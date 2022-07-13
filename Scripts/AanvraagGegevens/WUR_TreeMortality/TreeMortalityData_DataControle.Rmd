@@ -1,0 +1,530 @@
+---
+title: "Datacontrrole in kader van aanleveren treeMortality data"
+author: "Anja Leyman"
+date: `r Sys.Date()`
+output: 
+  html_document
+    code_folding : hide
+    toc : true
+    toc_float : true
+    number_sections : true
+    df_print : paged
+---
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+#rm(list = ls())
+
+library(tidyr)
+library (rlang)
+library(dplyr)
+library(RODBC)
+library(lubridate)
+library(knitr)
+library(here)
+library(openssl)
+library(kableExtra)
+
+```
+
+Rest van code loopt enkel goed, als we eerst TreeMortalityData.Rmd laten lopen.
+
+
+```{r CheckNAIUFROHght}
+t <- data_dendro %>% 
+  filter((is.na(IUFROHght) | IUFROHght == 0  | IUFROHght == 40 ) & AliveDead == 11 & IndShtCop != 12) %>% 
+  group_by(period, ForestReserve) %>% 
+  summarise(aantal = n()) %>% 
+  ungroup()
+
+t2 <- data_dendro %>% 
+  filter(AliveDead == 11 & IndShtCop != 12) %>% 
+  group_by(period, ForestReserve) %>% 
+  summarise(aantal = n()) %>% 
+  ungroup()
+
+t3 <- t2 %>% 
+  left_join(t, by = c("period", "ForestReserve"))
+t3
+
+write.csv2(t3, paste(here("Validatie"), "/aantal_records_zonder_iufrohght_perBR.csv", sep = ""))
+
+
+```
+
+
+```{r MissingTreenumber, echo=FALSE}
+# Missing TreeNumber 
+# als indshtcop = 10 or 11, dan Treenumber = 1
+
+data_dendro %>% filter(is.na(TreeNumber)) %>% nrow()
+# [1] 0
+# => verdere code niet meer nodig (aangepast in kader van datacontrole in db Els)
+
+# data_dendro  <- data_dendro %>% 
+#             mutate (TreeNumber = ifelse(is.na(TreeNumber) & 
+#                                           (IndShtCop %in% c("10","11"))
+#                                         , 1
+#                                         , TreeNumber)
+#             )
+
+
+
+```
+
+
+## CoppiceID - OldID
+
+zie ook mail van Peter (31/3/2020):
+**Anja, 
+van het moment er één spil afsterft van een stoof heb je die situatie en die komt frequent voor natuurlijk.
+Om een ruw idee idee te krijgen, kan je misschien eens de stoven levend en dood, "zonder oldid" uitsluiten voor peridode2,  sommeren en de vergelijking maken tussen de periodes, is niet helemaal correct maar misschien krijg je een beeld. Moeilijkheid die er bij komt is dat het dode stoofdeel die er bijkomt in periode 2, bijna nooit een oldid meekrijgt maar enkel gekoppeld is via CoppiceID.
+Als ik het zo niet nog moeilijker maak 🙄. Misschien zie jij nog een complexere query mogelijk die ook die Coppiceid in rekening brengt,...
+
+
+CoppiceID wordt consequent ingevuld, je zou nog kunnen ontbrekende oldid's overnemen indien plotID en CoppiceID gelijk zijn, controle zijn nog de coord'en met max delta X en delta Y bijvoorbeeld.
+Op die manier krijg je wel een juist beeld door vgl'en van de som, periode 1 en 2, moest het allemaal van belang genoeg zijn voor deze oefening natuurlijk.**
+
+
+
+```{r CreateTreeLinkExtraWide}
+# nog uitgebreidere treelink_wide aanmaken
+treelink_long <- dataMort %>%
+   select(ForestReserve, plotid, treeid, species,censusid, DBH, treestatus, CoppiceID, coppice = tree_multistemmed, TreeNr = TreeNumber, X = treelocation_X, Y = treelocation_Y)  
+# 31469
+treelink_wide <-
+   make_table_wide(treelink_long, column_to_repeat = "censusid",
+                   columns_for_comparison = c("DBH", "treestatus", "CoppiceID", "coppice", "TreeNr", "X", "Y", "species" )) 
+nrow(treelink_wide)
+# 19081
+
+write.csv2(treelink_wide, paste(here("Validatie"), "/treelink_wide.csv", sep = ""))
+```
+
+
+```{r CheckCoppice}
+colnames(treelink_wide)
+
+coppice_wide <- treelink_wide %>% 
+  filter ((coppice_1 == "yes") | (coppice_2 == "yes"))
+coppice_wide2 <- treelink_wide %>% 
+  filter ((CoppiceID_1 > 0) | (CoppiceID_2 > 0 ))
+
+# coppice_no_coppiceID
+t <- coppice_wide %>% 
+  filter((coppice_1 == "yes" & (is.na(CoppiceID_1) | CoppiceID_1 == 0)) |
+           (coppice_2 == "yes" & (is.na(CoppiceID_2) | CoppiceID_2 == 0)))
+
+write.csv2(t, paste(here("Validatie"), "/coppice_no_coppiceID.csv", sep = ""))
+# OK, enkel trees die enkel 1e of enkel 2eSET zijn
+
+# coppiceID_no_coppice
+t2 <- coppice_wide2 %>% 
+  anti_join(coppice_wide2, by = c("plotid", "treeid"))
+write.csv2(t2, paste(here("Validatie"), "/coppiceID_no_coppice.csv", sep = ""))
+# OK - 0 records
+
+# 2eSET geen coppice meer
+t1 <- coppice_wide %>% 
+  filter(coppice_2 == "no")
+# 0 records (initieel 4, gecorrigeerd)
+
+
+```
+
+```{r CheckCoppiceIDvsOldID}
+
+# zelfde oldID, andere coppiceID (was vooral Pruikemakers - gecorrigeerd)
+t3 <- treelink_wide %>% 
+  filter(CoppiceID_1 != CoppiceID_2)
+write.csv2(t3, paste(here("Validatie"), "/AndereCoppiceID_ZelfdeOldID.csv", sep = ""))
+# 0 
+```
+
+
+
+```{r CoppiceID_x2}
+# DOEL: deze die > 2x voorkomen eruit halen, dat zijn degene die moeten gesplitst worden
+
+# ?? klopt het dat deze met 2 records niet gesplitst moeten worden? 
+# of maw dat deze gelinkt zijn via oldid ...
+
+# soms 2 delen van eenzelfde stoof, die bij 1eSET al deels levend en dood zijn, maar is geen probleem, deze hebben een andere oldID
+# !!!! OPGEPAST: blijkbaar wel veel die toch een oldID hebben, maar waarbij treeid = 2_plotid_oldid ipv 1_
+
+
+# (zie verder: als gekoppeld via oldID dan zelfde coppiceid
+
+# ?? Als zelfde coppice id, dan ook zelfde tree_id (of gekoppeld via oldid?)
+summ_2 <- summ_CoppiceID %>% 
+  filter(aantal == 2)
+# 2726
+# zijn deze ook allemaal gelinkt via oldID? NEE, soms dead en alive, en dan ander treenr!
+summ_2_check <- summ_2 %>% 
+  left_join(dataMort, by = c("CoppiceID", "plotid"))
+summ_2_checkOldID <- summ_2_check %>% 
+  group_by(treeid) %>% summarise(aantal = n()) %>% filter(aantal == 1)
+# 254 records die niet dezelfde tree-id hebben, terwijl dat wel zou moeten, want zelfde coppice_id
+# én CoppiceID komt maar 2x voor: niet 1x maar 2x => sowieso in 2 sets => ? corrigeren
+# misschien wel eerst checken op basis van XY
+
+# nog 152 records na controle: zijn deze die in één periode uit levend en dood deel bestaan: zie verder
+summ_2_checkOldID2 <- summ_2_checkOldID %>% 
+  left_join(dataMort) 
+
+table(summ_2_checkOldID2$ForestReserve)
+
+# wide van maken obv plotid en coppiceid , treeid dan als 1 en 2, net zoals x1 en x2
+coppicelink_2_long <- summ_2_checkOldID2 %>%
+   select(ForestReserve, plotid, treeid, censusid, treestatus, CoppiceID, X = treelocation_X, Y = treelocation_Y)  # enkel de velden die identiek moeten zijn
+# OPGEPAST: CoppiceID soms wel en soms niet toegeveogd in 2 periodes
+# OPGEPAST: soort is ook een gevaarlijke, want soms ene soort berk en dan weer andere
+
+coppicelink_2_wide <-
+   make_table_wide(coppicelink_2_long, column_to_repeat = "censusid",
+                   columns_for_comparison = c("treestatus", "treeid", "X", "Y")) 
+nrow(coppicelink_2_wide)
+
+coppicelink <- unnest(coppicelink_2_wide, cols = c(treestatus_1, treestatus_2, treeid_1, treeid_2, X_1,  X_2, Y_1, Y_2)) 
+
+
+coppicelink_short <- coppicelink %>% filter(!is.na(treestatus_1) & !is.na(treestatus_2))
+# dit zijn 51 trees waarbij oldID niet ingevuld is, wellicht omdat 2eSEt 'dood' was
+# (gecheckt: van de ca 900 dode coppice, heeft ca 600 géén en ca 350 wel een oldID => niet systematisch)
+# 3 levende: 
+# 1_1217_27: pas achteraf toegevoegd aan 1eSET (qCommenRemark = 5 => niet mee te nemen voor aangroei op boomniveau) - gecorrigeerd (oldID toegevoegd)
+# 1_730_670: andere XY, coppiceid 233: levend levend => coppiceid aangepast
+# 1_822_493: andere XY, coppiceid 56: dood levend => coppiceid aangepast
+
+# ev. deze 48 trees bijwerken met oldID??
+# JA, want volgens Peter inderdaad oldID overgenomen, als boom niet verplaatst moet worden
+write.csv2(coppicelink_short, paste(here("Validatie"), "/coppiceOnlyDeadPart_missingOldID.csv", sep = ""))
+
+# !! AANGEPAST => nu nog 0 records
+nrow(coppicelink_short)
+# [1] 0
+
+
+# dubbele coppiceID 
+nrow(coppicelink_2_wide)
+dubbels <- coppicelink_2_long %>% group_by(plotid, CoppiceID) %>% summarise(aantal = n()) %>% filter(aantal > 2)
+# 0 rows
+
+
+```
+
+Unieke treeid wordt gecreëerd door volgende info te combineren:
+- de eerste periode waarin de boom opgemeten werd (1_ of 2_)
+- plot_id
+- de tree_id_measurement van de eerste periode waar de boom opgemeten werd: voor gekoppelde bomen is dit de oldID
+
+Aangezien 
+- hakhout opgesplitst wordt in een levend en dood deel, 
+- én niet steeds beide delen aanwezig waren in vorige periode, 
+- én oldID uniek moet zijn (één op één relatie met vorige periode), 
+opteren we om een nieuwe unieke treeid aan te maken, gebaseerd op coppiceid
+
+Deze maken we enkel aan, indien echt nodig, dus indien er meer dan 2x gebruik gemaakt wordt van dezelde coppiceid
+
+Op voorhand reeds gecheckt dat:
+- als coppice in 1eSET, dan ook in 2eSET
+- Coppice die in 1e én 2eSET voorkomt, heeft steeds een coppiceID
+- "coppice_no_coppiceID.csv": lijst van coppice zonder coppiceID: op één na allemaal 2eSET en wellilcht ingroei: deze van 1eSET dood in 2eSET (en omgevallen)
+
+Werkwijze:
+- dataMort opsplitsen in coppice en geen coppice
+- coppice: aantal x dat coppiceID voorkomt koppelen
+- deze selecteren waarbij dit aantal > 2
+- hierbij de treeid vervangen door period_plotid_coppiceID_a als levend 
+en period_plotid_coppiceID_b als dood
+
+
+Coppice waar max. 2 records zijn per coppiceID zijn OK: 
+- soms gekoppeld 
+- soms 2 delen van één coppice, en dan niet gekoppeld, maar ook niet nodig
+
+Coppice met 1 record = ook OK
+
+Coppice met 4 records: 2 per periode, één levend en één dood
+- levend aan levend koppelen en 
+- dood aan dood koppelen
+(! niet noodzakelijk helemaal juist, want er kan extra afgestorven zijn van de levende, maar dat is niet geweten)
+
+
+Coppice met 3 records: meest verwarrende: OPTIES
+(1) OFWEL levend & dood bij periode 1 --- enkel levend bij periode 2: 
+=> ok
+=> wel nog een dead fallen maken voor xxx_b
+
+(2) OFWEL levend & dood bij periode 1 --- enkel dood bij periode 2: 
+=> dode uit 2eSET in 2 opsplitsen en er a en b van maken (NIET DOEN)
+
+(3) OFWEL enkel levend bij periode 1 ---- levend & dood bij periode 2: 
+=> levende uit 1eSET in 2 opsplitsen en er a en b van maken waarbij aantal spillen evenredig verdeeld wordt volgens wat nu levend/dood is (?? maar misschien ook al fallen?? levend_1 kan meer zijn dan levend_2 + dood_2, maar we kunnen geen fallen aanmaken) => sowieso een benadering
+
+(4) OFWEL enkel dood bij periode 1 ---- levend & dood bij periode 2
+=> (komt wellicht niet veel voor): OK
+
+
+
+
+Dit is OK voor deze met aantal = 1, 2 en 4
+Bij deze met aantal = 3, zou er een virtuele 4de stoof moeten gemaakt worden die overeenstemt met 
+aantal
+
+
+```{r CoppiceID_4x}
+summ_4 <- summ_CoppiceID %>% 
+  filter(aantal == 4)
+# 105
+# zijn deze ook allemaal gelinkt via oldID? NEE, soms dead en alive, en dan ander treenr!
+summ_4_check <- summ_4 %>% 
+  left_join(dataMort, by = c("CoppiceID", "plotid"))
+# ok: 4x zoveel  records 
+
+summ_4_checkOldID <- summ_4_check %>% 
+  group_by(treeid) %>% summarise(aantal = n()) %>% filter(aantal == 1)
+
+summ_4_checkOldID2 <- summ_4_checkOldID %>% 
+  left_join(dataMort) 
+# blijkbaar de dode die niet meer gelinkt werden mbv oldID
+# Zou geen probleem moeten zijn, linken via coppiceid
+# zijn er ook die terugkomen in "identiekeXY_niet_gekoppeld.csv"
+
+table(summ_4_checkOldID2$ForestReserve)
+
+```
+
+```{r CoppiceID_3x}
+summ_3 <- summ_CoppiceID %>% 
+  filter(aantal == 3)
+# 562
+# zijn deze ook allemaal gelinkt via oldID? NEE, soms dead en alive, en dan ander treenr!
+summ_3_check <- summ_3 %>% 
+  left_join(dataMort, by = c("CoppiceID", "plotid"))
+# ok: 3x zoveel  records 
+
+# aantal oldID's = ? 
+summ_3_check %>% filter(!is.na(OldID)) %>%  nrow()
+# 557 (x3 = 1671: bijna 1686 of bijna één op drie records)
+
+summ_3_checkOldID <- summ_3_check %>% 
+  filter(censusid == 2 & treestatus == "alive" & is.na(OldID))
+# 0
+write.csv2(summ_3_checkOldID, paste(here("Validatie"), "/coppiceLiving_missingOldID.csv", sep = ""))
+
+```
+
+```{r LinkByXY}
+# ga ik toch niet doen, ik ga ervanuit dat ofwel oldID ofwel CoppiceID ingevuld staat om koppeling aan te duiden
+
+# ev. toch snel eens obv exacte XY, niet ikv coppice, maar ev.  ergens anders verloren gegaan??
+dataMort_set1 <- dataMort %>% 
+  filter(censusid == 1) %>% 
+  select(ForestReserve, plotid, treeid, species, censusid, DBH, treestatus, CoppiceID, coppice = tree_multistemmed, TreeNr = TreeNumber, X = treelocation_X, Y = treelocation_Y) 
+
+dataMort_set2 <- dataMort %>% 
+  filter(censusid == 2) %>% 
+  select(ForestReserve, plotid, treeid, species, censusid, DBH, treestatus, CoppiceID, coppice = tree_multistemmed, TreeNr = TreeNumber, X = treelocation_X, Y = treelocation_Y) 
+
+dataMortXY <- dataMort_set1 %>% 
+  inner_join (dataMort_set2, by = c("ForestReserve", "plotid", "X", "Y"))
+
+t <- dataMortXY %>% 
+  filter(treeid.x != treeid.y)
+# zijn (na opschonen) allemaal dode HH-stoven
+
+write.csv2(t, paste(here("Validatie"), "/identiekeXY_niet_gekoppeld.csv", sep = ""))
+
+```
+
+
+
+
+```{r SplitCoppiceDeadAlive}
+
+# HH splitsen in toekomstig dood en toekomstig levend stuk 
+
+#¬ (1) bepalen welke hakhout uit periode 1, deels levend en dood is in periode 2
+# obv hogere analyse blijkt dat we dit niet enkel obv oldid kunnen bepalen, want blijkbaar zijn er maar 4 records waarbij dezelfde tree-id 3x voorkomt.
+        # En volgens Els is er al één daarvan toch 2 levende delen, daar dus foute toekenning van oldID
+        # obv X en Y ook te zien
+        # 
+        # Ev. ook eerst een analyse doen obv XY en coppice ...
+        # 
+        # Is coppice in set1 ook nog coppice in set2?? JA 
+        #   
+        # Eens bekijken waar coppiceid meer dan 2x voorkomt ...
+
+t <- dataMort %>% filter (!is.na(CoppiceID) & CoppiceID != 0) %>% group_by (plotid, CoppiceID) %>% summarise (count = n()) %>% filter(count > 2)
+# 660 records
+
+
+# meestal 3 of 4, één keer 6 
+nrow(filter(t, count > 4))
+# plotid 813, coppiceid 10: fout bij 2eSET: 3 levende bomen met CoppiceID 10, die GEEN hahkhout zijn => wellicht per ongeluk CoppiceID overgenomen => gecorrigeerd 
+
+
+
+
+# als coppiceid niet NA, en bij eenzelfde coppice id is er een oldID, dan moet die oldID ook aan dat dode stuk toegekend worden
+# dan tree_id opnieuw berekenen => tree_measure_id nog wat bijhouden .... (of eerder deeltje obv oldid opnnieuw)
+
+      # mutate(treeid = ifelse(is.na(OldID), 
+      #                        treeid,
+      #                        paste(1, plot_id, OldID, sep = "_")
+      #   )
+
+# !! dit pas doen als ik zeker ben dat ik op basis daarvan coppice kan uitsplitsen
+
+# misschien eerst test-data aanmaken met enkel coppice 
+
+
+# en afzonderlijk behandelen en achteraf weer aan elkaar plakken
+# 
+# 1) als coppice, dan ook coppiceid en omgekeerd als coppice_id, dan ook coppice? ----
+# ANTWOORD: 0.5% niet - zo laten, kunnen we niet autmatsich bijwerken
+
+t1  <-  dataMort %>% 
+        filter(tree_multistemmed == "yes")
+nrow(t1)  # 8590
+
+t2 <-  dataMort %>% 
+        filter(tree_multistemmed == "yes" & (is.na(CoppiceID) | CoppiceID == 0) )  
+nrow(t2)  # 54 => 0.5 % niet
+
+# gesorteerd op X en overlopen => geen dubbele 
+# eigenlijk wel logisch, want het ander deel heeft misschien wel een coppice id
+
+# hoeveel daarvan zijn dood (en dus eventueel op te splitsen)
+t2b <- t2 %>% 
+  filter(treestatus == "dead")
+nrow(t2b) # 23
+
+# en hoeveel van die dode hebben ook een levend deel? (niet te koppelen met coppiceid, dus eerder obv XY ...)
+
+
+
+
+t2c <-  dataMort %>%
+         filter(tree_multistemmed == "no" & !is.na(CoppiceID) & CoppiceID != 0)
+nrow(t2c)  # 29
+
+# EVENTUEEL MULTISTEMMED AANPASSEN IN DATAMORT: ALS COPPICEID DAN OOK HH => 32 records - NEE
+      # !! kan ook per ongeluk toegekend zijn, dus niet zomaar doen, geen onderliggende spillen, dus doet er niet zoveel toe; is ook maar 0.4% van alle hakhout
+
+
+
+t3 <-  dataMort %>% 
+        filter(tree_multistemmed == "yes" & is.na(CoppiceID) & !is.na(OldID))
+nrow(t3) # 8 (eigenlijk maar 7, één typfout, zie verder)
+
+t4 <- dataMort %>% 
+  filter(treeid %in% t3$treeid )   # & censusid == 1
+nrow(t4) # 15 
+
+t5 <- data_dendro %>% 
+  filter(tree_measure_id == 5 & plot_id == 874 & period == 1)
+# wellicht typfout, alle andere oldID's zijn 730 en hoger  (ook ale ID's in periode1)
+# OldID verwijderd in db Els
+
+
+        
+# 2) testen of copppice in 1 ook coppice in 2 is -----
+s <- shootlink %>% 
+  filter((tree_multistemmed_1 == "yes" | tree_multistemmed_2 == "yes") 
+         & (!is.na(tree_multistemmed_1)) & (!is.na(tree_multistemmed_2))
+  )
+nrow(s) #3331
+
+s2 <- shootlink %>% 
+  filter(tree_multistemmed_1 == "yes" & tree_multistemmed_2 == "yes")
+nrow(s2) # 3293
+
+s3 <- shootlink %>% 
+  filter((tree_multistemmed_1 == "yes" & tree_multistemmed_2 == "no") | (tree_multistemmed_1 == "no" & tree_multistemmed_2 == "yes") )
+nrow(s3) # 38
+# meeste eerst geen coppice en nu 2eSET wel; wel steeds treenumber = 1
+# slechts 4 eerst wel coppice en nu niet meer: ook treenumber = 1
+# dus eigenlijk geen probleem, wellicht in eerste set enkel als er meerdere spillen waren dit op "coppice" gezet, want dan moesten er shoots afzonderlijk ingeladen worde, was complexer dan gewoon ...
+
+# ev. in deze dataset daar toch coppice van maken? 
+# zijn er maar 34 tov 3331 = 1% => NEE
+s3$Genus <- as.character(s3$Genus)
+table(s3$Genus)
+write.csv2(s3, paste(here("Validatie"), "/indiv_naar_coppice_van_set1_naar_set2.csv", sep = ""))
+
+s3b <- s3 %>% 
+  select(plotid, treeid, species, tree_multistemmed_1, tree_multistemmed_2)
+
+dataMort_correct <- dataMort %>% 
+  left_join(s3b, by= c("plotid", "treeid","species")) %>% 
+  mutate(tree_multistemmed2 = ifelse ((censusid == 1 & tree_multistemmed_1 == "no" & tree_multistemmed_2 == "yes" & 
+                                         (!is.na(tree_multistemmed_1) & !is.na(tree_multistemmed_2))
+                                       ),
+                                       "yes",
+                                       tree_multistemmed)
+                                       ) %>% 
+  select(-tree_multistemmed_1, -tree_multistemmed_2)
+
+
+summary(dataMort_correct)
+q <- dataMort_correct %>% 
+  filter(is.na(tree_multistemmed2)) # 0 
+
+dataMort <- dataMort_correct
+
+
+# 3) kijken hoe het zit met X en Y van gekoppeld coppice -----
+str(shootlink)
+
+
+
+wide-tabel aanmaken eerder obv CoppiceID 
+oldID en tree_id cfr DBH1 met _1 en _2
+
+
+
+
+
+
+# 4) uitsplitsen obv treenumber -----
+
+
+     
+    
+      
+      
+      
+      
+        
+        
+      # ? Is er veel hakhout??
+      # 
+      #   mail van Els: 
+      # Ik merkte trouwens dat een van die probleembomen, met tree_id 1_1116_260, enkel levende onderdelen heeft.  In periode 2 komt enerzijds de de hakhoutstoof met 4 stammen voor die ook in periode 1 vermeld is, en anderzijds nog een andere boom die ook andere X-Y-coördinaten heeft.  Het lijkt er dus op dat die 2de boom een verkeerde OldID meegekregen heeft.  Enfin, dus best nog even na te kijken in hoeverre het allemaal probleembomen zijn.  ;-)
+      # 
+      # 
+      # 
+      # !! dode boom in periode 2 DBH 20 cm en in A4 (niet in A3) => in periode 1 werd deze - als levend - niet opgemeten, want staat  niet in goede cirkel
+
+
+
+# daar moet rekening mee gehouden worden
+
+----------
+
+# (c)Anja: misschien beter shoots/hakhout afzonderlijk OF BETER: combinatie van TreeNumber en Fext_ha maar dan wel volume aanpassen
+# eigenlijk is ons hakhout beetje problematisch, want spillen worden niet gekoppeld, ewl hakhoutstoven in hun geheel
+# bovendien wordt dood en levend deel van HHStoof als afzonderlijk boom beschouwd ....
+
+      # stel: boom periode 1 id = 10, 2 spillen a en b
+      # periode 2: a leeft nog, b is dood, beide OldID= 10
+
+```

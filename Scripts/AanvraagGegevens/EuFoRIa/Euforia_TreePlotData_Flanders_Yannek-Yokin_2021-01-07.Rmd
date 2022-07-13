@@ -1,0 +1,559 @@
+---
+title: "Tree data from the Flemish forest reserve network - EUFORIA network"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"  
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: FALSE
+      smooth_scroll: FALSE
+---
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  eval = FALSE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+#rm(list = ls())
+
+library(tidyr)
+library (rlang)
+library(dplyr)
+library(RODBC)
+library(lubridate)
+library(knitr)
+library(here)
+library(openssl)
+library(kableExtra)
+library(stringr)
+library(forrescalc)
+library(tibble)
+
+```
+
+
+# Request
+
+This script creates the data as requested by Jokin Idoate Lacasia and Yannek Käber as part of the project
+**Demographic rates in European forest reserves: A project proposal for the EuFoRIa network**
+by Jokin Idoate Lacasia (jokin.lacasia@wsl.ch) 
+and Yannek Käber (yannek.kaeber@usys.ethz.ch)
+August 2020"
+
+Data is collected over the whole of Europe. Goal is to get a better understanding of mortality and recruitment (see [Proposal_ demographic rates.docx](https://drive.google.com/file/d/1SmVI5YMB5Wyjqf-Wzj0A2mByzr1kz3Fl/view?usp=sharing)).
+
+The script below generates tree and plot data according to the guidelines given in this document:
+**Tree level data**
+- tree ID
+- plot/reserve ID
+- species
+- dbh
+(- height: not necessary, as most countries don't have this data)
+-	alive/dead
+(- standing/lying: if not specified, assumed "standing")
+-	additional tree level information (e.g., uprooting, cause of dead)
+
+
+
+```{r Path}
+path_to_fieldmap <- "C:/3BR/5_dB_Els_deel2/FieldMapData_dB_Els_deel2.accdb"
+path_to_git_forresdat <- "C:/3BR/2_VisualisatieDataBR/1Packages/forresdat"
+
+path_to_strata <- "C:/3BR/1_DataVerwerkingBR/Data/BR_Strata.accdb"
+path_to_results <- "C:/3BR/1_DataVerwerkingBR/Output/BR_resultaten.accdb"
+path_to_forrescalc <- "C:/3BR/2_VisualisatieDataBR/1Packages/forrescalc/R/"
+
+```
+
+<!-- Onderstaande tabel geeft een overzicht van de gegevens die gebruikt worden voor de analyse.   -->
+
+```{r DataOverview, results="markup", include=FALSE}
+
+data_overzicht <- data.frame(
+  tabelnaam = c("FieldMapData_MDB_BOSRES_selectieEls.accdb", "tblTreeSpeciesCharacteristics_BR.csv", "metadata_plots"),
+  locatie = c(path_to_fieldmap, paste (here::here("Data/ExterneData")), path_to_strata),
+  md5 = c(md5(path_to_fieldmap), md5("tblTreeSpeciesCharacteristics_BR.csv"), md5(path_to_strata))
+)
+
+data_overzicht %>%
+  kable() %>%
+  kable_styling()
+
+#dbAnalyseDataTxt <- substring(dbAnalyseData, regexpr("/", dbAnalyseData) + 1)  # voor gebruik bij wegschrijven naar resultatendb
+
+```
+
+
+```{r ConnectionDb, include=FALSE}
+connectieData <- odbcConnectAccess2007(path_to_fieldmap)
+connectieStrata <- odbcConnectAccess2007(path_to_strata)
+
+dbtables <- sqlTables(connectieData)
+str(dbtables)
+
+odbcClose(connectieData)
+odbcClose(connectieStrata)
+odbcCloseAll()
+
+```
+
+
+```{r LoadDataTreeCharact}
+TreeCharact <- read.csv2(paste (here::here("Data/ExterneData"), "/tblTreeSpeciesCharacteristics_BR.csv", sep = ""))
+str(TreeCharact)
+
+```
+
+```{r LoadLookuplists}
+con <- odbcConnectAccess2007(path_to_fieldmap)
+  
+  qIndShootCop <- sqlFetch(con, "qIndShootCop", stringsAsFactors = FALSE)
+  qAliveDead <- sqlFetch(con, "qAliveDead", stringsAsFactors = FALSE)
+    
+odbcClose(con)
+
+```
+
+
+```{r LoadMetadataPlots}
+# plotinfo_<- read.csv2(paste (here::here("Data/Meetgegevens"), "/metadata_plots.csv", sep = "")) %>% 
+#   select(plot_id = ï..PlotID, forest_reserve = Site.subsite, PlotShape,
+#          XY_co, X_m, Y_m, Z_m, LatLon_co, XLon_wgs84, YLat_wgs84,
+#          Management_type, Unmanaged_since, 
+#          DBH1, plotradiusDBH1, plotsize1,  plotradiusDBH2 = Plotradius.DBH2, plotsize2 = Plotsize2, DBH2) 
+# 
+# colnames(plotinfo_)
+
+con <- odbcConnectAccess2007(path_to_strata)
+  plotinfo_ <- sqlFetch(con, "metadata_plots", stringsAsFactors = FALSE)
+odbcClose(con)
+
+plotinfo_ <- plotinfo_ %>% 
+  select(plot_id, forest_reserve = Site_subsite, PlotShape,
+         XY_co, X_m, Y_m, Z_m, LatLon_co, XLon_wgs84, YLat_wgs84,
+         date_dendro1 = 'S1-dendro', date_dendro2 = 'S2-dendro', 
+         year_dendro1 = 'Survey1-year', year_dendro2 = 'Survey2-year',
+         DBH1, plotradiusDBH1, plotsize1,  plotradiusDBH2, plotsize2 = Plotsize2, DBH2,
+         Management_type, Unmanaged_since,
+         Rain_year = Regen_jaar, Temp_year = Temp_jaar,
+         Soiltype = Reference, rsg_pq_cod, pq_code, Soil_unit,
+         Hillshade) 
+colnames(plotinfo_)
+
+# date_dendro uit trees halen, want problemen om datum correct in te laden uit metadata
+
+# plotinfo_<- read.csv2(paste (here::here("Data/Meetgegevens"), "/metadata_plots.csv", sep = "")) %>% 
+#   select(PlotID = ï..PlotID, forest_reserve = Site.subsite, PlotShape,
+#          XY_co, X_m, Y_m, Z_m, LatLon_co, XLon_wgs84, YLat_wgs84,
+#          Management_type, Unmanaged_since, 
+#          DBH1, plotradiusDBH1, plotsize1,  plotradius.DBH2 = Plotradius.DBH2, plotsize2 = Plotsize2, DBH2,
+#          Survey1.year, S2.dendro) %>% 
+#   mutate(S2.dendro = as.Date(S2.dendro))
+
+```
+
+
+```{r LoadDataTrees}
+data_dendro <- load_data_dendrometry(path_to_fieldmap, plottype = "Circular plot", extra_variables = TRUE)
+
+# str(data_dendro)
+# summary(data_dendro)
+
+colnames(data_dendro)
+
+```
+
+```{r OnlyZeroManagementPlots}
+# !! OPGEPAST: 10 plots met “Exotenbeheer na 1e meting”: 701, 707, 709, 727, 728, 738, 739, 740, 759, 760
+# => deze zijn niet representatief => uit algemene verwerking halen
+# 
+data_dendro <- data_dendro %>%
+  filter(!(plot_id %in% c(701, 707, 709, 727, 728, 738, 739, 740, 759, 760)))
+
+```
+
+
+```{r LoadDataShoots}
+data_shoots <- load_data_shoots(path_to_fieldmap)
+# hier kan je plottype niet specifiëren, ook niet nodig want te gebruiken samen met trees, en daar wordt wel op plottype geselecteerd
+
+```
+
+
+# Missing values?
+
+```{r CheckNA_trees}
+summary(data_dendro)
+# visueel gecheckt, en geen NA's bij nodige variabelen (muv old_id en coppice-id)
+
+data_dendro_ <- data_dendro %>% 
+  select(plot_id, plottype, tree_measure_id, x_local, y_local, period, species, dbh_mm, alive_dead, ind_sht_cop, old_id, coppice_id, tree_number)
+
+unique(data_dendro_$plottype)
+```
+
+```{r CheckNA_shoots}
+summary(data_shoots)
+# visueel gecheckt, en geen NA's bij nodige variabelen (muv old_id en coppice-id)
+
+```
+
+
+# File 1: tree_data
+
+- tree ID
+- plot/reserve ID
+- species
+- dbh
+-	alive/dead
+
+
+```{r MutateSimpleVariables}
+colnames(data_dendro_)
+
+tree_data <- data_dendro_ %>% 
+    mutate(tree_id = ifelse(is.na(old_id),
+          paste(period, plot_id, tree_measure_id, sep = "_"),
+          paste(1, plot_id, old_id, sep = "_")
+        ) # komt uit functie van package "summarize_status"; functie neemt echter beperkte selectie van variabelen en dan moet ik terug mergen om alle nodige info te bekomen
+    ) %>%
+    mutate(
+      treestatus = ifelse (alive_dead == 11, "alive",
+                           ifelse(12, "dead")),
+      tree_multistemmed = ifelse (ind_sht_cop %in% c(10, 11), "no",
+                           ifelse(ind_sht_cop == 12, "yes", NA))) %>% 
+  left_join(TreeCharact, by = c("species" = "IDTreeSp")) %>% 
+  select(plot_id, plottype, tree_id, tree_measure_id, x_local, y_local, period, IDTreeSp = species, NameSc, Genus, Spec, dbh_mm, alive_dead, treestatus, tree_multistemmed, old_id, coppice_id, tree_number)
+
+str(tree_data)
+
+```
+
+
+# File 1: tree_data: coppice 
+
+## Information on the database structure
+
+The forest reserves database contains two impartant tables
+
+(1) __trees layer__: contains all trees with their XY-coördinates, species, dead/alive, ...
+Naast individuele bomen, bevat deze laag ook hakhoutstoven. Deze laatste worden - indien nodig - opgeplitst in een levend en een dood deel. Eén record in de trees layer moet immers ofwel levend ofwel dood zijn, zo werkt FieldMap.
+
+(2) __shoots layer__: contains further details on the coppice (sort of child layer of the trees layer): contains one record per shoot and is linked to the coppice in the trees layer.
+
+Therefore:
+
+* field "tree number" in trees layer = number of shoots in the (dead or alive) coppice 
+
+* DBH van hakhoutstoof in trees layer = gemiddelde van DBH van de onderliggende spillen (zdd de som van de grondvlakken van de spillen gelijk is aan het grondvlak van de "tree" x treenumber)
+
+* grondvlak van de volledige stoof = (DBH/2)² * pi * treenumber
+
+* volume  van de volledige stoof = (volume obv DBH en Height) * treenumber
+
+
+## Hoe omgaan met dood en levend deel van hakhoutstoven?
+Uitsplitsen van hakhoutstoven in dood en levend deel is nodig, omdat er anders problemen ontstaan met de koppeling die gebaseerd is op OldID (moet een één-op-één relatie zijn tussen de 2 periodes).
+
+In de databank wordt OldID standaard toegekend aan het levende deel van de hakhoutstoof.
+Het dode deel wordt gelinkt via CoppiceID.
+Indien er enkel een dood deel is (en geen levend deel), dan wordt daar OldID aan toegekend.
+
+Dat wil zeggen dat er zich enkel een probleem stelt wanneer er in één van de twee periodes zowel een levend als een dood deel voorkomt.
+In de andere gevallen kan de koppeling gebeuren via OldID.
+
+*Input MartJan Schelhaas (1/4/2020): De beste oplossing is in dat geval denk ik dat je het levende deel van opname 1 splitst in het deel dat blijft leven en het deel dat dood gaat. Beide delen krijgen dan de gemiddelde dbh en gemiddeld spilvolume, en bij Nperha doe je dan 1/plotArea maal het aantal spillen dat blijft leven, dan wel dood gaat in de volgende opname. Boomnummer moet dan wel op de een of andere manier uniek blijven, bijvoorbeeld door toevoeging van een A bij het levende deel en een B bij het dode deel. Is dat te doen denk je?
+De makkelijkste oplossing is om gewoon het levende deel en het dode deel apart te vermelden zoals dat in de database staat, zonder rekening te houden met wat er in de volgende opname gebeurt. Dbh, volume en Nperha als hierboven. De mortaliteit wordt dan iets onderschat, maar het is niet anders.*
+
+## Werkwijze hakhout 
+
+__Werkwijze:__
+
+* bepalen hoeveel delen er per hakhoutstoof aanwezig zijn
+
+* dataMort opsplitsen:
+    (1) een deel waarbij link via OldID behouden blijft (= treeid): **_dataMort_OldID_**
+    (individuele bomen en coppice dat uit max. twee delen bestaat over de twee periodes heen)
+    (2) een deel waarbij link via CoppiceID gecreëerd wordt (= nieuwe tree_id): **_dataMort_CoppID_**
+    (coppice met 3 of meer delen)
+ 
+    
+* in dataMort_CoppID de treeid vervangen door periodid_plotid_coppiceID_a indien levend 
+en period_plotid_coppiceID_b indien dood
+
+* samenvoegen van dataMort_OldID, dataMort_CoppID
+
+
+```{r NumberOfPartsPerCoppice}
+tree_data %>% filter(coppice_id > 0) %>% nrow()
+# [1] 8595
+# [1] 8265
+
+# coppice_id en plot_id samen uniek => hoeveel metingen zijn er per stoof (max.4 - klopt)
+summ_coppice_id <- tree_data %>% 
+  filter(coppice_id > 0) %>%
+  group_by(coppice_id, plot_id) %>% 
+  summarise(aantal = n()) %>% 
+  ungroup()
+# 4430
+# 4258
+
+table(summ_coppice_id$aantal)
+#    1    2    3    4 
+# 1037 2731  564  101    
+
+# 1    2    3    4 
+#  989 2631  538  100 
+
+```
+
+
+```{r SplitDataTrees_OldID_CoppID}
+tree_data <- tree_data %>% 
+  mutate(coppice_id = ifelse(coppice_id == 0, NA, coppice_id))
+
+tree_data  <- tree_data %>% 
+  left_join(summ_coppice_id, by = c("plot_id","coppice_id")) %>% 
+  mutate (nr_parts_coppice = aantal) %>% 
+  select(- aantal) 
+
+str(tree_data)
+str(summ_coppice_id)
+
+tree_data_OldID <- tree_data %>% 
+  filter (tree_multistemmed == "no" | nr_parts_coppice < 3 | is.na(coppice_id))
+
+tree_data_CoppID <- tree_data %>% 
+  filter (nr_parts_coppice > 2)
+
+nrow(tree_data_OldID) + nrow(tree_data_CoppID) - nrow(tree_data)
+# [1] 0
+
+```
+
+<!-- Daar waar coppice uit meer dan twee delen bestaat (over de twee periodes heen), treeid vervangen door een id obv coppiceid. -->
+
+```{r CreateNewTreeID_TreeData_CoppID}
+
+tree_data_CoppID <- tree_data_CoppID %>% 
+  rename (treeid_old = tree_id) %>% 
+  mutate (tree_id = paste(1, plot_id, coppice_id, sep = "_")) %>% 
+  mutate (tree_id = ifelse(treestatus == "alive", paste(tree_id, "a", sep = "_"),
+                          ifelse(treestatus == "dead", paste(tree_id, "b", sep = "_"),
+                                 NA))) 
+
+```
+
+
+```{r Controle_TreeData_OldID}
+# str(tree_data_OldID)
+nrow(tree_data_OldID)
+# [1] 29373 - ? 28790
+# summary(tree_data_OldID)
+
+```
+
+
+```{r Controle_TreeData_CoppID}
+# str(tree_data_CoppID)
+nrow(tree_data_CoppID)
+# [1] 2106 - ?2014
+# summary(tree_data_CoppID)
+
+table(tree_data_CoppID$nr_parts_coppice)
+#    3    4 
+# 1692  404
+
+#    3    4 
+# 1614  400 
+
+```
+
+In script "TreeMortalityData_DetailHakhout.Rmd" werd in detail bekeken hoe de levende en dode delen van het hakhout zich verhouden tussen de twee periodes.
+
+__Vaststellingen:__
+
+
+**(1) deze met vier delen hakhout over de twee periodes:**  
+    - periode 1 levend gekoppeld aan periode 2 levend
+    - periode 1 dood gekoppeld aan periode 2 dood
+    
+--> mogelijks zijn er van de levende wat extra dood gegaan, en van de dode wat omgevallen (fallen)
+maar dat is niet te bepalen (kan vergeleken worden met dode takken in een boom)
+
+
+**(2) deze met drie delen hakhout over de twee periodes:**
+    
+    (type A - 1005 metingen)
+          - periode 1: 1 levende
+          - periode 2: 1 dode en 1 levende
+        --> levende aan levende gekoppeld
+        --> 1 extra dode die in periode ervoor niet was       
+        OPGEPAST: soms heeft het levende deel uit periode 1 zich gesplitst in het dode en het levende deel van periode 2. Maar net zo goed kan het dode deel een extra smalle spil zijn, die in tussentijd ingegroeid is en ook alweer afgestorven. Vaak is er ook al een deel van de spillen "fallen". Aantal spillen uit periode 1 is soms lager dan de som van de spillen uit periode 2.
+
+
+    (type B - 564 metingen)
+          - periode 1: 1 levende en 1 dode
+          - periode 2: 1 levende, geen dode meer
+        --> levende aan levende gekoppeld, dode is "fallen" (zie verder)
+
+    (type C - 99 metingen) 
+          - periode 1: 1 levende en 1 dode
+          - periode 2: 1 dode, geen levende meer    
+        --> dode aan dode gekoppeld, levende is "verdwenen" (mee in de dode)
+        --> wellicht is de eerste dode fallen, en de tweede dode gekoppeld aan de eerste levende
+              MAAR dat is niet zeker
+        --> levende zal in periode 2 als "fallen" beschouwd worden
+        
+    (type D - 6 metingen)
+           - periode 1: 1 dode
+           - periode 2: 1 dode en 1 levende
+        --> dode aan dode gekoppeld, nieuwe levende
+
+BIjgevolg opteren we voor __de meest pragmatische oplossing__. 
+Situatie is immers bij elke stoof verschillend, er valt geen lijn in te vinden.
+
+__Dode delen van hakhout worden met de dode delen gelinkt, levende met de levende.__
+
+__Is er maar één levend deel en één dood deel dan worden die uiteraard aan elkaar gekoppeld.__
+ 
+
+```{r rbind_tree_data_OldID_CoppID}
+tree_data_CoppID <- tree_data_CoppID %>% 
+  select(-treeid_old)
+
+tree_data_all <- rbind(tree_data_OldID, tree_data_CoppID)
+
+```
+
+
+
+# File 1: replace coppice with shoots
+
+Yannek: "We would prefer to have non-unique tree-IDs for coppice wood. Then we can calculate the mean by ourselves. But of course for all non coppice wood we defineately need unique tree IDs."
+
+Daarom vervangen we elke hakhouistoof (met zijn tree_id en status en info over meerstammigheid en XY ....) door de shoots met hun resp. DBH's
+
+=> werkwijze:
+stap 1: aanmaak van twee dataframes: coppice en geen coppice
+stap 2: info van dataframe coppice koppelen aan data_shoots, waarbij enkel dbh van shoots behouden blijft
+stap 3: dataframe met shoots en dataframe geen coppice terug aan elkaar koppelen
+
+
+```{r SplitData_CoppiceIndividualTrees}
+coppice <- tree_data_all %>% 
+  filter(tree_multistemmed == "yes")
+
+individuals <- tree_data_all %>% 
+  filter(tree_multistemmed == "no")
+
+nrow(tree_data_all) - nrow(coppice) - nrow(individuals)
+
+```
+```{r CreateShoots}
+coppice <- coppice %>% 
+  select(-dbh_mm)
+
+shoots <- data_shoots %>% 
+  right_join(coppice, by = c("plot_id", "tree_measure_id", "period")) %>% 
+  # right_join, op die manier enkel shoots van cirkelplots (shoots kan je niet inladen met optie enkel circular plots)
+  select(-height_m, -decaystage, -shoot_measure_id)
+
+str(shoots)
+str(individuals)
+
+```
+
+
+
+```{r InsertShoots}
+tree_data_ <- rbind(individuals,shoots) %>% 
+  arrange(tree_id) 
+
+View(tree_data_)
+
+```
+
+
+```{r FinalFile}
+tree_data_final <- tree_data_ %>% 
+  select(plot_id, tree_id, x_local, y_local, period, IDTreeSp, NameSc, Genus, Spec, dbh_mm, alive_dead, treestatus, tree_multistemmed)
+# old_id, coppice_id, tree_number, nr_parts_coppice)
+
+View(tree_data_final)
+colnames(tree_data_final)
+
+summary(tree_data_final)
+```
+
+
+# File 2: plot_data
+
+Minimum requirement  
+
+- plot/reserve ID
+- inventory year (< plotdetails of trees)
+- Important plot level information (e.g. disturbances, former management, ...)
+- plot size: rA1, rA2, rA3, rA4 (< metadata)
+- plot coordinates (< metadata)
+- dbh measurement threshold (< metadata, op termijn ook in plotdetails)
+
+Additional data (< metadata)  
+
+- climatic information (precipitation, temperature, radiation, ...)
+- soil information (soil texture, available water holding capacity, …)
+- topographic information (aspect, elevation, slope, ...)
+- detailed information on disturbances or management intensity
+
+
+```{r CreatePlotData}
+str(plotinfo_)
+
+plot_data <- plotinfo_ %>% 
+  select(-date_dendro1) %>% # periode 1: onvolledige datum, overal jaar ingevuld
+  mutate(year_dendro2 = year(date_dendro2))  %>% 
+  select(-date_dendro2) # periode 2: net omgekeerd (year onvolledig)
+
+unique(plot_data$forest_reserve)
+
+# enkel deze plots waarvan er ook treedata aangeleverd worden, meegeven
+?distinct
+
+tree_plots <- tree_data %>% 
+  distinct(plot_id) 
+
+plot_data <- plot_data %>% 
+  filter(plot_id %in% tree_plots$plot_id)
+
+```
+
+# Overzicht bosreservaten
+
+```{r}
+unique(plot_data$)
+```
+
+
+# Wegschrijven output
+
+De resultaten worden weggeschreven naar csv.
+
+```{r WegschrijvenOutput}
+write.csv2(tree_data_final, paste(here("Output"), "/tmp/Flanders_ForestReserves_tree_data.csv", sep = ""))
+write.csv2(plot_data, paste(here("Output"), "/tmp/Flanders_ForestReserves_plot_data.csv", sep = ""))
+
+```
+

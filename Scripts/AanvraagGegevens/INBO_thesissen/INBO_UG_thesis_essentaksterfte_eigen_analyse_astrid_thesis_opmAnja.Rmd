@@ -1,0 +1,578 @@
+---
+title: "Essentaksterfte"
+author: "Astrid Van den Bossche"
+date: "17-7-2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# packages
+# install.packages("patchwork")
+# install.packages("ggpubr")
+# install.packages("officer")
+# install.packages("flextable")
+
+  ## Algemeen
+library(dplyr)
+library(tidyr)
+
+  ## Grafieken
+library(ggplot2)
+library(patchwork)
+library(ggpubr)
+
+  ## Tabellen (niet gebruikt in dit script)
+library(officer)
+library(flextable)
+
+  ## Connectie met access
+library(RODBC)
+```
+
+```{r data inlezen}
+boomdata <- read.csv('C:/3BR/3_AanvraagGegevens/INBO_UG_thesis_essentaksterfte/boomdata.csv', sep = ';', dec  = ',')
+stemdata <- read.csv('C:/3BR/3_AanvraagGegevens/INBO_UG_thesis_essentaksterfte/stemdata.csv', sep = ';', dec  = ',')
+plotdata <- read.csv('C:/3BR/3_AanvraagGegevens/INBO_UG_thesis_essentaksterfte/plotdata_dendro.csv', sep = ';', dec  = ',')
+vegetatie <- read.csv('C:/3BR/3_AanvraagGegevens/INBO_UG_thesis_essentaksterfte/vegetatie.csv', sep = ';', dec  = ',')
+verjonging <- read.csv('C:/3BR/3_AanvraagGegevens/INBO_UG_thesis_essentaksterfte/verjonging.csv', sep = ';', dec  = ',')
+```
+
+**@Astrid**: misschien ok handig om lookuplijsten (betekenis van de gebruikte codes) in te lezen.
+Ik had deze gegroepeerd in het access-bestand "lookuplijsten.accdb". 
+Je kan die binnenhalen door eerst een connectie te leggen met deze db. 
+Dan heb je wel library(RODBC) nodig.
+Zie chunk hierna
+
+```{r lookuplijsten_inlezen}
+con <- odbcConnectAccess2007("C:/3BR/3_AanvraagGegevens/INBO_UG_thesis_essentaksterfte/lookuplijsten.accdb")
+
+qiufrovitality <- sqlFetch(con, "qiufrovitality")
+qheightclass <- sqlFetch(con, "qHeightClass_regeneration")
+qspecies <- sqlFetch(con, "qSpecies")
+# close db
+odbcClose(con)
+# of
+#odbcCloseAll()
+```
+
+**@Astrid**: hierna heb ik iufro_vital en iufro_vital_shoots gecombineerd
+```{r stemdata_vital}
+str(stemdata)
+
+stemdata <- stemdata %>% 
+  mutate(iufro_vital = ifelse(iufro_vital == 50, iufro_vital_shoots, iufro_vital))
+
+table(stemdata$iufro_vital)
+
+```
+
+
+Belangrijk om in het achterhoofd te houden is dat essentaksterfte op lange termijn voor het sterven van essen zorgt. De bomen sterven echter niet van vandaag op morgen. Het is meer dan waarschijnlijk dat er heel wat individuen zijn die weliswaar aangetast zijn, maar nog niet dood zijn. In onderstaande verkenning wordt hier geen rekening mee gehouden. Het kan interessant zijn om in volgende analyses te kijken of aantasting zichtbaar is in aanwasdata en dergelijke. 
+
+## 2.1. Trend in aantal essen op plotniveau
+Hiervoor gebruiken we de dataset 'plotdata'. Soorten worden voorgesteld door een nummer, 14 komt overeen met gewone es en 15 met es/esdoorn.
+
+```{r}
+# alle plots met es aanwezig
+plotdata %>%
+  filter(species == c(14,15)) -> plotdata_es
+```
+
+Gewone es is in 162 plots verspreid over de verschillende bosreservaten aanwezig. In 41 van deze plots kwam es zowel in de eerste als in de tweede meetronde voor.
+
+**@Astrid**: ik (anja) kom hier iets anders uit, zie onderstaande chunk: 
+83 plots met in beide periodes es
+38 plots enkel periode 1
+41 plots enkel periode 2
+
+```{r}
+t <- plotdata_es %>% 
+  group_by(plot_id) %>% 
+  summarize(aantal_periodes = unique(period), 
+            max_periode = max(period)) %>% 
+  ungroup()
+
+table(t$aantal_periodes, t$max_periode)
+  #    1  2
+  # 1 38 41
+  # 2  0 83
+
+
+```
+
+```{r}
+# Stamtal
+ggplot(data = plotdata_es, mapping = aes(x = period, y = stem_number_ha, color = as.character(plot_id), group = plot_id)) +
+  geom_point() + geom_line() +
+  theme_bw() +
+  labs(title = 'Trend in stamtal van es',
+       x = 'Meetronde',
+       y = 'Stamtal es per hectare') +
+  guides(color = FALSE)
+```
+Bovenstaande figuur geeft de trend weer van het stamtal es in alle beschouwde bosreservaten. Hierbij wordt duidelijk dat er plots zijn waar het stamtal stijgt, gelijk blijft en daalt. 
+
+```{r}
+# Enkel Muizenbos in beschouwing nemen 
+plotdata_es %>%
+  filter(forest_reserve == 'Muizenbos') -> plotdata_es_muiz
+
+ggplot(data = plotdata_es_muiz, mapping = aes(x = period, y = stem_number_ha, color = as.character(plot_id), group = plot_id)) +
+  geom_point() + geom_line() +
+  theme_bw() +
+  labs(title = 'Trend in stamtal van es in het Muizenbos',
+       x = 'Meetronde',
+       y = 'Stamtal es per hectare',
+       color = 'plot_id')
+```
+
+Deze figuur geeft hetzelfde weer, maar dan enkel voor de plots in het Muizenbos waar ook es aanwezig is. Omdat ik nu vooral geïnteresseerd ben in de toestand van de essen in het Muizenbos, is het vervolg van deze verkenning enkel van toepassing op dit bos.
+
+Ondanks het feit dat er over heel Vlaanderen verschillende evoluties van het essen-stamtal waar te nemen zijn, is dit niet het geval in het Muizenbos. Hier kennen alle plots een dalend stamtal es. Omdat enkel het levende essen in rekening worden gebracht, duidt deze trend op een duidelijke sterfte. 
+**@Astrid**: niet noodzakelijk: stamtallen (spilniveau) kunnen sterk variëren: het zijn niet noodzakelijk individuele bomen of volledige hakhoutstoven die verminderen.
+Bv. hakhoutstoof in periode 1 met 10 dunne spillen, kan mogelijks in periode 2 een hakhoutstoof met 5 zwaardere spillen geworden zijn.
+
+
+Dit wordt bevestigd door de evolutie van het grondvlak en het volume van de levende en dode essen. 
+**@Astrid**: ik zou me dan eerder enkel baseren op grondvlak en volume
+
+
+```{r fig.width=8, fig.height=6}
+# visualisatie verandering volume
+P1 <- ggplot(data = plotdata_es_muiz %>%
+          pivot_longer(c('vol_bole_dead_m3_ha','vol_bole_alive_m3_ha'), 
+               names_to = 'AD',
+               values_to = 'vol_bole'),
+       mapping = aes(x = period, y= vol_bole, group = plot_id, color = as.character(plot_id))) +
+  facet_wrap(vars(AD)) +
+  geom_point() + geom_line() +
+  theme_bw() +
+  labs(title = 'Trend in stamvolumes van dode en levende es in het Muizenbos',
+       x = 'Meetronde',
+       y = 'Stamvolume es per hectare',
+       color = 'plot id')
+
+# visualisatie verandering grondvlak
+P2 <- ggplot(data = plotdata_es_muiz %>%
+          pivot_longer(c('basal_area_alive_m2_ha','basal_area_dead_m2_ha'), 
+               names_to = 'AD',
+               values_to = 'basal_area'),
+       mapping = aes(x = period, y= basal_area, group = plot_id, color = as.character(plot_id))) +
+  facet_wrap(vars(AD)) +
+  geom_point() + geom_line() +
+  theme_bw() +
+  labs(title = 'Trend in grondvlak van dode en levende es in het Muizenbos',
+       x = 'Meetronde',
+       y = 'Grondvlak es per hectare',
+       color = 'plot id')
+
+P1/P2 + plot_layout(guides = "collect")
+```
+
+Dit wordt bevestigd door de evolutie van het grondvlak en het volume van de levende en dode essen (bovenstaande figuur). In alle plots, behalve in plot 1202, daalt zowel het levend volume als het levend grondvlak es. Opvallend is echter dat in alle plots, inclusief plot 1202, zowel het dood volume als het dood grondvlak es stijgt. Het afwijkend gedrag van plot 1202 kan verschillende oorzaken hebben. Omdat vitaliteit en verjonging van es hier waarschijnlijk een rol in speelt, is het van belang ook de evolutie van deze variabelen te bekijken. Bovendien is het mogelijk dat de stijging in dood essenhout en de daling in levend essenhout niet het gevolg is van de essentaksterfte (of ziekte in het algemeen). Ook hier zal de vitaliteitsdata meer zekerheid verschaffen.  
+
+**@Astrid**: OPGEPAST: iufrovital = 50 zijn hakhoutstoven. de vitaliteit wordt op het niveau van de spillen bepaald. 
+Ik bezorg je de ruwe data van de spillen (stemdata.csv).
+
+**@Astrid**: ik zou de eerste plot van onderstaande chunk ook eerder weergeven als een barplot, en periode ev. als factor definiëren eerder dan als integer. 
+(het is beetje verwarrend dat op de X-as 1.5 staat voor periode ...)
+
+```{r fig.width=8, fig.height=6}
+boomdata %>%
+  filter(species == c(14),
+         forest_reserve == 'Muizenbos') %>%
+  select(plot_id, tree_id, year, period, iufro_vital) -> vit_es_muiz
+plotdata_es_muiz %>%
+  left_join(vit_es_muiz, by = c('plot_id', "year", "period")) -> vit_es_muiz
+
+ggplot(data = vit_es_muiz %>%
+  group_by(period) %>%
+  count(iufro_vital), 
+  mapping = aes(x = period, y = n, col = as.character(iufro_vital))) +
+  geom_point() + geom_line() +
+  theme_bw() +
+  labs(title = 'Evolutie van vitaliteit es in het Muizenbos',
+       x = 'Meetronde',
+       y = 'Aantal essen',
+       color= 'Vitaliteit')
+
+ggplot(data = vit_es_muiz, mapping = aes(x = iufro_vital, fill = as.character(period))) +
+  facet_wrap(vars(plot_id)) +
+  geom_bar() +
+  theme_bw() +
+  labs(title = 'Vitaliteit es in het Muizenbos',
+       x = 'Vitaliteit',
+       y = 'Aantal essen',
+       fill= 'Meetronde')
+```
+
+```{r voorstel_anja, fig.width=8, fig.height=6}
+vit_es_muiz <- boomdata %>%
+  filter(species == c(14),
+         forest_reserve == 'Muizenbos') %>%
+  select(plot_id, tree_id, year, period, iufro_vital, alive_dead, ind_sht_cop) %>% 
+  left_join(qiufrovitality %>% select(ID, vital_txt = Value1), by = c("iufro_vital" = "ID"))
+
+# plotdata_es_muiz %>%
+#   left_join(vit_es_muiz, by = c('plot_id', "year", "period")) -> vit_es_muiz
+
+ggplot(data = vit_es_muiz %>%
+  mutate(period = as.factor(period), 
+         vital_txt = as.factor(vital_txt)) %>% 
+  group_by(period) %>%
+  count(vital_txt), 
+  mapping = aes(x = period, y = n)) +
+  geom_bar(stat = "identity", position = "dodge", width = 0.7) +
+  # theme_bw() +
+  labs(title = 'Evolutie van vitaliteit es in het Muizenbos',
+       x = 'Meetronde',
+       y = 'Aantal essen') + 
+    facet_wrap(~vital_txt)
+
+# OF
+
+ggplot(data = vit_es_muiz %>%
+  mutate(period = as.factor(period), 
+         vital_txt = as.factor(vital_txt)) %>% 
+  group_by(period) %>%
+  count(vital_txt), 
+  mapping = aes(x = vital_txt, y = n, fill = period)) +
+  geom_bar(stat = "identity", position = "dodge", width = 0.7) +
+  # theme_bw() +
+  labs(title = 'Evolutie van vitaliteit es in het Muizenbos',
+       x = 'Vitaliteit',
+       y = 'Aantal essen') 
+
+
+
+ggplot(data = vit_es_muiz, mapping = aes(x = iufro_vital, fill = as.character(period))) +
+  facet_wrap(vars(plot_id)) +
+  geom_bar() +
+  theme_bw() +
+  labs(title = 'Vitaliteit es in het Muizenbos',
+       x = 'Vitaliteit',
+       y = 'Aantal essen',
+       fill= 'Meetronde')
+
+
+```
+
+Op basis van deze grafieken kan inderdaad gesteld worden dat de vitaliteit van de essen sterk gedaald is: 
+-	Er zijn geen krachtige essen meer aanwezig na de eerste meetronde
+-	Het aantal kwijnende essen is sterk gestegen, evenals het aantal dode essen
+-	Het aantal essen met een normale vitaliteit is sterk gedaald
+
+Op de barplots is te zien dat er wel grote verschillen zijn tussen plots onderling. In sommige plots (vb 1207, 1221, 1244,...) is het aantal dode essen sterk gestegen. In andere plots (vb 1220, 1217) lijkt het dat es volledig verdwenen is (geen meetgegevens uit de tweede ronde). Er zijn ook plots waar er essen (dood en levend) bijkomen (meer blauw dan oranje).
+
+Bekijken we plot 1202, dan zien we dat het stoofvolume van es in dit bestand gestegen is. Dit kan het stijgende levend houtvolume en grondvlak van es verklaren, terwijl de stijging in dode essen het stijgend volume en grondvlak dode es verklaart. Echter is plot 1202 niet de enige waar het volume stoof gestegen is, dus een helemaal sluitende verklaring is dit niet. 
+
+Deze figuren (en dan vooral de onderste) geven ook aanleiding tot het vermoeden dat er in de meeste plots wel verjonging van es aanwezig is (de oranje balkjes zijn kleiner dan de gecumuleerde blauwe balkjes). Deze verjonging verkeert echter in relatief slechte staat. 
+
+Opmerking: de verjonging werd in een ander jaar geïnventariseerd dan de vitaliteitsdata
+
+```{r fig.width=8, fig.height=6}
+verjonging %>%
+  filter(species == c(14),
+         forest_reserve == 'Muizenbos') %>%
+  select(plot_id, period, height_class, mean_number_of_trees_ha) -> verj_es_muiz
+plotdata_es_muiz %>%
+  left_join(verj_es_muiz, by = c('plot_id', "period")) -> verj_es_muiz
+
+# @Astrid: heightclass: eventueel joinen om duidelijkere grafiek te bekomen
+view(qheightclass)
+
+
+ggplot(data = verj_es_muiz %>%
+  group_by(height_class, period) %>%
+  summarise(som = sum(mean_number_of_trees_ha)), 
+  mapping = aes(x = period, y = som, col = as.character(height_class))) +
+  geom_point() + geom_line() +
+  theme_bw() +
+  labs(title = 'Evolutie van verjonging es in het Muizenbos',
+       x = 'Meetronde',
+       y = 'Aantal essen',
+       color= 'Height_class')
+
+ggplot(verj_es_muiz, aes(x = height_class, y = mean_number_of_trees_ha, fill = as.character(period))) +
+  facet_wrap(vars(plot_id)) +
+  geom_col() +
+  theme_bw() +
+  labs(title = 'Verjonging es in het Muizenbos',
+       x = 'Verjonging',
+       y = 'Aantal essen',
+       fill= 'Meetronde')
+```
+Bovenstaande barplot geeft een meer gedetailleerd beeld van de verjonging per plot. Hieruit blijkt dat er grote veerschillen zijn tussen de verschillende plots. Er zijn heel wat plots waar in de eerst meetronde veel verjonging aanwezig was, terwijl dit in de tweede meetronde niet het geval was. Dit kan zowel door sterfte als door groei komen. Boompjes groter dan 200 cm behoren tot groeiklasse 4000, maar deze kunnen natuurlijk verder groeien zodanig dat deze niet meer tot verjong gerekend worden. Bovendien kan ook de tijd een factor spelen. In plot 1225 was er bijvoorbeeld geen verjonging aanwezig in de eerste meetronde, maar wel in de tweede meetronde. Bovendien is de verjonging nog klein (laagste klasse) wat er op kan duiden dat deze nog relatief jong is. Vergelijken we de verjonging in deze plot met de vitaliteit, dan valt op dat in de eerste meetronde enkel stoofessen aanwezig zijn.
+
+Bovenstaande grafiek visualiseert de evolutie van de hoogteklassen. Het dalend aantal individuen uit de eerste verjongingsklasse (1000) is een indicatie dat er minder jonge individuen bijkomen. 
+
+## 2.2. Trend in andere soorten
+Tot nu toe is er enkel gekeken naar de evolutie van het aantal essen, maar de vraag is natuurlijk of hier andere soorten van profiteren. 
+
+```{r fig.width=8, fig.height=6}
+# aanwezige soorten in de plots met es in het muizenbos
+plotdata_es_muiz %>%
+  select(plot_id, period) %>%
+  left_join(plotdata, by = c('plot_id', 'period')) -> plotdata_es_muiz_totaal
+
+# visualisatie stamtal
+ggplot(data = plotdata_es_muiz_totaal %>%
+  filter(species != 14), 
+  mapping = aes(x = period, y = stem_number_ha, color = as.character(plot_id))) +
+  facet_wrap(vars(species)) + 
+  geom_point() + geom_line() +
+  theme_bw() +
+  labs(title = 'Evolutie van stamtal van andere soorten in het Muizenbos',
+       x = 'Meetronde',
+       y = 'Stamtal per hectare',
+       color= 'Plot')
+```
+
+Zoals op onderstaande figuur zichtbaar is, zijn er inderdaad een aantal evoluties in stamtal van andere soorten waar te nemen, maar dit is niet noodzakelijk het gevolg van meer licht op de bosbodem door essentaksterfte of andere verschijnselen gelinkt aan de essensterfte. Dit kan ook gewoon bosontwikkeling zijn. De trends over verschillende plots voor eenzelfde soorten zijn echter wel gelijkaardig.  
+
+```{r fig.width=8, fig.height=6}
+ggplot(data = plotdata_es_muiz_totaal %>%
+  filter(species != 14),
+  mapping = aes(x = period, y = stem_number_ha)) +
+  facet_wrap(vars(species)) + 
+  geom_point() + 
+  geom_smooth(method = loess) +
+  theme_bw() +
+  labs(title = 'Evolutie van stamtal van andere soorten in het Muizenbos',
+       x = 'Meetronde',
+       y = 'Stamtal per hectare')
+```
+
+Op het eerste zicht, lijken de trends niet zeer uitgesproken te zijn. De significantie kan getest worden door een model aan deze data te fitten en er daarna statistische test op uit te voeren. 
+
+De correlatie tussen de evolutie van es en de evolutie van andere soorten is echter meer van belang in deze verkennende data-analyse. 
+
+```{r fig.width=8, fig.height=6}
+# Andere (veelvoorkomende) volwassen soorten ten opzichte van volwassen es
+plotdata_es_muiz_totaal %>%
+  filter(species == 14 | species == 16 | species == 28 | species == 51 | species == 77 | species == 87 | species == 89 ) %>%
+  pivot_wider(names_from = 'species',
+              values_from = 'stem_number_ha') %>%
+  rename(es = `14`, esdoorn = `16`, hazelaar = `28`, populier = `51`, wilg = `77`, zomereik = `87`, zwarteels = `89` ) %>%
+  group_by(plot_id, period) %>%
+  summarise (es = sum(es, na.rm = TRUE), 
+             esdoorn = sum(esdoorn, na.rm = TRUE), 
+             hazelaar = sum(hazelaar, na.rm = TRUE),
+             populier = sum(populier, na.rm = TRUE),
+             wilg  = sum(wilg, na.rm = TRUE),
+             zomereik  = sum(zomereik, na.rm = TRUE),
+             zwarteels  = sum(zwarteels, na.rm = TRUE)) -> cordat
+
+# Correlatie es - esdoorn (16)
+P1 <- ggscatter(cordat, x = "es", y = "esdoorn", 
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "pearson",
+          xlab = "stamtal es per ha", ylab = "stamtal esdoorn per ha", 
+          title = 'es - esdoorn (16)')
+
+# Correlatie es – hazelaar (28)
+P2 <- ggscatter(cordat, x = "es", y = "hazelaar", 
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "pearson",
+          xlab = "stamtal es per ha", ylab = "stamtal hazelaar per ha", 
+          title = 'es – hazelaar (28)')
+
+# Correlatie es – populier (51)
+P3 <- ggscatter(cordat, x = "es", y = "populier", 
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "pearson",
+          xlab = "stamtal es per ha", ylab = "stamtal populier per ha", 
+          title = 'es – populier (51)')
+
+# Correlatie es – wilg breedbladig (77)
+P4 <- ggscatter(cordat, x = "es", y = "wilg", 
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "pearson",
+          xlab = "stamtal es per ha", ylab = "stamtal wilg per ha", 
+          title = 'es – wilg breedbladig (77)')
+
+# Correlatie es – zomereik (87)
+P5 <- ggscatter(cordat, x = "es", y = "zomereik", 
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "pearson",
+          xlab = "stamtal es per ha", ylab = "stamtal zomereik per ha", 
+          title = 'es – zomereik (87)')
+
+# Correlatie es – zwarte els (89)
+P6 <- ggscatter(cordat, x = "es", y = "zwarteels", 
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "pearson",
+          xlab = "stamtal es per ha", ylab = "stamtal zwarte els per ha", 
+          title = 'es – zwarte els (89)')
+(P1+P2+P3)/(P4+P5+P6)
+```
+
+Bovenstaande figuur geeft de trend tussen stamtal es en de andere soort weer, samen met de pearson-correlatie en de significantie van de relatie. Hieruit blijkt dat geen enkele correlatie significant is. Echter zijn dit relaties tussen es en reeds volwassen individuen van andere soorten. Hierdoor is het mogelijk dat de correlatie tussen de volwassen es en de verjonging van andere soorten of tussen de vitaliteit van es en verjonging van andere soorten wel significant is. 
+
+```{r}
+# Verjonging van andere (veelvoorkomende) soorten ten opzichte van volwassen es
+verjonging %>%
+  filter(forest_reserve == 'Muizenbos') %>%
+  select(plot_id, period, species, mean_number_of_trees_ha) -> cordat
+plotdata_es_muiz %>%
+  select(-species) %>%
+  left_join(cordat, by = c('plot_id','period')) -> verj_andere_muiz
+ 
+ggplot(data = verj_andere_muiz, mapping = aes(x = period, y = mean_number_of_trees_ha)) +
+  facet_wrap(vars(species)) + 
+  geom_point() + 
+  geom_smooth(method = loess) +
+  theme_bw() +
+  labs(title = 'Evolutie van aantal individuen van andere soorten in het Muizenbos',
+       x = 'Meetronde',
+       y = 'Aantal individuen per hectare')
+```
+
+Bekijken we de verjonging van es, dan blijkt dat er ook hier voor niet veel soorten een trend waarneembaar is tussen de twee meetrondes. 
+
+Omdat er slechts een paar soorten (14, 20, 28, 39, 54, 69 en 87) zijn waar genoeg data voor handen is, worden enkele deze soorten bekeken. Let op bij onderstaande figuur! Deze visualiseert het aantal bomen, niet het aantal stammen. 
+
+```{r fig.width=16, fig.height=12}
+# Verjonging van andere (veelvoorkomende) volwassen soorten ten opzichte van volwassen es
+verjonging %>%
+  filter(forest_reserve == 'Muizenbos',
+         species == 14 | species == 20 | species == 28 | species == 39 | species == 54 | species == 69 | species == 87) %>%
+  select(plot_id, period, species, mean_number_of_trees_ha, height_class) -> cordat
+plotdata_es_muiz %>%
+  select(-species) %>%
+  left_join(cordat, by = c('plot_id','period')) %>%
+  group_by(plot_id, period, species, number_of_trees_ha, as.character(height_class)) %>%
+  summarise(som = sum(mean_number_of_trees_ha)) %>%
+  pivot_wider(names_from = 'species',
+              values_from = 'som', 
+              values_fill = 0) %>%
+  rename(es = `14`, GelderseRoos = `20`, hazelaar = `28`, lijsterbes = `39`, RodeKornoelje = `54`, zomereik = `87`, vlier = `69`, height_class = `as.character(height_class)`) -> cordat
+
+# Correlatie es - es (14)
+P1 <- ggscatter(cordat, x = "number_of_trees_ha", y = "es", color = 'height_class', 
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "pearson",
+          xlab = "individuen es per ha", ylab = "individuen verj. es per ha", 
+          title = 'es - es (14)') +
+  stat_cor(aes(color = height_class), label.x = 500)
+
+# Correlatie es – hazelaar (28)
+P2 <- ggscatter(cordat, x = "number_of_trees_ha", y = "hazelaar", color = 'height_class',
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "pearson",
+          xlab = "individuen es per ha", ylab = "individuen hazelaar per ha", 
+          title = 'es – hazelaar (28)') +
+  stat_cor(aes(color = height_class), label.x = 500)
+
+# Correlatie es – gelderse roos (20)
+P3 <- ggscatter(cordat, x = "number_of_trees_ha", y = "GelderseRoos", color = 'height_class',
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "pearson",
+          xlab = "individuen es per ha", ylab = "individuen Gelderse roos per ha", 
+          title = 'es – G. roos (20)') +
+  stat_cor(aes(color = height_class), label.x = 500)
+
+# Correlatie es – lijsterbes (39)
+P4 <- ggscatter(cordat, x = "number_of_trees_ha", y = "lijsterbes", color = 'height_class',
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "pearson",
+          xlab = "individuen es per ha", ylab = "individuen lijsterbes per ha", 
+          title = 'es – lijsterbes (39)') +
+  stat_cor(aes(color = height_class), label.x = 500)
+
+# Correlatie es – zomereik (87)
+P5 <- ggscatter(cordat, x = "number_of_trees_ha", y = "zomereik", color = 'height_class',
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "pearson",
+          xlab = "individuen es per ha", ylab = "individuen zomereik per ha", 
+          title = 'es – zomereik (87)') +
+  stat_cor(aes(color = height_class), label.x = 500)
+
+# Correlatie es – rode kornoelje (54)
+P6 <- ggscatter(cordat, x = "number_of_trees_ha", y = "RodeKornoelje", color = 'height_class',
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "pearson",
+          xlab = "individuen es per ha", ylab = "individuen rode kornoelje per ha", 
+          title = 'es – r. kornoelje (54)') +
+  stat_cor(aes(color = height_class), label.x = 500)
+
+# Correlatie es – vlier (69)
+P7 <- ggscatter(cordat, x = "number_of_trees_ha", y = "vlier", color = 'height_class',
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "pearson",
+          xlab = "individuen es per ha", ylab = "individuen vlier per ha", 
+          title = 'es – vlier (69)') +
+  stat_cor(aes(color = height_class), label.x = 500)
+(P1+P2+P3+P4+P5+P6+P7) + plot_layout(guides = "collect") & theme(legend.position = 'bottom')
+```
+
+HIER IS IETS VERKEERD !!!
+Hieronder staat het probleem gevisualiseerd:
+
+Het eerste codeblok is de data die in de figuur hierboven ook wordt gebruikt, dus met inbegrip van height_class. Het tweede codeblok is zonder height_class. Dat is de enige variabele die verschilt, maar op de figuur is een verschillende correlatie en significatie af te leiden. 
+
+Ik vermoed dat dit iets te maken heeft met hoe ik omga met missende waarden (values_fill = 0), maar ik snap niet echt hoe dit komt of hoe ik dit probleem kan oplossen. 
+
+Ik denk dat ik deze fout dan ook gemaakt heb bij het onderzoek van de correlatie tussen es en andere soorten (niet verjonging). 
+
+**@Astrid**: verschillende correlatie en significantie kan komen doordat je minder waarnemingen hebt (door hoogteklasses samen te nemen).
+Ook nog klein typfoutje in laatste chunk ;-)
+
+```{r}
+# Verjonging van andere (veelvoorkomende) volwassen soorten ten opzichte van volwassen es
+test <- verjonging %>%
+  filter(forest_reserve == 'Muizenbos',
+         species == 14 | species == 20 | species == 28 | species == 39 | species == 54 | species == 69 | species == 87) %>%
+  select(plot_id, period, species, mean_number_of_trees_ha, height_class) 
+
+test2 <- plotdata_es_muiz %>%
+  select(-species) %>%
+  rename(nr_trees_ha_es = number_of_trees_ha) %>% 
+  left_join(test, by = c('plot_id','period')) %>%
+  group_by(plot_id, period, species, nr_trees_ha_es, as.character(height_class)) %>%
+  summarise(som_regeneration = sum(mean_number_of_trees_ha)) %>%
+  pivot_wider(names_from = 'species',
+              values_from = 'som_regeneration', 
+              values_fill = 0) %>%
+  rename(es = `14`, GelderseRoos = `20`, hazelaar = `28`, lijsterbes = `39`, RodeKornoelje = `54`, zomereik = `87`, vlier = `69`, height_class = `as.character(height_class)`)
+
+
+ ggscatter(test2, x = "nr_trees_ha_es", y = "es", 
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "pearson",
+          xlab = "individuen es per ha", ylab = "individuen verj. es per ha", 
+          title = 'es - es (14)') 
+```
+
+```{r}
+# Verjonging van andere (veelvoorkomende) volwassen soorten ten opzichte van volwassen es
+test3 <- verjonging %>%
+  filter(forest_reserve == 'Muizenbos',
+         species == 14 | species == 20 | species == 28 | species == 39 | species == 54 | species == 69 | species == 87) %>%
+  select(plot_id, period, species, mean_number_of_trees_ha)
+
+test4 <- plotdata_es_muiz %>%
+  select(-species) %>%
+  rename(nr_trees_ha_es = number_of_trees_ha) %>%
+  left_join(test3, by = c('plot_id','period')) %>%
+  group_by(plot_id, period, species, nr_trees_ha_es) %>%
+  summarise(som = sum(mean_number_of_trees_ha)) %>%
+  pivot_wider(names_from = 'species',
+              values_from = 'som', 
+  # @Astrid: in lijn hierna had je een foutje staan "values_fill=)" je was de 0 vergeten
+  # maar maakt niet veel verschil ....
+              values_fill = 0) %>%
+  rename(es = `14`, GelderseRoos = `20`, hazelaar = `28`, lijsterbes = `39`, RodeKornoelje = `54`, zomereik = `87`, vlier = `69`) 
+
+ ggscatter(test4, x = "nr_trees_ha_es", y = "es", 
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "pearson",
+          xlab = "individuen es per ha", ylab = "individuen verj. es per ha", 
+          title = 'es - es (14)') 
+```
+
+
+
+

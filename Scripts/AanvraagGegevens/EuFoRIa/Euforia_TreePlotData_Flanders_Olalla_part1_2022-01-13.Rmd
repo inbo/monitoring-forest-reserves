@@ -1,0 +1,528 @@
+---
+title: "Tree data from the Flemish forest reserve network - EUFORIA network"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"  
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: FALSE
+      smooth_scroll: FALSE
+---
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  # eval = FALSE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+#rm(list = ls())
+
+# library(tidyr)
+# library (rlang)
+# library(dplyr)
+# library(RODBC)
+# library(lubridate)
+# library(knitr)
+# library(here)
+# library(openssl)
+# library(kableExtra)
+# library(stringr)
+# library(forrescalc)
+# library(tibble)
+
+
+source(here::here("scripts/Setup.R"))  # libraries, basic functions & paths
+```
+
+
+# Request
+
+This script creates the data as requested by Diaz Yanez Olalla project for a a project proposal for the EuFoRIa network.
+
+*I am a postdoctoral researcher in Harald's Bugmann group (ETH Zurich). In collaboration with Tomáš Přívětivý and Kamil Kral (VUKOZ Brno)  we have prepared a project proposal for the EuFoRIa
+ network (attached in this email). The main objective of our research proposal is to better understand snag dynamics and how long they last standing.*
+
+Contact: olalla.diaz@usys.ethz.ch
+
+```{r Path}
+path_to_request <- paste0(path_to_datarequests, "EUFORIA_Olalla-Tomas-Kamil_Snags_2022-01-13/")
+
+path_to_EUFORIA_algemeen <- paste0(path_to_datarequests, "EUFORIA_algemeen/enkel_INBO/")
+```
+
+```{r load_request}
+request_plotlevel <- read_csv(paste0(path_to_request, "Database_plot.csv"))
+request_treelevel <- read_csv(paste0(path_to_request, "Database_tree.csv"))
+
+names(request_plotlevel)
+names(request_treelevel)
+```
+
+
+```{r load_link_id_euforia_fieldmap}
+# EUFORIA gebruikt andere naamgeving om onze forest_reserves te identificeren
+forest_reserve_list <- read_xlsx(paste0(path_to_EUFORIA_algemeen, "INBO_link_forestreserve_EUFORIA_fieldmap.xlsx"))
+
+```
+
+<!-- The script below generates tree and plot data according to the guidelines given in this document: -->
+The script below generates tree and plot data according to the guidelines ....:
+
+**Plot level data**
+"plot/reserve ID"                                                                  
+"inventory years"                                                                  
+"primeval/natural forest"                                                          
+"reserve establishment year (or/and year from which management stopped)"           
+"plot size"                                                                        
+"plot coordinates"                                                                 
+"dbh measurement threshold"                                                        
+"aspect"                                                                           
+"slope"                                                                            
+"elevation"                                                                        
+"relevant natural disturbance dynamics/management"                                 
+"length of time that deadwood has not been removed from the forest (no management)"
+
+
+**Tree level data**
+"tree ID"                                     
+"plot/reserve ID"                            
+"species"                                    
+"alive/dead"                                  
+ "dbh"                                         
+ "height"                                     
+"volume"                                      
+ "standing/lying"                              
+ "tree coordinates"                           
+"measurement year"                            
+"cause of death"                              
+"broken / whole tree (snags)"                
+"length of downed deadwood"                   
+"height of broken standing deadwood"          
+"decay class"                                 
+"ratio of predominant direction of tree fall"
+
+
+# Load data
+
+<!-- Onderstaande tabel geeft een overzicht van de gegevens die gebruikt worden voor de analyse.   -->
+
+```{r DataOverview, results="markup"}
+data_overzicht <- data.frame(
+  tabelnaam = c(dbFieldmap, "tblTreeSpeciesCharacteristics_BR.csv", dbStrata),
+  locatie = c(path_to_fieldmap, paste (here::here("Data/ExterneData")), path_to_strata),
+  md5 = c(md5(path_to_fieldmap), md5("tblTreeSpeciesCharacteristics_BR.csv"), md5(path_to_strata))
+)
+
+data_overzicht %>%
+  kable() %>%
+  kable_styling()
+
+#dbAnalyseDataTxt <- substring(dbAnalyseData, regexpr("/", dbAnalyseData) + 1)  # voor gebruik bij wegschrijven naar resultatendb
+
+```
+
+
+```{r load_treecharact}
+TreeCharact <- read.csv2(paste (here::here("Data/ExterneData"), "/tblTreeSpeciesCharacteristics_BR.csv", sep = ""))
+str(TreeCharact)
+
+```
+
+
+```{r load_lkplists}
+# con <- odbcConnectAccess2007(path_to_fieldmap)
+#   
+#   qIndShootCop <- sqlFetch(con, "qIndShootCop", stringsAsFactors = FALSE)
+#   qAliveDead <- sqlFetch(con, "qAliveDead", stringsAsFactors = FALSE)
+#   qSpecies <- sqlFetch(con, "qAliveDead", stringsAsFactors = FALSE)
+#     
+# odbcClose(con)
+
+# Makkelijker vanuit forresdat
+
+qIndShootCop <- read_vc(file = "qIndShootCop", root = path_to_forresdat_data)
+qAliveDead <- read_vc(file = "qAliveDead", root = path_to_forresdat_data)
+qDecaystage <- read_vc(file = "qdecaystage", root = path_to_forresdat_data)
+qIntactSnag <- read_vc(file = "qIntactSnag", root = path_to_forresdat_data)
+qSpecies <- read_vc(file = "qSpecies", root = path_to_forresdat_data)
+
+
+```
+
+
+```{r load_plotinfo_strata}
+con <- odbcConnectAccess2007(path_to_strata_db)
+ strata_tables <- sqlTables(con) %>% filter(!str_detect(TABLE_NAME, "MSys"))
+ strata <- sqlFetch(con, "strata_remaining", stringsAsFactors = FALSE)
+ location <- sqlFetch(con, "strata_location", stringsAsFactors = FALSE)
+ plotinfo <- sqlFetch(con, "info_survey", stringsAsFactors = FALSE)
+odbcClose(con)
+
+```
+
+
+```{r load_trees_CP}
+# data_dendro <- load_data_dendrometry(path_to_fieldmap, plottype = "Circular plot", extra_variables = TRUE)
+
+# beter uit folder "C:\03_BR\1_Dataverwerking\Output\raw-data" halen
+trees_calc <- read_csv2(paste0(path_to_treelevel_csv, "trees_calc.csv")) %>% 
+  filter(plottype == 20) %>% select(-1)
+stems_calc<- read_csv2(paste0(path_to_treelevel_csv, "stems_calc.csv")) %>% 
+  filter(plottype == 20) %>% select(-1)
+
+# str(trees_calc)
+# summary(trees_calc)
+
+# colnames(trees_calc)
+# colnames(stems_calc)
+```
+
+
+```{r OnlyZeroManagementPlots}
+# !! OPGEPAST: 10 plots met “Exotenbeheer na 1e meting”: 701, 707, 709, 727, 728, 738, 739, 740, 759, 760
+# => deze zijn niet representatief => uit algemene verwerking halen
+# 
+trees_calc <- trees_calc %>%
+  filter(!(plot_id %in% c(701, 707, 709, 727, 728, 738, 739, 740, 759, 760)))
+
+stems_calc <- stems_calc %>%
+  filter(!(plot_id %in% c(701, 707, 709, 727, 728, 738, 739, 740, 759, 760)))
+
+plotinfo <- plotinfo %>%
+  filter(!(plot_id %in% c(701, 707, 709, 727, 728, 738, 739, 740, 759, 760)))
+
+
+```
+
+
+```{r only_processed_data}
+colnames(trees_calc)
+
+trees_calc_ <- trees_calc %>% 
+  left_join(plotinfo %>% select(plot_id, period, data_processed), by = c("plot_id", "period")) %>% 
+  filter(data_processed == TRUE)   # enkel verwerkte plots, met dh-curves
+
+stems_calc_ <- stems_calc %>% 
+  left_join(plotinfo %>% select(plot_id, period, data_processed), by = c("plot_id", "period")) %>% 
+  filter(data_processed == TRUE)  
+
+plotinfo <- plotinfo %>%
+  filter(data_processed == TRUE)  
+
+```
+
+
+```{r minimal_two_surveys}
+two_surveys <- plotinfo %>% 
+  select(forest_reserve, plot_id, plottype, period, data_processed) %>% 
+  filter(plottype == 20 & data_processed == TRUE) %>% 
+  group_by(forest_reserve, plot_id) %>% 
+  summarize(aantal_surveys = n()) %>% 
+  ungroup() %>% 
+  filter(aantal_surveys > 1)
+
+trees_calc__ <- trees_calc_ %>%
+  inner_join(two_surveys, by = c("plot_id", "forest_reserve"))
+
+stems_calc__ <- stems_calc_ %>%
+  inner_join(two_surveys, by = c("plot_id", "forest_reserve"))
+
+trees_calc_ <- trees_calc__
+stems_calc_ <- stems_calc__
+
+plotinfo_ <- plotinfo %>%
+  inner_join(two_surveys, by = c("plot_id", "forest_reserve")) 
+
+plotinfo <- plotinfo_
+
+```
+
+```{r overview}
+list_reserves <- trees_calc_ %>% 
+  group_by(forest_reserve) %>% 
+  summarize() %>% 
+  ungroup()
+
+list_reserves %>% dplyr::pull(forest_reserve)
+
+nrow(list_reserves) == 11
+
+list_reserves2 <- plotinfo_ %>% 
+  group_by(forest_reserve) %>% 
+  summarize() %>% 
+  ungroup()
+
+list_reserves == list_reserves2
+```
+
+
+# File 1: plot_data
+
+- plot/reserve ID       x                                                          
+- inventory years  x                                                              
+- primeval/natural forest     x                                                  
+- reserve establishment year (or/and year from which management stopped) x       
+- plot size  x 
+- plot coordinates x
+- dbh measurement threshold  x
+- aspect x 
+- slope   x 
+- elevation  x
+- relevant natural disturbance dynamics/management
+- length of time that deadwood has not been removed from the forest (no management)  x
+- welke naam voor forest_reserve: zie `forest_reserve_list` (aangeleverd door Kris aan Euforia)  x
+
+---- 
+
+!! nog beslissen welke bron voor unmanaged_since te gebruiken: gsheet of monitoringrapport
+
+*Antwoord Kris:*
+ik zou de datum meegeven die het meest relevant is voor de bomen die zij bekijkt en dat is de oudste datum.
+We moeten er hoe dan ook wel op letten dat we geen geringde bomen doorgeven aan haar: die vertonen een ander afbraakpatroon en gaan sneller afbreken op de ring dan natuurlijk afgestorven bomen.
+Als ik het goed had focust zij in eerste instantie op beuk, dus daar stelt zich dit niet. Enkel Am. eiken en naaldhoutsoorten als douglas en lork zijn in de reservaten soms geringd.
+
+=> `plot_unmanaged_since`
+
+
+```{r create_plot_data}
+plot_data <- plotinfo %>%   # one record per year
+  filter(plottype == 20,   # circular plots - 1684 records
+         data_processed == TRUE) %>%   # enkel verwerkte plots, met dh-curves
+  left_join(forest_reserve_list, by = c("plottype", "forest_reserve" = "forest_reserve_fieldmap")) %>% 
+  left_join(location %>% select(-Unieknr, -SiteName, -SubArea), by = c("plot_id")) %>% 
+  left_join(strata %>% select(-Unieknr), by = c("plot_id")) %>% 
+  mutate(plotsize_m2 = pi*(rA4_m)^2,
+         years_of_no_management = year - plot_unmanaged_since,
+         slope = "<5%",
+         aspect = "none",
+         primeval = "no") %>% 
+  select(plot_id, 
+         plottype, 
+         SiteID_EUFORIA, institute, res_ID_inst, reserve_name,
+         forest_reserve_fieldmap = forest_reserve, 
+         # SiteName, SubArea,
+         # Site_subsite, 
+         survey_number, year,
+         plotsize_m2,
+         contains("TresHoldDBH_A"), 
+         # TresHoldDiam_Deadw_A4_mm,
+         Management_type, plot_unmanaged_since,
+         years_of_no_management, reserve_establishment_yr,
+         slope, aspect,
+         XY_co, XLambert72, YLambert72, Z_m_TAW, LatLon_co, XLon_wgs84, YLat_wgs84
+         ) 
+
+names(plot_data)
+# summary(plot_data)
+
+# ? NA's
+which(is.na(plot_data), arr.ind=TRUE)
+
+
+```
+
+# File 2: tree_data
+
+## Variabelen
+
+- tree ID  x 
+- plot/reserve ID  
+- species  x
+-	alive/dead  x
+- dbh  x 
+- height x 
+- volume  x
+- standing/lying  x
+- tree coordinates x 
+- measurement year  (date_dendro)   x
+- cause of death !! overal natuurlijk (daarom plots in Heirnisse met exotenbeheer weggefilterd) 
+- broken / whole tree (snags)  x
+- length of downed deadwood  = calch_height - height_m bij snags  x
+- height of broken standing deadwood   = bij snags height_m ipv calc_height  x
+- decay class  x 
+- ratio of predominant direction of tree fall  
+
+<!-- ?? https://www.meteoblue.com/en/weather/historyclimate/climatemodelled/ghent_belgium_2797656 -->
+<!-- predominant wind direction -->
+<!-- bevat een windroos thv Gent -->
+<!-- Vooral SW richting -->
+
+
+## Hoe omgaan met hakhoutstoven?
+
+Afgesproken dat ik stem level data bezorg, zie mail van 18/2/2022:  
+
+*And another bigger issue is about how we handle coppice wood.*
+
+*The way we handle coppice wood is determined by the software we use in the field (FieldMap from Ifer).*
+*We look at coppice as if it was one tree (one record), with mean diameter of all shoots (representing a mean basal area) saved as the tree diameter, and an extra variable "TreeNumber" indicating how many shoots the coppice counts. *
+*Details on the shoots (exact diameter, decaystage, intact/snag of every shoot) are stored in a seperate table. *
+*Only the trees are linked between censuses, not the individual shoots.*
+*As a "tree" can only be dead or alive - not both - the living and the dead part of the coppice have a different tree_measure_id.*
+*Also, as coordinates have to be unique for each "tree", we have to use a minimal shift of the coordinates between the dead and the living part of one coppice tree (when they are both present at the same time).*
+
+*For a correct link between coppice (both the living and the dead part), we use coppice-id to create a unique tree-id. *
+*Important to know is that XY may differ slightly between the living and dead shoots of the same coppice.*
+
+**I'd suggest I give you a list of all stems (= individual trees + seperate shoots of coppice wood).  **
+**Shoots of the same coppice will then have the same (non-unique) tree-id.**
+
+----
+
+`Trees_calc` bevat een unieke `tree_id` per boom (die constant blijft doorheen de tijd),
+verschillend van de `tree_measure_id` uit fieldmap, die wel varieert doorheen de tijd..
+
+Deze `tree_id` wordt in het package aangemaakt obv old_id.
+
+**OPGEPAST**
+Bij hakhout kan/kon dit soms tot gemiste linken leiden. 
+(zie ook "TreeMortalityData_DetailHakhout.Rmd")
+
+Hakhoutstoven worden opgesplitst in een levend en dood deel, 
+en elk deel wordt dan als een afzonderlijke boom beschouwd 
+(een boom kan immers niet én levend én dood tegelijk zijn)
+
+OldID wordt standaard toegekend aan het levende deel van de hakhoutstoof.
+Het dode deel wordt gelinkt via CoppiceID.
+Indien er enkel een dood deel is (en geen levend deel), dan wordt daar OldID aan toegekend.
+
+Dat wil zeggen dat er zich enkel een probleem stelt wanneer er in één van de 
+twee periodes zowel een levend als een dood deel voorkomt.
+In de andere gevallen is de koppeling die gebeurt via OldID correct.
+
+**OPLOSSING**
+Daarom wordt in code hierna voor hakhout dat in één van de 
+twee periodes uit zowel een levend als een dood deel bestaat, de tree_id bepaald obv coppice_id.
+
+Voor de 11 verwerkte CP's + KV Muizenbos is die koppeling gecheckt en OK bevonden.
+
+Dit houdt in dat tree_id niet meer uniek is.
+Dat geeft dan weer problemen wanneer we er een "wijde" tabel van willen maken.
+
+Daarom wordt er een _a of _b toegevoegd, afh. of het om levend of dood deel van een hakhoutstoof gaat.
+Indien we toch één ID per hakhout willen, ongeacht levend/dood, dan kunnen we makkelijk de _a en _b verwijderen (= `tree_id_non_unique`).
+
+## Practisch
+
+We vertrekken van de stem data (`stems_calc`), niet van de tree data.
+
+```{r select_variables_stems}
+colnames(stems_calc_)
+
+no_decaystage <- stems_calc_ %>% filter(is.na(decaystage))
+nrow(no_decaystage) # 43
+
+tree_data <- stems_calc_ %>% 
+  rename(alive_dead_cde = alive_dead, 
+         ind_sht_cop_cde = ind_sht_cop,
+         intact_snag_cde = intact_snag,
+         decaystage_cde = decaystage) %>% 
+  mutate(
+      alive_dead = ifelse (alive_dead_cde == 11, "alive",
+                           ifelse(alive_dead_cde == 12, "dead", NA)),
+      tree_multistemmed = ifelse (ind_sht_cop_cde %in% c(10, 11), "no",
+                           ifelse(ind_sht_cop_cde == 12, "yes", NA)),
+      intact_snag = ifelse (intact_snag_cde == 10, "snag",
+                           ifelse(intact_snag_cde == 11, "intact", NA))
+      ) %>% 
+  left_join(qDecaystage %>% select(ID, decaystage = Value2), by = c("decaystage_cde" = "ID")) %>% 
+  left_join(TreeCharact, by = c("species" = "IDTreeSp")) %>% 
+  mutate(cause_of_death = "natural death",
+         standing_lying = "standing",
+         height_broken_deadw = ifelse(intact_snag_cde == 10, height_m, NA),
+         length_downed_deadwood = ifelse(intact_snag_cde == 10, calc_height_m - height_m, NA)) %>% 
+  select(plot_id, plottype, 
+         tree_id = tree_id_non_unique, tree_measure_id, coppice_id,
+         x_local, y_local, 
+         period, 
+         IDTreeSp = species, NameSc, Genus, Spec, 
+         alive_dead, intact_snag, tree_multistemmed, decaystage_cde, decaystage,
+         dbh_mm, height_m, calc_height_m, vol_bole_m3, vol_crown_m3, vol_tot_m3,
+         # tree_number,
+         cause_of_death,
+         standing_lying,
+         height_broken_deadw, length_downed_deadwood)
+
+# str(tree_data)
+
+summary(tree_data)
+
+```
+
+Missing values?
+
+```{r CheckNA_stems}
+# height_NA - volume!!
+tree_data %>% filter(is.na(calc_height_m)) %>% nrow() == 0
+check_na <- tree_data %>% filter(is.na(vol_bole_m3))
+
+# hier aanpassen in afwachting tot Peter het aanpast in db (dd 21/2/2022)
+tree_data_ <- tree_data %>% 
+  mutate(vol_bole_m3 = ifelse(tree_id == "1_816_550" & period == 1,
+                              0.0413, vol_bole_m3),
+         vol_crown_m3 = ifelse(tree_id == "1_816_550" & period == 1,
+                              0.0227, vol_crown_m3),
+         vol_tot_m3 = ifelse(tree_id == "1_816_550" & period == 1,
+                              0.0639, vol_tot_m3),
+         intact_snag = ifelse(tree_id == "1_816_550" & period == 1,
+                              11, intact_snag)
+  )
+
+# names(tree_data_)
+```
+
+
+
+```{r tree_data_final}
+tree_data_final <- tree_data_ %>% 
+  select(-plottype, -tree_measure_id, coppice_id)
+
+# head(tree_data_final)
+colnames(tree_data_final)
+
+# summary(tree_data_final)
+```
+
+
+
+Enkel plot_data van de plots waar ook tree_data aangeleverd wordt.
+
+```{r vgl_plots}
+unique(plot_data$plot_id) == unique(tree_data_final$plot_id)
+
+# enkel deze plots waarvan er ook treedata aangeleverd worden, meegeven
+tree_plots <- tree_data_final %>% 
+  distinct(plot_id) 
+
+plot_data_final <- plot_data %>% 
+  filter(plot_id %in% tree_plots$plot_id) 
+
+nrow(plot_data) == nrow(plot_data_final)
+
+```
+
+
+
+# Wegschrijven output
+
+De resultaten worden weggeschreven naar csv.
+
+```{r WegschrijvenOutput, eval = FALSE}
+write.csv2(plot_data_final, paste0(path_to_request, "Output/Flanders_plot_data_2022-03-22.csv"))
+
+write.csv2(tree_data_final, paste0(path_to_request, "Output/Flanders_tree_data_2022-02-22.csv"))
+
+```
+

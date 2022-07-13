@@ -1,0 +1,233 @@
+---
+title: "Data from the Flemish forest reserve network, volumes on plot level - Cost Bottoms Up"
+author: "Anja Leyman"
+date: "22 april 2020"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: FALSE
+      smooth_scroll: FALSE
+---
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup_ForresCalc.R"))
+
+
+```
+
+
+```{r SetupSelectieVwdn}
+lijst_BRen <- c("Everzwijnbad", "Bos Terrijst", "Pruikemakers", "Wijnendalebos", "Sevendonck")
+
+```
+
+
+# Vraagstelling
+
+Dit script maakt de tabellen aan zoals gevraagd in het kader van de Cost-actie "Bottoms Up", meer bepaald volumes op plotniveau. 
+
+
+```{r Path}
+# deze worden ook in "Setup_ForresCalc.R" gedefinieerd, hier ev. extra "paths" toevoegen indien nodig voor huidig script
+      # path_to_fieldmap <- "C:/3BR/5_MDB_BOSRES_selectieEls/FieldMapData_MDB_BOSRES_selectieEls.accdb"
+      # path_to_git_forresdat <- "C:/3BR/2_VisualisatieDataBR/2Packages/forresdat"
+      # 
+      # path_to_analysis_set <- "C:/3BR/2_VisualisatieDataBR/1DataVerwerkingBR/Output/BR_analysedb.accdb"
+      # path_to_results <- "C:/3BR/2_VisualisatieDataBR/1DataVerwerkingBR/Output/BR_resultaten.accdb"
+      # path_to_forrescalc <- "C:/3BR/2_VisualisatieDataBR/2Packages/forrescalc/R/"
+
+path_to_datarequest <- "C:/3BR/3_AanvraagGegevens/Cost_BottomsUp/"
+
+```
+
+<!-- Onderstaande tabel geeft een overzicht van de gegevens die gebruikt worden voor de analyse.   -->
+
+```{r Overzicht, results="markup", include=FALSE}
+data_overzicht <- data.frame(
+  tabelnaam = c("FieldMapData_MDB_BOSRES_selectieEls.accdb", "tblTreeSpeciesCharacteristics_BR.csv"),
+  locatie = c(path_to_fieldmap, paste(here::here("Data/ExterneData"))),
+  md5 = c(md5(path_to_fieldmap), md5("tblTreeSpeciesCharacteristics_BR.csv"))
+)
+
+data_overzicht %>%
+  kable() %>%
+  kable_styling()
+
+#dbAnalyseDataTxt <- substring(dbAnalyseData, regexpr("/", dbAnalyseData) + 1)  # voor gebruik bij wegschrijven naar resultatendb
+
+```
+
+
+```{r OverzichtFunctions}
+# zie Functions_ForresCalc.R
+# package en bijhoredne functies worden automatisch ingeladen in chunck "Setup" 
+# (source(here::here("scripts/Setup_ForresCalc.R"))
+
+```
+
+
+```{r OverviewRawData}
+con <- odbcConnectAccess2007(path_to_fieldmap)
+      dbtablesRaw <- sqlTables(con) %>% 
+                filter(str_detect(TABLE_NAME, "MSys", negate = TRUE ))
+                # wegfilteren van records waar TABLE_NAME "MSys" bevat
+odbcClose(con)
+
+```
+
+
+```{r OverviewAnalyseSets}
+path_to_analysis_set
+
+# overview tables in BR_analysedb.accdb
+con <- odbcConnectAccess2007(path_to_analysis_set)
+      dbtables <- sqlTables(con) %>% 
+                filter(str_detect(TABLE_NAME, "MSys", negate = TRUE ))
+                # wegfilteren van records waar TABLE_NAME "MSys" bevat
+odbcClose(con)
+
+```
+
+
+# Dendrometrsche gegevens op plotniveau
+
+Gevraagd:
+* stavol	x	Stand volume per hectare
+* stdwvo	x	Standing deadwood volume per hectare
+* lydwvo	x	volumes_plot deadwood and stump volume per hectare
+* stuvol	x	Stump volume per hectare
+* logvol	x	Log volume per hectare
+
+
+```{r LoadPlotData}
+# using package forrescalc
+# data binnenhalen uit access-db (save_results_git naar forresdat werkt nog niet)
+
+con <- odbcConnectAccess2007(path_to_analysis_set)
+
+dbtables <- sqlTables(con) %>% 
+  filter(str_detect(TABLE_NAME, "MSys", negate = TRUE ))
+    # wegfilteren van records waar TABLE_NAME "MSys" bevat
+plotdata <- sqlFetch(con, "dendro_by_plot", stringsAsFactors = TRUE)
+
+odbcClose(con)
+
+dbtables$TABLE_NAME
+
+# plotinfo met info over BR, plottye, ... nog afzonderlijk binnen te halen 
+plotinfo <- load_plotinfo(path_to_fieldmap)
+str(plotinfo)
+
+# beide koppelen
+plotdata <- plotdata %>% 
+  left_join(plotinfo, by = c("plot_id"))
+
+colnames(plotdata)
+```
+
+
+```{r SelectForestReservesCorrectPeriodPlotLevel}
+colnames(plotdata)
+
+# lijst_BRen <- c("Everzwijnbad", "Bos Terrijst", "Pruikemakers", "Wijnendalebos", "Sevendonck")   # hoger reeds gedefinieerd
+
+# (c)Kris: Voor de meeste plots wordt dat de meest recente opname, voor Bos Terrijst en Sevendonk de eerste opname.
+lijst_BRen_periode1 <- c("Bos Terrijst", "Sevendonck")
+lijst_BRen_periode2 <- c("Everzwijnbad", "Pruikemakers", "Wijnendalebos")   # hoger reeds gedefinieerd
+
+plotdata <- plotdata %>% 
+  # filter(plottype == 20) %>% # cirkelplots
+  filter(forest_reserve %in% lijst_BRen) %>% 
+  filter((period == 1 & forest_reserve %in% lijst_BRen_periode1) | (period == 2 & forest_reserve %in% lijst_BRen_periode2)) %>% 
+  filter(plottype == 20)
+
+table(plotdata$forest_reserve, plotdata$period) 
+
+```
+
+
+```{r SelectVariablesPlotLevel}
+colnames(plotdata)
+
+# stavol	x	Stand volume per hectare
+# stdwvo	x	Standing deadwood volume per hectare
+# (lydwvo	x	volumes_plot deadwood and stump volume per hectare)
+# logvol	x	Log volume per hectare
+
+volumes_plot <- plotdata %>% 
+  select(period, year, forest_reserve, plot_id, volume_alive_m3_ha, volume_snag_m3_ha, volume_log_m3_ha)
+  
+colnames(volumes_plot)
+```
+
+```{r RenameVariablesPlotLevel}
+volumes_plot <-  volumes_plot %>% 
+  dplyr::rename(stavol=volume_alive_m3_ha,stdwvo=volume_snag_m3_ha,
+                logvol=volume_log_m3_ha) 
+
+str(volumes_plot)
+
+```
+
+```{r MakeIDsPlotLevel}
+#create siteID column from a original column with different name
+volumes_plot <-  volumes_plot %>% 
+  mutate(siteID = as.character(case_when(
+    forest_reserve == "Everzwijnbad" ~ "BE_KV1_MDW",
+    forest_reserve == "Wijnendalebos" ~ "BE_KV1_WD",
+    forest_reserve == "Sevendonck" ~ "BE_KV1_SD",
+    forest_reserve == "Bos Terrijst" ~ "BE_KV1_BTR",
+    forest_reserve == "Pruikemakers" ~ "BE_KV1_MDW"
+  )))
+
+
+# plotID
+volumes_plot <-  volumes_plot %>% 
+  mutate(plotID = as.character(case_when(
+    forest_reserve == "Everzwijnbad" ~ paste(siteID, "_EB", plot_id, sep = ""),
+    forest_reserve == "Wijnendalebos" ~ paste("BE_KV1_WDL", plot_id, sep = ""),
+    forest_reserve == "Sevendonck" ~ paste("BE_KV1_SVD", plot_id, sep = ""),
+    forest_reserve == "Bos Terrijst" ~ paste(siteID, plot_id, sep = ""),
+    forest_reserve == "Pruikemakers" ~ paste(siteID, "_PM", plot_id, sep = "")
+  )))
+
+
+# overbodige velden verwijderen
+volumes_plot <-  volumes_plot %>% 
+  select(-plot_id, - forest_reserve, -period) %>% 
+  select(siteID, plotID, year, stavol, stdwvo, logvol)
+
+str(volumes_plot)
+
+```
+
+
+# Wegschrijven output
+
+De resultaten worden weggeschreven naar csv.
+
+```{r WegschrijvenOutput}
+write.csv2(volumes_plot, paste(here::here("Output"), "/CostBottomUp_2020_05/VolumesPlotLevel_BE_KV_al.csv", sep = ""))
+
+```
+

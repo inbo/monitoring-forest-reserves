@@ -1,0 +1,503 @@
+---
+title: "Aanmaak output KV Muizenbos - cfr update databank"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: FALSE
+      smooth_scroll: FALSE
+---
+
+DOEL van dit script is het aanmaken van alle forresdat-files, maar beperkt tot KV Muizenbos.
+
+Dit zou ook met alle data samen kunnen, maar dan moest ik de ganse databank weer updaten
+en dat zou langer duren.
+
+Alles wordt weggeschreven naar folder "C:/3BR/4_LiedekSevendMuizenbHarras/!Verwerking/4Muizenbos/3Statistieken/KV"
+Als csv of gegroepeerd in database "/KV_Muizenbos_results_R.accdb"
+
+Wat betreft een unieke ID voor hakhout, zie "Dataverwerking_KV_Muizenbos_ID_Hakhout.Rmd"
+
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup_Forrescalc.R"))
+
+```
+
+
+```{r Path}
+# deze worden ook in "Setup_ForresCalc.R" gedefinieerd, hier ev. extra "paths" toevoegen indien nodig voor huidig script
+      # path_to_fieldmap <- "C:/3BR/5_MDB_BOSRES_selectieEls/FieldMapData_MDB_BOSRES_selectieEls.accdb"
+      # path_to_git_forresdat <- "C:/3BR/2_VisualisatieDataBR/2Packages/forresdat"
+      # 
+      # path_to_analysis_set <- "C:/3BR/2_VisualisatieDataBR/1DataVerwerkingBR/Output/BR_analysedb.accdb"
+      # path_to_results <- "C:/3BR/2_VisualisatieDataBR/1DataVerwerkingBR/Output/BR_resultaten.accdb"
+      # path_to_forrescalc <- "C:/3BR/2_VisualisatieDataBR/2Packages/forrescalc/R/"
+
+
+# path_to_raw_csv_data <- "C:/3BR/1_DataVerwerkingBR/Output/BR_ruwe_data/"
+
+# resultaten
+path_to_results_csv <- "C:/3BR/4_LiedekSevendMuizenbHarras/!Verwerking/4Muizenbos/3Statistieken/KV"
+path_to_results_db <- "C:/3BR/4_LiedekSevendMuizenbHarras/!Verwerking/4Muizenbos/3Statistieken/KV_Muizenbos_results_R.accdb"
+```
+
+
+# Plotinfo
+
+Plotinfo samenstellen, zijnde plottype, naam forest_reserve en info over survey en data al dan niet processed.
+Wegschrijven naar access en opslaan als csv.
+
+```{r plotinfo_load}
+plotinfo <- load_plotinfo(database = path_to_fieldmap) %>% 
+  filter(forest_reserve == "Muizenbos" & plottype == 30)
+
+```
+
+```{r plotinfo_save_access_csv}
+save_results_access (
+  results = list(plotinfo = plotinfo),
+  database = path_to_results_db,
+  remove_tables = TRUE
+)
+
+save_results_csv(
+    results = list(plotinfo = plotinfo),
+    output_dir = path_to_results_csv
+  )
+
+```
+
+Als we plotinfo willen koppelen aan de resultaten op plotniveau, moeten we eerst "year" verwijderen, want dat komt reeds voor in de datasets, én kan soms afwijken (year uit plotinfo < dendro)
+
+```{r plotinfo_no_yr}
+plotinfo_no_yr <- plotinfo %>%select(-year)
+```
+
+
+# Dendro
+
+## Calculate dendro data
+
+```{r load_dendro}
+data_dendro <- load_data_dendrometry(database = path_to_fieldmap, plottype = "Core area", extra_variables = TRUE) %>% 
+  filter(forest_reserve == "Muizenbos")
+
+data_shoots <- load_data_shoots(database = path_to_fieldmap, extra_variables = TRUE)
+
+data_stems  <- compose_stem_data(data_dendro, data_shoots)
+
+height_model <- load_height_models(path_to_height_models)
+
+data_stems_calc <- calc_variables_stem_level(data_stems, height_model)
+
+data_dendro_calc <- calc_variables_tree_level(data_dendro, data_stems_calc)
+
+data_deadwood <- load_data_deadwood(database = path_to_fieldmap) %>% 
+  filter(plottype == 30 & forest_reserve == "Muizenbos")
+
+```
+
+```{r calc_dendro}
+dendro <- calculate_dendrometry(data_dendro, data_deadwood, data_shoots, height_model)
+```
+
+```{r join_plotinfo}
+dendro_plotinfo <- lapply(dendro, function(x) left_join(x, plotinfo, by = c("plot_id", "period", "year")))
+# lapply: same function over all elements of the list
+```
+
+## Create unique tree-id
+
+Tabel bevat een unieke tree_id per boom (die constant blijft doorheen de tijd),
+verschillend van de tree_measure_id uit data_dendro.
+Dus één record per boom en per periode.
+
+### Op boomniveau
+
+```{r}
+str(data_dendro_calc)
+str(data_dendro)
+
+# !! sommige trees uit Kerss KV hebben een oldid periode 1, daar kan fctie niet mee om
+# (moet behouden blijven in originele dataset want is link naar 1986, hier tijdelijk verwijderen)
+data_dendro_calc_ <- data_dendro_calc %>% 
+  mutate(old_id = ifelse(period == 1, NA, old_id))
+
+tree_id <- create_unique_tree_id(data_dendro = data_dendro_calc_)
+# Deze tabel wordt NIET bewaard in forresdat (daar enkel geaggregeerde resultaten op plotniveau)
+
+# check
+tree_id %>% filter(is.na(tree_id)) %>% nrow()
+tree_id_missing <- tree_id %>% filter(is.na(tree_id))
+table(tree_id_missing$forest_reserve, tree_id_missing$period)
+
+# selectie
+tree_id_long <- tree_id %>%
+  select(plot_id, species, tree_id, period, dbh_mm, vol_tot_m3, alive_dead)
+
+```
+
+Om één record per boom te verkrijgen met info uit beide periodes, dient functie "make_table_wide" gebruikt te worden
+
+```{r}
+tree_id_wide <- make_table_wide(table_long = tree_id_long,
+                                    column_to_repeat = "period",
+                                    columns_for_comparison = c("dbh_mm", "vol_tot_m3", "alive_dead"))
+```
+
+
+### Op spilniveau
+Tree_-_id overgenomen van boomniveau, aangemaakt via old_id.
+Bij hakhout kan dit soms tot foutieve/gemiste linken leiden. 
+Zie ook "Dataverwerking_KV_Muizenbos_ID_Hakhout.Rmd".
+
+```{r }
+str(data_stems_calc)
+str(tree_id)
+
+tree_id_ <- tree_id %>% 
+  select(plot_id, tree_measure_id, tree_id, period)
+
+stem_id <- data_stems_calc %>% 
+  left_join(tree_id_, by = c("plot_id", "tree_measure_id", "period"))
+
+```
+
+```{r check_id_hakhout, eval=FALSE}
+stem_id %>% filter(is.na(tree_id)) %>% nrow()
+
+tree_id_hakhout <- stem_id %>% 
+  group_by(plot_id, tree_measure_id, period) %>% 
+  summarize(aantal = n()) %>% 
+  ungroup()
+
+table(tree_id_hakhout$aantal)
+```
+
+
+
+## Export dendro data
+
+### Plot level data
+
+```{r save_dendro_access_csv, eval=FALSE}
+# volgende functie heb ik zelf geschreven, zit niet in het package!!!
+# enkel in nood te gebruiken als "save_results_git" niet werkt
+save_results_csv (
+    results = dendro,
+    output_dir = path_to_results_csv
+    )
+
+# afgerond voor export naar access
+dendro_round <- dendro %>% 
+  lapply(., function(x) round_df(x, 2))
+
+save_results_access (
+  results = dendro_round,
+  database = path_to_results_db,
+  remove_tables = TRUE
+  )
+
+```
+
+
+### Tree level data
+
+Met unieke tree-id én berekende variabelen.
+
+Niet alle variabelen mee exporteren, enkel deze relevant voor de meeste gebruikers
+
+```{r trees_less_variables}
+tree_id_less_var <- tree_id %>% 
+    select(-contains(c("reduction", "r_A", "dbh_min", "core_area_")), -subcirclearea_ha)
+```
+
+
+```{r save_trees, eval=FALSE}
+# volgende functies heb ik zelf geschreven, zitten niet in het package!!!
+save_results_csv (
+    results = list(trees_calc = tree_id_less_var),
+    output_dir = path_to_results_csv
+    )
+
+# afgerond voor export naar access
+tree_id_round <- tree_id_less_var %>% 
+  mutate(round_df(., 4))
+
+# save_results_access (
+#   results = list(trees_calc = data_dendro_calc_round),
+#   database = path_to_results_db,
+#   remove_tables = TRUE
+#   )
+
+# Functie "save_results_access" (< package) geeft problemen met dates => hierna manueel
+
+con <- odbcConnectAccess2007(path_to_results_db)
+
+dbtables <- sqlTables(con)
+if ("trees_calc" %in% dbtables$TABLE_NAME) {
+        sqlDrop(con, "trees_calc")
+      }
+# sqlSave(con, dat = herblayer, tablename = "herblayer_by_plot", fast = FALSE)
+sqlSave(con, dat = tree_id_round, tablename = "trees_calc", varTypes = c(date_dendro="datetime"))
+
+odbcClose(con)
+```
+
+
+### Stem level data
+
+Met unieke tree-id (uniek op boomniveau, niet op spilniveau) én berekende variabelen.
+
+**!! OPGEPAST !!**
+Tree_id overgenomen van boomniveau, aangemaakt via OldID.
+Bij hakhout kan dit soms tot gemiste/foutieve linken leiden, indien er zowel een dood als levend deel was.
+Tijdelijk is dit nu wel OK.
+
+Niet alle variabelen mee exporteren, enkel deze relevant voor de meeste gebruikers
+
+```{r stems_less_variables}
+stem_id_less_var <- stem_id %>% 
+  select(-contains(c("reduction", "r_A", "dbh_min", "core_area_")), -subcirclearea_ha)
+```
+
+
+```{r save_stems, eval=FALSE}
+# volgende functies heb ik zelf geschreven, zitten niet in het package!!!
+save_results_csv (
+    results = list(stems_calc = stem_id_less_var),
+    output_dir = path_to_results_csv
+    )
+
+# afgerond voor export naar access
+stem_id_round <- stem_id_less_var %>% 
+  mutate(round_df(., 4))
+
+# save_results_access (
+#   results = list(trees_calc = data_dendro_calc_round),
+#   database = path_to_results_db,
+#   remove_tables = TRUE
+#   )
+
+# Functie "save_results_access" (< package) geeft problemen met dates => hierna manueel
+
+con <- odbcConnectAccess2007(path_to_results_db)
+
+dbtables <- sqlTables(con)
+if ("stems_calc" %in% dbtables$TABLE_NAME) {
+        sqlDrop(con, "stems_calc")
+      }
+# sqlSave(con, dat = herblayer, tablename = "herblayer_by_plot", fast = FALSE)
+sqlSave(con, dat = stem_id_round, tablename = "stems_calc", varTypes = c(date_dendro="datetime"))
+
+odbcClose(con)
+```
+
+
+
+# Regeneration 
+
+## Calculate
+```{r load_calc_reg}
+data_regeneration <-
+  load_data_regeneration(
+    database = path_to_fieldmap) %>% 
+  filter(forest_reserve == "Muizenbos" & plottype == 30)
+
+regeneration <- calculate_regeneration(data_regeneration)
+```
+
+
+## Export
+
+```{r select_vars_reg}
+reg_plotinfo <- lapply(regeneration, function(x) left_join(x, plotinfo_no_yr, by = c("plot_id", "period")))
+# lapply: same function over all elements of the list
+
+# filter processed data
+# reg_plotinfo_ <- reg_plotinfo %>% 
+#   lapply(., function(x) filter(x, data_processed == TRUE & survey_reg == TRUE))
+
+# keep only necessary variables
+reg_ <- reg_plotinfo %>% 
+  lapply(., function(x) select(x, -survey_trees, -survey_deadw, -survey_veg))
+
+```
+
+
+```{r save_reg_access_csv, eval=FALSE}
+save_results_csv (
+  results = reg_,
+  output_dir = path_to_results_csv
+)
+
+# afgerond voor export naar access
+# de df's van CP mogen op 0 afgerond worden (= 1ste drie dataframes)
+# de KV's op 2 cijfers na de komma
+
+reg_CP <- reg_[c(1:3)]
+reg_CP <- reg_CP %>% 
+  lapply(., function(x) round_df(x, 0)) 
+  
+reg_CA  <- reg_[c(4:5)]
+reg_CA <- reg_CA %>% 
+  lapply(., function(x) round_df(x, 2))
+
+reg_round <- c(reg_CP, reg_CA)
+
+save_results_access(
+    results = reg_round,
+    database = path_to_results_db,
+    remove_tables = TRUE
+  )
+
+```
+
+
+# Vegetation 
+
+## Calculate
+
+```{r load_veg}
+data_vegetation <-
+  load_data_vegetation(
+    database = path_to_fieldmap, plottype = "Core area") %>% 
+  filter(forest_reserve == "Muizenbos")
+
+data_herblayer <-
+  load_data_herblayer(
+    database = path_to_fieldmap, plottype = "Core area") %>% 
+  filter(forest_reserve == "Muizenbos")
+
+vegetation <- calculate_vegetation(data_vegetation, data_herblayer)
+```
+
+## Export
+
+```{r select_vars_herb}
+veg_plotinfo <- lapply(vegetation, function(x) left_join(x, plotinfo_no_yr, by = c("plot_id", "period")))
+# lapply: same function over all elements of the list
+
+# filter processed data
+# veg_plotinfo_ <- veg_plotinfo %>% 
+#   lapply(., function(x) filter(x, data_processed == TRUE & survey_veg == TRUE))
+
+# keep only necessary variables
+veg_ <- veg_plotinfo %>% 
+  lapply(., function(x) select(x, -survey_trees, -survey_deadw, -survey_reg))
+
+```
+
+
+```{r save_veg_access_csv, eval=FALSE}
+save_results_csv (
+  results = veg_,
+  output_dir = path_to_results_csv
+)
+
+# afgerond voor export naar access
+# de df's van CP mogen op 0 afgerond worden (= 1ste drie dataframes)
+# de KV's op 2 cijfers na de komma
+
+veg_round <- veg_ %>% 
+  lapply(., function(x) round_df(x, 2)) 
+  
+save_results_access(
+    results = veg_round,
+    database = path_to_results_db,
+    remove_tables = TRUE
+  )
+
+```
+
+# Herblayer 
+
+## Export
+Ook herblayer naar forresdat wegschrijven
+
+```{r select_variables}
+str(data_herblayer)
+
+herblayer <- data_herblayer %>%
+  select(plot_id, subplot_id, period, year, species, coverage_class_average_perc, browse_index_id, plotarea_ha, date_vegetation, deviating_date) %>%
+  mutate(date_vegetation = as.Date(date_vegetation), deviating_date = as.Date(deviating_date)) 
+
+# save_results_xxxx: gemaakt om list weg te schrijven
+# hier maar één dataframe
+herblayer_list <- list(herblayer_by_plot = herblayer)
+
+# summary(herblayer)
+
+
+```
+
+
+```{r select_vars_herb}
+herb_plotinfo <- lapply(herblayer_list, function(x) left_join(x, plotinfo_no_yr, by = c("plot_id", "period")))
+# lapply: same function over all elements of the list
+
+# # filter processed data
+# herb_plotinfo_ <- herb_plotinfo %>% 
+#   lapply(., function(x) filter(x, data_processed == TRUE & survey_veg == TRUE))
+
+# keep only necessary variables
+herb_ <- herb_plotinfo %>% 
+  lapply(., function(x) select(x, -survey_trees, -survey_deadw, -survey_reg))
+
+
+
+```
+
+
+```{r save_herb_access_csv, eval=FALSE}
+save_results_csv (
+  results = herb_,
+  output_dir = path_to_results_csv
+)
+
+# afgerond voor export naar access - is al OK
+
+# save to access nog steeds niet opgelost, is alsof access date niet herkent
+# => manueel gedaan (csv opgeslagen als xlsx en dan geïmporteerd; csv gaf zelfd eproblemen als access)
+        # save_results_access(
+        #   results = herb_[1],
+        #   database = path_to_results_db,
+        #   remove_tables = TRUE
+        # )
+
+# probleem met datumvelden => varTypes aanduiden
+con <- odbcConnectAccess2007(path_to_results_db)
+
+dbtables <- sqlTables(con)
+if ("herblayer_by_plot" %in% dbtables$TABLE_NAME) {
+        sqlDrop(con, "herblayer_by_plot")
+      }
+# sqlSave(con, dat = herblayer, tablename = "herblayer_by_plot", fast = FALSE)
+sqlSave(con, dat = herb_[[1]], tablename = "herblayer_by_plot", varTypes = c(date_vegetation="datetime", deviating_date="datetime"))
+
+odbcClose(con)
+
+```
+

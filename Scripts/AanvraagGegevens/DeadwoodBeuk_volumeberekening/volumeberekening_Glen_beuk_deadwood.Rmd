@@ -1,0 +1,88 @@
+---
+title: "Tijdelijke load_data mét derde set erbij én met N, G, V berekend in R"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: FALSE
+      smooth_scroll: FALSE
+---
+
+
+```{r Rm, eval = FALSE}
+# rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup_Forrescalc.R"))
+source(here::here("scripts/ExtraFunctions_volume.R"))
+```
+
+
+# DOEL
+
+Volumeberekening Beuk voor Glen:
+- deels als fragment: in FM berekend
+- deels als intacte boom => hier berekenen mbv tarieven
+
+
+```{r load_data}
+deadwood <- read_xlsx("C:/3BR/3_AanvraagGegevens/Glen_DeadwoodBeukKerss_volumeberekening/ZF_Selectie2021_GlenBachelorproef.xlsx")
+str(deadwood)
+head(deadwood)
+```
+
+```{r calc_vol_intact}
+deadwood_intact <- deadwood %>% 
+  filter(Value1 == "Intact calc Dagnilie") %>% 
+  mutate(species = 7,
+         NameNl = "Beuk",
+         test_BA = pi*(D1/2000)^2)
+
+deadwood_intact <- my.CalcVolBA(deadwood_intact, tarieven = tarieven2ing, nIngang = 2, varNameDiameter = "D1", varNameHeight = "Length_m")
+
+deadwood_intact <- my.CalcVolBranches(deadwood_intact, tarieven = tarieven1ingKroon, varNameDiameter = "D1", varNameHeight = "Length_m")
+
+str(deadwood_intact)
+deadwood_intact <- deadwood_intact %>% 
+  mutate(CalcVolume_m3 =  vol_stem_m3 + vol_crown_m3) %>% 
+  select(-test_BA, -basal_area_m2)
+```
+
+```{r calc_vol_fragment}
+deadwood_fragment <- deadwood %>% 
+  filter(Value1 == "Fragment calc FieldMap") %>% 
+  mutate(species = 7,
+         NameNl = "Beuk",
+         CalcVolume_m3 = Volume_m3,
+         vol_stem_m3 = NA,
+         vol_crown_m3 = NA)
+```
+
+
+```{r rbind}
+deadwood_ <- rbind(deadwood_intact, deadwood_fragment)
+
+```
+
+```{r export}
+write_csv2 (deadwood_, "C:/3BR/3_AanvraagGegevens/Glen_DeadwoodBeukKerss_volumeberekening/ZF_Selectie2021_GlenBachelorproef_volumesBeuk.csv")
+```
+

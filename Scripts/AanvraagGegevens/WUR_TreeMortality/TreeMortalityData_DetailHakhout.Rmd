@@ -1,0 +1,391 @@
+---
+title: "Koppeling van hakhout nader bekeken"
+author: "Anja Leyman"
+date: `r Sys.Date()`
+output: 
+  html_document
+    code_folding : hide
+    toc : true
+    toc_float : true
+    number_sections : true
+    df_print : paged
+---
+
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+#rm(list = ls())
+
+library(tidyr)
+library (rlang)
+library(dplyr)
+library(RODBC)
+library(lubridate)
+library(knitr)
+library(here)
+library(openssl)
+library(kableExtra)
+library(stringr)
+
+```
+
+
+
+
+
+# File 1: tree_data.csv: hakhout 
+
+## Info mbt opbouw databank
+
+Databank bevat
+(1) trees layer: bevat alle bomen met hun XY-coördinaten, soort, dood/levend, ...
+Naast individuele bomen, bevat deze laag ook hakhoutstoven. Deze laatste worden - indien nodig - opgeplitst in een levend en een dood deel. Eén record in de trees layer moet immers ofwel levend ofwel dood zijn, zo werkt FieldMap.
+
+(2) shoots layer: bevat details over de hakhoutstoof (soort child layer van trees): bevat één record per spil en is gelinkt aan de stoof (levend of dood) in de trees layer.
+
+Bijgevolg:
+- extra veld "tree number" in trees layer = aantal spillen van de (levende of dode) stoof 
+- DBH van hakhoutstoof in trees layer = gemiddelde van de DBH van de onderliggende spillen (zdd de som van de grondvlakken van de spillen gelijk is aan het grondvlak van de "tree" x treenumber)
+- grondvlak van de stoof in zijn geheel = (DBH/2)² * pi * treenumber
+- volume  van de stoof in zijn geheel = (volume obv DBH en Height) * treenumber
+
+
+## Hoe omgaan met dood en levend deel van hakhoutstoven?
+Uitsplitsen van hakhoutstoven in dood en levend deel is nodig, omdat er anders problemen ontstaan met de koppeling die gebaseerd is op OldID (moet een één-op-één relatie zijn tussen de 2 periodes).
+
+In de databank wordt OldID standaard toegekend aan het levende deel van de hakhoutstoof.
+Het dode deel wordt gelinkt via CoppiceID.
+Indien er enkel een dood deel is (en geen levend deel), dan wordt daar OldID aan toegekend.
+
+Dat wil zeggen dat er zich enkel een probleem stelt wanneer er in één van de twee periodes zowel een levend als een dood deel voorkomt.
+In de andere gevallen kan de koppeling gebeuren via OldID.
+
+Mail van Mart-Jan (1/4/2020):
+**De beste oplossing is in dat geval denk ik dat je het levende deel van opname 1 splitst in het deel dat blijft leven en het deel dat dood gaat. Beide delen krijgen dan de gemiddelde dbh en gemiddeld spilvolume, en bij Nperha doe je dan 1/plotArea maal het aantal spillen dat blijft leven, dan wel dood gaat in de volgende opname. Boomnummer moet dan wel op de een of andere manier uniek blijven, bijvoorbeeld door toevoeging van een A bij het levende deel en een B bij het dode deel. Is dat te doen denk je?
+
+De makkelijkste oplossing is om gewoon het levende deel en het dode deel apart te vermelden zoals dat in de database staat, zonder rekening te houden met wat er in de volgende opname gebeurt. Dbh, volume en Nperha als hierboven. De mortaliteit wordt dan iets onderschat, maar het is niet anders.**
+
+## Werkwijze hakhout 
+
+Werkwijze:
+* bepalen hoeveel delen er per hakhoutstoof aanwezig zijn
+* dataMort opsplitsen:
+    (1) een deel waarbij link via OldID behouden blijft (= treeid): dataMort_OldID
+    (individuele bomen en coppice dat uit max. twee delen bestaat over de twee periodes heen)
+    (2) een deel waarbij link via CoppiceID gecreëerd wordt (= nieuwe tree_id): dataMort_CoppID 
+    (coppice met 3 of meer delen)
+* in dataMort_CoppID de treeid vervangen door censusid_plotid_coppiceID_a indien levend 
+en period_plotid_coppiceID_b indien dood
+* dataMort_CoppID nog verder opsplitsen in
+  (1) dataMort_CoppID_3: 3 delen hakhout over de twee periodes
+  (2) dataMort_CoppID_4: 4 delen hakhout over de twee periodes
+* dataMort_CoppID_3 in detail bekijken
+* samenvoegen van dataMort_OldID, dataMort_CoppID_3 en dataMort_CoppID_4
+
+
+```{r NumberOfPartsPerCoppice}
+dataMort %>% filter(CoppiceID > 0) %>% nrow()
+# [1] 8595
+
+# coppiceid en plotid samen uniek => hoeveel metingen zijn er per stoof (max.4 - klopt)
+summ_CoppiceID <- dataMort %>% 
+  filter(CoppiceID > 0) %>%
+  group_by(CoppiceID, plotid) %>% 
+  summarise(aantal = n()) %>% 
+  ungroup()
+# 4430
+
+table(summ_CoppiceID$aantal)
+#    1    2    3    4 
+# 1037 2731  564  101 
+
+```
+
+
+```{r SplitDataMort_OldID_CoppID}
+dataMort <- dataMort %>% 
+  left_join(summ_CoppiceID, by = c("plotid","CoppiceID")) %>% 
+  mutate (nr_parts_coppice = aantal) %>% 
+  select(- aantal) 
+
+dataMort_OldID <- dataMort %>% 
+  filter (tree_multistemmed == "no" | nr_parts_coppice < 3 | is.na(CoppiceID))
+
+dataMort_CoppID <- dataMort %>% 
+  filter (nr_parts_coppice > 2)
+
+nrow(dataMort_OldID) + nrow(dataMort_CoppID) - nrow(dataMort)
+# [1] 0
+
+```
+
+Daar waar coppice uit meer dan twee delen bestaat (over de twee periodes heen), treeid vervangen door een id obv coppiceid.
+
+```{r CreateNewTreeID_DataMort_CoppID}
+
+dataMort_CoppID <- dataMort_CoppID %>% 
+  rename (treeid_old = treeid) %>% 
+  mutate (treeid = paste(1, plotid, CoppiceID, sep = "_")) %>% 
+  mutate (treeid = ifelse(treestatus == "alive", paste(treeid, "a", sep = "_"),
+                          ifelse(treestatus == "dead", paste(treeid, "b", sep = "_"),
+                                 NA))) 
+
+```
+
+
+```{r Controle_dataMort_OldID}
+# str(dataMort_OldID)
+nrow(dataMort_OldID)
+# [1] 29373
+# summary(dataMort_OldID)
+
+dataMort_OldID <- dataMort_OldID %>% 
+  filter(treelocation_Y > -18)
+
+```
+
+
+```{r Controle_dataMort_CoppID}
+# str(dataMort_CoppID)
+nrow(dataMort_CoppID)
+# [1] 2106
+# summary(dataMort_CoppID)
+
+table(dataMort_CoppID$nr_parts_coppice)
+#    3    4 
+# 1692  404
+
+
+```
+
+DataMort_CoppID opsplitsen in
+  (1) dataMort_CoppID_3: 3 delen hakhout over de twee periodes
+  (2) dataMort_CoppID_4: 4 delen hakhout over de twee periodes
+
+
+```{r SplitDataMort_CoppID_3_4}
+dataMort_CoppID_3 <- dataMort_CoppID %>% 
+  filter(nr_parts_coppice == 3)
+
+dataMort_CoppID_4 <- dataMort_CoppID %>% 
+  filter(nr_parts_coppice == 4)
+
+nrow(dataMort_CoppID_3) + nrow(dataMort_CoppID_4) - nrow(dataMort_CoppID)
+# [1] 0
+```
+
+DataMort_CoppID_4 alsOK beschouwen
+
+```{r dataMort_CoppID_4}
+nrow(dataMort_CoppID_4)
+# [1] 404
+
+# periode 1 levend gekoppeld aan periode 2 levend
+# periode 1 dood gekoppeld aan periode 2 dood
+# mogelijks zijn er van de levende wat extra dood gegaan, 
+# en van de dode wat gevallen (fallen)
+# maar dat is niet te bepalen
+# => insteek Kris: is zoals dode takken die uitvallen in een individuele boom
+
+# checken of koppeling ok is
+Copp_4_long <- dataMort_CoppID_4 %>%
+   select(ForestReserve, plotid, treeid, species, censusid, DBH, treestatus, CoppiceID)  # enkel de velden die identiek moeten zijn
+
+t <- Copp_4_long %>% 
+  group_by(plotid, treeid, treestatus) %>% 
+  summarize(aantal = n())
+t %>% filter(aantal != 2)
+# gecheckt en foute CoppiceID's gecorrigeerd (deze waar aantal <> 2 was)
+
+Copp_4_wide <-
+   make_table_wide(Copp_4_long, column_to_repeat = "censusid",
+                   columns_for_comparison = c("DBH", "treestatus", "CoppiceID", "species")) 
+nrow(Copp_4_wide)
+# [1] 204
+
+# indien ergens id die > 2x voorkomt, dan volgende code nodig
+
+      # Copp_4_link <- unnest(Copp_4_wide, cols = c(DBH_1, DBH_2, treestatus_1, treestatus_2))
+      # nrow(treelink)
+      # dubbels <- Copp_4_long %>% count(treeid) %>% filter(n > 2)
+      # Copp_4_long %>% filter(treeid %in% dubbels$treeid)
+
+
+```
+
+DataMort_CoppID_3 in detail bekijken
+
+
+```{r dataMort_CoppID_3}
+nrow(dataMort_CoppID_3)
+# [1] 1674
+
+# checken of koppeling ok is
+Copp_3_long <- dataMort_CoppID_3 %>%
+   select(ForestReserve, plotid, treeid, species, censusid, DBH, treestatus, CoppiceID, TreeNumber)  # enkel de velden die identiek moeten zijn
+
+t <- Copp_3_long %>% 
+  group_by(plotid, treeid, treestatus) %>% 
+  summarize(aantal = n())
+# aantal zou max. 2 mogen zijn, anders 3 dezelfde status 
+t %>% filter(aantal > 2)
+      # 874	1_874_224_b	dead	3	
+      # 1113	1_1113_2_a	alive	3	
+      # 1124	1_1124_210_b	dead	3	
+      # 1133	1_1133_285_a	alive	3	
+      # 1170	1_1170_502_a	alive	3	
+# gecheckt en foute CoppiceID's gecorrigeerd (deze waar aantal <> 2 was)
+
+Copp_3_wide <-
+   make_table_wide(Copp_3_long, column_to_repeat = "censusid",
+                   columns_for_comparison = c("DBH", "treestatus", "TreeNumber")) 
+nrow(Copp_3_wide)
+# [1] 1116
+
+
+```
+
+Coppice met 3 records: meest verwarrende: MOGELIJKE SITUATIES
+
+(A) OFWEL enkel levend bij periode 1 ---- levend & dood bij periode 2 (335 records: meest voorkomend): 
+=> levende uit 1eSET in 2 opsplitsen en er a en b van maken waarbij aantal spillen evenredig verdeeld wordt volgens wat nu levend/dood is (?? maar misschien ook al fallen?? levend_1 kan meer zijn dan levend_2 + dood_2, maar we kunnen geen fallen aanmaken) => sowieso een benadering
+
+(B) OFWEL levend & dood bij periode 1 --- enkel levend bij periode 2 (188 records): 
+=> ok
+=> wel nog een dead fallen maken voor xxx_b
+
+(C) OFWEL levend & dood bij periode 1 --- enkel dood bij periode 2 (33 records): 
+=> dode uit 2eSET in 2 opsplitsen en er a en b van maken (NIET DOEN)
+OF
+=> dode uit 1eSET verwijderen en link maken tss levende en dode
+=> géén fallen!!!
+
+(D) OFWEL enkel dood bij periode 1 ---- levend & dood bij periode 2
+=> (komt wellicht niet veel voor): OK (= 2 records)
+
+```{r PossibleSituations_3}
+Copp_3_wide <- Copp_3_wide %>% 
+  mutate(treeid_zonderab = str_sub (treeid,start = 1, end = -3))
+
+copp3_summ <- Copp_3_wide %>% 
+  group_by(ForestReserve, plotid, treeid_zonderab, CoppiceID) %>% 
+  summarize(aantal_levend_1 = sum(treestatus_1 == "alive", na.rm = TRUE),
+            aantal_levend_2 = sum(treestatus_2 == "alive", na.rm = TRUE),
+            aantal_dood_1 = sum(treestatus_1 == "dead", na.rm = TRUE),
+            aantal_dood_2 = sum(treestatus_2 == "dead", na.rm = TRUE)       
+            ) %>% 
+  mutate(check = aantal_levend_1 +aantal_levend_2 + aantal_dood_1 +aantal_dood_2,
+         overview = paste("L1", aantal_levend_1, "D1", aantal_dood_1, "L2", aantal_levend_2, "D2", aantal_dood_2, sep = "_")) %>% 
+  mutate (type = ifelse(overview == "L1_1_D1_0_L2_1_D2_1", "A", 
+                       ifelse(overview == "L1_1_D1_1_L2_1_D2_0", "B",
+                              ifelse(overview == "L1_1_D1_1_L2_0_D2_1", "C", 
+                                     ifelse(overview == "L1_0_D1_1_L2_1_D2_1", "D", NA)))))
+ 
+table(copp3_summ$overview)
+# L1_0_D1_1_L2_1_D2_1 L1_1_D1_0_L2_1_D2_1 L1_1_D1_1_L2_0_D2_1 L1_1_D1_1_L2_1_D2_0 
+#                   2                 335                  33                 188
+
+table(copp3_summ$type)
+#   A   B   C   D 
+# 335 188  33   2
+
+
+Copp_3_wide <- Copp_3_wide %>% 
+  left_join(copp3_summ, by = c("ForestReserve", "plotid", "treeid_zonderab", "CoppiceID")) %>% 
+  select(-aantal_levend_1, -aantal_levend_2, -aantal_dood_1, -aantal_dood_2, -check)
+
+
+```
+ Meest voorkomende situatie is L1_1_D1_0_L2_1_D2_1 (335), met daarna L1_1_D1_1_L2_1_D2_0 (188)
+ 
+ L1_1_D1_0_L2_1_D2_1 (335 records): type A
+ - periode 1: 1 levende
+ - periode 2: 1 dode en 1 levende
+ 
+ 
+ L1_1_D1_1_L2_1_D2_0 (188 records): type B - OK
+ - periode 1: 1 levende en 1 dode
+ - periode 2: 1 levende, geen dode meer (omgevallen)
+--> levende aan levende gekoppeld, dode is "fallen" (zie verder)
+=> GEEN VIRTUAL TREE NODIG
+ 
+ L1_1_D1_1_L2_0_D2_1 (33 records): type C - +/- OK
+ - periode 1: 1 levende en 1 dode
+ - periode 2: 1 dode, geen levende meer
+--> dode aan dode gekoppeld, levende is "verdwenen" (mee in de dode)
+--> wellicht is de eerste dode fallen, en de tweede dode gekoppeld aan de eerste levende
+MAAR dat is ook niet zeker
+=> moeite doen voor deze 33?? want aanpassing misschien ook niet OK
+--> opsplitsen kan sowieso niet, want dode uit periode 2 vaak maar 1 spil
+=> GEEN VIRTUAL TREE
+ 
+ L1_0_D1_1_L2_1_D2_1 (2 records): type D - OK
+ - periode 1: 1 dode
+ - periode 2: 1 dode en 1 levende
+ --> OK zoals het is, GEEN VIRTUAL TREE NODIG
+ 
+
+
+```{r dataMort_CoppID_3_typeC}
+ # L1_1_D1_1_L2_0_D2_1 (33 records): type C
+ # - periode 1: 1 levende en 1 dode
+ # - periode 2: 1 dode, geen levende meer
+
+Copp_3_wide_C <- Copp_3_wide %>% 
+  filter (type == "C")
+# slechts 14 dode (periode 2) met treenumber > 1
+
+
+--> idealiter misschien toch hier levende aan dode koppelen: in beide a vervangen door c?
+=> fallen kan dan op normale manier gebeuren
+
+
+```
+
+
+```{r dataMort_CoppID_3_typeA}
+ # L1_1_D1_0_L2_1_D2_1 (335 records): type A
+ # - periode 1: 1 levende
+ # - periode 2: 1 dode en 1 levende
+
+Copp_3_wide_A <- Copp_3_wide %>% 
+  filter (type == "A")
+
+# de levende uit periode 1 (_a) vervangen door 2 levende (_a en _b)
+# ? kan dit wel? want soms treenumber = 1 (12 van de 330), en in tussenperiode een extra spil die tegen 2de periode afgestorven is ...
+
+Copp_3_wide_A %>% filter(TreeNumber_1 == 1) %>% nrow()
+# 12
+
+# sowieso zijn de dode meestal smallere boompjes, en kunnen ze extra aangegroeid zijn, vaak sowieso ingroei => moeten niet gekoppeld worden ...
+Copp_3_wide_A_dead <- Copp_3_wide_A %>% 
+  filter(treestatus_2 == "dead")
+summary(Copp_3_wide_A_dead)
+
+Copp_3_wide_A_alive <- Copp_3_wide_A %>% 
+  filter(treestatus_2 == "alive")
+summary(Copp_3_wide_A_alive)
+
+# één zware in detail bekeken: dode is ook zwaar maar wellicht ingroei, niet geweten of deze voordien dead or alive was ....
+
+# aantal spillen periode 1 = aantal spillen periode 2?
+test_nr_spillen <-  Copp_3_wide_A %>% 
+  group_by(treeid_zonderab) %>% 
+  summarise(treenr_1 = sum(TreeNumber_1, na.rm = T),
+            treenr_2 = sum(TreeNumber_2))
+
+test_nr_spillen %>% filter(treenr_1 == treenr_2) %>%  nrow()
+# 244 van de 333
+test_nr_spillen %>% filter(treenr_1 < treenr_2) %>%  nrow()
+# 45 van de 333
+
+
+
+
+```

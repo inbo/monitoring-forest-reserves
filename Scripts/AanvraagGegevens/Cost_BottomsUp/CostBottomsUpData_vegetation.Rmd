@@ -1,0 +1,308 @@
+---
+title: "Data from the Flemish forest reserve network, vegetation - Cost Bottoms Up"
+author: "Anja Leyman"
+date: "22 april 2020"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: FALSE
+      smooth_scroll: FALSE
+---
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+?rm
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup_ForresCalc.R"))
+
+```
+
+
+```{r SetupSelectieVwdn}
+lijst_BRen <- c("Everzwijnbad", "Bos Terrijst", "Pruikemakers", "Wijnendalebos", "Sevendonck")
+
+```
+
+
+# Vraagstelling
+
+Dit script maakt de tabellen aan zoals gevraagd in het kader van de Cost-actie "Bottoms Up".
+
+Dendrometrische gegevens woorden aangeleverd volgens het sjabloon "Raw_data_structure.xlsx".
+Vegetatie-gegevens volgens het sjabloon "Raw_data_taxa.xlsx".
+
+
+```{r Path}
+# deze worden ook in "Setup_ForresCalc.R" gedefinieerd, hier ev. extra "paths" toevoegen indien nodig voor huidig script
+      # path_to_fieldmap <- "C:/3BR/5_MDB_BOSRES_selectieEls/FieldMapData_MDB_BOSRES_selectieEls.accdb"
+      # path_to_git_forresdat <- "C:/3BR/2_VisualisatieDataBR/2Packages/forresdat"
+      # 
+      # path_to_analysis_set <- "C:/3BR/2_VisualisatieDataBR/1DataVerwerkingBR/Output/BR_analysedb.accdb"
+      # path_to_results <- "C:/3BR/2_VisualisatieDataBR/1DataVerwerkingBR/Output/BR_resultaten.accdb"
+      # path_to_forrescalc <- "C:/3BR/2_VisualisatieDataBR/2Packages/forrescalc/R/"
+
+path_to_datarequest <- "C:/3BR/3_AanvraagGegevens/Cost_BottomsUp/"
+
+```
+
+<!-- Onderstaande tabel geeft een overzicht van de gegevens die gebruikt worden voor de analyse.   -->
+
+```{r Overzicht, results="markup", include=FALSE}
+data_overzicht <- data.frame(
+  tabelnaam = c("FieldMapData_MDB_BOSRES_selectieEls.accdb", "tblTreeSpeciesCharacteristics_BR.csv"),
+  locatie = c(path_to_fieldmap, paste(here::here("Data/ExterneData"))),
+  md5 = c(md5(path_to_fieldmap), md5("tblTreeSpeciesCharacteristics_BR.csv"))
+)
+
+data_overzicht %>%
+  kable() %>%
+  kable_styling()
+
+#dbAnalyseDataTxt <- substring(dbAnalyseData, regexpr("/", dbAnalyseData) + 1)  # voor gebruik bij wegschrijven naar resultatendb
+
+```
+
+
+```{r OverzichtFunctions}
+# zie Functions_ForresCalc.R
+# package en bijhoredne functies worden automatisch ingeladen in chunck "Setup" 
+# (source(here::here("scripts/Setup_ForresCalc.R"))
+
+```
+
+
+```{r OverviewRawData}
+con <- odbcConnectAccess2007(path_to_fieldmap)
+      dbtablesRaw <- sqlTables(con) %>% 
+                filter(str_detect(TABLE_NAME, "MSys", negate = TRUE ))
+                # wegfilteren van records waar TABLE_NAME "MSys" bevat
+odbcClose(con)
+
+```
+
+
+```{r OverviewAnalyseSets}
+path_to_analysis_set
+
+# overview tables in BR_analysedb.accdb
+con <- odbcConnectAccess2007(path_to_analysis_set)
+      dbtables <- sqlTables(con) %>% 
+                filter(str_detect(TABLE_NAME, "MSys", negate = TRUE ))
+                # wegfilteren van records waar TABLE_NAME "MSys" bevat
+odbcClose(con)
+
+```
+
+
+
+# Vegetatie-gegevens
+
+## Data "taxa" 
+De vegetatie-gegevens bevatten volgende taxa:
+- Tracheophyta: vaatplanten
+- Bryophyta: mossen (slechts sporadische waarnemingen)
+
+
+De aan te leveren data dient volgende velden te bevatten: 
+ "siteID"  "plotID"  "elemID"  "genus"   "species" "genspe"  "taxon"   "layer"   "abucov"  "abuind" 
+ 
+ 
+```{r TemplateTaxa, echo = FALSE}
+template <- read_xlsx(path = paste (path_to_datarequest, "Raw_data_taxa.xlsx" , sep =""), sheet = "Legend")
+
+template$Field_title
+
+```
+
+
+```{r LoadLookuplists}
+con <- odbcConnectAccess2007(path_to_fieldmap)
+  
+  qherbspecies <- sqlFetch(con, "qHerbSpecies240810", stringsAsFactors = FALSE)
+  qlayer <- sqlFetch(con, "qLayer", stringsAsFactors = FALSE)
+  qcover_herbs <- sqlFetch(con, "qCoverHerbs", stringsAsFactors = FALSE)
+  
+odbcClose(con)
+
+```
+
+```{r LoadDataHerblayer}
+# using package forrescalc
+
+data_herblayer <-
+  load_data_herblayer(
+    database = path_to_fieldmap, plottype = "Circular plot"
+  )
+
+colnames(data_herblayer)
+
+```
+
+```{r SelectForestReservesCorrectPeriodTrees}
+colnames(data_herblayer)
+
+# lijst_BRen <- c("Everzwijnbad", "Bos Terrijst", "Pruikemakers", "Wijnendalebos", "Sevendonck")   # hoger reeds gedefinieerd
+
+# (c)Kris: Voor de meeste plots wordt dat de meest recente opname, voor Bos Terrijst en Sevendonk de eerste opname.
+lijst_BRen_periode1 <- c("Bos Terrijst", "Sevendonck")
+lijst_BRen_periode2 <- c("Everzwijnbad", "Pruikemakers", "Wijnendalebos")   # hoger reeds gedefinieerd
+
+vegetation <- data_herblayer %>%
+  # filter(plottype == 20) %>% # cirkelplots
+  filter(forest_reserve %in% lijst_BRen) %>% 
+  filter((period == 1 & forest_reserve %in% lijst_BRen_periode1) | (period == 2 & forest_reserve %in% lijst_BRen_periode2))
+
+table(vegetation$forest_reserve, vegetation$period) 
+
+```
+
+
+
+```{r SplitIntoGenusSpecies}
+# opsplitsen genus species
+library("rgbif")  # tip van Wouter VL
+parsed_herbs_BR <- parsenames(scientificname = as.character(qherbspecies$Value2))
+
+qherbspecies <- qherbspecies %>%
+  left_join(parsed_herbs_BR, by = c("Value2" = "scientificname")) %>%
+  unique() %>% 
+  select(ID, Value1, Value2, genusorabove, specificepithet, canonicalname, parsedpartially, parsed )
+
+colnames(qherbspecies)
+
+# niet alles correct gesplitst
+parsedpartially <- qherbspecies %>% 
+  filter(parsedpartially ==TRUE | parsed == FALSE)
+
+
+# enkel focussen op de soorten die voorkomen in huidige dataset
+possibleproblems <- data_herblayer %>% 
+  filter(species %in% parsedpartially$ID) 
+
+possibleproblems_list <- qherbspecies %>% 
+  filter(ID %in% unique(possibleproblems$species))
+possibleproblems_list
+
+# volgende soorten zijn niet correct opgesplitst => aanpassen
+      # Viola riviniana/reichenbachiana 
+      # Dryopteris carthusiana/dilatata
+      # Betula tremula/alba
+qherbspecies <- qherbspecies %>% 
+  mutate(specificepithet = ifelse(Value1 == "Bosviooltje", "riviniana/reichenbachiana", specificepithet)) %>% 
+  mutate(specificepithet = ifelse(Value1 %in% c("Stekelvaren species", "Berk"), NA, specificepithet)) %>%   
+  mutate(specificepithet = ifelse(Value2 == "Rubus 'fruticosus' groep", "fruticosus", specificepithet))
+ 
+# Rubus 'fruticosus' groep -> rubus groep
+# t <- unique(qherbspecies$specificepithet)
+
+vegetation <-  vegetation %>% 
+  left_join(qherbspecies, by = c("species" = "ID")) %>% 
+  mutate(genspe=str_c(genusorabove, specificepithet, sep=" ")) %>% 
+  mutate(genspe=ifelse(is.na(specificepithet), genusorabove, genspe)) %>% 
+  select(-species, -canonicalname, -parsedpartially, -parsed, -Value1, -Value2)
+  
+  
+```
+
+
+```{r SelectVariablesVegetation}
+colnames(vegetation)
+
+# [1] "siteID"  "plotID"  "elemID"  "genus"   "species" "genspe"  "taxon"   "layer"   "abucov"  "abuind" 
+
+vegetation <- vegetation %>% 
+  select(period, year, forest_reserve, plot_id, genspe, genusorabove, specificepithet, coverage_class_average_perc) 
+
+  
+```
+
+
+
+```{r RenameVariablesVegetation}
+vegetation <-  vegetation %>% 
+  dplyr::rename(genus=genusorabove,species=specificepithet,abucov=coverage_class_average_perc) 
+
+str(vegetation)
+```
+
+
+
+```{r MutateVariablesVegetation}
+vegetation <-  vegetation %>% 
+  mutate(abuind = NA,
+         taxon = ifelse(genus == "Spaghnum", "Bryophyta", "Tracheophyta"),
+         layer = "Herb"
+         ) 
+
+str(vegetation)
+```
+
+
+```{r MakeIDsVegetation}
+#create siteID column from a original column with different name
+vegetation <-  vegetation %>% 
+  mutate(siteID = as.character(case_when(
+    forest_reserve == "Everzwijnbad" ~ "BE_KV1_MDW",
+    forest_reserve == "Wijnendalebos" ~ "BE_KV1_WD",
+    forest_reserve == "Sevendonck" ~ "BE_KV1_SD",
+    forest_reserve == "Bos Terrijst" ~ "BE_KV1_BTR",
+    forest_reserve == "Pruikemakers" ~ "BE_KV1_MDW"
+  )))
+
+
+# plotID
+vegetation <-  vegetation %>% 
+  mutate(plotID = as.character(case_when(
+    forest_reserve == "Everzwijnbad" ~ paste(siteID, "_EB", plot_id, sep = ""),
+    forest_reserve == "Wijnendalebos" ~ paste("BE_KV1_WDL", plot_id, sep = ""),
+    forest_reserve == "Sevendonck" ~ paste("BE_KV1_SVD", plot_id, sep = ""),
+    forest_reserve == "Bos Terrijst" ~ paste(siteID, plot_id, sep = ""),
+    forest_reserve == "Pruikemakers" ~ paste(siteID, "_PM", plot_id, sep = "")
+  )))
+
+# elemID 
+# ID of the element (tree/subplot/trap) sampled within the plot, enter NA if data were not recorded by element (if it is a number please add a letter before it in order to be sure that is read as a charachter field)
+# => NIET
+vegetation <-  vegetation %>% 
+  mutate(elemID = NA) 
+
+
+# overbodige velden verwijderen
+vegetation <-  vegetation %>% 
+  select(-plot_id, -forest_reserve, -period) %>% 
+  select(siteID, plotID, year, elemID, genus,	species, genspe, taxon, layer, abucov, abuind)
+
+colnames(vegetation)
+
+
+
+```
+
+# Wegschrijven output
+
+De resultaten worden weggeschreven naar csv.
+
+```{r WegschrijvenOutput}
+write.csv2(vegetation, paste(here::here("Output"), "/CostBottomUp_2020_05/Raw_data_taxa_BE_KV_vegetation_al.csv", sep = ""))
+
+```
+
+

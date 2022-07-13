@@ -1,0 +1,275 @@
+---
+title: "Plots met es - boom-, verjongings- en vegetatiedata"
+author: "Anja Leyman"
+date: "20 juli 2020"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: FALSE
+      smooth_scroll: FALSE
+---
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup_ForresCalc.R"))
+
+```
+
+
+# Vraagstelling
+
+**Thesisstudente bij Kris Verheyen (Astrid Van den Bossche) zal de effecten van de essentaksterfte op de bosontwikkeling  onderzoeken. Luc DK volgt op vanuit INBO.**
+
+Data aan te leveren:  
+- gegevens van alle cirkelplots met es (als boom) in één van beide meetrondes
+- gegevens van de kernvlakte van het Muizenbos
+
+Zowel dendrometrie, verjonging als vegetatie wordt bekeken.
+Belangrijk zijn ook de vitaliteitsbeoordelingen van es.
+
+Dus:
+
+1) welke plots bevatten es in één van beide meetrondes?
+2) van deze plots volgende data nodig:
+- boomdata (+ repreArea, IUFRO_Vitaliteit en waar mogelijk unieke tree-id) + lookuplijsten
+- verjonging: ruwe data + lookuplijsten
+- vegetatie: ruwe data + lookuplijsten
+
+In eerste instantie enkel van cirkelplots, kernvlakte is minder dringend.
+
+
+```{r Path}
+# deze worden ook in "Setup_ForresCalc.R" gedefinieerd, hier ev. extra "paths" toevoegen indien nodig voor huidig script
+      # path_to_fieldmap <- "C:/3BR/5_MDB_BOSRES_selectieEls/FieldMapData_MDB_BOSRES_selectieEls.accdb"
+      # path_to_git_forresdat <- "C:/3BR/2_VisualisatieDataBR/2Packages/forresdat"
+      # 
+      # path_to_analysis_set <- "C:/3BR/2_VisualisatieDataBR/1DataVerwerkingBR/Output/BR_analysedb.accdb"
+      # path_to_results <- "C:/3BR/2_VisualisatieDataBR/1DataVerwerkingBR/Output/BR_resultaten.accdb"
+      # path_to_forrescalc <- "C:/3BR/2_VisualisatieDataBR/2Packages/forrescalc/R/"
+
+# boomdata
+path_to_raw_csv_data <- "C:/3BR/1_DataVerwerkingBR/Output/BR_ruwe_data/"
+
+# resultaten
+path_to_datarequest <- "C:/3BR/3_AanvraagGegevens/INBO_UG_thesis_essentaksterfte/"
+```
+
+
+```{r overview_raw_data}
+con <- odbcConnectAccess2007(path_to_fieldmap)
+      dbtablesRaw <- sqlTables(con) %>% 
+                filter(str_detect(TABLE_NAME, "MSys", negate = TRUE ))
+                # wegfilteren van records waar TABLE_NAME "MSys" bevat
+odbcClose(con)
+
+```
+
+
+
+```{r overview_analyse_data}
+con <- odbcConnectAccess2007(path_to_analysis_set_db)
+      dbtablesAnalysed <- sqlTables(con) %>% 
+                filter(str_detect(TABLE_NAME, "MSys", negate = TRUE ))
+                # wegfilteren van records waar TABLE_NAME "MSys" bevat
+odbcClose(con)
+
+```
+
+
+```{r load_data}
+plotinfo <- read_vc(file = "plotinfo", root = path_to_forresdat_data)
+colnames(plotinfo)
+
+dendro_by_plot_species <- read_vc(file = "dendro_by_plot_species", root = path_to_forresdat_data)
+colnames(dendro_by_plot_species)
+
+trees <- read_csv2(paste0(path_to_raw_csv_data, "trees_calc.csv")) 
+stems <- read_csv2(paste0(path_to_raw_csv_data, "stems_calc.csv")) 
+
+regeneration_by_plot_height_species <- read_vc(file = "regeneration_by_plot_height_species", root = path_to_forresdat_data)
+colnames(regeneration_by_plot_height_species)
+	
+herblayer_by_plot <- read_vc(file = "herblayer_by_plot", root = path_to_forresdat_data)
+colnames(herblayer_by_plot)
+
+```
+
+
+
+```{r load_lookuplists}
+qSpecies <- read_vc(file = "qSpecies", root = path_to_forresdat_data)
+colnames(qSpecies)
+
+# aan te leveren, maar niet nodig in dit script:
+  # qHerbSpecies240810
+  # qiufrovitality
+  # qHeightClass_regeneration
+  # qAliveDead
+  # qdecaystage
+  # qIndShootCop
+  # qIntactSnag
+  # qnumber_regeneration_classes
+  # qPlotType
+
+```
+
+
+# Selectie van de relevante plots
+
+Lijst aanmaken van alle cirkelplots (`plottype == 20`) die in één van beide periodes es bevatten,
+én die 2 x opgemeten zijn.
+
+- obv `plotinfo` --> survey number: moet minimum 2 zijn én verwerkt (data_processed == TRUE)
+- obv `qSpecies` (es) --> in één van beide periodes
+- regeneratie en vegetatie moet in beide periodes opgemeten zijn
+
+```{r select_plots_processed}
+plots_2surveys <- plotinfo %>% 
+  filter(survey_number >= 2 & plottype == 20 
+         & survey_trees == TRUE
+         & survey_reg == TRUE
+         & survey_veg == TRUE
+         & data_processed == TRUE
+         & forest_reserve != "Kersselaerspleyn") # want daar geen vitaliteit genoteerd bij 1eSET
+
+BR_list <- plots_2surveys %>% 
+  group_by(forest_reserve) %>% 
+  summarize() %>% 
+  ungroup()
+
+```
+
+```{r select_plots_fraxinus}
+plots_fraxinus <- dendro_by_plot_species %>% 
+  left_join(qSpecies, by = c("species" = "ID")) %>% 
+  filter(str_detect(Value2, "Fraxinus excelsior")) %>% 
+  group_by(plot_id) %>% 
+  summarize(nr_periods = n()) %>% 
+  ungroup()
+# als in één van beide periodes fraxinus dan ok => period niet mee opgenomen
+
+```
+
+```{r select_plots_def}
+# 2 opnames én fraxinus
+plots_fraxinus_2surveys <- plots_fraxinus %>% 
+  inner_join(plots_2surveys) %>% 
+  select(plot_id)
+
+# plots die bij één van beide meetrondes geen reg of veg opnames hebben 
+# (plot 946)
+plots_fraxinus_2surveys_def <- plots_fraxinus_2surveys %>% 
+  inner_join(plotinfo) %>% 
+  group_by(plot_id, plottype, forest_reserve) %>% 
+  summarize(survey_trees = min(survey_trees),
+            survey_reg = min(survey_reg),
+            survey_veg = min(survey_veg)
+            ) %>% 
+  ungroup() %>% 
+  filter(survey_trees == 1 & survey_reg == 1 & survey_veg == 1) %>% 
+  select(-contains("survey"))
+
+plots_fraxinus_2surveys <- plots_fraxinus_2surveys_def
+
+table(plots_fraxinus_2surveys$forest_reserve)
+```
+
+# Selectie data
+
+Hierna selectie van alle data: `plot_id` komt voor in `plots_fraxinus_2surveys`.
+
+## Dendrodata op plotniveau
+
+```{r select_dendro_plot}
+dendro_by_plot_species_select <- dendro_by_plot_species %>% 
+  inner_join(plots_fraxinus_2surveys) 
+
+colnames(dendro_by_plot_species_select)
+
+```
+
+## Boomdata
+
+```{r select_trees}
+trees_select <- trees %>% 
+  inner_join(plots_fraxinus_2surveys) %>% 
+  select(forest_reserve, plot_id, plottype, tree_measure_id, tree_id, year, period, 
+         plotarea_ha, 
+         everything()) %>% 
+  select(-...1, -date_dendro) %>% 
+  rename(nr_of_stems = tree_number)
+colnames(trees_select)
+
+```
+
+
+## Stemdata
+
+```{r select_stems}
+stems_select <- stems %>% 
+  inner_join(plots_fraxinus_2surveys) %>% 
+  select(forest_reserve, plot_id, plottype, tree_measure_id, tree_id, shoot_measure_id, year, period, 
+         plotarea_ha, 
+         everything()) %>% 
+  select(-...1, -date_dendro) 
+colnames(stems_select)
+
+```
+
+## Verjonging
+
+```{r select_reg}
+reg_select <- regeneration_by_plot_height_species %>% 
+  inner_join(plots_fraxinus_2surveys) %>% 
+  select(-contains(c("rubbing", "subplot")))
+
+colnames(reg_select)
+```
+
+
+
+
+## Vegetatie
+
+```{r select_veg}
+veg_select <- herblayer_by_plot %>% 
+  inner_join(plots_fraxinus_2surveys) %>% 
+  select(-contains(c("browse", "subplot")))
+
+colnames(veg_select)
+```
+
+
+# Wegschrijven output
+
+De resultaten worden weggeschreven naar csv.
+
+```{r WegschrijvenOutput, eval = FALSE}
+write.csv2(BR_list, paste0(path_to_datarequest, "/lijst_bosreservaten.csv"))
+write.csv2(plots_fraxinus_2surveys, paste0(path_to_datarequest, "/lijst_plots.csv"))
+
+write.csv2(dendro_by_plot_species_select, paste0(path_to_datarequest, "/plotdata_dendro.csv"))
+write.csv2(trees_select, paste0(path_to_datarequest, "/boomdata.csv"))
+write.csv2(stems_select, paste0(path_to_datarequest, "/stemdata.csv"))
+write.csv2(reg_select, paste0(path_to_datarequest, "/verjonging.csv"))
+write.csv2(veg_select, paste0(path_to_datarequest, "/vegetatie.csv"))
+```

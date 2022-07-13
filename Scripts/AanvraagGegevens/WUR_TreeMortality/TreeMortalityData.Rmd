@@ -1,0 +1,936 @@
+---
+title: "Treemortality data from the Flemish forest reserve network - MJ Schelhaas"
+author: "Anja Leyman"
+date: "22 april 2020"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: FALSE
+      smooth_scroll: FALSE
+---
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  eval = FALSE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+#rm(list = ls())
+
+library(tidyr)
+library (rlang)
+library(dplyr)
+library(RODBC)
+library(lubridate)
+library(knitr)
+library(here)
+library(openssl)
+library(kableExtra)
+library(stringr)
+
+```
+
+
+# Vraagstelling
+
+Dit script maakt de tabellen aan zoals gevraagd door Mart-Jan Schelhaas in het kader van het project "TreeMort".
+Data wordt ingezameld van over de hele wereld met als doel meer over mortaliteit te weten te komen (zie https://more.bham.ac.uk/treemort/).
+
+Data wordt aangeleverd volgens het sjabloon TreeMort_Data_request_template.xlsx.
+
+```{r Path}
+path_to_fieldmap <- "C:/3BR/5_MDB_BOSRES_selectieEls/FieldMapData_MDB_BOSRES_selectieEls.accdb"
+path_to_git_forresdat <- "C:/3BR/2_VisualisatieDataBR/2Packages/forresdat"
+
+path_to_results <- "C:/3BR/2_VisualisatieDataBR/1DataVerwerkingBR/Output/BR_resultaten.accdb"
+path_to_forrescalc <- "C:/3BR/2_VisualisatieDataBR/2Packages/forrescalc/R/"
+path_to_6TreeMortality <- "C:/3BR/3_AanvraagGegevens/WUR_TreeMortality/"
+```
+
+<!-- Onderstaande tabel geeft een overzicht van de gegevens die gebruikt worden voor de analyse.   -->
+
+```{r Overzicht, results="markup", include=FALSE}
+
+data_overzicht <- data.frame(
+  tabelnaam = c("FieldMapData_MDB_BOSRES_selectieEls.accdb", "tblTreeSpeciesCharacteristics_BR.csv"),
+  locatie = c(path_to_fieldmap, paste (here::here("Data/ExterneData"))),
+  md5 = c(md5(path_to_fieldmap), md5("tblTreeSpeciesCharacteristics_BR.csv"))
+)
+
+data_overzicht %>%
+  kable() %>%
+  kable_styling()
+
+#dbAnalyseDataTxt <- substring(dbAnalyseData, regexpr("/", dbAnalyseData) + 1)  # voor gebruik bij wegschrijven naar resultatendb
+
+```
+
+
+```{r Functions}
+# Functies uit package forrescalc
+source(paste (path_to_forrescalc, "check_input.R", sep = ""))
+source(paste (path_to_forrescalc, "translate_input_to_queryselection.R", sep = ""))
+source(paste (path_to_forrescalc, "load_data_dendrometry.R", sep = ""))
+source(paste (path_to_forrescalc, "create_overview_status.R", sep = ""))
+source(paste (path_to_forrescalc, "give_diamclass_5cm.R", sep = ""))
+
+source(paste (path_to_forrescalc, "create_overview_status.R", sep = ""))
+source(paste (path_to_forrescalc, "make_table_wide.R", sep = ""))
+
+```
+
+
+```{r ConnectieDb, include=FALSE}
+
+connectieData <- odbcConnectAccess2007(path_to_fieldmap)
+connectieResult <- odbcConnectAccess2007(path_to_results)
+
+dbtables <- sqlTables(connectieData)
+str(dbtables)
+
+odbcClose(connectieData)
+odbcClose(connectieResult)
+odbcCloseAll()
+
+```
+
+
+```{r LoadDataTreeCharact}
+TreeCharact <- read.csv2(paste (here::here("Data/ExterneData"), "/tblTreeSpeciesCharacteristics_BR.csv", sep = ""))
+str(TreeCharact)
+
+```
+
+```{r LoadLookuplists}
+con <- odbcConnectAccess2007(path_to_fieldmap)
+  
+  qiufroheight <- sqlFetch(con, "qiufroheight", stringsAsFactors = FALSE)
+  qIndShootCop <- sqlFetch(con, "qIndShootCop", stringsAsFactors = FALSE)
+  qAliveDead <- sqlFetch(con, "qAliveDead", stringsAsFactors = FALSE)
+    
+odbcClose(con)
+```
+
+
+```{r LoadDataTrees}
+test <- load_data_dendrometry(path_to_fieldmap, plottype = "Circular plot")
+
+# kopie van functie "load_data_dendrometry" uit package, aangepast aan onze noden
+
+  query_dendro <-
+    "SELECT Plots.ID AS plot_id,
+        Plots.Plottype,
+        IIf(Plots.Area_ha IS NULL, Plots.Area_m2 / 10000, Plots.Area_ha) AS totalplotarea_ha,
+        Trees.ID AS tree_measure_id,
+        pd.ForestReserve,
+        pd.Date_dendro_1eSet AS date_dendro,
+        pd.rA1, pd.rA2, pd.rA3, pd.rA4,
+        pd.LenghtCoreArea_m, pd.WidthCoreArea_m,
+        Trees.DBH_mm,
+        Trees.Height_m,
+        Trees.Species AS speciesID,
+        Trees.AliveDead,
+        Trees.DecayStage AS decaystage,
+        Trees.Vol_stem_m3,
+        Trees.Vol_crown_m3,
+        Trees.Vol_tot_m3,
+        Trees.BasalArea_m2,
+        Trees.TreeNumber,
+        Trees.X_m,
+        Trees.Y_m,
+        Trees.CommenRemark,
+        Plots.Xorig_m,
+        Plots.Yorig_m,
+        Trees.IndShtCop,
+        Trees.IUFROHght,
+        Trees.CoppiceID
+      FROM (Plots INNER JOIN Trees ON Plots.ID = Trees.IDPlots)
+        INNER JOIN PlotDetails_1eSet pd ON Plots.ID = pd.IDPlots;"
+
+  query_dendro2 <-
+    "SELECT Plots.ID AS plot_id,
+        Plots.Plottype,
+        IIf(Plots.Area_ha IS NULL, Plots.Area_m2 / 10000, Plots.Area_ha) AS totalplotarea_ha,
+        Trees.ID AS tree_measure_id,
+        pd.ForestReserve,
+        pd.Date_dendro_2eSet AS date_dendro,
+        pd.rA1, pd.rA2, pd.rA3, pd.rA4,
+        pd.LenghtCoreArea_m, pd.WidthCoreArea_m,
+        Trees.DBH_mm,
+        Trees.Height_m,
+        Trees.Species AS speciesID,
+        Trees.AliveDead,
+        Trees.DecayStage AS decaystage,
+        Trees.Vol_stem_m3,
+        Trees.Vol_crown_m3,
+        Trees.Vol_tot_m3,
+        Trees.BasalArea_m2,
+        Trees.OldID,
+        Trees.TreeNumber,
+        Trees.X_m,
+        Trees.Y_m,
+        Trees.CommenRemark,
+        Plots.Xorig_m,
+        Plots.Yorig_m,
+        Trees.IndShtCop,
+        Trees.IUFROHght,
+        Trees.CoppiceID
+      FROM (Plots INNER JOIN Trees_2eSET Trees ON Plots.ID = Trees.IDPlots)
+        INNER JOIN PlotDetails_2eSet pd ON Plots.ID = pd.IDPlots;"
+
+
+  con <- odbcConnectAccess2007(path_to_fieldmap)
+  data_dendro <- sqlQuery(con, query_dendro, stringsAsFactors = FALSE) %>%
+    dplyr::mutate(
+      period = 1
+    ) %>%
+    bind_rows(
+      sqlQuery(con, query_dendro2, stringsAsFactors = FALSE) %>%
+        mutate(
+          period = 2
+        )
+    ) %>%
+    filter(Plottype == 20) %>% 
+    dplyr::mutate(
+      year = year(round_date(.data$date_dendro, "year")) - 1,
+      X_m = X_m - Xorig_m,  # Xorig_m = 0 als X in lokale coordinaten staat
+      Y_m = Y_m - Yorig_m,
+      subcircle =
+        ifelse(
+          .data$AliveDead == 11 & .data$DBH_mm >= 400,
+          "A4",
+          ifelse(
+            .data$AliveDead == 12 & .data$DBH_mm >= 100,
+            "A4",
+            "A3"
+          )
+        ),
+      subcirclearea_ha =
+        ifelse(
+          .data$subcircle == "A4",
+          (pi * .data$rA4 ^ 2)/10000,
+          (pi * .data$rA3 ^ 2)/10000
+        ))
+
+  odbcClose(con)
+
+# str(data_dendro)
+# summary(data_dendro)
+
+colnames(data_dendro)
+# colnames(test)
+
+
+```
+
+```{r OnlyZeroManagementPlots}
+# !! OPGEPAST: 10 plots met “Exotenbeheer na 1e meting”: 701, 707, 709, 727, 728, 738, 739, 740, 759, 760
+# => deze zijn niet representatief => uit algemene verwerking halen
+# 
+data_dendro <- data_dendro %>%
+  filter(!(plot_id %in% c(701, 707, 709, 727, 728, 738, 739, 740, 759, 760)))
+
+```
+
+
+```{r LoadDataShoots}
+
+ query_shoots <-
+    "SELECT Shoots.IDPlots AS plot_id,
+      Shoots.IDTrees AS tree_measure_id,
+      Shoots.ID AS shoot_id,
+      Shoots.DBH_mm AS dbh_mm,
+      Shoots.Height_m AS height_m,
+      Shoots.DecayStage_Shoots as decaystage,
+      Shoots.IUFRHght,
+      Trees.AliveDead, 
+      Trees.CoppiceID
+    FROM Trees INNER JOIN Shoots ON (Trees.IDPlots = Shoots.IDPlots) AND (Trees.ID = Shoots.IDTrees);"
+
+  query_shoots2 <-
+    "SELECT Shoots.IDPlots AS plot_id,
+      Shoots.IDTrees_2eSet AS tree_measure_id,
+      Shoots.ID AS shoot_id,
+      Shoots.DBH_mm AS dbh_mm,
+      Shoots.Height_m AS height_m,
+      Shoots.DecayStage_Shoots as decaystage,
+      Shoots.IUFRHght,
+      Trees.AliveDead, 
+      Trees.CoppiceID
+    FROM Trees_2eSET Trees INNER JOIN Shoots_2eSET Shoots ON (Trees.IDPlots = Shoots.IDPlots) AND (Trees.ID = Shoots.IDTrees_2eSET);"
+
+  con <- odbcConnectAccess2007(path_to_fieldmap)
+  data_shoots <- sqlQuery(con, query_shoots, stringsAsFactors = FALSE) %>%
+    plyr::mutate(
+      period = 1
+    ) %>%
+    bind_rows(
+      sqlQuery(con, query_shoots2, stringsAsFactors = FALSE) %>%
+        plyr::mutate(
+          period = 2
+        )) %>%
+    filter(plot_id < 10000)   # KV weggefilterd
+  odbcClose(con)
+
+  
+```
+
+
+# Ontbrekende waarden
+
+IUFROHght niet steeds ingevuld.
+Deels niet overgenomen uit papieren data (set 1 van Everzwijnbad, Heirnisse en Wijnendale), en deels (ca 1%) vergeten.
+In verhouding teveel werk om deze aan te vullen. 
+Volgens Mart-Jan ook geen groot probleem dat deze info soms ontbreekt, 
+in andere landen soms helemaal niet beschikbaar.
+
+```{r CheckNAIUFROHght}
+t <- data_dendro %>% 
+  filter((is.na(IUFROHght) | IUFROHght == 0  | IUFROHght == 40 ) & AliveDead == 11 & IndShtCop != 12) %>% 
+  group_by(period, ForestReserve) %>% 
+  summarise(aantal = n()) %>% 
+  ungroup()
+
+t2 <- data_dendro %>% 
+  filter(AliveDead == 11 & IndShtCop != 12) %>% 
+  group_by(period, ForestReserve) %>% 
+  summarise(aantal = n()) %>% 
+  ungroup()
+
+t3 <- t2 %>% 
+  left_join(t, by = c("period", "ForestReserve"))
+t3
+
+```
+
+
+Info van onderliggende shoots overnemen: hoogst voorkomende etage van onderliggende spillen
+<!-- (= min(iufroheight))  -->
+
+```{r ShootsMinIUFROHght}
+str(data_shoots)
+table(data_shoots$IUFRHght)
+qiufroheight
+
+coppice_IUFROHght <- data_shoots %>% 
+    filter(plot_id > 800 | period == 2) %>%    # plots < 800 bij periode 1 slechts heel beperkte IUFROklasses
+    filter(!is.na(IUFRHght)) %>%  # soms één  spil NA en andere wel waarde genoteerd
+    dplyr::select(plot_id, tree_measure_id, shoot_id, period, IUFRHght, AliveDead) %>%
+    arrange(period, plot_id, tree_measure_id, shoot_id, IUFRHght) %>% # oplopend sorteren
+    group_by(period, plot_id, tree_measure_id, AliveDead) %>%
+    dplyr::summarise(IUFRHght = first(IUFRHght)) %>% # eerst gesorteerde record is deze met de hoogste canopy position
+    ungroup() %>% 
+    rename (coppice_IUFROHght =  IUFRHght)
+
+
+```
+
+<!-- * als plotid <  800 én periode = 1 => NA (want in die bosreservaten IUFROklasses meer niet dan wel genoteerd) -->
+<!-- * als dood -> 40  -->
+<!-- * als hakhout en levend: min. van spillen overnemen (= hoogste etage die voorkomt) -->
+
+```{r AddIUFROHghtCoppice}
+# gecheckt:
+      # dood, dan 40
+      # coppice dan 50
+      # levendindividueel: soms 40, NA of 0
+
+nrow(coppice_IUFROHght)
+# 6564
+
+data_dendro <- data_dendro %>% 
+  mutate(IUFROHght = ifelse (plot_id < 800 & period == 1, NA, IUFROHght)) %>% 
+  mutate(IUFROHght = ifelse (AliveDead == 12, 40, IUFROHght)) %>% 
+  left_join(coppice_IUFROHght, by = c("plot_id", "period", "tree_measure_id", "AliveDead")) %>% 
+  mutate(IUFROHght = ifelse(AliveDead == 11 & IndShtCop == 12, coppice_IUFROHght, IUFROHght)) %>% 
+  select(-coppice_IUFROHght)
+
+```
+
+
+# File 1: tree_data.csv
+
+* treeid : unique id for each tree
+* plotid : unique id for each plot
+* censusid : unique id for each census
+* DBH 
+* Species
+* NPerHa : for how many trees per ha is this observation representative (usually 1/plot area)
+* Genus
+* Family
+* Other species grouping (where available) : For instance, grouping into major tree tyes, if this has already been done.
+* Tree status : Alive/Dead
+* Cause of death (standing/fallen/harvested) : Basic classification for use in primary analysis
+* Cause of death (further categories)
+* Tree location within plot :  X, Y Will be necessary to sub-divide large plots to standardise sizes
+* Height of DBH measurement (Point of measurement)
+* Canopy position of tree (in / not in canopy)
+* Height
+* Above-ground biomass : Where available. All woody above-ground biomass
+* Volume : Where available. May be used to check/derive biomassa estimates for countries without biomass data.
+* Census date
+* Liana infestation index
+* subplotid
+* Tree is multistemmed?
+
+
+```{r TemplateTreeData, echo = FALSE}
+# cfr excel "TreeMort_Data_requests_template.xlsx"
+# in deze chunck worden de eenvoudige variabelen geselecteerd
+
+template_MartJan <- read.csv2(paste (path_to_6TreeMortality,"TreeMort1_TreeData_template.csv" , sep =""))
+
+template_MartJan$Variable
+
+```
+
+
+```{r MutateSimpleVariables}
+colnames(data_dendro)
+
+dataMort <- data_dendro %>% 
+    mutate(treeid = ifelse(is.na(OldID),
+          paste(period, plot_id, tree_measure_id, sep = "_"),
+          paste(1, plot_id, OldID, sep = "_")
+        ) # komt uit functie van package "summarize_status"; functie neemt echter beperkte selectie van variabelen en dan moet ik terug mergen om alle nodige info te bekomen
+    ) %>%
+    mutate(
+      plotid = plot_id,
+      censusid = period,
+      DBH = DBH_mm/10,
+      treestatus = ifelse (AliveDead == 11, "alive",
+                           ifelse(12, "dead")),
+      treelocation_X = X_m, treelocation_Y = Y_m,
+      Height_DBH_measurement = 130,
+      canopy_position = ifelse(IUFROHght %in% c(10, 20), "in canopy",
+                              ifelse(IUFROHght == 30, "not in canopy", 
+                                     ifelse(IUFROHght == 40, "inapplicable - dead tree", NA))),
+      height = Height_m,   
+      # Above-ground biomass  
+      volume_stem = Vol_stem_m3, volume_total = Vol_tot_m3,
+      volume_crown = ifelse(is.na(Vol_crown_m3), 0, Vol_crown_m3), 
+      # volume houdt geen rekening met aantal spillen => NPerHa bevat TreeNumber 
+      censusdate = date_dendro,    
+      # Liana infestation index    
+      # subplotid      
+      tree_multistemmed = ifelse (IndShtCop %in% c(10, 11), "no",
+                           ifelse(IndShtCop == 12, "yes", NA))) %>% 
+  select(-rA1, -rA2, -rA3, -rA4) %>% 
+  select(
+    ForestReserve,
+    treeid,plotid,censusid,DBH,speciesID,OldID, CoppiceID,  
+      TreeNumber,treestatus,
+      treelocation_X,treelocation_Y,
+      Height_DBH_measurement,
+      canopy_position, height, volume_stem, volume_crown, volume_total,     
+      censusdate, tree_multistemmed,
+      totalplotarea_ha, subcircle, subcirclearea_ha, CommenRemark
+           ) %>% 
+   # mutate(censusdate = as.Date(censusdate, tryFormats = c("%Y-%m-%d", "%Y/%m/%d"),
+   #       optional = FALSE)) %>%
+    mutate(censusdate = format(censusdate, format="%d/%m/%Y")) 
+    
+# str(data_dendro)
+# str(dataMort)
+summary(dataMort)
+dataMort %>% filter(is.na(canopy_position)) %>% filter(treestatus == "alive") %>% nrow()
+# [1] 5850
+
+dataMort <- dataMort %>% 
+  filter(treelocation_Y > -18)
+
+```
+
+## Boomsoorteigenschappen
+Koppelen van boomeigenschappen zoals groep, NH vs LH, genus en species afzonderlijk.
+
+```{r AddVariablesTreeCharact}
+# species, genus, family
+# < treespeciescharacteristics
+# str(TreeCharact)
+# str(dataMort)
+
+dataMort <- dataMort %>% 
+  left_join(TreeCharact[, c("IDTreeSp", "NameSc", "Genus", "Spec", "SpeciesGroup", "NameScSpeciesGroup", "LH_NH")], by = c("speciesID" = "IDTreeSp")) %>%
+  rename(species = NameSc) 
+
+
+```
+
+## Berekening biomassa   
+
+Om van volume naar biomassa over te gaan, gebruiken we de BEF (biomass expansion factor LULUCF) :
+
+* 0.25 : Fijnspar 
+* 0.17 : Douglas 
+* 0.28 : Grove den, Corsicaanse den, andere naaldhout
+* 0.29 : populier
+* 0.32 : Lork
+* 0.40 : Berk
+* 0.41 : Amerikaanse vogelkers, Boskers, Gewone esdoorn, ander loofhout, robinia, tamme kastanje, wilf, zwarte els, Gewone es
+* 0.45 : Amerikaanse eik, inlandse eik
+* 0.49 : Beuk, Haagbeuk
+
+samengevat :
+
+* NH : 0.28, tenzij Fijnspar(0.25), Douglas (0.17), Lork(0.32)
+* LH : 0.41, tenzij Populier(0.29), Berk (0.40), Amerikaanse/inlandse eik (0.45), Beuk/Haagbeuk(0.49)
+* _ANDERE SOORT?  0.28 ander NH, en 0.41 ander loofhout --> 0.35 als gemiddelde (van toepassing op 49 records)
+
+
+```{r Biomass}
+
+dataMort <- dataMort %>%
+  mutate(BEF = ifelse(speciesID %in% c(51, 52, 90), 0.29
+                      , ifelse(speciesID %in% c(6, 86, 57), 0.4
+                      , ifelse(speciesID %in% c(7, 27), 0.49
+                      , ifelse(speciesID %in% c(3, 110, 80, 87), 0.45
+                      , ifelse(LH_NH == 'LH', 0.41
+                      , ifelse(speciesID %in% c(54, 114, 105), 0.32
+                      , ifelse(speciesID == 18, 0.25
+                      , ifelse(speciesID == 12, 0.27
+                      , ifelse(LH_NH == 'NH', 0.28, NA))))))))))
+
+test <- dataMort %>%
+    group_by(speciesID, species, BEF) %>%
+    dplyr::summarise(aantal = n()) %>%
+    ungroup()
+
+dataMort$BEF[is.na(dataMort$BEF)] <- 0.35    # gemiddelde waarde
+dataMort$above_ground_biomass <- dataMort$BEF * dataMort$volume_tot
+dataMort$above_ground_biomass_stem <- dataMort$BEF * dataMort$volume_stem
+
+dataMort <- dataMort %>%
+  dplyr::select(everything(), -speciesID) 
+
+```
+
+## Variabele NperHa
+
+*Input MartJan Schelhaas: Van belang bij systeem van 2 of meerdere concentrische cirkels, met verschillende grenswaardes. 
+Bv. binnen een plot van 5 m worden alle bomen >7 cm dbh gemeten en binnen plot van 10 m alles > 15 cm ofzoiets. Op deze manier kunnen we alle verschillende systemen in 1 grote tabel krijgen.*
+
+Standaard wordt bij de bosresrvatenmonitoring gewerkt met 2 concentrische cirkels A3 en A4 van resp. 9 en 18m diameter.
+Uitzondering hierop is het bosreservaat van Liedekerke waarbij de A3- en A4-cirkel even groot zijn (alles wordt in volledige cirkel opgemeten, R = 15 m).
+
+De berekening van de variabele "NperHa"" hangt bijgevolg af van de DBH van de boom.
+
+Ook het aantal spillen per hakhoutstoof bepaalt mee deze variabele, aangezien niet de afzonderlijke spillen, maar de volledige hakhoutstoof als één record beschouwd wordt.
+
+Het aangeleverde volume is het volume van een gemiddelde spil. 
+Deze moet nog vermenigvuldigd worden met het aantal spillen om aan het volume van de volledige stoof te komen. 
+
+```{r CalculateNperHA}
+
+# TreeNumber hierbij betrekken: NperHa = TreeNumber/plotarea
+# A3A4: obv diameters
+
+str(dataMort)
+
+# subcircle = A3 of A4 (term sub-circle is also used in NFI Ireland)
+# subcirclearea_ha = 9*9*pi() of 18*18*pi() afhankelijk van A3 of A4 (Liedekerke enkel A4)
+# plotarea_ha = subcirclearea_ha voor cirkelplots -> niet meenemen (verwarrend)
+
+dataMort <- dataMort %>% 
+  mutate(NperHa = TreeNumber/subcirclearea_ha)
+
+```
+
+## Variabele "Cause of death : standing/fallen/harvested"
+
+Alle dode staande bomen krijgen waarde "standing".
+
+Levende bomen krijgen de waarde "nvt".
+
+Bomen die er in de tweede periode niet meer zijn, worden als "fallen" beschouwd, gezien het nulbeheer in de vlaamse bosreservaten (zie ook verder). 
+
+```{r CalculateCauseOfDeathStanding}
+
+# dead standing
+
+dataMort <- dataMort %>% 
+  mutate(cause_of_death = ifelse(treestatus == "dead", "standing",
+                ifelse(treestatus == "alive", "nvt", NA)))
+```
+
+
+
+# File 2 : Census_data.csv
+
+In deze tabel staan de kenmerken van de opname: 
+
+* plotid
+* cendusid
+* Census date (DD/MM/YY)
+* Plot area
+* Lianas sampled (Yes/No)
+* Management indicator (classes - NA voor NFI)
+* Census PI and contact
+
+Deze file dient verderop ook als insteek voor het vervolledigen van de treedata, met name census_date voor fallen trees.
+
+
+```{r TemplateCensusData, echo = FALSE}
+# cfr excel 
+template_censusdata <- read.csv2(paste (path_to_6TreeMortality,"TreeMort2_CensusData_template.csv" , sep =""))
+template_censusdata$Variable
+
+```
+
+
+```{r SelectVariablesCensusData}
+colnames(dataMort)
+
+data_census <- dataMort %>% 
+  group_by (plotid, censusid, censusdate, totalplotarea_ha) %>% 
+  summarise() %>% 
+  ungroup() %>% 
+  mutate(
+    plot_area = totalplotarea_ha, management_indicator = "zero management",  
+    lianas_sampled = "no", census_PI_contact = "kris.vandekerkhove@inbo.be"
+  ) %>% 
+  mutate (plot_area = ifelse (plot_area > 0.1015, 0.1018, plot_area)) %>% 
+  mutate (plot_area = ifelse (plot_area < 0.08, 0.07068580, plot_area)) %>% 
+  select(-totalplotarea_ha) %>% 
+  mutate(management_indicator = 
+           ifelse(plotid %in% c(701, 707, 709, 727, 728, 738, 739, 740, 759, 760)
+                  ,"Removal of exotic species, after 1st measurement" 
+                  , management_indicator))
+  
+unique(data_census$plot_area)
+# 0.1018 beter dan 0.1017876 => aangepast 
+
+nrow(data_census)/2
+# [1] 538.5
+table(data_census$censusid)
+# één  plot meer in periode 2
+data_census %>% group_by (plotid) %>% summarise (count = n()) %>% filter(count < 2)
+# plot 475 
+# gevraagd aan Peter: plot 475 niet in 1ste set: kan kloppen (toendertijd recent gekapt corsenbestand) 
+
+str(data_census)
+
+```
+
+
+# File 1: tree_data.csv: hakhout 
+
+## Info mbt opbouw databank
+
+Databank bevat
+
+(1) __trees layer__: bevat alle bomen met hun XY-coördinaten, soort, dood/levend, ...
+Naast individuele bomen, bevat deze laag ook hakhoutstoven. Deze laatste worden - indien nodig - opgeplitst in een levend en een dood deel. Eén record in de trees layer moet immers ofwel levend ofwel dood zijn, zo werkt FieldMap.
+
+(2) __shoots layer__: bevat details over de hakhoutstoof (soort child layer van trees): bevat één record per spil en is gelinkt aan de stoof (levend of dood) in de trees layer.
+
+Bijgevolg:
+
+* veld "tree number" in trees layer = aantal spillen van de (levende of dode) stoof 
+
+* DBH van hakhoutstoof in trees layer = gemiddelde van DBH van de onderliggende spillen (zdd de som van de grondvlakken van de spillen gelijk is aan het grondvlak van de "tree" x treenumber)
+
+* grondvlak van de volledige stoof = (DBH/2)² * pi * treenumber
+
+* volume  van de volledige stoof = (volume obv DBH en Height) * treenumber
+
+
+## Hoe omgaan met dood en levend deel van hakhoutstoven?
+Uitsplitsen van hakhoutstoven in dood en levend deel is nodig, omdat er anders problemen ontstaan met de koppeling die gebaseerd is op OldID (moet een één-op-één relatie zijn tussen de 2 periodes).
+
+In de databank wordt OldID standaard toegekend aan het levende deel van de hakhoutstoof.
+Het dode deel wordt gelinkt via CoppiceID.
+Indien er enkel een dood deel is (en geen levend deel), dan wordt daar OldID aan toegekend.
+
+Dat wil zeggen dat er zich enkel een probleem stelt wanneer er in één van de twee periodes zowel een levend als een dood deel voorkomt.
+In de andere gevallen kan de koppeling gebeuren via OldID.
+
+*Input MartJan Schelhaas (1/4/2020): De beste oplossing is in dat geval denk ik dat je het levende deel van opname 1 splitst in het deel dat blijft leven en het deel dat dood gaat. Beide delen krijgen dan de gemiddelde dbh en gemiddeld spilvolume, en bij Nperha doe je dan 1/plotArea maal het aantal spillen dat blijft leven, dan wel dood gaat in de volgende opname. Boomnummer moet dan wel op de een of andere manier uniek blijven, bijvoorbeeld door toevoeging van een A bij het levende deel en een B bij het dode deel. Is dat te doen denk je?
+De makkelijkste oplossing is om gewoon het levende deel en het dode deel apart te vermelden zoals dat in de database staat, zonder rekening te houden met wat er in de volgende opname gebeurt. Dbh, volume en Nperha als hierboven. De mortaliteit wordt dan iets onderschat, maar het is niet anders.*
+
+## Werkwijze hakhout 
+
+__Werkwijze:__
+
+* bepalen hoeveel delen er per hakhoutstoof aanwezig zijn
+
+* dataMort opsplitsen:
+    (1) een deel waarbij link via OldID behouden blijft (= treeid): **_dataMort_OldID_**
+    (individuele bomen en coppice dat uit max. twee delen bestaat over de twee periodes heen)
+    (2) een deel waarbij link via CoppiceID gecreëerd wordt (= nieuwe tree_id): **_dataMort_CoppID_**
+    (coppice met 3 of meer delen)
+ 
+    
+* in dataMort_CoppID de treeid vervangen door censusid_plotid_coppiceID_a indien levend 
+en period_plotid_coppiceID_b indien dood
+
+* samenvoegen van dataMort_OldID, dataMort_CoppID
+
+
+```{r NumberOfPartsPerCoppice}
+dataMort %>% filter(CoppiceID > 0) %>% nrow()
+# [1] 8595
+
+# coppiceid en plotid samen uniek => hoeveel metingen zijn er per stoof (max.4 - klopt)
+summ_CoppiceID <- dataMort %>% 
+  filter(CoppiceID > 0) %>%
+  group_by(CoppiceID, plotid) %>% 
+  summarise(aantal = n()) %>% 
+  ungroup()
+# 4430
+
+table(summ_CoppiceID$aantal)
+#    1    2    3    4 
+# 1037 2731  564  101 
+
+```
+
+
+```{r SplitDataMort_OldID_CoppID}
+dataMort <- dataMort %>% 
+  left_join(summ_CoppiceID, by = c("plotid","CoppiceID")) %>% 
+  mutate (nr_parts_coppice = aantal) %>% 
+  select(- aantal) 
+
+dataMort_OldID <- dataMort %>% 
+  filter (tree_multistemmed == "no" | nr_parts_coppice < 3 | is.na(CoppiceID))
+
+dataMort_CoppID <- dataMort %>% 
+  filter (nr_parts_coppice > 2)
+
+nrow(dataMort_OldID) + nrow(dataMort_CoppID) - nrow(dataMort)
+# [1] 0
+
+```
+
+<!-- Daar waar coppice uit meer dan twee delen bestaat (over de twee periodes heen), treeid vervangen door een id obv coppiceid. -->
+
+```{r CreateNewTreeID_DataMort_CoppID}
+
+dataMort_CoppID <- dataMort_CoppID %>% 
+  rename (treeid_old = treeid) %>% 
+  mutate (treeid = paste(1, plotid, CoppiceID, sep = "_")) %>% 
+  mutate (treeid = ifelse(treestatus == "alive", paste(treeid, "a", sep = "_"),
+                          ifelse(treestatus == "dead", paste(treeid, "b", sep = "_"),
+                                 NA))) 
+
+```
+
+
+```{r Controle_dataMort_OldID}
+# str(dataMort_OldID)
+nrow(dataMort_OldID)
+# [1] 29373
+# summary(dataMort_OldID)
+
+```
+
+
+```{r Controle_dataMort_CoppID}
+# str(dataMort_CoppID)
+nrow(dataMort_CoppID)
+# [1] 2106
+# summary(dataMort_CoppID)
+
+table(dataMort_CoppID$nr_parts_coppice)
+#    3    4 
+# 1692  404
+
+
+```
+
+In script "TreeMortalityData_DetailHakhout.Rmd" werd in detail bekeken hoe de levende en dode delen van het hakhout zich verhouden tussen de twee periodes.
+
+__Vaststellingen:__
+
+
+**(1) deze met vier delen hakhout over de twee periodes:**  
+    - periode 1 levend gekoppeld aan periode 2 levend
+    - periode 1 dood gekoppeld aan periode 2 dood
+    
+--> mogelijks zijn er van de levende wat extra dood gegaan, en van de dode wat omgevallen (fallen)
+maar dat is niet te bepalen (kan vergeleken worden met dode takken in een boom)
+
+
+**(2) deze met drie delen hakhout over de twee periodes:**
+    
+    (type A - 1005 metingen)
+          - periode 1: 1 levende
+          - periode 2: 1 dode en 1 levende
+        --> levende aan levende gekoppeld
+        --> 1 extra dode die in periode ervoor niet was       
+        OPGEPAST: soms heeft het levende deel uit periode 1 zich gesplitst in het dode en het levende deel van periode 2. Maar net zo goed kan het dode deel een extra smalle spil zijn, die in tussentijd ingegroeid is en ook alweer afgestorven. Vaak is er ook al een deel van de spillen "fallen". Aantal spillen uit periode 1 is soms lager dan de som van de spillen uit periode 2.
+
+
+    (type B - 564 metingen)
+          - periode 1: 1 levende en 1 dode
+          - periode 2: 1 levende, geen dode meer
+        --> levende aan levende gekoppeld, dode is "fallen" (zie verder)
+
+    (type C - 99 metingen) 
+          - periode 1: 1 levende en 1 dode
+          - periode 2: 1 dode, geen levende meer    
+        --> dode aan dode gekoppeld, levende is "verdwenen" (mee in de dode)
+        --> wellicht is de eerste dode fallen, en de tweede dode gekoppeld aan de eerste levende
+              MAAR dat is niet zeker
+        --> levende zal in periode 2 als "fallen" beschouwd worden
+        
+    (type D - 6 metingen)
+           - periode 1: 1 dode
+           - periode 2: 1 dode en 1 levende
+        --> dode aan dode gekoppeld, nieuwe levende
+
+BIjgevolg opteren we voor __de meest pragmatische oplossing__. 
+Situatie is immers bij elke stoof verschillend, er valt geen lijn in te vinden.
+
+__Dode delen van hakhout worden met de dode delen gelinkt, levende met de levende.__
+
+__Is er maar één levend deel en één dood deel dan worden die uiteraard aan elkaar gekoppeld.__
+ 
+
+```{r rbind_dataMort_OldID_CoppID}
+dataMort_CoppID <- dataMort_CoppID %>% 
+  select(-treeid_old)
+
+dataMort_all <- rbind(dataMort_OldID, dataMort_CoppID)
+
+```
+
+
+# File 1: tree_data.csv: aanvulling met missing bomen uit periode 1
+
+De eerder aangemaakte tabel met bomen bevat enkel de bomen die effectief zijn opgemeten, hetzij in periode 1, hetzij in periode 2.
+Voor deze specifieke Treemortality vraag moeten ook de gekapte/gevallen bomen toegevoegd worden (cause_of_death = 'harvested/fallen').
+Gezien het nulbeheer in de bosresrvaten, komt enkel "fallen" voor.
+
+File 2: census_data dient als insteek voor de bepaling van de censusdate. 
+
+*Input MartJan Schelhaas : Als een boom er in periode 2 niet meer is mag je die als “missing” opgeven, of in jouw geval als harvested/fallen. Daarbij hoef je dan geen verder info te leveren, je mag de dbh op 0 zetten.* 
+
+__Werkwijze:__
+
+* aanmaak tabel "treelink" met één record per opgemeten boom, aangevuld met DBH en treestatus per periode
+* selectie van bomen die enkel opgemeten werden in periode 1, en niet meer in periode 2 (DBH2 = NA)
+* toevoegen van deze bomen (met periode = 2 en NA voor de meeste andere attributen). Dit zijn de dode, gevallen bomen.
+
+
+```{r MakeLinkTrees}
+treelink_long <- dataMort_all %>%
+   select(ForestReserve, plotid, treeid, censusid, DBH, treestatus, species)  # enkel de velden die identiek moeten zijn
+# 31466
+
+treelink_wide <-
+   make_table_wide(treelink_long, column_to_repeat = "censusid",
+                   columns_for_comparison = c("DBH", "treestatus", "species")) 
+nrow(treelink_wide)
+# [1] 19861
+
+treelink <- treelink_wide
+
+```
+
+
+```{r FallenTreesViaTreelink, echo = FALSE}
+# dead fallen
+  # Als boom er niet meer is in periode 2, dan is boom "fallen" 
+  # => lijst aanmaken van fallen bomen en dan mbv rbind toevoegen aan dataMort
+
+# fallen <- treelink %>% 
+#   filter (!is.na(DBH_1) & is.na(DBH_2)) %>% 
+#   mutate (Cause_of_death = "fallen", 
+#           censusid = 2, treestatus = "dead") %>% 
+#   select(-DBH_1, -DBH_2, -treestatus_1, -treestatus_2, species = species_1) %>% 
+#   left_join(TreeCharact[, c("NameSc", "Genus", "Spec", "SpeciesGroup", "NameScSpeciesGroup", "LH_NH")], by = c("species" = "NameSc")) 
+#  
+# # unique(TreeCharact$NameSc)
+# # unique(treelink$species_1)
+# # 
+# # fallen <- fallen %>% 
+# #   left_join(TreeCharact[, c("NameSc", "Genus", "Spec", "SpeciesGroup", "NameScSpeciesGroup", "LH_NH")], by = c("species" = "NameSc")) 
+# 
+# # str(dataMort)
+# # str(fallen)
+# nrow(fallen)
+# #  [1] 3563
+# treelink %>% filter (is.na(DBH_2)) %>% nrow()
+# 
+# # Censusdata zou nog toegevoegd moeten worden obv record uit zelfde plot, censusid 2
+# 
+# fallen <- fallen %>% 
+#   left_join (data_census[, c("plotid", "censusid", "censusdate")], by = c("plotid", "censusid"))
+# 
+# # pas helemaal op einde samenvoegen met DataMort (zie chunck "AddFallenTrees")
+
+```
+
+```{r FallenTreesViaAntijoin, echo=FALSE}
+dataMort2 <- dataMort_all %>% # alle nog aanwezige bomen in periode 2 in de gekoppelde plots
+    filter(censusid == 2)
+
+fallen <- dataMort_all %>% 
+  filter(censusid == 1) %>% 
+  anti_join(dataMort2, by = "treeid")   # alle bomen die niet meer in periode 2 zitten 
+
+# aantal van fallen_cfrLeen komt overeen met access-queries én met "fallen"
+
+colnames(fallen)
+
+fallen_ <- fallen %>%
+  mutate(DBH = NA, TreeNumber = NA, treestatus = "dead", canopy_position = NA
+         , height = NA, volume_stem = NA, volume_crown = NA, volume_total = NA
+         , tree_multistemmed = NA, BEF = NA, above_ground_biomass = NA
+         , above_ground_biomass_stem = NA, NperHa = NA, nr_parts_coppice = NA
+         , Height_DBH_measurement = NA, subcircle = NA, subcirclearea_ha = NA
+         , cause_of_death = "fallen", censusid = 2) %>% 
+  select(-censusdate) %>% 
+  left_join (data_census[, c("plotid", "censusid", "censusdate")], by = c("plotid", "censusid")) 
+
+
+```
+
+
+```{r AddFallenTrees}
+dataMort_InclFallen <- plyr::rbind.fill(dataMort_all, fallen_)
+
+nrow(fallen_) + nrow(dataMort_all) - nrow(dataMort_InclFallen)
+
+```
+```{r FinalFile1}
+
+template_MartJan$Variable
+
+dataMort_final <- dataMort_InclFallen %>% 
+  select (treeid, plotid, censusid, DBH, species, NperHa
+          , Genus, Spec, SpeciesGroup, NameScSpeciesGroup, LH_NH 
+          , treestatus, cause_of_death, treelocation_X, treelocation_Y
+          , Height_DBH_measurement, canopy_position, height
+          , volume_stem, volume_total
+          , BEF, above_ground_biomass_stem, above_ground_biomass
+          , censusdate, tree_multistemmed
+  )
+
+```
+
+
+# Wegschrijven output
+
+De resultaten worden weggeschreven naar csv.
+
+```{r WegschrijvenOutput}
+write.csv2(dataMort_final, paste(here("Output"), "/TreeMort_2020-04/Flanders_ForestReserves_tree_data.csv", sep = ""))
+write.csv2(data_census, paste(here("Output"), "/TreeMort_2020-04/Flanders_ForestReserves_census_data.csv", sep = ""))
+
+```
+

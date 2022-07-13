@@ -1,0 +1,148 @@
+---
+title: "Data from the Monochamus plots - volume and basal area on plot level"
+author: "Anja Leyman"
+date: "20 juli 2020"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: FALSE
+      smooth_scroll: FALSE
+---
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup_ForresCalc.R"))
+
+```
+
+
+# Vraagstelling
+
+*Zouden jullie de plots van de Monochamus vallen die ik een jaar of 5 geleden heb opgemeten kunnen verwerken. Je kan er een standaard verwerking op loslaten zodat ik iets heb van grondvlak, volume, boomsoortensamenstelling en data rond dood hout. Er is een internationaal project waarvoor ze deze data opvragen.* 
+
+In dit script worden een aantal dendrometrische gegevens berekend in het kader van het Monochaus onderzoek, meer bepaald grondvlak en volume op plotniveau van de Monochamus plots. 
+
+
+```{r Path}
+# deze worden ook in "Setup_ForresCalc.R" gedefinieerd, hier ev. extra "paths" toevoegen indien nodig voor huidig script
+      # path_to_fieldmap <- "C:/3BR/5_MDB_BOSRES_selectieEls/FieldMapData_MDB_BOSRES_selectieEls.accdb"
+      # path_to_git_forresdat <- "C:/3BR/2_VisualisatieDataBR/2Packages/forresdat"
+      # 
+      # path_to_analysis_set <- "C:/3BR/2_VisualisatieDataBR/1DataVerwerkingBR/Output/BR_analysedb.accdb"
+      # path_to_results <- "C:/3BR/2_VisualisatieDataBR/1DataVerwerkingBR/Output/BR_resultaten.accdb"
+      # path_to_forrescalc <- "C:/3BR/2_VisualisatieDataBR/2Packages/forrescalc/R/"
+
+# monochamus plots: 3000 : navigatieplot monochamus, cirkelplots 3001 t/m 3053
+path_to_fieldmap <- "C:/3BR/3_AanvraagGegevens/INBO_Monochamus_Arno/Monochamus_X8_inbo2020/FieldMapData_Monochamus_X8_inbo2020.accdb"
+
+path_to_datarequest <- "C:/3BR/3_AanvraagGegevens/INBO_Monochamus_Arno/"
+
+```
+
+<!-- Onderstaande tabel geeft een overzicht van de gegevens die gebruikt worden voor de analyse.   -->
+
+```{r Overzicht, results="markup", include=FALSE}
+data_overzicht <- data.frame(
+  tabelnaam = c("FieldMapData_Monochamus_X8_inbo2020.accdb"),
+  locatie = c(path_to_fieldmap),
+  md5 = c(md5(path_to_fieldmap))
+)
+
+data_overzicht %>%
+  kable() %>%
+  kable_styling()
+
+#dbAnalyseDataTxt <- substring(dbAnalyseData, regexpr("/", dbAnalyseData) + 1)  # voor gebruik bij wegschrijven naar resultatendb
+
+```
+
+
+```{r OverzichtFunctions}
+# zie Functions_ForresCalc.R
+# package en bijhorende functies worden automatisch ingeladen in chunck "Setup" 
+# (source(here::here("scripts/Setup_ForresCalc.R"))
+
+```
+
+
+```{r OverviewRawData}
+con <- odbcConnectAccess2007(path_to_fieldmap)
+      dbtablesRaw <- sqlTables(con) %>% 
+                filter(str_detect(TABLE_NAME, "MSys", negate = TRUE ))
+                # wegfilteren van records waar TABLE_NAME "MSys" bevat
+odbcClose(con)
+
+```
+
+
+
+# Dendrometrsche gegevens op plotniveau
+
+Gevraagd:
+* grondvlak per ha
+* volume per ha
+* boomsoortensamenstelling
+* volume liggend dood hout + ev. decaystage
+* volume staand dood hout + ev. decaystage
+
+*volgens de standaard ingemeten (18m) met kompas en vertex vermoed ik en manueel ingegeven, ook Deadwood*
+
+```{r LoadDataTrees}
+# using package forrescalc
+
+data_dendro <-
+  load_data_dendrometry(
+    database = path_to_fieldmap, extra_variables = TRUE
+  )
+
+colnames(data_dendro)
+
+# plottype = 70 = afwijkend
+# date_dendro1 niet beschikbaar, want niet opgemeten 
+#☺ => hoe omgaan met één periode???
+
+```
+
+
+
+```{r LoadLookuplists}
+con <- odbcConnectAccess2007(path_to_fieldmap)
+  
+  qAliveDead <- sqlFetch(con, "qAliveDead", stringsAsFactors = FALSE)
+  qSpecies <- sqlFetch(con, "qspecies", stringsAsFactors = FALSE)
+  qDecaystage <- sqlFetch(con, "qdecaystage", stringsAsFactors = FALSE)
+  qiufro_vitality <- sqlFetch(con, "qiufrovitality", stringsAsFactors = FALSE)
+  qPlotType <- sqlFetch(con, "qPlotType", stringsAsFactors = FALSE)
+  
+odbcClose(con)
+```
+
+
+
+# Wegschrijven output
+
+De resultaten worden weggeschreven naar csv.
+
+```{r WegschrijvenOutput}
+write.csv2(volumes_plot, paste(here::here("Output"), "/Monochamus_2020_07/VolumesPlotLevel.csv", sep = ""))
+
+```
