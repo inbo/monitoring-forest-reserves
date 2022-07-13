@@ -1,0 +1,236 @@
+---
+title: "Verkenning DHcurves aangemaakt in FM-IA"
+author: "Anja Leyman"
+date: "20 juli 2020"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: FALSE
+      smooth_scroll: FALSE
+---
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+library(writexl)
+
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+
+```
+
+
+```{r Setup2}
+forestreserve <- "Zwaenepoel"
+# forestreserve <- c("Kersselaerspleyn", "Harras", "Zwaenepoel")
+forestreserve_folder <- paste0(path_to_reserves, "4_KerssHarrasZwaenepoel")
+
+# plot_type <- "Core area"
+plot_type <- "Circular plot"
+
+virt_plot <- 2190
+
+```
+
+
+```{r Path}
+# deze worden ook in "Paths.R" gedefinieerd, hier ev. extra "paths" toevoegen indien nodig voor huidig script
+
+# path to height_models
+path_to_height_models <- paste0(forestreserve_folder, "/AanmaakDHcurves/Zwaenepoel_CP")
+
+# dh-parameters
+heightparam <- "HeightParams_Zwaenep_CP.xlsx"
+
+# heightparam_KerssZwaen <- "HeightParams_KerrsZwaenep_CP.xlsx"
+# heightparam_Zwaen <- "HeightParams_Zwaenep_CP.xlsx"
+```
+
+
+# Vraagstelling
+
+Momenteel gebeurt de meeste dataverwerking in R, maar de aanmaak van DH-curves gebeurt nog steeds in FM-IA.
+
+Tot nu toe werd acces gebuikt om te kijken of er voor elke soort een curve opgesteld was, en of er geen soorten geclusterd dienen te worden.
+Dit wordt nu door onderstaand script vervangen.
+
+
+# Data inladen
+
+**Bosreservaat `r forestreserve`** - **plottype `r plot_type`**.
+
+
+```{r overview_tables}
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+      dbtablesRaw_1eSET <- sqlTables(con) %>% 
+                filter(str_detect(TABLE_NAME, "MSys", negate = TRUE ))
+                # wegfilteren van records waar TABLE_NAME "MSys" bevat
+odbcClose(con)
+```
+
+```{r load_lookuplists}
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+
+qspecies <- sqlFetch(con, "qSpecies")
+qalivedead <- sqlFetch(con, "qAliveDead")
+qindshootcop <- sqlFetch(con, "qIndShootCop")
+qintactsnag <- sqlFetch(con, "qIntactSnag")
+
+odbcClose(con)
+
+```
+
+```{r load_data}
+trees <- load_data_dendrometry(database = path_to_fieldmap_db, 
+                               # plottype = plot_type, 
+                               # forest_reserve = forestreserve, 
+                               extra_variables = TRUE) %>%  
+  filter(forest_reserve == forestreserve & plottype == 20) 
+
+shoots <- load_data_shoots(database = path_to_fieldmap_db, extra_variables = TRUE)
+# hier kan forest_reserve niet gespecifieerd worden
+
+stems <- compose_stem_data(trees, shoots)
+# door samen te voegen, wordt wel enkel het specifieke forest reserve behouden
+
+stems_ <- stems %>% 
+  select(forest_reserve, plot_id
+         , species
+         , dbh_mm
+         , height_m
+         , alive_dead
+         , intact_snag
+         , ind_sht_cop
+         , period
+         , tree_measure_id 
+         , common_remark
+         , common_remark_shoots)
+```
+
+```{r select_height_data}
+# names(stems)
+stems_height <- stems_ %>% 
+  filter(alive_dead == 11 & intact_snag == 11
+         & ind_sht_cop != 11
+         & !is.na(height_m)  # levend en intact, geen opgr spil
+         & (common_remark != 90 | is.na(common_remark))
+         & (common_remark_shoots != 90 | is.na(common_remark_shoots))  # 90: uitgebroken top
+  ) %>% 
+  left_join(qspecies %>% select(ID, Value1), by = c("species"= "ID")) %>% 
+  rename(name_nl = Value1) %>% 
+  left_join(qindshootcop %>% select(ID, Value1), by = c("ind_sht_cop"= "ID")) %>% 
+  rename(ind_sht_cop_txt = Value1) %>% 
+  mutate(fperiod = as.factor(period))
+```
+
+# Hoogtemodellen inladen
+
+```{r load_heightparameters}
+dh_parameters <- read_xlsx(paste0(path_to_height_models, "/", heightparam)) %>% 
+  rename(species = Species, forest_reserve = BR) %>% 
+  filter(species != "<ALL>") %>% 
+  mutate(species = as.integer(species))
+```
+
+# Aantal gemeten hoogtes per soort
+
+```{r}
+nr_measured <- stems_ %>% 
+  mutate(height_m = ifelse((common_remark != 90 | is.na(common_remark))
+                            & (common_remark_shoots != 90 | is.na(common_remark_shoots))
+                            , height_m
+                            , NA)  # uitgebroken top
+        ) %>% 
+  # filter(alive_dead == 11 & intact_snag == 11) %>% 
+  group_by(species) %>% 
+  summarize(n = n(),
+            n_alive = sum(alive_dead == 11),
+            n_dead = sum(alive_dead == 12),
+            n_height_all = sum(height_m > 0, na.rm = TRUE), 
+            n_height_alive = sum(height_m > 0 & alive_dead == 11 & intact_snag == 11, na.rm = TRUE)) %>%
+  ungroup() %>% 
+  left_join(qspecies %>% select(ID, name_nl = Value1), by = c("species" = "ID")) %>% 
+  arrange(n_height_alive, n_alive)
+
+nr_measured %>% DT :: datatable(options = list(dom = 'tip'),rownames = FALSE) 
+
+write.csv2(nr_measured, paste0(path_to_height_models, "/nr_measured.csv"))
+
+```
+
+
+# Soorten die enkel dood of als snag voorkomen
+Deze moeten ook toegevoegd worden aan de lijst
+
+```{r}
+only_dead <- stems_ %>% 
+  group_by(species) %>% 
+  summarize(aantal = n(),
+            alive = sum(alive_dead == 11) > 0,
+            dead = sum(alive_dead == 12) > 0) %>%
+  ungroup() %>% 
+  left_join(qspecies %>% select(ID, name_nl = Value1), by = c("species" = "ID")) %>% 
+  filter(alive == FALSE & dead == TRUE)
+
+print(only_dead)
+
+```
+
+
+Voor bosreservaat `r forestreserve` gaat het om volgende soorten: `r only_dead$name_nl` (soort-id `r only_dead$species`)
+
+# Soorten clusteren?
+
+Is er een meerwaarde om berk, zachte en ruwe berk samen te nemen?
+
+```{r calc_pred_height}
+unique(stems_height$forest_reserve)
+# [1] Zwaenepoel" 
+
+names(stems_height)
+
+stems_height_ <- stems_height %>% 
+  left_join(dh_parameters %>% select(-forest_reserve), by = c("species")) %>% 
+  mutate(pred_height = 1.3 + exp(.data$P1 + .data$P2 / (.data$dbh_mm / 10))) %>% 
+  select(-c(16:25)) %>% 
+  # left_join(qspecies %>% select(ID, name_nl = Value1), by = c("species" = "ID")) %>% 
+  mutate(species = as.factor(species))
+
+# names(stems_height_)
+```
+
+JA, zie onderstaande grafiek.
+Er verandert bijna niks voor ruwe berk, maar zachte berk en berk hebben betere curve.
+
+```{r graph_berk_cluster}
+listspecies <- c(6, 86, 57)
+
+p4 <- ggplot(stems_height_ %>% filter(species %in% listspecies),
+             aes(dbh_mm, height_m)) + 
+  geom_point(aes(color = name_nl)) +
+  geom_smooth(aes(x = dbh_mm, y = pred_height), color = "dark blue", linetype = "solid", size=0.5) 
+
+p4
+
+stems_height_ %>% filter(species %in% listspecies) %>% nrow
+
+
+```
+

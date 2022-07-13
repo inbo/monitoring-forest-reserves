@@ -1,0 +1,504 @@
+---
+title: "Ophalen data voor aanmaak DH-curves in een virtuele plot mbv FM-IA"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: FALSE
+      smooth_scroll: FALSE
+---
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+library(writexl)
+
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+
+```
+
+
+```{r Setup2}
+forestreserve <- "Harras"
+# forestreserve <- c("Kersselaerspleyn", "Harras", "Zwaenepoel")
+forestreserve_folder <- paste0(path_to_reserves, "4_KerssHarrasZwaenepoel")
+
+plot_type <- "Core area"
+# plot_type <- "Circular plot"
+
+virt_plot <- 21001  # niet steeds nodig bij KV's, maar nu eventueel CP's erbij betrekken
+
+# extra_CPs <- c(??) 
+
+# er ligt maar één CP in kernvlakte
+# enkel meenemen indien te weinig hoogtemetingen
+
+# !! oppassen dat ik hoogtes niet dupliceer!
+
+```
+
+
+```{r Path}
+# deze worden ook in "Paths.R" gedefinieerd, hier ev. extra "paths" toevoegen indien nodig voor huidig script
+
+# resultaten
+path_to_datarequest <- paste0(forestreserve_folder, "/VirtualTreesHeightCurves/Harras_KV")
+
+```
+
+
+# Vraagstelling
+
+Momenteel gebeurt de meeste dataverwerking in R, maar de aanmaak van DH-curves gebeurt nog steeds in FM-IA.
+Daartoe wordt een virtuele plot aangemaakt waar alle boomhoogtes in opgenomen zijn.
+
+- alle hoogtes van intacte bomen
+- hoogtes van hakhout spillen, zeker als er te weinig metingen op boomniveau zijn (bv. Hazelaar)
+- hoogtes van 1e en 2eSET samen (soms hoogtecurves obv 1e en 2e SET afzonderlijk)
+
+Onderstaand script voegt al deze data samen, om vervolgens in FM in te laden mbv de Import2FM-tool.
+
+
+**Specifiek voor Kersselaerspleyn:**
+Hoogtes uit periode 2 en 3 combineren om hoogtecurves op te stellen, deze van periode 1 beter niet meer gebruiken, want toen was aparatuur niet zo goed (veel overschattingen).
+
+Indien nodig aanvullen met hoogtes uit cirkelplots die in KV liggen (2014, 2046, 2047, 2049, 2050, 2051, 2053, 2054, 2055)
+
+
+----
+
+**Mails**
+
+Kris, Peter,
+wat betreft Kersselaerspleyn, opmaak dh-curves.
+Doe ik dat afzonderlijk voor de CP's die al 3x opgemeten zijn (plotid's 2001-2065)?
+Of doe ik dat beter samen met de CP's van de uitbreiding van 2010 en CP's Harras (2100-...)?
+
+
+Dag Anja,
+daar kan ik niet zo direct een antwoord op geven.
+de zone Harras heeft wel een afwijkende bodem, dus ik weet het niet goed.
+Hadden we gisteren niet het idee om enkel de data uit de kernvlakte mee te nemen voor de hoogtecurves voor de kernvlakte zelf ?
+Groetjes
+Kris. 
+
+
+Cirkels eens apart voor 2000+ en 2100+ met gelijkaardige ruimtelijke spreiding en eens samen (heights_m 20/21), kan dat, zou me benieuwen wat dat oplevert van verschil, 
+KVs zou ik sowieso apart nemen, voor KV KP kan je de hoogtes van de 11 cirkels die er in liggen meenemen. En zoals gezegd, kunnen gerust nog bijmeten als er te kort aan data zou zijn
+
+Peter
+
+
+
+Op vr 18 feb. 2022 om 17:12 schreef Anja Leyman <anja.leyman@inbo.be>:
+
+Bedankt!
+
+Grts,
+Anja 
+
+# Data inladen
+
+In dit script wordt data van het **bosreservaat `r forestreserve`** ingeladen, met als **plottype `r plot_type`**.
+
+<!-- In het geval van `r forestreserve` dient ook rekening gehouden te worden met een aantal **verstoorde plots**. -->
+<!-- Deze worden niet meegenomen in de verdere dataverwerking.   -->
+
+
+
+```{r overview_tables_fieldmap}
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+      tables_fieldmap <- sqlTables(con) %>% 
+                filter(str_detect(TABLE_NAME, "MSys", negate = TRUE ))
+                # wegfilteren van records waar TABLE_NAME "MSys" bevat
+      # CircularPlots_forestreserves <- sqlFetch(con, "CircularPlots_forestreserves")   # LEEG
+      # CoreArea_forestreserves <- sqlFetch(con, "CoreArea_forestreserves")  # LEEG
+odbcClose(con)
+```
+
+```{r load_lookuplists}
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+
+qspecies <- sqlFetch(con, "qSpecies")
+qalivedead <- sqlFetch(con, "qAliveDead")
+qindshootcop <- sqlFetch(con, "qIndShootCop")
+qintactsnag <- sqlFetch(con, "qIntactSnag")
+
+odbcClose(con)
+# odbcCloseAll()
+```
+
+Data inladen via de functies `load_data_dendrometry`, `load_data_shoots` en `compose_stem_data`uit package `forrescalc`.
+
+NIET `trees_calc` uit forresdat, want dat zijn niet steeds de meest recente data en mogelijk ook enkel de processed data.
+
+
+```{r inspect_plots}
+plots <- load_plotinfo(database = path_to_fieldmap_db)
+# ZONDER 1986 !!
+
+plots %>% distinct(forest_reserve) %>% dplyr::pull(forest_reserve)
+
+# bevat geen tresholds
+con <- odbcConnectAccess2007(path_to_strata_db)
+ # strata_tables <- sqlTables(con) %>% filter(!str_detect(TABLE_NAME, "MSys"))
+ # strata <- sqlFetch(con, "strata_remaining", stringsAsFactors = FALSE)
+ # location <- sqlFetch(con, "strata_location", stringsAsFactors = FALSE)
+ plotinfo <- sqlFetch(con, "info_survey", stringsAsFactors = FALSE)
+odbcClose(con)
+
+plotinfo %>% filter(forest_reserve == forestreserve) %>% select(plot_id, contains("Treshold"))
+
+plotinfo_ <- plotinfo %>% filter(forest_reserve == forestreserve) 
+
+```
+
+
+```{r load_data}
+trees <- load_data_dendrometry(database = path_to_fieldmap_db, 
+                               # plottype = plot_type, 
+                               # forest_reserve = forestreserve, 
+                               extra_variables = TRUE) %>% 
+  # filter(plot_id == 11000 | plot_id %in% extra_CPs)
+  filter(plot_id == 21000)
+
+shoots <- load_data_shoots(database = path_to_fieldmap_db, extra_variables = TRUE)
+# hier kan forest_reserve niet gespecifieerd worden
+
+stems <- compose_stem_data(trees, shoots)
+# door samen te voegen, wordt wel enkel het specifieke forest reserve behouden
+
+```
+
+
+```{r select_height_data}
+# names(stems)
+stems_height <- stems %>% 
+  filter(alive_dead == 11 & intact_snag == 11
+         & ind_sht_cop != 11
+         & !is.na(height_m)  # levend en intact, geen opgr spil
+         & (common_remark != 90 | is.na(common_remark))
+         & (common_remark_shoots != 90 | is.na(common_remark_shoots))  # 90: uitgebroken top
+         # & period %in% c(2,3)
+  ) %>% 
+  left_join(qspecies %>% select(ID, Value1), by = c("species"= "ID")) %>% 
+  rename(name_nl = Value1) %>% 
+  left_join(qindshootcop %>% select(ID, Value1), by = c("ind_sht_cop"= "ID")) %>% 
+  rename(ind_sht_cop_txt = Value1) %>% 
+  mutate(fperiod = as.factor(period),
+         ind_sht_cop = as.factor(ind_sht_cop))
+```
+
+
+# Hakhout meenemen?
+
+JA.
+
+Voor 't simpelste immers standaard meenemen tenzij als afwijkend => zie onderstaande grafieken.
+
+```{r tables, include=FALSE}
+table(stems_height$period)
+table(stems_height$ind_sht_cop)
+table(stems_height$name_nl)
+table(stems_height$crown_volume_reduction) # allemaal NA
+table(stems_height$branch_length_reduction) # allemaal NA
+
+table(stems_height$ind_sht_cop, stems_height$name_nl)
+
+table(stems$species)
+
+
+overview_heights_KV <- stems_height %>% 
+  group_by(name_nl, period) %>% 
+  summarize(aantal = n()) %>% 
+  ungroup() %>% 
+  pivot_wider(
+    names_from = period,
+    values_from = c(aantal)
+    )
+
+write_csv2(overview_heights_KV,paste0(forestreserve_folder, "/Overzichten/overview_heights_KV_Harras.csv"))
+
+```
+
+```{r HH_overzicht, eval=FALSE}
+# er is geen hakhout met hoogtemeting
+overview_HH_height <- stems_height %>% 
+  group_by(ind_sht_cop, species, name_nl) %>% 
+  summarize(aantal = n()) %>% 
+  ungroup %>% 
+  pivot_wider(names_from = ind_sht_cop, values_from = aantal) %>% 
+  rename(individual = "10", coppice = "12") %>% 
+  mutate(perc_hakhout = round(100*coppice/(individual + coppice), ))
+
+overview_HH_height %>% arrange(desc(perc_hakhout)) %>% DT :: datatable(options = list(dom = 'rt'), rownames = FALSE, filter = "top") 
+
+write.csv2(overview_HH_height, paste0(forestreserve_folder, "/Overzichten/overview_HH_height_Harras_KV.csv"))
+```
+
+
+## Grafiek
+
+```{r vgl_individ_coppice_curve}
+# per soort
+p1 <- ggplot(stems_height %>% filter(species %in% c(7, 27, 16)), aes(dbh_mm, height_m)) + geom_point(aes(color = ind_sht_cop)) + geom_smooth() + facet_wrap(~species)
+p1
+
+```
+
+Enkel bij haagbeuk trekken de hoogtes van hakhout de curve een héél klein beetje naar beneden.
+Is OK.
+
+
+```{r vgl_individ_coppice_curve2, eval = FALSE}
+ggplot(stems_height %>% filter(species %in% c(7, 27, 16)), aes(dbh_mm, height_m)) + geom_point(aes(color = ind_sht_cop)) + geom_smooth(aes(color = ind_sht_cop)) 
+
+ggplot(stems_height %>% filter(species %in% c(7, 27, 16)), aes(dbh_mm, height_m)) + geom_point() + geom_smooth() + facet_wrap(~ind_sht_cop)
+
+ggplot(stems_height %>% filter(species %in% c(7, 27, 16)), aes(dbh_mm, height_m)) + geom_point(aes(color = ind_sht_cop)) + geom_smooth() 
+
+# per soort
+p1 <- ggplot(stems_height %>% filter(species %in% c(7, 27, 16)), aes(dbh_mm, height_m)) + geom_point(aes(color = ind_sht_cop)) + geom_smooth() + facet_wrap(~species)
+p1
+
+# eens alleen individuele bomen
+p2 <- ggplot(stems_height %>% filter(species %in% c(7, 27, 16) & ind_sht_cop == 10), aes(dbh_mm, height_m)) + geom_point(aes(color = ind_sht_cop)) + geom_smooth() + facet_wrap(~species)
+p2
+
+grid.arrange(p1, p2, nrow = 2)
+```
+
+
+# Periode 1 en/of periode 2 gebruiken?
+
+2008 en 2018
+
+## Tabel
+
+```{r }
+n1_h <- stems %>% filter(period == 1 & alive_dead == 11 & !is.na(height_m)) %>% nrow()
+n2_h <- stems %>% filter(period == 2 & alive_dead == 11 & !is.na(height_m)) %>% nrow()
+
+n1 <- stems %>% filter(period == 1) %>% nrow()
+n2 <- stems %>% filter(period == 2) %>% nrow()
+
+periode <- c("periode 1", "periode 2")
+n_bomen <- c(n1, n2)
+n_hoogtes <- c(n1_h, n2_h)
+dt <- data.frame(periode, n_bomen, n_hoogtes)
+dt %>% DT :: datatable(options = list(dom = 'rt'), rownames = FALSE) 
+
+
+table(stems_height$plot_id, stems_height$period)
+
+```
+
+
+## Grafiek
+
+```{r vgl_all_1_vs_2_curve}
+ggplot(stems_height, aes(dbh_mm, height_m)) + geom_point(aes(color = fperiod)) + geom_smooth(aes(color = fperiod)) 
+
+# ggplot(stems_height, aes(dbh_mm, height_m)) + geom_point() + geom_smooth() + facet_wrap(~fperiod)
+# 
+# ggplot(stems_height, aes(dbh_mm, height_m)) + geom_point(aes(color = fperiod)) + geom_smooth()
+                                                  
+```
+
+
+## Besluit
+
+Op basis van bovenstaande grafieken:  
+
+- 1eSET: data 1e + 2eSET
+- 2eSET: data 1e + 2eSET
+
+
+# Wat met Beuk?
+
+Kan het zijn dat er bij periode 1 een overschatting gebeurd is bij de metingen? 
+
+```{r vgl_beuk_1_vs_2_mean, include=FALSE}
+stems_height_beuk <- stems_height %>% filter(name_nl == "Beuk")
+
+stems_height_beuk_p1 <- stems_height_beuk %>% filter(period == 1)
+stems_height_beuk_p2 <- stems_height_beuk %>% filter(period == 2)
+
+mean(stems_height_beuk_p1$height_m)
+mean(stems_height_beuk_p2$height_m)
+
+```
+
+Mean_height verschilt `r mean(stems_height_beuk_p1$height_m) - mean(stems_height_beuk_p2$height_m)` m.
+
+(periode 1 : `r mean(stems_height_beuk_p1$height_m)` m - 
+periode 2: `r mean(stems_height_beuk_p2$height_m)` m )
+
+## Histogram
+
+```{r vgl_beuk_1_vs_2_histogram}
+# hoogtes
+h1 <- ggplot(stems_height_beuk_p1, aes(height_m)) + geom_histogram()
+h2 <- ggplot(stems_height_beuk_p2, aes(height_m)) + geom_histogram()
+grid.arrange(h1, h2)
+
+# diameters
+d1 <- ggplot(trees %>% filter(species == 7 & period == 1), aes(dbh_mm)) + geom_histogram()
+d2 <- ggplot(trees %>% filter(species == 7 & period == 2), aes(dbh_mm)) + geom_histogram()
+grid.arrange(d1, d2, nrow = 1)
+
+```
+
+## Curve
+
+```{r vgl_beuk_1_vs_2_curve}
+ggplot(stems_height_beuk, aes(dbh_mm, height_m)) + geom_point(aes(color = fperiod)) + geom_smooth(aes(color = fperiod)) 
+
+# ggplot(stems_height_beuk, aes(dbh_mm, height_m)) + geom_point() + geom_smooth() + facet_wrap(~fperiod)
+
+ggplot(stems_height_beuk, aes(dbh_mm, height_m)) + geom_point(aes(color = fperiod)) + geom_smooth()
+
+```
+
+Hoogtes 2e SET hoger dan 1e SET => zeker geen overschattingen bij 1e set metingen.
+
+
+# Wat met Gewone es?
+
+Zit er verschil op de hoogtes van es?
+
+```{r vgl_es_1_vs_2_mean, include=FALSE}
+stems_height_es <- stems_height %>% filter(name_nl == "Es (gewone)")
+
+stems_height_es_p1 <- stems_height_es %>% filter(period == 1)
+stems_height_es_p2 <- stems_height_es %>% filter(period == 2)
+
+mean(stems_height_es_p1$height_m)
+mean(stems_height_es_p2$height_m)
+
+```
+
+Nee: mean_height verschilt maar `r mean(stems_height_es_p1$height_m) - mean(stems_height_es_p2$height_m)` m.
+
+(periode 1 : `r mean(stems_height_es_p1$height_m)` m - 
+periode 2: `r mean(stems_height_es_p2$height_m)` m )
+
+
+## Histogram
+
+```{r vgl_es_1_vs_2_histogram}
+# hoogtes
+h1 <- ggplot(stems_height_es_p1, aes(height_m)) + geom_histogram()
+h2 <- ggplot(stems_height_es_p2, aes(height_m)) + geom_histogram()
+grid.arrange(h1, h2)
+
+# diameters
+d1 <- ggplot(trees %>% filter(species == 14 & period == 1), aes(dbh_mm)) + geom_histogram()
+d2 <- ggplot(trees %>% filter(species == 14 & period == 2), aes(dbh_mm)) + geom_histogram()
+grid.arrange(d1, d2, nrow = 1)
+
+```
+
+## Curve
+
+Weinig relevant: resp. slechts 3 en 2 (2x zelfde hoogte en dbh) hoogtemetingen van Gewone es.
+
+```{r vgl_es_1_vs_2_curve}
+ggplot(stems_height_es, aes(dbh_mm, height_m)) + geom_point(aes(color = fperiod)) + geom_smooth(aes(color = fperiod)) 
+
+# ggplot(stems_height_es, aes(dbh_mm, height_m)) + geom_point() + geom_smooth() + facet_wrap(~fperiod)
+
+```
+
+
+
+# Dataset aanmaken voor import mbv Import2FM
+
+Deze dataset dient omgevormd te worden zodat die makkelijk in te laden is mbv Import2FM.  
+Dataset moet volgende velden bevatten:
+
+- IDPlots = IDPlotsVirt
+- IDTrees = unique_ID
+- X
+- Y
+- Species
+- DBH_mm
+- Height_m
+- AliveDead
+- IntactSnag
+- IndShtCop
+
+Ter info ook nog volgende velden:  
+
+- period
+- plot_id
+- tree_measure_id
+- shoot_measure_id
+
+
+```{r aanmaak_output}
+# names(stems)
+                        
+unique_ID <- c(1:nrow(stems %>%
+                        filter(alive_dead == 11 & intact_snag == 11
+                               # & !plot_id %in% plots_to_exclude
+                      )))
+
+output <- stems %>% 
+  filter(alive_dead == 11 & intact_snag == 11) %>% 
+  mutate(height_m = ifelse((is.na(common_remark) |  common_remark != 90), height_m, NA)) %>% 
+  mutate(height_m = ifelse((is.na(common_remark_shoots) | common_remark_shoots != 90)
+                           , height_m
+                           , NA)) %>%
+         # 90: uitgebroken top
+  mutate(IDPlotsVirt = virt_plot) %>% 
+  select(IDPlotsVirt
+         , X = x_local
+         , Y = y_local
+         , Species = species
+         , DBH_mm = dbh_mm
+          ,Height_m = height_m
+          ,AliveDead = alive_dead
+          ,IntactSnag = intact_snag
+          ,IndShtCop = ind_sht_cop
+          ,period
+         , plot_id
+         ,tree_measure_id
+         ,shoot_measure_id
+  ) %>% 
+  cbind(unique_ID)
+  
+# check
+t <- unique(output$unique_ID)
+nrow(output) - length(t) == 0
+
+```
+
+
+# Wegschrijven output
+
+De resultaten worden weggeschreven naar **TblVirtueleTrees_KV_1e2eSET.xlsx**
+
+```{r WegschrijvenOutput, eval=FALSE}
+write_xlsx(output, paste0(path_to_datarequest, "/TblVirtueleTrees_KV_1e2eSET.xlsx"))
+
+```

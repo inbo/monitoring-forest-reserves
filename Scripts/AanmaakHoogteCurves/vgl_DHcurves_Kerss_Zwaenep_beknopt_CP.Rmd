@@ -1,0 +1,571 @@
+---
+title: "Vergelijking van de DHcurves obv CP's Kersselaerspleyn en Zwaenepoel: samen en afzonderlijk"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: FALSE
+      smooth_scroll: FALSE
+---
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+library(writexl)
+
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+```
+
+
+```{r Setup2}
+forestreserve <- c("Kersselaerspleyn", "Zwaenepoel")
+forestreserve_folder <- paste0(path_to_reserves, "4_KerssHarrasZwaenepoel")
+
+plot_type <- "Circular plot"
+
+virt_plot <- 20002100 
+```
+
+
+```{r Path}
+# deze worden ook in "Paths.R" gedefinieerd, hier ev. extra "paths" toevoegen indien nodig voor huidig script
+path_to_KerssZwaen <- paste0(forestreserve_folder, "/AanmaakDHcurves/KerssZwaenep_CP")
+
+# ook van Kers en Zwaenepoel afzonderlijk
+path_to_Kerss <- paste0(forestreserve_folder, "/AanmaakDHcurves/Kerss_CP")
+path_to_Zwaen <- paste0(forestreserve_folder, "/AanmaakDHcurves/Zwaenepoel_CP")
+
+# dh-parameters
+heightparam_KerssZwaen <- "HeightParams_KerssZwaenep_CP.xlsx"
+heightparam_Kerss <- "HeightParams_Kerss_CP.xlsx"
+heightparam_Zwaen <- "HeightParams_Zwaenep_CP.xlsx"
+
+```
+
+
+# Vraagstelling
+
+Kunnen we voor bepaalde soorten de hoogtemetingen uit beide sites samen nemen?
+
+Voor sommmige soorten die weinig voorkomen kan dit een meerwaarde zijn: 
+
+- kan extrapolatie vermijden
+- kan voor eigen curve zorgen ipv een verschoven curve
+- ...
+
+
+
+# Data inladen
+
+Data van cirkelplots Kersselaerspleyn en Zwaenepoel: plot_id's 2000-2065 en 2100-2185.
+
+```{r overview_tables}
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+      dbtablesRaw_1eSET <- sqlTables(con) %>% 
+                filter(str_detect(TABLE_NAME, "MSys", negate = TRUE ))
+                # wegfilteren van records waar TABLE_NAME "MSys" bevat
+odbcClose(con)
+```
+
+```{r load_lookuplists}
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+
+qspecies <- sqlFetch(con, "qSpecies")
+qalivedead <- sqlFetch(con, "qAliveDead")
+qindshootcop <- sqlFetch(con, "qIndShootCop")
+qintactsnag <- sqlFetch(con, "qIntactSnag")
+qplottype <- sqlFetch(con, "qPlotType")
+
+odbcClose(con)
+
+```
+
+```{r load_data}
+trees <- load_data_dendrometry(database = path_to_fieldmap_db, 
+                               # plottype = plot_type, 
+                               # forest_reserve = forestreserve, 
+                               extra_variables = TRUE) %>%  
+  filter(forest_reserve %in% forestreserve & plottype == 20) 
+
+shoots <- load_data_shoots(database = path_to_fieldmap_db, extra_variables = TRUE)
+# hier kan forest_reserve niet gespecifieerd worden
+
+stems <- compose_stem_data(trees, shoots)
+# door samen te voegen, wordt wel enkel het specifieke forest reserve behouden
+
+stems_ <- stems %>% 
+  select(forest_reserve, plot_id
+         , species
+         , dbh_mm
+         , height_m
+         , alive_dead
+         , intact_snag
+         , ind_sht_cop
+         , period
+         , tree_measure_id 
+         , common_remark
+         , common_remark_shoots)
+```
+
+```{r select_height_data}
+# names(stems)
+stems_height <- stems_ %>% 
+  filter(alive_dead == 11 & intact_snag == 11
+         & ind_sht_cop != 11
+         & !is.na(height_m)  # levend en intact, geen opgr spil
+         & (common_remark != 90 | is.na(common_remark))
+         & (common_remark_shoots != 90 | is.na(common_remark_shoots))  # 90: uitgebroken top
+  ) %>% 
+  left_join(qspecies %>% select(ID, Value1), by = c("species"= "ID")) %>% 
+  rename(name_nl = Value1) %>% 
+  left_join(qindshootcop %>% select(ID, Value1), by = c("ind_sht_cop"= "ID")) %>% 
+  rename(ind_sht_cop_txt = Value1) %>% 
+  mutate(fperiod = as.factor(period))
+
+names(stems_height)
+
+```
+
+```{r outlier}
+# in FM-IA een outlier gedetecteerd => verwijderen
+# 485	16	27	Haagbeuk
+
+stems_height_ <- stems_height %>% 
+  filter(!(species == 27 & height_m == 16 & dbh_mm == 485))
+
+stems_height <- stems_height_
+```
+
+
+# Hoogtemodellen inladen
+
+```{r load_heightparameters}
+# path_to_KerssZwaen <- paste0(forestreserve_folder, "/AanmaakDHcurves/KerssZwaenep_CP")path_to_Kerss <- paste0(forestreserve_folder, "/AanmaakDHcurves/Kerss_CP")
+# path_to_Zwaen <- paste0(forestreserve_folder, "/AanmaakDHcurves/Zwaenepoel_CP")
+# 
+# # dh-parameters
+# heightparam_KerssZwaen <- "HeightParams_KerrsZwaenep_CP.xlsx"
+# heightparam_Kerss <- "HeightParams_Kerrs_CP.xlsx"
+# heightparam_Zwaen <- "HeightParams_Zwaenep_CP.xlsx"
+
+dh_kerss <- read_xlsx(paste0(path_to_Kerss, "/", heightparam_Kerss)) %>% 
+  rename(species = Species, forest_reserve = BR) %>% 
+  filter(species != "<ALL>") %>% 
+  mutate(species = as.integer(species))
+
+dh_zwaen <- read_xlsx(paste0(path_to_Zwaen, "/", heightparam_Zwaen)) %>% 
+  rename(species = Species, forest_reserve = BR) %>% 
+  filter(species != "<ALL>") %>% 
+  mutate(species = as.integer(species))
+
+dh_kersszwaen <- read_xlsx(paste0(path_to_KerssZwaen, "/", heightparam_KerssZwaen)) %>% 
+  rename(species = Species, forest_reserve = BR) %>% 
+  filter(species != "<ALL>") %>% 
+  mutate(species = as.integer(species))
+
+```
+
+# Vergelijking
+
+
+```{r list_soorten}
+listspecies1 <- c(7, 87, 27, 16, 14, 32, 44)  # veel voorkomende - eigen curve 
+
+listspecies2 <- c(3, 26, 39, 52, 57, 61, 64, 77, 81, 83)  # weinig => ? mag ik deze samennemen
+
+```
+
+
+
+## Eenvoudige smoother functie
+
+Alle soorten samen
+
+```{r eval = FALSE}
+names(stems_height)
+nrow(stems_height)
+```
+
+```{r graph_all}
+p1 <- ggplot(stems_height, aes(dbh_mm, height_m)) + geom_point(aes(color = forest_reserve)) + geom_smooth(aes(color = forest_reserve)) 
+p1
+
+```
+
+
+## Height tov predicted height
+
+Hoogte voorspellen obv curves eigen reservaat (`pred_height`) en obv overkoepelende curves (`pred_height_KZ`).
+Voor de volledigheid ook eens voor alle bomen enkel obv Kerss en enkel obv Zwaenepoel (resp. `pred_height_K` en `ored_height_Z`)
+
+```{r calc_pred_heights}
+unique(stems_height$forest_reserve)
+# [1] "Kersselaerspleyn" "Zwaenepoel" 
+
+names(stems_height_)
+
+stems_height_ <- stems_height %>% 
+  left_join(dh_kerss %>% select(-forest_reserve), by = c("species")) %>% 
+  mutate(pred_height_K = 1.3 + exp(.data$P1 + .data$P2 / (.data$dbh_mm / 10)), 
+         pred_height = pred_height_K) %>% 
+  select(-c(16:25)) %>% 
+  left_join(dh_zwaen %>% select(-forest_reserve), by = c("species")) %>% 
+  mutate(pred_height_Z = 1.3 + exp(.data$P1 + .data$P2 / (.data$dbh_mm / 10)),
+         pred_height = ifelse(forest_reserve == "Zwaenepoel", 
+                              pred_height_Z,
+                              pred_height) 
+  ) %>% 
+  select(-c(18:27)) %>% 
+  left_join(dh_kersszwaen %>% select(-forest_reserve), by = c("species")) %>% 
+  mutate(pred_height_KZ = 1.3 + exp(.data$P1 + .data$P2 / (.data$dbh_mm / 10))) %>% 
+  select(-c(19:28)) %>% 
+  # left_join(qspecies %>% select(ID, name_nl = Value1), by = c("species" = "ID")) %>% 
+  mutate(species = as.factor(species))
+
+```
+
+Voorspelde hoogte tov gemeten hoogte:   
+
+- meerdere soorten samen (de meest voorkomende)
+- Kerss en Zwaenepoel afzonderlijk   
+- met eigen curve én met gemeenschappelijke curve  
+
+```{r graph_height_vs_predicted_specific_species}
+listspecies <- listspecies1 # veel voorkomende
+
+p2 <- ggplot(stems_height_ %>% filter(species %in% listspecies), aes(height_m, pred_height)) + 
+  geom_point(aes(color = name_nl)) + 
+  geom_abline(intercept = 0, slope = 1) + 
+  facet_wrap(~forest_reserve)
+p3 <- ggplot(stems_height_ %>% filter(species %in% listspecies), aes(height_m, pred_height_KZ)) + 
+  geom_point(aes(color = name_nl)) + 
+  geom_abline(intercept = 0, slope = 1) + 
+  facet_wrap(~forest_reserve)
+grid.arrange(p2, p3)
+
+```
+
+```{r graph_height_vs_predicted_specific_species_Kerss, eval = FALSE}
+listspecies <- listspecies1 # veel voorkomende
+subsite <- "Kersselaerspleyn"
+
+p2 <- ggplot(stems_height_ %>% filter(species %in% listspecies & forest_reserve == subsite), 
+             aes(height_m, pred_height)) + 
+  geom_point(aes(color = name_nl)) + 
+  geom_abline(intercept = 0, slope = 1) + 
+  facet_wrap(~name_nl)
+p3 <- ggplot(stems_height_ %>% filter(species %in% listspecies & forest_reserve == subsite),
+             aes(height_m, pred_height_KZ)) + 
+  geom_point(aes(color = name_nl)) + 
+  geom_abline(intercept = 0, slope = 1) + 
+  facet_wrap(~name_nl)
+grid.arrange(p2, p3)
+
+```
+
+
+## Visualisatie van curves
+
+- blauw:  Kerss
+- groen: zwaen
+- rood : KZ samen
+
+
+### Beuk
+
+```{r beuk_K, eval = FALSE}
+listspecies <- c(7)
+subsite <- "Kersselaerspleyn"
+
+p4 <- ggplot(stems_height_ %>% filter(species %in% listspecies & forest_reserve == subsite),
+             aes(dbh_mm, height_m)) + 
+  geom_point(aes(color = forest_reserve)) +
+  geom_smooth(aes(x = dbh_mm, y = pred_height), color = "dark blue", linetype = "solid", size=0.5) + 
+  geom_smooth(aes(x = dbh_mm, y = pred_height_KZ), color = "red", linetype = "dashed", size=0.5) + 
+  geom_smooth(aes(x = dbh_mm, y = pred_height_Z), color = "green", linetype = "dashed", size=0.5) +
+  
+
+p4
+
+stems_height_ %>% filter(species %in% listspecies & forest_reserve == subsite) %>% nrow
+```
+
+```{r beuk_Z, eval = FALSE}
+listspecies <- c(7)
+subsite <- "Zwaenepoel"
+
+p5 <- ggplot(stems_height_ %>% filter(species %in% listspecies & forest_reserve == subsite),
+             aes(dbh_mm, height_m)) + 
+  geom_point(aes(color = forest_reserve)) +
+  geom_smooth(aes(x = dbh_mm, y = pred_height), color = "blue", linetype = "solid", size=0.5) + 
+  geom_smooth(aes(x = dbh_mm, y = pred_height_KZ), color = "red", linetype = "dashed", size=0.5) + 
+  geom_smooth(aes(x = dbh_mm, y = pred_height_K), color = "green", linetype = "dashed", size=0.5) 
+
+p5
+
+grid.arrange(p4, p5, nrow = 1)
+
+stems_height_ %>% filter(species %in% listspecies & forest_reserve == subsite) %>% nrow
+stems_height_ %>% filter(species %in% listspecies) %>% nrow()
+```
+
+
+```{r beuk_KZ}
+listspecies <- c(7)
+# subsite <- "Kersselaerspleyn"
+
+p4 <- ggplot(stems_height_ %>% filter(species %in% listspecies),
+             aes(dbh_mm, height_m)) + 
+  geom_point(aes(color = forest_reserve)) +
+  scale_color_manual(values=c("blue", "green")) + 
+  geom_smooth(aes(x = dbh_mm, y = pred_height_K), color = "dark blue", linetype = "solid", size=0.5) + 
+  geom_smooth(aes(x = dbh_mm, y = pred_height_KZ), color = "red", linetype = "longdash", size=1) + 
+  geom_smooth(aes(x = dbh_mm, y = pred_height_Z), color = "dark green", linetype = "solid", size=0.5) +
+  facet_wrap(~forest_reserve) + 
+  theme(legend.position = "none") + 
+  scale_y_continuous(minor_breaks = seq(0 , 50, 1), breaks = seq(0, 50, 10))
+  
+p4
+
+# stems_height_ %>% filter(species %in% listspecies & forest_reserve == subsite) %>% nrow
+```
+
+
+
+### Zomereik
+
+```{r eik_K, eval = FALSE}
+listspecies <- c(87)
+subsite <- "Kersselaerspleyn"
+
+p4 <- ggplot(stems_height_ %>% filter(species %in% listspecies & forest_reserve == subsite),
+             aes(dbh_mm, height_m)) + 
+  geom_point(aes(color = forest_reserve)) +
+  geom_smooth(aes(x = dbh_mm, y = pred_height), color = "blue", linetype = "solid", size=0.5) + 
+  geom_smooth(aes(x = dbh_mm, y = pred_height_KZ), color = "red", linetype = "dashed", size=0.5) 
+
+p4
+
+stems_height_ %>% filter(species %in% listspecies & forest_reserve == subsite) %>% nrow
+```
+
+```{r eik_Z, eval = FALSE}
+listspecies <- c(87)
+subsite <- "Zwaenepoel"
+
+p5 <- ggplot(stems_height_ %>% filter(species %in% listspecies & forest_reserve == subsite),
+             aes(dbh_mm, height_m)) + 
+  geom_point(aes(color = forest_reserve)) +
+  geom_smooth(aes(x = dbh_mm, y = pred_height), color = "blue", linetype = "solid", size=0.5) + 
+  geom_smooth(aes(x = dbh_mm, y = pred_height_KZ), color = "red", linetype = "dashed", size=0.5) 
+
+p5
+
+grid.arrange(p4, p5, nrow = 1)
+
+stems_height_ %>% filter(species %in% listspecies & forest_reserve == subsite) %>% nrow
+stems_height_ %>% filter(species %in% listspecies) %>% nrow()
+```
+
+
+```{r eik_KZ}
+listspecies <- c(87)
+# subsite <- "Kersselaerspleyn"
+
+p4 <- ggplot(stems_height_ %>% filter(species %in% listspecies),
+             aes(dbh_mm, height_m)) + 
+  geom_point(aes(color = forest_reserve)) +
+  scale_color_manual(values=c("blue", "green")) + 
+  geom_smooth(aes(x = dbh_mm, y = pred_height_K), color = "dark blue", linetype = "solid", size=1) + 
+  geom_smooth(aes(x = dbh_mm, y = pred_height_KZ), color = "red", linetype = "longdash", size=1) + 
+  geom_smooth(aes(x = dbh_mm, y = pred_height_Z), color = "dark green", linetype = "solid", size=1) +
+  facet_wrap(~forest_reserve) + 
+  theme(legend.position = "none") + 
+  scale_y_continuous(minor_breaks = seq(0 , 50, 1), breaks = seq(0, 50, 10))
+  
+p4
+
+# stems_height_ %>% filter(species %in% listspecies & forest_reserve == subsite) %>% nrow
+```
+
+
+### Overige soorten
+
+#### Soorten met eigen curve
+
+Enkel Kersselaerspleyn
+
+```{r Kerss_KZ}
+listspecies <- c(27, 16, 14, 32, 44)
+# listspecies <- listspecies1
+subsite <- "Kersselaerspleyn"
+
+p4 <- ggplot(stems_height_ %>% filter(species %in% listspecies & forest_reserve == subsite),
+             aes(dbh_mm, height_m)) + 
+  geom_point(aes(color = forest_reserve)) +
+  scale_color_manual(values=c("blue", "green")) + 
+  geom_smooth(aes(x = dbh_mm, y = pred_height_K), color = "dark blue", linetype = "solid", size=0.5) + 
+  geom_smooth(aes(x = dbh_mm, y = pred_height_KZ), color = "red", linetype = "longdash", size=1) + 
+  geom_smooth(aes(x = dbh_mm, y = pred_height_Z), color = "dark green", linetype = "solid", size=0.5) +
+  facet_wrap(~name_nl) + 
+  theme(legend.position = "none") + 
+  scale_y_continuous(minor_breaks = seq(0 , 50, 1), breaks = seq(0, 50, 10))
+  
+p4
+
+# stems_height_ %>% filter(species %in% listspecies & forest_reserve == subsite) %>% nrow
+```
+
+Samen met Zwaenepoel
+
+
+```{r KerssZwaen_KZ}
+listspecies <- c(27, 16, 14, 32, 44)
+# listspecies <- listspecies1
+# subsite <- "Kersselaerspleyn"
+
+p4 <- ggplot(stems_height_ %>% filter(species %in% listspecies),
+             aes(dbh_mm, height_m)) + 
+  geom_point(aes(color = forest_reserve)) +
+  scale_color_manual(values=c("blue", "green")) + 
+  geom_smooth(aes(x = dbh_mm, y = pred_height_K), color = "dark blue", linetype = "solid", size=0.5) + 
+  geom_smooth(aes(x = dbh_mm, y = pred_height_KZ), color = "red", linetype = "longdash", size=1) + 
+  geom_smooth(aes(x = dbh_mm, y = pred_height_Z), color = "dark green", linetype = "solid", size=0.5) +
+  facet_wrap(~name_nl) + 
+  theme(legend.position = "top") + 
+  scale_y_continuous(minor_breaks = seq(0 , 50, 1), breaks = seq(0, 50, 10))
+  
+p4
+
+# stems_height_ %>% filter(species %in% listspecies & forest_reserve == subsite) %>% nrow
+```
+
+#### Zeldzame soorten 
+
+Geen afzonderlijke curve mogelijk
+
+```{r Kerss_zeldz_KZ}
+listspecies <- listspecies2
+subsite <- "Kersselaerspleyn"
+
+p4 <- ggplot(stems_height_ %>% filter(species %in% listspecies & forest_reserve == subsite),
+             aes(dbh_mm, height_m)) + 
+  geom_point(aes(color = forest_reserve)) +
+  scale_color_manual(values=c("blue", "green")) + 
+  geom_smooth(aes(x = dbh_mm, y = pred_height_K), color = "dark blue", linetype = "solid", size=0.5) + 
+  geom_smooth(aes(x = dbh_mm, y = pred_height_KZ), color = "red", linetype = "longdash", size=1) + 
+  geom_smooth(aes(x = dbh_mm, y = pred_height_Z), color = "dark green", linetype = "solid", size=1) +
+  facet_wrap(~name_nl) + 
+  theme(legend.position = "top") + 
+  scale_y_continuous(minor_breaks = seq(0 , 50, 1), breaks = seq(0, 50, 10))
+  
+p4
+
+# stems_height_ %>% filter(species %in% listspecies & forest_reserve == subsite) %>% nrow
+```
+
+
+Maar wel soms wanneer we de cirkelplots van de uitbreiding (Zwaenepoel) erbij nemen
+
+```{r KerssZwaen_zeldz_KZ2}
+listspecies <- listspecies2
+# subsite <- "Kersselaerspleyn"
+
+p4 <- ggplot(stems_height_ %>% filter(species %in% listspecies),
+             aes(dbh_mm, height_m)) + 
+  geom_point(aes(color = forest_reserve)) +
+  scale_color_manual(values=c("blue", "green")) + 
+  geom_smooth(aes(x = dbh_mm, y = pred_height_K), color = "dark blue", linetype = "solid", size=0.5) + 
+  geom_smooth(aes(x = dbh_mm, y = pred_height_KZ), color = "red", linetype = "longdash", size=1) + 
+  geom_smooth(aes(x = dbh_mm, y = pred_height_Z), color = "dark green", linetype = "solid", size=1) +
+  facet_wrap(~name_nl) + 
+  theme(legend.position = "top") + 
+  scale_y_continuous(minor_breaks = seq(0 , 50, 1), breaks = seq(0, 50, 10))
+  
+p4
+
+# stems_height_ %>% filter(species %in% listspecies & forest_reserve == subsite) %>% nrow
+```
+
+
+# Hoogteverschillen
+
+We zien dat er vooral bij beuk een verschil is tss Kerss en Zwaenepoel, en dan vooral bij de maximale hoogtes: een verschil van 2 m.  
+
+Bij zomereik is het verschil slechts 1 m.
+
+- beuk: 
+
+++ gemiddelde hoogte in Kersselaerspleyn:  `r round(mean(stems_height_[stems_height_$species == 7, ]$pred_height_K, na.rm = T), 1)`    
+++ gemiddelde hoogte in Zwaenepoel:  `r round(mean(stems_height_[stems_height_$species == 7, ]$pred_height_Z, na.rm = T), 1)`  
+++ max. hoogte in Kersselaerspleyn:  `r round(max(stems_height_[stems_height_$species == 7, ]$pred_height_K, na.rm = T), 1)`  
+++ max. hoogte in Zwaenepoel:  `r round(max(stems_height_[stems_height_$species == 7, ]$pred_height_Z, na.rm = T),1)`  
+
+- zomereik:   
+
+++ gemiddelde hoogte in Kersselaerspleyn:  `r round(mean(stems_height_[stems_height_$species == 87, ]$pred_height_K, na.rm = T), 1)`    
+++ gemiddelde hoogte in Zwaenepoel:  `r round(mean(stems_height_[stems_height_$species == 87, ]$pred_height_Z, na.rm = T), 1)`  
+++ max. hoogte in Kersselaerspleyn:  `r round(max(stems_height_[stems_height_$species == 87, ]$pred_height_K, na.rm = T), 1)`  
+++ max. hoogte in Zwaenepoel:  `r round(max(stems_height_[stems_height_$species == 87, ]$pred_height_Z, na.rm = T),1)`  
+
+- tamme kastanje:   
+
+++ gemiddelde hoogte in Kersselaerspleyn:  `r round(mean(stems_height_[stems_height_$species == 64, ]$pred_height_K, na.rm = T), 1)`    
+++ gemiddelde hoogte in Zwaenepoel:  `r round(mean(stems_height_[stems_height_$species == 64, ]$pred_height_Z, na.rm = T), 1)`  
+++ max. hoogte in Kersselaerspleyn:  `r round(max(stems_height_[stems_height_$species == 64, ]$pred_height_K, na.rm = T), 1)`  
+++ max. hoogte in Zwaenepoel:  `r round(max(stems_height_[stems_height_$species == 64, ]$pred_height_Z, na.rm = T),1)`  
+
+- algemeen:  
+
+++ gemiddelde hoogte in Kersselaerspleyn:  `r round(mean(stems_height_$pred_height_K, na.rm = T), 1)`    
+++ gemiddelde hoogte in Zwaenepoel:  `r round(mean(stems_height_$pred_height_Z, na.rm = T), 1)`  
+
+
+# Besluit
+
+Voor de **soorten met veel metingen** zoals eik en beuk, gebruiken we de eigen curves.  
+
+Voor de **soorten met voldoende metingen voor eigen curve** opteren we om de eigen curve te gebruiken (es, esdoorn), tenzij wanneer er een duidelijke meerwaarde is om de metingen van de uitbreiding erbij te nemen.  
+Dat is het geval voor Haagbeuk.  
+Bij de ander soorten is er ofwel heel weinig verschil ofwel net een te groot verschil (bv. Japanse lork: de lork in Zwaenepoel lijkt minder hoog én we hebben voldoende metingen).  
+
+
+Ook voor de **soorten met héél weinig metingen** (berk, lijsterbes, ...) zijn de gezamenlijke curves een betere optie dan de algemene curve voor alle soorten samen.   
+Zie word-document.   
+Voor berk, els en spaanse aak gebruiken we de gezamenlijke curve.  
+Voor de overige niet, omdat er maar één meting is, er geen metingen zijn in Zwaenepoel of omdat de hoogtes in Zwaenepoel veel hoger liggen (bv. tKa).  
+
+
+```{r verschil_in_hooogte, eval = FALSE}
+# beuk
+mean(stems_height_[stems_height_$species == 7, ]$pred_height_K, na.rm = T)
+mean(stems_height_[stems_height_$species == 7, ]$pred_height_Z, na.rm = T)
+
+# tKa
+mean(stems_height_[stems_height_$species == 64, ]$pred_height_K, na.rm = T)
+mean(stems_height_[stems_height_$species == 64, ]$pred_height_Z, na.rm = T)
+max(stems_height_[stems_height_$species == 64, ]$pred_height_K, na.rm = T)
+max(stems_height_[stems_height_$species == 64, ]$pred_height_Z, na.rm = T)
+max(stems_height_[stems_height_$species == 64, ]$pred_height_KZ, na.rm = T)
+```
+
+

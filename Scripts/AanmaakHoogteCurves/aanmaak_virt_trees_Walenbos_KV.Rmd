@@ -1,0 +1,824 @@
+---
+title: "Ophalen data voor aanmaak DH-curves in een virtuele plot mbv FM-IA"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: FALSE
+      smooth_scroll: FALSE
+---
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+library(writexl)
+
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+
+```
+
+
+```{r Setup2}
+forestreserve <- "Walenbos KV1"
+forestreserve <- "Walenbos OT"
+forestreserve <- "Walenbos"
+
+
+forestreserve_folder <- paste0(path_to_reserves, "4c_Walenbos_DEELS")
+
+plot_type <- "CA"
+# plot_type <- "CP"
+# plot_type <- "Core area"
+# plot_type <- "Circular plot"
+
+# virt_plot <- 51001
+# virt_plot <- 53001
+# !! wordt verderop automatisch berekend: plot_id + 1
+```
+
+
+```{r Path}
+# deze worden ook in "Paths.R" gedefinieerd, hier ev. extra "paths" toevoegen indien nodig voor huidig script
+
+# resultaten
+path_to_datarequest <- paste0(forestreserve_folder, "/2AanmaakDHcurves/VirtualTreesHeightCurves")
+
+```
+
+
+# Vraagstelling
+
+Momenteel gebeurt de meeste dataverwerking in R, maar de aanmaak van DH-curves gebeurt nog steeds in FM-IA.
+Daartoe wordt een virtuele plot aangemaakt waar alle boomhoogtes in opgenomen zijn.
+
+- alle hoogtes van intacte bomen
+- hoogtes van hakhout spillen, zeker als er te weinig metingen op boomniveau zijn (bv. Hazelaar)
+- hoogtes van 1e, 2e en 3eSET samen
+
+Onderstaand script voegt al deze data samen, om vervolgens in FM in te laden mbv de Import2FM-tool.
+
+
+# Data inladen
+
+In dit script wordt data van het **bosreservaat `r forestreserve`** ingeladen, met als **plottype `r plot_type`**.
+
+<!-- In het geval van `r forestreserve` dient ook rekening gehouden te worden met een aantal **verstoorde plots**. -->
+<!-- Deze worden niet meegenomen in de verdere dataverwerking.   -->
+
+
+```{r overview_tables_fieldmap}
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+      tables_fieldmap <- sqlTables(con) %>% 
+                filter(str_detect(TABLE_NAME, "MSys", negate = TRUE ))
+                # wegfilteren van records waar TABLE_NAME "MSys" bevat
+      # CircularPlots_forestreserves <- sqlFetch(con, "CircularPlots_forestreserves")   # LEEG
+      # CoreArea_forestreserves <- sqlFetch(con, "CoreArea_forestreserves")  # LEEG
+odbcClose(con)
+```
+
+```{r load_lookuplists}
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+
+qspecies <- sqlFetch(con, "qSpecies")
+qalivedead <- sqlFetch(con, "qAliveDead")
+qindshootcop <- sqlFetch(con, "qIndShootCop")
+qintactsnag <- sqlFetch(con, "qIntactSnag")
+
+odbcClose(con)
+# odbcCloseAll()
+```
+
+Data inladen via de functies `load_data_dendrometry`, `load_data_shoots` en `compose_stem_data`uit package `forrescalc`.
+
+NIET `trees_calc` uit forresdat, want dat zijn niet steeds de meest recente data en mogelijk ook enkel de processed data.
+
+
+```{r inspect_plots}
+plots <- load_plotinfo(database = path_to_fieldmap_db)
+
+plots %>% distinct(forest_reserve) %>% dplyr::pull(forest_reserve)
+
+# # bevat geen tresholds
+# con <- odbcConnectAccess2007(path_to_strata_db)
+#  # strata_tables <- sqlTables(con) %>% filter(!str_detect(TABLE_NAME, "MSys"))
+#  # strata <- sqlFetch(con, "strata_remaining", stringsAsFactors = FALSE)
+#  # location <- sqlFetch(con, "strata_location", stringsAsFactors = FALSE)
+#  plotinfo <- sqlFetch(con, "info_survey", stringsAsFactors = FALSE)
+# odbcClose(con)
+# 
+# plotinfo %>% filter(str_detect(forest_reserve, forestreserve)) %>% select(plot_id, contains("Treshold"))
+
+plotinfo_ <- plots %>% filter(str_detect(forest_reserve, forestreserve) & plottype == plot_type) 
+
+unique(plotinfo_$forest_reserve)
+```
+
+
+```{r load_data}
+trees <- load_data_dendrometry(database = path_to_fieldmap_db, 
+                               plottype = plot_type, 
+                               # forest_reserve = forestreserve, 
+                               extra_variables = TRUE, 
+                               processed = FALSE) %>% 
+  filter(forest_reserve %in% unique(plotinfo_$forest_reserve))
+
+shoots <- load_data_shoots(database = path_to_fieldmap_db, extra_variables = TRUE)# hier kan forest_reserve niet gespecifieerd worden
+
+stems <- compose_stem_data(trees, shoots, extra_variables = TRUE)
+# door samen te voegen, wordt enkel het specifieke forest reserve behouden
+
+```
+
+
+```{r select_height_data}
+# names(stems)
+stems_height <- stems %>% 
+  filter(alive_dead == 11 & intact_snag == 11
+         & ind_sht_cop != 11
+         & !is.na(height_m)  # levend en intact, geen opgr spil
+         & (common_remark != 90 | is.na(common_remark)) # 90: uitgebroken top
+         # & period %in% c(2,3)
+  ) %>% 
+  left_join(qspecies %>% select(ID, Value1), by = c("species"= "ID")) %>% 
+  rename(name_nl = Value1) %>% 
+  left_join(qindshootcop %>% select(ID, Value1), by = c("ind_sht_cop"= "ID")) %>% 
+  rename(ind_sht_cop_txt = Value1) %>% 
+  mutate(fperiod = as.factor(period),
+         ind_sht_cop = as.factor(ind_sht_cop)) %>% 
+  select(-contains(c("dbh_min", "r_A", "core", "area", "circle")))
+
+```
+
+
+# Aantal gemeten hoogtes per soort
+
+```{r only_core_area}
+nr_measured <- stems %>% 
+  mutate(height_m = ifelse((common_remark != 90 | is.na(common_remark))
+                            , height_m
+                            , NA)  # uitgebroken top
+        ) %>% 
+  # filter(alive_dead == 11 & intact_snag == 11) %>% 
+  group_by(species) %>% 
+  summarize(n = n(),
+            n_alive = sum(alive_dead == 11),
+            # n_dead = sum(alive_dead == 12),
+            # n_height_all = sum(height_m > 0, na.rm = TRUE), 
+            n_height_alive = sum(height_m > 0 & alive_dead == 11 & intact_snag == 11, na.rm = TRUE)) %>%
+  ungroup() %>% 
+  left_join(qspecies %>% select(ID, name_nl = Value1), by = c("species" = "ID")) %>% 
+  arrange(n_height_alive, n_alive)
+
+nr_measured %>% DT :: datatable(options = list(dom = 'tip'),rownames = FALSE) 
+
+# write.csv2(nr_measured, paste0(forestreserve_folder, "/2AanmaakDHcurves/nr_measured_KV_AQ.csv"))
+# write.csv2(nr_measured, paste0(forestreserve_folder, "/2AanmaakDHcurves/nr_measured_KV_A.csv"))
+write.csv2(nr_measured, paste0(forestreserve_folder, "/2AanmaakDHcurves/nr_measured_KV_all.csv"))
+# write.csv2(nr_measured, paste0(forestreserve_folder, "/2AanmaakDHcurves/nr_measured_KV2_all.csv"))
+```
+
+
+# Aantal metingen per periode
+
+2001 2011 2021
+
+```{r}
+table(stems_height$period)
+#   1   2 
+# 348  18 
+unique(stems_height$year)
+# [1] 2001 2011
+
+overview_heights_KV <- stems_height %>% 
+  group_by(name_nl, period) %>% 
+  summarize(aantal = n()) %>% 
+  ungroup() %>% 
+  pivot_wider(
+    names_from = period,
+    values_from = c(aantal),
+    names_prefix = "periode" 
+    )
+
+
+```
+
+
+
+# KV vs OT 
+
+## Algemeen
+
+```{r aantal_per_KV}
+n1_h <- stems %>% filter(plot_id == 51000 & alive_dead == 11 & !is.na(height_m)) %>% nrow()
+n2_h <- stems %>% filter(plot_id == 53000 & alive_dead == 11 & !is.na(height_m)) %>% nrow()
+
+n1 <- stems %>% filter(plot_id == 51000) %>% nrow()
+n2 <- stems %>% filter(plot_id == 53000) %>% nrow()
+
+KV <- c("KV 51000", "KV 53000")
+n_bomen <- c(n1, n2)
+n_hoogtes <- c(n1_h, n2_h)
+dt <- data.frame(KV, n_bomen, n_hoogtes)
+dt %>% DT :: datatable(options = list(dom = 'rt'), rownames = FALSE) 
+```
+
+
+## Aantal metingen per soort en per kernvlakte
+
+```{r}
+overview_heights_KV1vs2 <- stems_height %>% 
+  group_by(forest_reserve, species, name_nl) %>% 
+  summarize(aantal = n()) %>% 
+  ungroup() %>% 
+  pivot_wider(
+    names_from = forest_reserve,
+    values_from = c(aantal)
+    )
+
+names(overview_heights_KV1vs2)[3] <- "Walenbos_KV1_heights"
+names(overview_heights_KV1vs2)[4] <- "Walenbos_OT_heights"
+
+write.csv2(overview_heights_KV1vs2, paste0(forestreserve_folder, "/2AanmaakDHcurves/overview_heights_KVvsOT.csv"))
+```
+
+```{r aantal_per_soort_per_KV}
+overview_trees_KV1vs2 <- stems %>% 
+  filter(intact_snag == 11) %>% # enkel intacte, voor snags geen hoogte nodig
+  group_by(forest_reserve, species) %>% 
+  summarize(aantal = n()) %>% 
+  ungroup() %>% 
+  pivot_wider(
+    names_from = forest_reserve,
+    values_from = c(aantal)
+    ) 
+
+names(overview_trees_KV1vs2)[2] <- "Walenbos_KV1_all"
+names(overview_trees_KV1vs2)[3] <- "Walenbos_OT_all"
+
+overview_KV1vs2 <- overview_heights_KV1vs2 %>% 
+  full_join(overview_trees_KV1vs2, by = c("species"))
+
+overview_KV1vs2 %>% DT :: datatable(options = list(dom = 'rt'), rownames = FALSE, filter = "top") 
+
+write.csv2(overview_KV1vs2, paste0(forestreserve_folder, "/2AanmaakDHcurves/overview_KVvsOT.csv"))
+```
+
+
+# Periode 1 en/of periode 2 gebruiken?
+
+## Tabel
+
+```{r }
+n1_h <- stems %>% filter(period == 1 & alive_dead == 11 & !is.na(height_m)) %>% nrow()
+n2_h <- stems %>% filter(period == 2 & alive_dead == 11 & !is.na(height_m)) %>% nrow()
+
+n1 <- stems %>% filter(period == 1) %>% nrow()
+n2 <- stems %>% filter(period == 2) %>% nrow()
+
+periode <- c("periode 1", "periode 2")
+n_bomen <- c(n1, n2)
+n_hoogtes <- c(n1_h, n2_h)
+dt <- data.frame(periode, n_bomen, n_hoogtes)
+dt %>% DT :: datatable(options = list(dom = 'rt'), rownames = FALSE) 
+
+table(stems_height$plot_id, stems_height$period)
+  #       1   2
+  # 51000 243  18
+  # 53000 105   0
+```
+
+Allemaal gebruiken
+
+
+## Grafiek
+
+```{r vgl_all_1_vs_2_curve}
+ggplot(stems_height, aes(dbh_mm, height_m)) + geom_point(aes(color = fperiod)) + geom_smooth(aes(color = fperiod)) 
+
+# ggplot(stems_height, aes(dbh_mm, height_m)) + geom_point() + geom_smooth() + facet_wrap(~fperiod)
+# 
+# ggplot(stems_height, aes(dbh_mm, height_m)) + geom_point(aes(color = fperiod)) + geom_smooth()
+                                                  
+```
+
+Eerder lagere hoogtes in periode 2, maar te weinig metingen om er veel belang aan te kunnen hechten.
+Al zeker geen verschuiving van curve wegens ouder wordende bestanden
+MAAR mogelijks wel overschattingen in 1e periode?
+
+
+
+# Hakhout meenemen?
+
+Voor 't simpelste standaard meenemen tenzij indien afwijkend => zie onderstaande grafieken.
+
+```{r tables, include=FALSE}
+table(stems_height$period)
+table(stems_height$ind_sht_cop)
+table(stems_height$name_nl)
+table(stems_height$crown_volume_reduction) # allemaal NA
+table(stems_height$branch_length_reduction) # allemaal NA
+
+table(stems_height$ind_sht_cop, stems_height$name_nl)
+
+table(stems$species)
+
+```
+
+```{r HH_overzicht, eval=FALSE}
+overview_HH_height <- stems_height %>% 
+  group_by(ind_sht_cop, species, name_nl) %>% 
+  summarize(aantal = n()) %>% 
+  ungroup %>% 
+  pivot_wider(names_from = ind_sht_cop, values_from = aantal) %>% 
+  rename(individual = "10", coppice = "12") %>% 
+  mutate(perc_hakhout = round(100*coppice/(individual + coppice), ))
+
+overview_HH_height %>% arrange(desc(perc_hakhout)) %>% DT :: datatable(options = list(dom = 'rt'), rownames = FALSE, filter = "top") 
+
+# write.csv2(overview_HH_height, paste0(forestreserve_folder, "/2AanmaakDHcurves/overview_HH_height_KV_AQ.csv"))
+
+# write.csv2(overview_HH_height, paste0(forestreserve_folder, "/2AanmaakDHcurves/overview_HH_height_KV_A.csv"))
+
+write.csv2(overview_HH_height, paste0(forestreserve_folder, "/2AanmaakDHcurves/overview_HH_height_KV_all.csv"))
+```
+
+
+## Grafiek
+
+
+```{r vgl_individ_coppice_curve}
+specieslist_coppice <- c(89, 16, 58, 27, 86, 83)
+specieslist_coppice <- c(27, 3, 39)
+
+# per soort
+p1 <- ggplot(stems_height  %>% filter(species %in% specieslist_coppice), aes(dbh_mm, height_m)) + geom_point(aes(color = ind_sht_cop)) + geom_smooth() + facet_wrap(~species)
+p1
+
+```
+
+```{r vgl_individ_coppice_curve2, eval = FALSE}
+ggplot(stems_height %>% filter(species %in% specieslist_coppice), aes(dbh_mm, height_m)) + geom_point(aes(color = ind_sht_cop)) + geom_smooth(aes(color = ind_sht_cop)) 
+
+ggplot(stems_height %>% filter(species %in% specieslist_coppice), aes(dbh_mm, height_m)) + geom_point() + geom_smooth() + facet_wrap(~ind_sht_cop)
+
+ggplot(stems_height %>% filter(species %in% specieslist_coppice), aes(dbh_mm, height_m)) + geom_point(aes(color = ind_sht_cop)) + geom_smooth() 
+
+# per soort
+p1 <- ggplot(stems_height %>% filter(species %in% specieslist_coppice), aes(dbh_mm, height_m)) + geom_point(aes(color = ind_sht_cop)) + geom_smooth() + facet_wrap(~species)
+p1
+
+# eens alleen individuele bomen
+p2 <- ggplot(stems_height %>% filter(species %in% specieslist_coppice & ind_sht_cop == 10), aes(dbh_mm, height_m)) + geom_point(aes(color = ind_sht_cop)) + geom_smooth() + facet_wrap(~species)
+p2
+
+grid.arrange(p1, p2, nrow = 2)
+```
+
+Ziet er OK uit, geen grote verschillen tussen coppice en individual.
+
+
+# Clusteren?
+
+Ev. els of ratelpopulier? 
+
+Els: eventeel wel, vergelijkbare hoogtes - maar geen echte meerwaarde, voldoende metingen in beide KV's
+
+```{r cluster_els}
+listspecies <- c(89, 83)
+
+# p4 <- ggplot(stems_height_ %>% filter(species %in% listspecies),
+#              aes(dbh_mm, height_m)) + 
+#   geom_point(aes(color = name_nl)) +
+#   geom_smooth(aes(x = dbh_mm, y = pred_height), color = "dark blue", linetype = "solid", size=0.5) 
+# 
+# p4
+
+stems_height %>% filter(species %in% listspecies) %>% nrow
+
+p5 <- ggplot(stems_height %>% filter(species %in% listspecies),
+             aes(dbh_mm, height_m)) + 
+  geom_point(aes(color = name_nl)) +
+  geom_smooth(aes(x = dbh_mm, y = height_m, color = name_nl), linetype = "solid", size=0.5) 
+
+p5
+
+```
+
+Populier: eventueel meerwaarde voor ratelpopulier - toch niet, erop vertrouwen dat IA goede benadering heeft, enkel bij flagrante zaken zelf aanpassen
+
+```{r cluster_populier}
+listspecies <- c(51, 52)
+
+# p4 <- ggplot(stems_height_ %>% filter(species %in% listspecies),
+#              aes(dbh_mm, height_m)) + 
+#   geom_point(aes(color = name_nl)) +
+#   geom_smooth(aes(x = dbh_mm, y = pred_height), color = "dark blue", linetype = "solid", size=0.5) 
+# 
+# p4
+
+stems_height %>% filter(species %in% listspecies) %>% nrow
+
+p5 <- ggplot(stems_height %>% filter(species %in% listspecies),
+             aes(dbh_mm, height_m)) + 
+  geom_point(aes(color = name_nl)) +
+  geom_smooth(aes(x = dbh_mm, y = height_m, color = name_nl), linetype = "solid", size=0.5) 
+
+p5
+
+```
+
+Meidoorn: misschien, samen 5 metingen, elk afz. steeds adjusted_all_species
+
+<!-- want maar één gemeten hoogte => curve van alle soorten samen, met aangepast intercept (adjusted_all_species) -->
+<!-- Kan vervangen worden door adjusted_global -->
+<!-- MAAR: maar één meting én één boom => geen meerwaarde -->
+
+
+```{r cluster_iep}
+listspecies <- c(13, 41, 67)
+
+# p4 <- ggplot(stems_height_ %>% filter(species %in% listspecies),
+#              aes(dbh_mm, height_m)) + 
+#   geom_point(aes(color = name_nl)) +
+#   geom_smooth(aes(x = dbh_mm, y = pred_height), color = "dark blue", linetype = "solid", size=0.5) 
+# 
+# p4
+
+stems_height %>% filter(species %in% listspecies) %>% nrow
+
+p5 <- ggplot(stems_height %>% filter(species %in% listspecies),
+             aes(dbh_mm, height_m)) + 
+  geom_point(aes(color = name_nl)) +
+  geom_smooth(aes(x = dbh_mm, y = height_m, color = name_nl), linetype = "solid", size=0.5) 
+
+p5
+
+```
+
+Berk: ruwe zachte en berk
+Vergelijkbaar, maar niet persé nodig want kunnen elk afzonderlijk ook curve maken
+
+```{r cluster_berk}
+listspecies <- c(57, 86)
+
+# p4 <- ggplot(stems_height_ %>% filter(species %in% listspecies),
+#              aes(dbh_mm, height_m)) + 
+#   geom_point(aes(color = name_nl)) +
+#   geom_smooth(aes(x = dbh_mm, y = pred_height), color = "dark blue", linetype = "solid", size=0.5) 
+# 
+# p4
+
+stems_height %>% filter(species %in% listspecies) %>% nrow
+
+p5 <- ggplot(stems_height %>% filter(species %in% listspecies),
+             aes(dbh_mm, height_m)) + 
+  geom_point(aes(color = name_nl)) +
+  geom_smooth(aes(x = dbh_mm, y = height_m, color = name_nl), linetype = "solid", size=0.5) 
+
+p5
+
+```
+
+
+Wintereik en zomereik? 
+Geen hoogtes van wintereik => curve van zomereik gebruiken, beter dan algemene curve van alle soorten samen.
+
+```{r cluster_eik}
+listspecies <- c(80, 87)
+
+# p4 <- ggplot(stems_height_ %>% filter(species %in% listspecies),
+#              aes(dbh_mm, height_m)) + 
+#   geom_point(aes(color = name_nl)) +
+#   geom_smooth(aes(x = dbh_mm, y = pred_height), color = "dark blue", linetype = "solid", size=0.5) 
+# 
+# p4
+
+stems_height %>% filter(species %in% listspecies) %>% nrow
+
+p5 <- ggplot(stems_height %>% filter(species %in% listspecies),
+             aes(dbh_mm, height_m)) + 
+  geom_point(aes(color = name_nl)) +
+  geom_smooth(aes(x = dbh_mm, y = height_m, color = name_nl), linetype = "solid", size=0.5) 
+
+p5
+
+```
+
+
+# Twee kernvlaktes samen?
+
+Zie verkenning_XXX.Rmd
+
+```{r}
+table(stems_height$forest_reserve, stems_height$name_nl)
+```
+
+Enkel avK, zwarte en witte els, en zachte berk komen in beide KV's in even grote aantallen voor => zit daar toch geen groot verschil op?
+
+!! In IA kan er curve per KV opgesteld worden, enkel voor deze met te weinig metingen worden KV's samengevoegd: ideaal!
+
+```{r }
+listspecies <- c(4, 83, 86, 89)
+
+# p4 <- ggplot(stems_height_ %>% filter(species %in% listspecies),
+#              aes(dbh_mm, height_m)) + 
+#   geom_point(aes(color = name_nl)) +
+#   geom_smooth(aes(x = dbh_mm, y = pred_height), color = "dark blue", linetype = "solid", size=0.5) 
+# 
+# p4
+
+stems_height %>% filter(species %in% listspecies) %>% nrow
+
+p5 <- ggplot(stems_height %>% filter(species %in% listspecies),
+             aes(dbh_mm, height_m)) + 
+  geom_point(aes(color = forest_reserve)) +
+  geom_smooth(aes(x = dbh_mm, y = height_m, color = forest_reserve), linetype = "solid", size=0.5) +
+  facet_wrap(~name_nl)
+
+p5
+```
+
+Ook eens checken voor zomereik en populier
+
+```{r }
+listspecies <- c(51, 87)
+
+# p4 <- ggplot(stems_height_ %>% filter(species %in% listspecies),
+#              aes(dbh_mm, height_m)) + 
+#   geom_point(aes(color = name_nl)) +
+#   geom_smooth(aes(x = dbh_mm, y = pred_height), color = "dark blue", linetype = "solid", size=0.5) 
+# 
+# p4
+
+stems_height %>% filter(species %in% listspecies) %>% nrow
+
+p5 <- ggplot(stems_height %>% filter(species %in% listspecies),
+             aes(dbh_mm, height_m)) + 
+  geom_point(aes(color = forest_reserve)) +
+  geom_smooth(aes(x = dbh_mm, y = height_m, color = forest_reserve), linetype = "solid", size=0.5) +
+  facet_wrap(~name_nl)
+
+p5
+```
+
+Lagere hoogtes in OT!
+
+Sowieso waar voldoende metingen zijn, de curves apart houden. 
+
+IA zorgt sowieso voor aanpassing van intercept als er maar 1 à 4 metngen zijn, curvevorm wordt dan overgenomen van andere KV. 
+
+
+# Wat met Zwarte els KV vs OT
+
+Komt vrij goed overeen
+
+```{r vgl_els_1_vs_2_curve}
+ggplot(stems_height %>% filter(species == 89), aes(dbh_mm, height_m)) + geom_point(aes(color = forest_reserve)) + geom_smooth(aes(color = forest_reserve)) 
+
+# ggplot(stems_height, aes(dbh_mm, height_m)) + geom_point() + geom_smooth() + facet_wrap(~fperiod)
+# 
+# ggplot(stems_height, aes(dbh_mm, height_m)) + geom_point(aes(color = fperiod)) + geom_smooth()
+                                                  
+```
+
+
+# Overschattingen periode 1?
+
+## Wat met populier?
+
+Kan het zijn dat er bij periode 1 een overschatting gebeurd is bij de metingen? 
+
+Ietsje lager periode 2, maar maar 4 metingen ...
+
+```{r vgl_pop_1_vs_2_mean, include=FALSE}
+stems_height_pop <- stems_height %>% filter(name_nl == "Populier species")
+
+stems_height_pop_p1 <- stems_height_pop %>% filter(period == 1)
+stems_height_pop_p2 <- stems_height_pop %>% filter(period == 2)
+
+mean(stems_height_pop_p1$height_m) # 31.6
+mean(stems_height_pop_p2$height_m) # 33.2
+
+```
+
+Mean_height verschilt `r mean(stems_height_pop_p1$height_m) - mean(stems_height_pop_p2$height_m)` m.
+
+(periode 1 : `r mean(stems_height_pop_p1$height_m)` m - 
+periode 2: `r mean(stems_height_pop_p2$height_m)` m )
+
+
+### Curve
+
+```{r vgl_pop_1_vs_2_curve}
+ggplot(stems_height_pop, aes(dbh_mm, height_m)) + geom_point(aes(color = fperiod)) + geom_smooth(aes(color = fperiod)) 
+
+# ggplot(stems_height_pop, aes(dbh_mm, height_m)) + geom_point() + geom_smooth() + facet_wrap(~fperiod)
+
+ggplot(stems_height_pop, aes(dbh_mm, height_m)) + geom_point(aes(color = fperiod)) + geom_smooth()
+
+```
+
+
+
+## Wat met zomereik?
+
+Geen indicatie van overschatting
+
+```{r vgl_eik_1_vs_2_mean, include=FALSE}
+stems_height_eik <- stems_height %>% filter(name_nl == "Zomereik")
+
+stems_height_eik_p1 <- stems_height_eik %>% filter(period == 1)
+stems_height_eik_p2 <- stems_height_eik %>% filter(period == 2)
+
+mean(stems_height_eik_p1$height_m, na.rm = T) # 25
+mean(stems_height_eik_p2$height_m, na.rm = T) # 26
+
+```
+
+### Curve
+
+```{r vgl_eik_1_vs_2_curve}
+ggplot(stems_height_eik, aes(dbh_mm, height_m)) + geom_point(aes(color = fperiod)) + geom_smooth(aes(color = fperiod)) 
+
+# ggplot(stems_height_eik, aes(dbh_mm, height_m)) + geom_point() + geom_smooth() + facet_wrap(~fperiod)
+
+ggplot(stems_height_eik, aes(dbh_mm, height_m)) + geom_point(aes(color = fperiod)) + geom_smooth()
+
+```
+
+
+## Wat met esdoorn?
+
+GEEN ESDOORN opgemeten tweede set
+
+
+```{r vgl_esd_1_vs_2_mean, include=FALSE}
+stems_height_esd <- stems_height %>% filter(name_nl == "Esdoorn (gewone)")
+
+stems_height_esd_p1 <- stems_height_esd %>% filter(period == 1)
+stems_height_esd_p2 <- stems_height_esd %>% filter(period == 2)
+
+mean(stems_height_esd_p1$height_m, na.rm = T) # 18
+mean(stems_height_esd_p2$height_m, na.rm = T) # 19
+
+```
+
+### Curve
+
+```{r vgl_esd_1_vs_2_curve}
+ggplot(stems_height_esd, aes(dbh_mm, height_m)) + geom_point(aes(color = fperiod)) + geom_smooth(aes(color = fperiod)) 
+
+# ggplot(stems_height_esd, aes(dbh_mm, height_m)) + geom_point() + geom_smooth() + facet_wrap(~fperiod)
+
+ggplot(stems_height_esd, aes(dbh_mm, height_m)) + geom_point(aes(color = fperiod)) + geom_smooth()
+
+```
+
+## Wat met wilg?
+
+Lijkt OK
+
+```{r vgl_wilg_1_vs_2_mean, include=FALSE}
+stems_height_wilg <- stems_height %>% filter(name_nl == "Wilg smalbladige species")
+
+stems_height_wilg_p1 <- stems_height_wilg %>% filter(period == 1)
+stems_height_wilg_p2 <- stems_height_wilg %>% filter(period == 2)
+
+mean(stems_height_wilg_p1$height_m, na.rm = T) # 18
+mean(stems_height_wilg_p2$height_m, na.rm = T) # 19
+
+```
+
+### Curve
+
+```{r vgl_wilg_1_vs_2_curve}
+ggplot(stems_height_wilg, aes(dbh_mm, height_m)) + geom_point(aes(color = fperiod)) + geom_smooth(aes(color = fperiod)) 
+
+# ggplot(stems_height_wilg, aes(dbh_mm, height_m)) + geom_point() + geom_smooth() + facet_wrap(~fperiod)
+
+ggplot(stems_height_wilg, aes(dbh_mm, height_m)) + geom_point(aes(color = fperiod)) + geom_smooth()
+
+```
+
+
+## Wat met es?
+
+Ietsje lager periode 2, maar maar 4 metingen ...
+
+```{r vgl_es_1_vs_2_mean, include=FALSE}
+stems_height_es <- stems_height %>% filter(name_nl == "Es (gewone)")
+
+stems_height_es_p1 <- stems_height_es %>% filter(period == 1)
+stems_height_es_p2 <- stems_height_es %>% filter(period == 2)
+
+mean(stems_height_es_p1$height_m, na.rm = T) # 18
+mean(stems_height_es_p2$height_m, na.rm = T) # 19
+
+```
+
+### Curve
+
+```{r vgl_es_1_vs_2_curve}
+ggplot(stems_height_es, aes(dbh_mm, height_m)) + geom_point(aes(color = fperiod)) + geom_smooth(aes(color = fperiod)) 
+
+# ggplot(stems_height_wilg, aes(dbh_mm, height_m)) + geom_point() + geom_smooth() + facet_wrap(~fperiod)
+
+ggplot(stems_height_es, aes(dbh_mm, height_m)) + geom_point(aes(color = fperiod)) + geom_smooth()
+
+```
+
+
+
+# Dataset aanmaken voor import mbv Import2FM
+
+Deze dataset dient omgevormd te worden zodat die makkelijk in te laden is mbv Import2FM.  
+Dataset moet volgende velden bevatten:
+
+- IDPlots = IDPlotsVirt
+- IDTrees = unique_ID
+- X
+- Y
+- Species
+- DBH_mm
+- Height_m
+- AliveDead
+- IntactSnag
+- IndShtCop
+
+Ter info ook nog volgende velden:  
+
+- period
+- plot_id
+- tree_measure_id
+- shoot_measure_id
+
+----
+
+Heel weinig hermetingen in 2011 => metingen uit beide periodes gebruiken
+
+
+```{r aanmaak_output}
+# names(stems)
+                        
+unique_ID <- c(1:nrow(stems %>%
+                        filter(alive_dead == 11 & intact_snag == 11
+                               # & !plot_id %in% plots_to_exclude
+                      )))
+
+output <- stems %>% 
+  filter(alive_dead == 11 & intact_snag == 11) %>% 
+  mutate(height_m = ifelse((is.na(common_remark) |  common_remark != 90), height_m, NA)) %>% 
+         # 90: uitgebroken top
+  # mutate(IDPlotsVirt = virt_plot) %>% 
+  mutate(IDPlotsVirt = plot_id + 1) %>% 
+  select(IDPlotsVirt
+         , X = x_local
+         , Y = y_local
+         , Species = species
+         , DBH_mm = dbh_mm
+          ,Height_m = height_m
+          ,AliveDead = alive_dead
+          ,IntactSnag = intact_snag
+          ,IndShtCop = ind_sht_cop
+          ,period
+         , plot_id
+         ,tree_measure_id
+         ,shoot_measure_id
+  ) %>% 
+  cbind(unique_ID)
+  
+# check
+t <- unique(output$unique_ID)
+nrow(output) - length(t) == 0
+
+```
+
+
+# Wegschrijven output
+
+De resultaten worden weggeschreven naar **TblVirtueleTrees_KV_1e2e3eSET.xlsx**
+
+```{r WegschrijvenOutput, eval=FALSE}
+# write_xlsx(output, paste0(path_to_datarequest, "/TblVirtueleTrees_KV_1e2eSET_AQ.xlsx"))
+# write_xlsx(output, paste0(path_to_datarequest, "/TblVirtueleTrees_KV_1e2eSET_A.xlsx"))
+write_xlsx(output, paste0(path_to_datarequest, "/TblVirtueleTrees_KV_1e2eSET.xlsx"))
+```

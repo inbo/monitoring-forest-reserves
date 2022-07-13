@@ -1,0 +1,182 @@
+---
+title: "Verkenning DHcurves aangemaakt in FM-IA"
+author: "Anja Leyman"
+date: "20 juli 2020"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: FALSE
+      smooth_scroll: FALSE
+---
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+library(writexl)
+
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup_ForresCalc.R"))
+
+```
+
+
+```{r Setup2}
+forestreserve <- "Heirnisse"
+forestreserve_folder <- "Heirnisse_DEELS"
+# plot_type <- "Core area"
+plot_type <- "Circular plot"
+
+virt_plot <- 799
+
+plots_to_exclude <- c(701, 707, 709, 727, 728, 738, 739, 740, 759, 760)
+```
+
+
+```{r Path}
+# deze worden ook in "Setup_ForresCalc.R" gedefinieerd, hier ev. extra "paths" toevoegen indien nodig voor huidig script
+      # path_to_fieldmap <- "C:/3BR/5_dB_Els_deel2/FieldMapData_dB_Els_deel2.accdb"
+      # path_to_git_forresdat <- "C:/3BR/2_VisualisatieDataBR/2Packages/forresdat"
+      # 
+      # path_to_analysis_set <- "C:/3BR/2_VisualisatieDataBR/1DataVerwerkingBR/Output/BR_analysedb.accdb"
+      # path_to_results <- "C:/3BR/2_VisualisatieDataBR/1DataVerwerkingBR/Output/BR_resultaten.accdb"
+      # path_to_forrescalc <- "C:/3BR/2_VisualisatieDataBR/2Packages/forrescalc/R/"
+
+# resultaten
+path_to_datarequest <- paste0("C:/3BR/4_", forestreserve_folder, "/2AanmaakDHcurves/VirtualTreesHeightCurves")
+
+```
+
+
+
+# Vraagstelling
+
+Momenteel gebeurt de meeste dataverwerking in R, maar de aanmaak van DH-curves gebeurt nog steeds in FM-IA.
+
+Tot nu toe werd acces gebuikt om te kijken of er voor elke soort een curve opgesteld was, en of er geen soorten geclusterd dienen te owrden.
+Dit wordt nu door onderstaand script vervangen.
+
+
+
+# Data inladen
+
+
+**Bosreservaat `r forestreserve`** - **plottype `r plot_type`**
+
+In het geval van `r forestreserve` dient ook rekening gehouden te worden met een aantal **verstoorde plots**.
+Deze worden niet meegenomen in de verdere dataverwerking.  
+Het gaat om volgende plots: **`r plots_to_exclude`**
+
+
+```{r overview_tables}
+con <- odbcConnectAccess2007(path_to_fieldmap)
+      dbtablesRaw_1eSET <- sqlTables(con) %>% 
+                filter(str_detect(TABLE_NAME, "MSys", negate = TRUE ))
+                # wegfilteren van records waar TABLE_NAME "MSys" bevat
+odbcClose(con)
+```
+
+```{r load_lookuplists}
+con <- odbcConnectAccess2007(path_to_fieldmap)
+
+qspecies <- sqlFetch(con, "qSpecies")
+qalivedead <- sqlFetch(con, "qAliveDead")
+qindshootcop <- sqlFetch(con, "qIndShootCop")
+qintactsnag <- sqlFetch(con, "qIntactSnag")
+
+odbcClose(con)
+
+```
+
+```{r load_data}
+# trees <- load_data_dendrometry(database = path_to_fieldmap, plottype = plot_type, forest_reserve = forest_reserve, extra_variables = TRUE)
+# trees_tmp <- load_data_dendrometry(database = path_to_fieldmap, plottype = "Core area", forest_reserve = "Muizenbos", extra_variables = TRUE)
+
+# gaf foutmelding => achteraf gefilterd
+trees <- load_data_dendrometry(database = path_to_fieldmap, plottype = plot_type, extra_variables = TRUE) %>% 
+  filter(forest_reserve == forestreserve & !plot_id %in% plots_to_exclude) %>% 
+  mutate(fperiod = as.factor(period))
+
+shoots <- load_data_shoots(database = path_to_fieldmap, extra_variables = TRUE)
+stems <- compose_stem_data(trees, shoots)
+
+```
+
+```{r select_height_data}
+# names(stems)
+stems_height <- stems %>% 
+  filter(alive_dead == 11 & intact_snag == 11
+         & ind_sht_cop != 11
+         & !is.na(height_m)  # levend en intact, geen opgr spil
+  ) %>% 
+  left_join(qspecies, by = c("species"= "ID")) %>% 
+  rename(name_nl = Value1) %>% 
+  left_join(qindshootcop, by = c("ind_sht_cop"= "ID")) %>% 
+  rename(ind_sht_cop_txt = Value1)
+```
+
+# Hoogtemodellen inladen
+
+```{r}
+
+```
+
+# Aantal gemeten hoogtes per soort
+
+```{r}
+nr_measured <- stems %>% 
+  # filter(alive_dead == 11 & intact_snag == 11) %>% 
+  group_by(species) %>% 
+  summarize(n = n(),
+            n_alive = sum(alive_dead == 11),
+            n_dead = sum(alive_dead == 12),
+            n_height_all = sum(height_m > 0, na.rm = TRUE), 
+            n_height_alive = sum(height_m > 0 & alive_dead == 11 & intact_snag == 11, na.rm = TRUE)) %>%
+  ungroup() %>% 
+  left_join(qspecies %>% select(ID, name_nl = Value1), by = c("species" = "ID")) %>% 
+  arrange(n_height_alive, n_alive) %>% 
+  select(species, name_nl, everything())
+
+nr_measured %>% DT :: datatable(options = list(dom = 'tip'), rownames = FALSE) 
+
+write.csv2(nr_measured, paste0(path_to_datarequest, "/nr_measured.csv"))
+
+```
+
+
+# Soorten die enkel dood of als snag voorkomen
+Deze moeten ook toegevoegd worden aan de lijst
+
+```{r}
+only_dead <- stems %>% 
+  group_by(species) %>% 
+  summarize(aantal = n(),
+            alive = sum(alive_dead == 11) > 0,
+            dead = sum(alive_dead == 12) > 0) %>%
+  ungroup() %>% 
+  left_join(qspecies %>% select(ID, name_nl = Value1), by = c("species" = "ID")) %>% 
+  filter(alive == FALSE & dead == TRUE)
+
+print(only_dead)
+
+```
+
+Voor bosreservaat `r forestreserve` gaat het om volgende soorten: `r only_dead$name_nl`  (soort-id `r only_dead$species`)
+
+
