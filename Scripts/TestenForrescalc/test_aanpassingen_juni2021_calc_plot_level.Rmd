@@ -1,0 +1,476 @@
+---
+title: "test aanpassing forrescalc - 17/5/2021"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: FALSE
+      smooth_scroll: FALSE
+---
+
+
+```{r Rm, eval = FALSE}
+# rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup_Forrescalc.R"))
+source(here::here("scripts/ExtraFunctions_volume.R"))
+```
+
+# Load_height_models
+
+```{r}
+height_models <- load_height_models(path_to_height_models)
+
+str(height_models)
+
+table(height_models$forest_reserve, height_models$period)
+summary(height_models)
+```
+# Calc_variables_tree_level
+
+## Load_data
+
+Eerst data inladen (load_data_dendrometry/deadwood/shoots).
+Data_stems aanmaken mbv compose_stem_data obv data_dendro en data_shoots
+
+```{r load_data}
+data_dendro <-
+  load_data_dendrometry(
+    database = path_to_fieldmap
+  )
+
+data_deadwood <-
+  load_data_deadwood(
+    database = path_to_fieldmap
+  ) %>%
+  filter(plot_id != 11000)  # in KV Kersselaerspleyn (plot 11000) no lying deadwood is meausured
+
+data_shoots <-
+  load_data_shoots(
+    database = path_to_fieldmap
+  )
+
+data_stems  <- compose_stem_data(data_dendro, data_shoots)
+
+```
+
+
+```{r}
+data_shoots %>% filter(intact_snag == 10 & is.na(height_m)) %>% nrow()
+# [1] 0 - OK
+
+data_shoots %>% filter(is.na(intact_snag)) %>% nrow()
+# [1] 0 - OK
+```
+
+## Calc_variables
+
+Berekenen van extra variabelen die vroeger in IA gebeurden:
+#'  \item tree_number: OK
+#'  \item individual: OK
+#'  \item calc_height_m: OK, MAAR ook op shootniveau!!!
+#'  \item basal_area_m2: OK
+#'  \item vol_tot_m3: OK, MAAR te berekenen op shootniveau met exacte dbh en niet de mean dbh
+#'  \item vol_stem_m3: idem
+#'  \item vol_crown_m3: idem
+#'  \item dbh_mm (based on average for coppice trees): OK
+#'  \item decaystage (based on average for coppice trees): OK
+
+
+```{r calc_var_stem}
+data_stems_calc <- calc_variables_stem_level(data_stems, height_model = height_models)
+```
+
+
+
+```{r calc_var_tree}
+colnames(data_dendro)  # 46 variables
+
+# undebug(calc_variables_tree_level)
+data_dendro_calc <- calc_variables_tree_level(data_dendro, data_stems_calc)
+
+# data_dendro_calc <- data_dendro2
+# data_dendro_calc_AL <- calc_variables_tree_level_AL(data_dendro = data_dendro, data_stems = data_stems, height_model = height_models)
+
+colnames(data_dendro_calc) # 57 variables
+# str(data_dendro_calc)
+```
+
+# Berekenen van waarden op plotniveau
+
+```{r calc_plot_level}
+by_plot <- calculate_dendro_plot(data_dendro_calc, data_deadwood)
+by_plot_species <-
+    calculate_dendro_plot_species(data_dendro_calc, data_deadwood)
+
+by_decay_plot <- calculate_logs_decay_plot(data_deadwood)
+by_decay_plot_species <-
+    calculate_logs_decay_plot_species(data_deadwood)
+
+by_diam_plot <- calculate_diam_plot(data_stems_calc, data_deadwood)
+by_diam_plot_species <-
+    calculate_diam_plot_species(data_stems_calc, data_deadwood)
+
+
+```
+
+# Vergelijken met wat reeds berekend werd
+
+
+```{r load_plot_level}
+plotinfo <- read_vc(file = "plotinfo", root = "C:/3BR/2_VisualisatieDataBR/1Packages/forresdat/data")
+
+dendro_by_plot <- read_vc(file = "dendro_by_plot", 
+                          root = "C:/3BR/2_VisualisatieDataBR/1Packages/forresdat/data") %>% 
+  left_join(plotinfo)
+
+dendro_by_plot_species <- read_vc(file = "dendro_by_plot_species", 
+                                 root = "C:/3BR/2_VisualisatieDataBR/1Packages/forresdat/data") %>% 
+  left_join(plotinfo)
+
+dendro_by_diam_plot <- read_vc(file = "dendro_by_diam_plot", 
+                               root = "C:/3BR/2_VisualisatieDataBR/1Packages/forresdat/data") %>% 
+  left_join(plotinfo)
+
+dendro_by_diam_plot_species <- read_vc(file = "dendro_by_diam_plot_species", 
+                                       root = "C:/3BR/2_VisualisatieDataBR/1Packages/forresdat/data") %>% 
+  left_join(plotinfo)
+
+
+by_plot_species <- by_plot_species %>% 
+  left_join(plotinfo)
+
+by_plot <- by_plot %>% 
+  left_join(plotinfo)
+
+by_diam_plot <- by_diam_plot %>% 
+  left_join(plotinfo)
+
+by_diam_plot_species <- by_diam_plot_species %>% 
+  left_join(plotinfo)
+
+nrow(dendro_by_plot_species)
+nrow(by_plot_species)
+
+```
+
+```{r compare_by_species}
+oud <- dendro_by_plot_species %>% 
+   filter(plottype == 20)
+# & forest_reserve == "Muizenbos")
+
+nieuw <- by_plot_species %>% 
+   filter(plottype == 20)
+# & forest_reserve == "Muizenbos")
+
+names(oud)
+names(nieuw)
+
+
+```
+
+```{r vol_plot}
+test_vol <- oud %>% 
+  select(plot_id, year, period, species, volume_alive_m3_ha, forest_reserve) %>% 
+  inner_join(nieuw %>% 
+               select(plot_id, year, period, species, vol_alive_m3_ha),
+             by = c("plot_id", "year", "period", "species")) %>% 
+  filter(volume_alive_m3_ha != 0) %>% 
+  mutate(verschil_vol = volume_alive_m3_ha - vol_alive_m3_ha, 
+         verschil_prco = 100 * (volume_alive_m3_ha - vol_alive_m3_ha)/volume_alive_m3_ha) %>% 
+  filter(abs(verschil_prco) > 10)
+# procentuele afwijking tov eerste berekening !! op tree-niveau
+range(abs(test_vol$verschil_prco))
+
+g <- ggplot(data = test_vol, aes(x = verschil_prco)) + geom_histogram()
+g
+
+data_dendro_calc %>%  filter(plot_id == 732 & tree_measure_id == 13) %>% 
+ select(plot_id, year, period, species, vol_alive_m3_ha, tree_number)
+
+test_vol %>%  filter(plot_id == 732 & species == 28)
+
+```
+
+
+
+```{r BA_plot}
+
+test_BA <- oud %>% 
+  select(plot_id, year, period, species, basal_area_alive_m2_ha) %>% 
+  inner_join(nieuw %>% 
+               select(plot_id, year, period, species, basal_area_alive_m2_ha),
+             by = c("plot_id", "year", "period", "species")) %>% 
+  filter(basal_area_alive_m2_ha.x != 0) %>% 
+  mutate(verschil_BA = basal_area_alive_m2_ha.x - basal_area_alive_m2_ha.y, 
+         verschil_prco = abs(100 * (basal_area_alive_m2_ha.x - basal_area_alive_m2_ha.y)/basal_area_alive_m2_ha.x))
+# procentuele afwijking tov eerste berekening !! op tree-niveau
+range(abs(test_BA$verschil_prco))
+
+g <- ggplot(data = test_BA, aes(x = verschil_prco)) + geom_histogram()
+g
+
+
+t <- test_BA %>% filter(verschil_prco > 10)
+
+# verschilpunten bekeken, en vaak wegens gewijzigde diameter of ... (?)
+# Ik ga ervanuit dat moederdb in orde is, dus dat de herberekeningen ok zijn!
+
+
+```
+
+```{r compare_by_diam}
+oud <- dendro_by_diam_plot %>% 
+  filter(plottype == 20)
+   # filter(plottype == 20 & forest_reserve == "Muizenbos")
+
+nieuw <- by_diam_plot %>% 
+  filter(plottype == 20)
+   # filter(plottype == 20 & forest_reserve == "Muizenbos")
+
+names(oud)
+names(nieuw)
+```
+
+```{r volume}
+test_vol <- oud %>% 
+  select(plot_id, year, period, dbh_class_5cm, volume_tree_alive_m3_ha) %>% 
+  inner_join(nieuw %>% 
+               select(plot_id, year, period, dbh_class_5cm, vol_alive_m3_ha),
+             by = c("plot_id", "year", "period", "dbh_class_5cm")) %>% 
+  filter(volume_tree_alive_m3_ha != 0) %>% 
+  mutate(verschil_vol = volume_tree_alive_m3_ha - vol_alive_m3_ha, 
+         verschil_prco = 100 * (volume_tree_alive_m3_ha - vol_alive_m3_ha)/volume_tree_alive_m3_ha)
+# procentuele afwijking tov eerste berekening !! op tree-niveau
+range(abs(test_vol$verschil_prco))
+
+g <- ggplot(data = test_vol, aes(x = verschil_prco)) + geom_histogram()
+g
+
+```
+
+
+```{r BA}
+
+test_BA <- oud %>% 
+  select(plot_id, year, period, dbh_class_5cm, basal_area_shoot_alive_m2_ha) %>% 
+  inner_join(nieuw %>% 
+               select(plot_id, year, period, dbh_class_5cm, basal_area_alive_m2_ha),
+             by = c("plot_id", "year", "period", "dbh_class_5cm")) %>% 
+  filter(basal_area_shoot_alive_m2_ha != 0) %>% 
+  mutate(verschil_BA = basal_area_shoot_alive_m2_ha - basal_area_alive_m2_ha, 
+         verschil_prco = 100 * (basal_area_shoot_alive_m2_ha - basal_area_alive_m2_ha)/basal_area_shoot_alive_m2_ha, na.rm = TRUE)
+# procentuele afwijking tov eerste berekening !! op tree-niveau
+range(abs(test_BA$verschil_prco))
+
+g <- ggplot(data = test_BA, aes(x = verschil_prco)) + geom_histogram()
+g
+
+```
+
+
+```{r compare_by_diam_species}
+oud <- dendro_by_diam_plot_species %>% 
+  filter(plottype == 20)
+   # filter(plottype == 20 & forest_reserve == "Muizenbos")
+
+nieuw <- by_diam_plot_species %>% 
+  filter(plottype == 20)
+   # filter(plottype == 20 & forest_reserve == "Muizenbos")
+
+names(oud)
+names(nieuw)
+```
+
+```{r volume_diam_sp}
+test_vol <- oud %>% 
+  select(plot_id, year, period, species, dbh_class_5cm, volume_tree_alive_m3_ha) %>% 
+  inner_join(nieuw %>% 
+               select(plot_id, year, period, species, dbh_class_5cm, vol_alive_m3_ha),
+             by = c("plot_id", "year", "period", "species", "dbh_class_5cm")) %>% 
+  filter(volume_tree_alive_m3_ha != 0) %>% 
+  mutate(verschil_vol = volume_tree_alive_m3_ha - vol_alive_m3_ha, 
+         verschil_prco = abs(100 * (volume_tree_alive_m3_ha - vol_alive_m3_ha)/volume_tree_alive_m3_ha))
+# procentuele afwijking tov eerste berekening !! op tree-niveau
+range(abs(test_vol$verschil_prco))
+
+g <- ggplot(data = test_vol %>% filter(verschil_prco > 1000), aes(x = verschil_prco)) + geom_histogram()
+g
+
+```
+
+
+```{r BA_diam_sp}
+
+test_BA <- oud %>% 
+  select(plot_id, year, period, dbh_class_5cm, species, basal_area_shoot_alive_m2_ha) %>% 
+  inner_join(nieuw %>% 
+               select(plot_id, year, period, dbh_class_5cm, species, basal_area_alive_m2_ha),
+             by = c("plot_id", "year", "period", "species", "dbh_class_5cm")) %>% 
+  filter(basal_area_shoot_alive_m2_ha != 0) %>% 
+  mutate(verschil_BA = basal_area_shoot_alive_m2_ha - basal_area_alive_m2_ha, 
+         verschil_prco = 100 * (basal_area_shoot_alive_m2_ha - basal_area_alive_m2_ha)/basal_area_shoot_alive_m2_ha)
+
+# procentuele afwijking tov eerste berekening !! op tree-niveau
+range(abs(test_BA$verschil_prco))
+
+g <- ggplot(data = test_BA, aes(x = verschil_prco)) + geom_histogram()
+g
+
+test_BA %>% filter(plot_id == 880 & period == 2 & species == 16)
+
+```
+
+```{r totalen_oud}
+tot_test <- dendro_by_diam_plot_species %>% 
+  group_by(plot_id, period) %>% 
+  summarize(tot_vol = sum(volume_tree_alive_m3_ha),
+            tot_BA_shoot = sum(basal_area_shoot_alive_m2_ha),
+            tot_BA_tree = sum(basal_area_tree_alive_m2_ha),
+            verschil_BA = tot_BA_shoot - tot_BA_tree) %>% 
+  ungroup()
+# verschil tss BA_shoot en _tree kan zijn omdat tree overgenomen werd uit FM en shoot herberekend werd
+
+
+# vgln met dendro_by_plot
+
+vgl <- tot_test %>% 
+  inner_join(dendro_by_plot, by = c("plot_id", "period")) %>% 
+  select(plot_id, period, tot_vol, volume_alive_m3_ha, tot_BA_tree, basal_area_alive_m2_ha) %>% 
+  mutate(vgl_BA = abs(tot_BA_tree - basal_area_alive_m2_ha), 
+         vgl_vol = abs(tot_vol - volume_alive_m3_ha))
+
+plot_vgl <- vgl %>% filter(vgl_BA > 10 | vgl_vol > 100)
+```
+
+
+
+```{r totalen_nieuw}
+tot_test_n <- by_diam_plot_species %>% 
+  group_by(plot_id, period) %>% 
+  summarize(tot_vol = sum(vol_alive_m3_ha),
+            tot_BA = sum(basal_area_alive_m2_ha)
+            ) %>% 
+  ungroup()
+# verschil tss BA_shoot en _tree kan zijn omdat tree overgenomen werd uit FM en shoot herberekend werd
+
+
+# vgln met dendro_by_plot
+
+vgl_n <- tot_test_n %>% 
+  inner_join(by_plot, by = c("plot_id", "period")) %>% 
+  select(plot_id, period, tot_vol, vol_alive_m3_ha, tot_BA, basal_area_alive_m2_ha) %>% 
+  mutate(vgl_BA = abs(tot_BA - basal_area_alive_m2_ha), 
+         vgl_vol = abs(tot_vol - vol_alive_m3_ha))
+
+plot_vgl_n <- vgl_n %>% inner_join(plot_vgl, by = c("plot_id", "period"))
+```
+
+Het lijkt alsof de nieuwe versie beter is
+
+# Nog eens bekijken met laatste resultaten van Kolmont (uit IA)
+
+```{r Kolmont}
+kolm_by_species <- by_plot_species %>% 
+  filter(forest_reserve == "Kolmont")
+
+kolm <- by_plot %>% 
+  filter(forest_reserve == "Kolmont")
+
+kolm_IA_BA <- read_csv2("C:/3BR/4_Kolmont/3Statistieken/tmp_BA_plot.csv")
+kolm_IA_Vol <- read_csv2("C:/3BR/4_Kolmont/3Statistieken/tmp_Vol_plot.csv")
+
+vgl_kolm_BA <- kolm %>% 
+  inner_join(kolm_IA_BA, by = c("plot_id")) %>% 
+  select(plot_id, period, vol_alive_m3_ha, basal_area_alive_m2_ha, basal_area_ha) %>% 
+  mutate(vgl_BA = abs(basal_area_ha - basal_area_alive_m2_ha), 
+         vgl_BA_perc = 100 * vgl_BA / basal_area_alive_m2_ha) 
+
+vgl_kolm_vol <- kolm %>% 
+  inner_join(kolm_IA_Vol, by = c("plot_id")) %>% 
+  select(plot_id, period, vol_alive_m3_ha, basal_area_alive_m2_ha, vol_ha) %>% 
+  mutate(vgl_vol = abs(vol_ha - vol_alive_m3_ha), 
+         vgl_vol_perc = 100 * vgl_vol / vol_alive_m3_ha) 
+
+range(vgl_kolm_vol$vgl_vol_perc)
+# max. 4% afwijking: door hakhout!!
+```
+
+```{r Kolmont_stamtal}
+kolm_IA_N <- read_csv2("C:/3BR/4_Kolmont/3Statistieken/tmp_N_plot.csv")
+
+vgl_kolm_N <- kolm %>% 
+  inner_join(kolm_IA_N, by = c("plot_id")) %>% 
+  select(plot_id, period, number_of_trees_ha, stamtal_ha) %>% 
+  mutate(vgl_N = abs(stamtal_ha - number_of_trees_ha), 
+         vgl_N_perc = 100 * vgl_N / number_of_trees_ha) 
+
+range(vgl_kolm_N$vgl_N_perc)
+# max. 4% afwijking: door hakhout!!
+```
+
+```{r logs}
+kolm_logs <- kolm %>% 
+  select(plot_id, vol_log_m3_ha)
+
+# visueel vergeleken - OK
+```
+
+
+```{r dead_standing}
+kolm_IA_dead <- read_csv2("C:/3BR/4_Kolmont/3Statistieken/tmp_Vol_dead_plot.csv")
+
+vgl_kolm_dead <- kolm %>% 
+  inner_join(kolm_IA_dead, by = c("plot_id")) %>% 
+  select(plot_id, period, vol_dead_standing_m3_ha, vol_dead_standing) %>% 
+  mutate(vgl_dead = vol_dead_standing - vol_dead_standing_m3_ha, 
+         vgl_dead_perc = 100 * vgl_dead / vol_dead_standing_m3_ha) 
+
+range(vgl_kolm_dead$vgl_dead_perc)
+
+mean(vgl_kolm_dead$vgl_dead_perc)
+
+sum(vgl_kolm_dead$vol_dead_standing_m3_ha)  # R => kegel
+# [1] 1409.431
+sum(vgl_kolm_dead$vol_dead_standing)  # IA => taper functions
+# [1] 1675.7
+
+# als kegel
+100*(1675.7 - 1409.431)/1675.7
+# [1] 15.89002 => 15% afwijking op niveau bosreservaat, minder volume in R
+# alternatief is om als cilinder te berekenen? wat is dan verschil???
+
+# als cilinder
+100*(1675.7 - 1734.848)/1675.7
+# [1] -3.529749 => 3.5% afwijking op niveau bosreservaat, meer volume in R als cilinder
+
+
+```
+
+
+## alles samen
+
+
+```{r}
+dendro <- calculate_dendrometry(data_dendro_calc, data_deadwood, data_stems_R)
+```
+

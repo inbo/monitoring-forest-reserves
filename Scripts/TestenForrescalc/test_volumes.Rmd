@@ -1,0 +1,272 @@
+---
+title: "test aanpassing forrescalc - 17/5/2021"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: FALSE
+      smooth_scroll: FALSE
+---
+
+
+```{r Rm, eval = FALSE}
+# rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup_Forrescalc.R"))
+source(here::here("scripts/ExtraFunctions_volume.R"))
+```
+
+# Load_height_models
+
+```{r}
+height_models <- load_height_models(path_to_height_models)
+
+str(height_models)
+
+table(height_models$forest_reserve, height_models$period)
+summary(height_models)
+```
+
+
+# Load_data
+
+Eerst data inladen (load_data_dendrometry/deadwood/shoots).
+Data_stems aanmaken mbv compose_stem_data obv data_dendro en data_shoots
+
+```{r load_data}
+data_dendro <-
+  load_data_dendrometry(
+    database = path_to_fieldmap
+  )
+
+data_deadwood <-
+  load_data_deadwood(
+    database = path_to_fieldmap
+  ) %>%
+  filter(plot_id != 11000)  # in KV Kersselaerspleyn (plot 11000) no lying deadwood is meausured
+
+data_shoots <-
+  load_data_shoots(
+    database = path_to_fieldmap
+  )
+
+data_stems  <- compose_stem_data(data_dendro, data_shoots)
+
+```
+
+```{r tarieven}
+tarief1 <- read_csv2("C:/3BR/2_VisualisatieDataBR/1Packages/forrescalc/inst/extdata/tariffs1entry.csv") %>%
+      select(-.data$name_nl, -.data$tariff_id, -.data$tariff_group, -.data$source)
+
+tarief2 <- read_csv2("C:/3BR/2_VisualisatieDataBR/1Packages/forrescalc/inst/extdata/tariffs1entry_crown.csv") %>% select(-.data$name_nl, -.data$tariff_id, -.data$tariff_group, -.data$source)
+    
+tarief3 <- read_csv2("C:/3BR/2_VisualisatieDataBR/1Packages/forrescalc/inst/extdata/tariffs2entries.csv") %>% select(-.data$name_nl, -.data$tariff_id, -.data$tariff_group, -.data$source)
+    
+    
+    
+```
+
+
+```{r}
+# calc_variables_tree_level <-
+#   function(data_dendro, data_stems, height_model) {
+
+height_model <- height_models
+
+  data_stems1 <- data_stems %>%
+    left_join(
+    height_model,
+    by = c("species", "forest_reserve", "period", "plottype")
+    )
+
+  data_stems2 <- data_stems1 %>%
+    filter(!is.na(.data$model)) %>%
+    bind_rows(
+      data_stems1 %>%
+        filter(is.na(.data$model)) %>%
+        select(-.data$model, -.data$P1, -.data$P2) %>%
+        left_join(
+          height_model %>%
+            filter(is.na(.data$species)) %>%
+            select(-.data$species),
+          by = c("forest_reserve", "period", "plottype")
+        )
+    ) %>%
+    mutate(
+      calc_height_r =
+        ifelse(
+          grepl("exp", .data$model),
+          1.3 + exp(.data$P1 + .data$P2 / (.data$dbh_mm / 10)),
+          1.3 + .data$P1 + .data$P2 * log(.data$dbh_mm / 10)
+        ),
+      calc_height_m =
+        ifelse(is.na(.data$calc_height_r), .data$calc_height_m, .data$calc_height_r)
+    ) %>%
+    select(-.data$model, -.data$P1, -.data$P2) %>%
+    # bole volume 1 entry
+    left_join(tarief1,
+      by = "species"
+    ) %>%
+    mutate(
+      perimeter = pi * .data$dbh_mm / 10
+      , vol_stem_t1_m3 =
+        .data$a + .data$b * .data$perimeter + .data$c * .data$perimeter ^ 2 +
+        .data$d * .data$perimeter ^ 3
+      , vol_stem_t1_m3 = pmax(0, .data$vol_stem_t1_m3)
+    ) %>%
+    select(
+      -.data$a, -.data$b, -.data$c, -.data$d
+    ) %>%
+    # crown volume 1 entry on shoot level
+    left_join(tarief2,
+      by = "species"
+    ) %>%
+    mutate(
+      vol_crown_m3 =
+        .data$a + .data$b * .data$perimeter + .data$c * .data$perimeter ^ 2 +
+        .data$d * .data$perimeter ^ 3,
+      vol_crown_m3 = pmax(0, .data$vol_crown_m3)
+    ) %>%
+    select(
+      -.data$a, -.data$b, -.data$c, -.data$d
+    ) %>% 
+    # bole volume 2 entries on shoot level
+    # !! (when DH-model or calc_height_m is available)
+    left_join(tarief3,
+      by = "species"
+    ) %>%
+      mutate(
+        d_cm = .data$dbh_mm / 10
+        , vol_stem_t2_m3 =
+          ifelse(
+            .data$formula == 1,
+            yes =
+              .data$a + .data$b * .data$perimeter + .data$c * .data$perimeter ^ 2 +
+              .data$d * .data$perimeter ^ 3 + .data$e * .data$calc_height_m +
+              .data$f * .data$calc_height_m * .data$perimeter +
+              .data$g * .data$calc_height_m * .data$perimeter ^ 2,
+            no =
+              1 / 1000 *
+              #spil
+              (exp(1.10597 * log(.data$calc_height_m) + 1.78865 * log(.data$d_cm) - 3.07192) -
+                 #Verlies
+                 exp(-4.608923 * log(.data$d_cm) + 3.005989 * log(.data$calc_height_m) -
+                       1.3209 * log(.data$calc_height_m) * log(.data$calc_height_m) +
+                       1.605266 * log(.data$d_cm) * log(.data$calc_height_m) + 5.410272))
+          )
+        , vol_stem_t2_m3 = pmax(0, .data$vol_stem_t2_m3)
+        , vol_stem_m3 =
+          ifelse(
+            .data$ind_sht_cop == 12 & is.na(.data$vol_stem_t2_m3),
+            .data$vol_stem_t1_m3,
+            .data$vol_stem_t2_m3
+          )
+      ) %>%
+    select(
+      -.data$a, -.data$b, -.data$c, -.data$d, -.data$e, -.data$f, -.data$g,
+      -.data$formula, -.data$d_cm, -.data$perimeter
+    )
+
+  data_dendro1 <- data_dendro %>%
+    select(
+      -.data$dbh_mm, -.data$vol_tot_m3, -.data$vol_stem_m3, -.data$vol_crown_m3
+    ) %>%
+    left_join(
+      data_stems2 %>%
+        group_by(.data$plot_id, .data$tree_measure_id, .data$period) %>%
+        summarise(
+          tree_number = n()
+          , decaystage =
+            round(
+              sum(.data$decaystage * .data$dbh_mm ^ 2 / 4) /
+                sum(.data$dbh_mm ^ 2 / 4)
+            )
+          , dbh_mm = round(sqrt(sum(.data$dbh_mm ^ 2) / n()))
+          , basal_area_m2 = sum(.data$basal_area_m2)
+          , vol_stem_t1_m3 = sum(.data$vol_stem_t1_m3)
+          , vol_stem_t2_m3 = sum(.data$vol_stem_t2_m3)
+          , vol_stem_m3 = sum(.data$vol_stem_m3)
+          , vol_crown_m3 = sum(.data$vol_crown_m3)
+          ) %>%
+        ungroup(),
+      by = c("plot_id", "tree_measure_id", "period")
+    ) %>%
+    mutate(
+      individual = (.data$ind_sht_cop == 10 | .data$ind_sht_cop == 12)
+      , vol_crown_m3_full = vol_crown_m3
+      # volume correction for snags
+      , vol_crown_m3 = ifelse(.data$intact_snag == 10, 0, .data$vol_crown_m3)
+      , vol_stem_m3 = ifelse(.data$intact_snag == 10, .data$calc_height_m*pi*(.data$dbh_mm/2000)^2, .data$vol_stem_m3)
+            # TIJDELIJK vol_stem_m3 berekend als cilinder cfr. VBI (soms over- en soms onderschatting)
+            # OP TERMIJN functie van Ifer (in afzonderlijke functie te stoppen)
+      # volume correction for broken crown or branches
+      , reduction_crown =
+        ifelse(is.na(.data$crown_volume_reduction), 0, .data$crown_volume_reduction)
+      , vol_crown_m3 = .data$vol_crown_m3 * (1 - .data$reduction_crown)
+      , reduction_branch =
+        ifelse(is.na(.data$branch_length_reduction), 0, .data$branch_length_reduction)
+      , vol_crown_m3 = .data$vol_crown_m3 * (1 - .data$reduction_branch)
+      # total volume
+      , vol_tot_m3 = .data$vol_stem_m3 + .data$vol_crown_m3
+    )
+
+  # return(data_dendro1)
+# }
+```
+
+
+```{r}
+t3_trees <- data_dendro1 %>% 
+      select(plot_id, tree_measure_id, plottype, period, forest_reserve, species, alive_dead, ind_sht_cop, intact_snag, contains("dbh_mm"), contains("height"), contains("tree_number"), contains("vol_crown"), contains("redu"), -contains("_redu")) 
+
+```
+
+```{r}
+t3_trees %>% filter(plot_id == 888, tree_measure_id == 23)
+```
+
+```{r}
+t2 <- t3_trees %>%  
+      left_join(data_dendro %>% select(plot_id, tree_measure_id, period, 
+                                       vol_stem_m3_IA = vol_stem_m3, 
+                                       vol_crown_m3_IA = vol_crown_m3, 
+                                       vol_tot_m3_IA = vol_tot_m3 ), 
+                by = c("plot_id", "tree_measure_id", "period")) %>% 
+      mutate(test_volcrown = vol_crown_m3_IA*tree_number.x - vol_crown_m3,
+             test_perc = 100 * abs(test_volcrown/vol_crown_m3),
+             test_perc2 = 100 * test_volcrown/vol_crown_m3) 
+
+t3 <- t2 %>% 
+      filter(abs(test_perc) > 10) %>%  
+      filter(ind_sht_cop == 10) %>% 
+      # filter(vol_crown_m3 != 0 & vol_crown_m3 != 0 & vol_crown_m3 != 0) %>% 
+      select(-contains("basal_"))
+
+table(t3$forest_reserve)
+table(t3$period)
+table(t3$ind_sht_cop)
+```
+
+
+```{r}
+t2 %>% filter(plot_id == 888, tree_measure_id == 23)
+```

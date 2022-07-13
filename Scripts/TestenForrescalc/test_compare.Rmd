@@ -1,0 +1,233 @@
+---
+title: "Package forrescalc - test functie compare_periods"
+author: "Anja Leyman"
+date: "4 mei 2020"
+output: 
+  html_document:
+    code_folding: hide
+    fig_caption: yes
+    number_sections: yes
+    toc: yes
+    toc_float:
+      collapsed: no
+      smooth_scroll: no
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+#rm(list = ls())
+library(here)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup_ForresCalc.R"))
+
+```
+
+# Vraagstelling
+
+Doel van dit script is het uittesten van de functie compare statistiche functies uit het package forrescalc.
+Deze laten toe statistieken te berekenen per bosreservaat, en ook over alle bosreservaten heen (bv. voor een bepaald stratum).
+
+```{r Path}
+# deze worden ook in "Setup_ForresCalc.R" gedefinieerd, hier ev. extra "paths" toevoegen indien nodig voor huidig script
+      # path_to_fieldmap <- "C:/3BR/5_MDB_BOSRES_selectieEls/FieldMapData_MDB_BOSRES_selectieEls.accdb"
+      # path_to_git_forresdat <- "C:/3BR/2_VisualisatieDataBR/2Packages/forresdat"
+      # 
+      # path_to_results <- "C:/3BR/2_VisualisatieDataBR/1DataVerwerkingBR/Output/BR_resultaten.accdb"
+      # path_to_forrestcalc <- "C:/3BR/2_VisualisatieDataBR/2Packages/forrescalc/R/"
+
+```
+
+<!-- Onderstaande tabel geeft een overzicht van de gegevens die gebruikt worden voor de analyse.   -->
+
+```{r OverzichtInput, results="markup", include=FALSE}
+
+# data_overzicht <- data.frame(
+#   tabelnaam = c("FieldMapData_MDB_BOSRES_selectieEls.accdb", "tblTreeSpeciesCharacteristics_BR.csv"),
+#   locatie = c(path_to_fieldmap, paste (here("Data/ExterneData"))),
+#   md5 = c(md5(path_to_fieldmap), md5("tblTreeSpeciesCharacteristics_BR.csv"))
+# )
+
+data_overzicht <- data.frame(
+  tabelnaam = c("FieldMapData_MDB_BOSRES_selectieEls.accdb"),
+  locatie = c(path_to_fieldmap),
+  md5 = c(md5(path_to_fieldmap))
+)
+
+data_overzicht %>%
+  kable() %>%
+  kable_styling()
+
+```
+
+
+```{r LoadLookuplists}
+con <- odbcConnectAccess2007(path_to_fieldmap)
+  
+  qIufroheight <- sqlFetch(con, "qiufroheight", stringsAsFactors = FALSE)
+  qIndShootCop <- sqlFetch(con, "qIndShootCop", stringsAsFactors = FALSE)
+  qAliveDead <- sqlFetch(con, "qAliveDead", stringsAsFactors = FALSE)
+  qSpecies <- sqlFetch(con, "qspecies", stringsAsFactors = FALSE)
+  qDecaystage <- sqlFetch(con, "qdecaystage", stringsAsFactors = FALSE)
+  qHerbSpecies <- sqlFetch(con, "qHerbSpecies240810", stringsAsFactors = FALSE)
+  
+odbcClose(con)
+```
+
+
+
+# Werkwijze dataverwerking
+
+## Data inladen
+
+Eerst dienen de gegevens op plotniveau ingeladen worden. 
+Deze werden in een vorige stap opgeslagen in access, en zullen op termijn ook op git bewaard worden (forresdat). 
+
+
+```{r LoadAnalyseSetsDendro}
+path_to_analysis_set
+
+# overview tables in BR_analysedb.accdb
+con <- odbcConnectAccess2007(path_to_analysis_set)
+      dbtables <- sqlTables(con) %>% 
+                filter(str_detect(TABLE_NAME, "MSys", negate = TRUE ))
+                # wegfilteren van records waar TABLE_NAME "MSys" bevat
+odbcClose(con)
+
+```
+
+## Berekeningen
+Vervolgens kunnen pas de berekeningen gebeuren.
+
+Resultaten kunnen weggeschreven worden naar access. Bv. naar "BR_resultaten.accdb" in folder "C:\3BR\2_VisualisatieDataBR\1DataVerwerkingBR\Output".
+
+Om een data-opvolgingssysteem te verkrijgen, moet weggeschreven worden naar git, maar dat staat nog niet helemaal op punt.
+
+
+```{r DiffRegPlot}
+str(regeneration_by_plot)
+
+r1 <- compare_periods(regeneration_by_plot, c("year", "number_of_tree_species", "min_number_of_trees_ha", "max_number_of_trees_ha")) %>% 
+  filter(forest_reserve == "Muizenbos")
+
+
+str(regeneration_by_plot_height)
+regeneration_by_plot_height <- regeneration_by_plot_height %>% 
+  left_join(plotinfo, by = c("plot_id"))
+
+r2 <- compare_periods(regeneration_by_plot_height, c("year", "number_of_tree_species", "min_number_of_trees_ha", "max_number_of_trees_ha", "rubbing_damage_perc")) %>% 
+  filter(forest_reserve == "Muizenbos") 
+
+
+str(regeneration_by_plot_height_species)
+regeneration_by_plot_height_species <- regeneration_by_plot_height_species %>% 
+  left_join(plotinfo, by = c("plot_id"))
+
+r3 <- compare_periods(regeneration_by_plot_height_species, c("year", "min_number_of_trees_ha", "max_number_of_trees_ha", "rubbing_damage_perc")) %>% 
+  filter(forest_reserve == "Muizenbos")
+
+```
+
+
+Zie mail van Els van 27/5: vooral testen mbt regeneration en NA's in rubbing ...
+compare_periods(test$regeneration_by_plot_height(_species),
+
+```{r DiffRegRubbbing}
+compare_periods(test$regeneration_by_plot_height(_species),
+                
+```
+
+
+```{r DiffDendroPlot_BR}
+# All column names of the dataset that are not added to parameter measure_vars, are considered as grouping variables, except for period
+colnames(dendro_by_plot)
+
+data <- dendro_by_plot %>% 
+  select(forest_reserve, year, period, plot_id, volume_alive_m3_ha) %>%
+  distinct()
+
+diff <- compare_periods(dataset = data, measure_vars = c("year", "volume_alive_m3_ha"))
+# year moet uitdrukkelijk vermeld worden bij measure_vars, als je info wil verkrijgen 
+# over aantal jaar tss 2 metingen
+# soms wil je dat immers niet, wanneer je over alle bosreservaten heen variabelen wil vergelijken
+colnames(diff)
+stat9 <- create_statistics(dataset = diff, 
+                           level = c("forest_reserve"), 
+                           variables = c("volume_alive_m3_ha_diff"))
+
+# Wijnendalebos NA ??
+t <- dendro_by_plot %>% 
+  filter(forest_reserve == "Wijnendalebos")
+summary(t)
+# ?? geen NA's
+      # !! wellicht omdat er plots (plot 475) zijn die in één van beide periodes niet voorkomen => deze eerst wegfilteren!!
+t2 <- diff %>% 
+  filter(forest_reserve == "Wijnendalebos")
+summary(t2)
+
+# eerst NA's wegfilteren bij diff
+diff <- compare_periods(dataset = data, measure_vars = c("year", "volume_alive_m3_ha")) %>% 
+  filter(!is.na(volume_alive_m3_ha_diff)) 
+
+stat9 <- create_statistics(dataset = diff, 
+                           level = c("forest_reserve"), 
+                           variables = c("volume_alive_m3_ha_diff"))
+# melding: "Unknown or uninitialised column: 'period'."
+# geen probleem, berekening gebeurt correct
+
+```
+
+
+```{r DiffDendroPlot_MeerdereBRen_Textuur}
+data <- dendro_by_plot %>% 
+  select(forest_reserve, year, period, plot_id, volume_alive_m3_ha) %>%
+  distinct() %>% 
+  left_join(strata_stat, by = c("plot_id" = "Plotid")) %>% 
+  mutate(period = "1vs2")
+
+stat9b <- create_statistics(dataset = diff, 
+                            variables = c("volume_alive_m3_ha_diff"))
+# als je geen level specifieert wordt bosreservaat en period gebruikt
+
+stat9c <- create_statistics(dataset = diff, 
+                            level = "textuur",
+                            variables = c("volume_alive_m3_ha_diff"))
+
+```
+
+
+```{r DiffDendroPlot_NoYear}
+data_no_yr <- dendro_by_plot %>% 
+  select(forest_reserve, period, plot_id, volume_alive_m3_ha) %>%
+  distinct()
+  
+
+diff_no_yr <- compare_periods(dataset = data_no_yr, measure_vars = c("volume_alive_m3_ha")) %>% 
+  mutate(period = "1vs2")
+
+```
+
+```{r DiffDendroForestReserve}
+str(diff)
+str(diff_no_yr)
+
+stat8 <- create_statistics(dataset = diff_no_yr, 
+                           level = c("forest_reserve"), 
+                           variables = c("volume_alive_m3_ha_diff"))
+
+```
+
+

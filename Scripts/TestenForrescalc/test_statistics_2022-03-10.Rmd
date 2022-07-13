@@ -1,0 +1,383 @@
+---
+title: "Package forrescalc - test functie create_statistics"
+author: "Anja Leyman"
+date: "10 mrt 2022"
+output: 
+  html_document:
+    code_folding: hide
+    fig_caption: yes
+    number_sections: yes
+    toc: yes
+    toc_float:
+      collapsed: no
+      smooth_scroll: no
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = FALSE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+#rm(list = ls())
+
+library(here)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+
+# library(tidyr)
+# library (rlang)
+# library(dplyr)
+# library(RODBC)
+# library(lubridate)
+# library(knitr)
+# library(here)
+# library(openssl)
+# library(kableExtra)
+# library(stringr)
+
+
+```
+
+
+# Vraagstelling
+
+Doel van dit script is het uittesten van de functie create_statistics uit het package forrescalc.
+Dit package wordt ingeladen in het script "Setup.R".
+
+Deze functie kan tegenwoordig om met min_ en max_variabelen zoals bv shrub_cover and tree_cover 
+
+```{r LoadLookuplists}
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+  
+  qLayer <- sqlFetch(con, "qLayer", stringsAsFactors = FALSE)
+  qTotalCover <- sqlFetch(con, "qtotalCover", stringsAsFactors = FALSE)
+  qHerbSpecies <- sqlFetch(con, "qHerbSpecies240810", stringsAsFactors = FALSE)
+  qBrowseIndex <- sqlFetch(con, "qBrowsIndex", stringsAsFactors = FALSE)
+  qCoverHerbs <- sqlFetch(con, "qCoverHerbs", stringsAsFactors = FALSE)
+
+odbcClose(con)
+```
+
+
+# Data inladen
+
+Eerst dienen de vegetatiegegevens ingeladen te worden.
+
+- data_vegetation met gegevens op plotniveau (algemene bedekking, year, ... zonder soorten) 
+- data_herblayer met soortspecifieke gegevens
+
+Enkele verduidelijkingen:
+
+<!-- Veg.Year AS year_main_survey -->
+<!-- year = year(.data$date_vegetation), -->
+<!--       year = ifelse(is.na(.data$year), .data$year_main_survey, .data$year), -->
+
+* year: afgeleid van het veld `Datum`, of van `Opnamejaar` als `Datum` niet ingevuld is
+
+* year_main_survey: overgenomen van veld `Opnamejaar` - zou zelfde moeten zijn als `year`
+
+* date_vegetation: wordt op niveau van herblayer bij voorjaarsflora vervangen door de afwijkende datum
+
+* totalplotarea_ha: area of total plot; in case of circular plot: area of A4 circle
+
+* plotarea_ha: area of plot (ha): area of vegetation plot (16 x 16 m2 = 0.0256 ha)
+
+* naast range van cover, wordt ook min, max en mid toegevoegd 
+
+```{r LoadDatavegetation}
+# ENKEL PROCESSED
+
+data_vegetation <-
+  load_data_vegetation(
+    database = path_to_fieldmap_db, 
+    processed=TRUE
+  )
+# 5012
+
+data_herblayer <-
+  load_data_herblayer(
+    database = path_to_fieldmap_db, 
+    processed=TRUE
+  )
+# 67771
+
+```
+
+```{r}
+names(data_vegetation)
+# xxx_cover_mid toegevoegd, naast min, max en interval
+names(data_herblayer)
+```
+
+
+```{r FunctionvegetationGlobal}
+vegetation <- calculate_vegetation(data_vegetation, data_herblayer)
+
+```
+
+## Overzicht van functies opgenomen in "calculate_vegetation"
+
+De functie "calculate_vegetation" bestaat uit 2 onderliggende functies:
+
+1. calculate_vegetation_plot(data_vegetation, data_herblayer): op plotniveau (zonder soorten) - ok
+
+2. calculate_vegetation_core_area_species(data_herblayer_CA)
+
+
+```{r CreateSeparateDataframesVeg}
+for (tablename in names(vegetation)) {
+     assign(tablename, vegetation[[tablename]])
+} 
+
+```
+
+```{r}
+vegetation_by_plot2 <- vegetation_by_plot %>% 
+  left_join(plotinfo %>% select(plot_id, period, forest_reserve, plottype))
+```
+
+```{r}
+stat_veg <- create_statistics(dataset = vegetation_by_plot2, 
+                  level = c("forest_reserve", "period", "plottype"), 
+                  variables = c("number_of_species", "shrub_cover", "tree_cover"))
+
+```
+
+
+
+
+```{r export_access, eval = FALSE}
+save_results_access (results = vegetation, database = path_to_analysis_set, remove_tables = TRUE)
+```
+
+
+# Basisdata (data_vegetation en data_herblayer)
+
+De basisdata wordt opgeslagen in de tabel data_vegetation. 
+
+Deze tabel dient als basis voor de algemene berekeningen, maar kan ook dienen voor meer gedetailleerde, niet-standaard berekeningen.
+
+Enkele verduidelijkingen:
+
+* plotarea_ha = de oppervlakte van de vegetatie-opname, dus NIET de volledige cirkel (= totalplotarea_ha)
+
+* year: afgeleid van het veld `Datum`, of van `Opnamejaar` als `Datum` niet ingevuld is
+
+* year_main_survey: overgenomen van veld `Opnamejaar` - zou zelfde moeten zijn als `year`
+
+* date_vegetation: wordt op niveau van herblayer bij voorjaarsflora vervangen door de afwijkende datum
+
+* naast range van cover, wordt ook min, max en mid toegevoegd 
+
+
+```{r data_vegetation}
+str(data_vegetation)
+
+```
+
+
+# Data op plotniveau
+
+Bij de berekening van vegetatie wordt onderscheid gemaakt tussen cirkelplots en kernvlaktes (CA, core area).
+
+
+## Vegetation_by_plot: zowel CP als CA
+
+Vegetation_by_plot: bedekkingen op niveau van volledige plot, niet gekeken naar de individuele soorten.
+
+Enkele verduidelijkingen:   
+
+* cumm_herb_coverage_class_average_perc: totale bedekking soorten obv bedekking van de afzonderlijke soorten (uit herblayer), gedeeld door totaal aantal subplots (enkel bij CA meerdere subplots)
+
+* cumulated_canopy_cover: som van shrub_cover en tree_cover
+
+* year: afgeleid van het veld `Datum`, of van `Opnamejaar` als `Datum` niet ingevuld is
+
+* naast min, max van cover, wordt ook mid toegevoegd 
+
+```{r vegetation_by_plot}
+names(vegetation_by_plot)
+nrow(vegetation_by_plot)
+
+# aantal jaar per plot en per periode: zou toch maar één jaar per plot mogen zijn, zelfs al is er een deviating date
+test <- vegetation_by_plot %>% 
+  group_by(plot_id, period) %>% 
+  summarize(aantal_yr = n_distinct(year)) %>% 
+  filter(aantal_yr > 1)
+# 75 plots met 2 jaartallen => aanpassen in functie: year van vegetation nemen - ok
+
+# head(vegetation_by_plot, 10) 
+
+```
+
+## Vegetation_by_plot_species - CP (= herblayer)
+
+Is zelfde als data_herblayer => wordt niet opnieuw berekend
+
+Enkele verduidelijkingen:
+
+* year_main_survey: overgenomen van veld `Opnamejaar` (niveau hoger)
+
+* date_vegetation: wordt op niveau van herblayer bij voorjaarsflora vervangen door de afwijkende datum
+
+* year: afgeleid van date_vegetation
+
+
+```{r vegetation_by_plot_species}
+names(data_herblayer)
+
+# ev. koppelen aan qHerbSpecies
+data_herblayer <- data_herblayer %>% 
+  left_join(qHerbSpecies[, c("ID", "Value1")], by = c("species" = "ID")) %>%
+  rename("NameNl" = "Value1")  %>%
+  left_join(qBrowseIndex[, c("ID", "Value1")], by = c("browse_index_id" = "ID")) %>% 
+  rename("BrowseIndex" = "Value1")
+
+head(data_herblayer, 10) 
+```
+
+
+
+## Vegetation_by_plot_species - CA
+
+De output "vegetation_by_plot_species" bevat voor de kernvlaktes informatie op subplotniveau: bedekking per subplot en per soort.
+
+Specifiek voor de kernvlaktes in hun geheel, is er de output "vegetation_core_area_species", met - per soort - het aantal subplots waar die soort voorkomt (exact aantal + percentage).
+
+Enkele verduidelijkingen:   
+
+* cumm_herb_coverage_class_average_perc: totale bedekking soorten obv bedekking van de afzonderlijke soorten (uit herblayer), gedeeld door totaal aantal subplots
+
+* cumulated_canopy_cover: som van shrub_cover en tree_cover
+
+* year: afgeleid van het veld `Datum`, of van `Opnamejaar` als `Datum` niet ingevuld is
+
+* naast min, max van cover, wordt ook mid toegevoegd 
+
+
+```{r KV_vegetation_by_plot_species}
+# str(vegetation_by_plot_species)
+# !! is eigenlijk zelfde als data_herblayer
+str(data_herblayer)
+
+
+# filteren op kernvlakte - test
+data_herblayer_CA <- data_herblayer %>% 
+  filter(plot_id == 121000)
+
+```
+
+```{r vegetation_by_core_area_species}
+str(vegetation_by_core_area_species)
+
+# ev. koppelen aan qHerbSpecies
+vegetation_by_core_area_species <- vegetation_by_core_area_species %>% 
+  left_join(qHerbSpecies[, c("ID", "Value1")], by = c("species" = "ID")) %>% 
+  rename("NameNl" = "Value1")
+```
+
+```{r test_n_subplots}
+# in functie wordt n_subplots gebruikt, als zijnde uniek aantal in herblayer.
+
+# MAAR wat als er een subplot is waar niks van vegetatie staat => zit die dan wel in herblayer??
+  
+test <- data_herblayer %>% 
+  filter(plottype == "CA") %>% 
+  group_by(plot_id, period, core_area_ha) %>% 
+  summarize(n_subplots = n_distinct(.data$subplot_id)) %>% 
+  ungroup()
+
+t <- data_herblayer %>% 
+  filter(period == 1 & plot_id == 51000)
+
+n_distinct(t$subplot_id)
+unique(t$subplot_id)
+
+# 11000 - period 1: er zijn er 710, maar er moeten er 750 zijn!
+
+# 73 geen veg
+```
+**AANPASSING GEVRAAGD: **  
+- `number_of_subplots_with_vegetation:` deze naamgeving vind ik verwarrend, want gaat enkel over die ene soort.
+Beter `number_of_subplots_with_species`
+
+- `n_subplots = n_distinct(.data$subplot_id)`: moet totaal aantal subplots in de kernvlakte zijn, maar er zijn ook (héél) soms subplots zonder enige vegetatie: die zitten niet in herblayer en dan klopt n_subplots niet
+Bv. 11000 - period 1: er zijn er 710, maar er moeten er 750 zijn!
+Bv. plot_id 51000, subplot 73 geen veg, period 1 => 97 subplots ipv 98
+
+Je zou dit aantal moeten halen uit de vegetation layer: aantal unieke ID's per plot_id
+
+
+
+# Controle 
+
+## Controle mbv data Muizenbos - CP
+
+Niet opnieuw gedaan mrt 2022.
+
+De resultaten uit R worden vergeleken met de resultaten uit Fieldmap voor Muizenbos.
+
+
+```{r ControleMuizenbos}
+str(vegetation_by_plot)
+# info mbt BR en plottype zit in afzonderlijke tabel, dan moet ze niet elke keer opgeslagen worden
+plotinfo <- load_plotinfo(database = path_to_fieldmap_db)
+
+controle_veg_plot <- vegetation_by_plot %>% 
+  left_join(plotinfo, by= c("plot_id")) %>% 
+  filter(forest_reserve == "Muizenbos") 
+
+# controle_veg_plot_species <- vegetation_by_plot_species %>%
+#   filter(forest_reserve == "Muizenbos")
+# !! is eigenlijk zelfde als data_herblayer
+str(data_herblayer)
+controle_veg_plot_species <- data_herblayer %>%
+   filter(forest_reserve == "Muizenbos")
+
+write.csv2(controle_veg_plot, paste(here::here("Output"), "/Controle_forrescalc/Muizenbos_ ", "controle_veg_plot", ".csv", sep = ""))
+write.csv2(controle_veg_plot_species, paste(here::here("Output"), "/Controle_forrescalc/Muizenbos_ ", "controle_veg_plot_species", ".csv", sep = ""))
+
+
+```
+
+
+# Controle mbv data Pruikemakers - CA
+
+Niet opnieuw gedaan mrt 2022.
+
+De resultaten uit R worden vergeleken met de resultaten uit Fieldmap voor Pruikemakers.
+
+```{r ControlePruikemakers}
+controle_veg_plot <- vegetation_by_plot %>%
+  left_join(plotinfo, by= c("plot_id")) %>% 
+  filter(forest_reserve == "Pruikemakers" & plottype == 30)
+
+# controle_veg_plot_species <- vegetation_by_plot_species %>%
+#   filter(forest_reserve == "Pruikemakers")
+# !! is eigenlijk zelfde als data_herblayer
+str(data_herblayer)
+controle_veg_plot_species <- data_herblayer %>%
+   filter(forest_reserve == "Pruikemakers" & plottype == 30)
+
+controle_veg_core_area_species <- vegetation_by_core_area_species %>%
+  left_join(plotinfo, by= c("plot_id")) %>% 
+  filter(forest_reserve == "Pruikemakers")
+
+write.csv2(controle_veg_plot, paste(here::here("Output"), "/Controle_forrescalc/Pruikemakers_ ", "controle_veg_plot", ".csv", sep = ""))
+write.csv2(controle_veg_plot_species, paste(here::here("Output"), "/Controle_forrescalc/Pruikemakers_ ", "controle_veg_plot_species", ".csv", sep = ""))
+write.csv2(controle_veg_core_area_species, paste(here::here("Output"), "/Controle_forrescalc/Pruikemakers_ ", "controle_veg_core_area_species", ".csv", sep = ""))
+
+
+
+```

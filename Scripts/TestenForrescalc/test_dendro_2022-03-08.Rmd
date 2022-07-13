@@ -1,0 +1,494 @@
+---
+title: "Package forrescalc - test functie calculate_dendrometry"
+author: "Anja Leyman"
+date: "8 mrt 2022"
+output: 
+  html_document:
+    code_folding: hide
+    fig_caption: yes
+    number_sections: yes
+    toc: yes
+    toc_float:
+      collapsed: no
+      smooth_scroll: no
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = FALSE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+#rm(list = ls())
+
+library(here)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+
+# library(tidyr)
+# library (rlang)
+# library(dplyr)
+# library(RODBC)
+# library(lubridate)
+# library(knitr)
+# library(here)
+# library(openssl)
+# library(kableExtra)
+# library(stringr)
+
+
+```
+
+# Vraagstelling
+
+Doel van dit script is het uittesten van de dendrometrische functies uit het package forrescalc.
+Dit package wordt ingeladen in het script "Setup.R".
+
+```{r LoadLookuplists}
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+  
+  qIufroheight <- sqlFetch(con, "qiufroheight", stringsAsFactors = FALSE)
+  qIndShootCop <- sqlFetch(con, "qIndShootCop", stringsAsFactors = FALSE)
+  qAliveDead <- sqlFetch(con, "qAliveDead", stringsAsFactors = FALSE)
+  qSpecies <- sqlFetch(con, "qspecies", stringsAsFactors = FALSE)
+  qDecaystage <- sqlFetch(con, "qdecaystage", stringsAsFactors = FALSE)
+  qcommonremark <- sqlFetch(con, "qcommonremark", stringsAsFactors = FALSE)
+  
+odbcClose(con)
+```
+
+
+
+# Werkwijze dataverwerking
+
+## Plotinfo
+
+```{r load_plotinfo}
+plotinfo <- load_plotinfo(database = path_to_fieldmap_db)
+```
+```{r plotinfo_1986_nog_niet_ok}
+# gevraagd aan Els op github
+range(plotinfo$period)
+range(plotinfo$period)
+
+```
+
+
+## Data inladen
+
+Eerst dienen de dendrometrische gegevens ingeladen te worden (dendro, deadwood, shoots en stems).
+
+```{r LoadDataDendro}
+data_dendro <- load_data_dendrometry(database = path_to_fieldmap_db, extra_variables = TRUE, processed = TRUE)
+#80849
+
+# data_dendro_tmp <- load_data_dendrometry(database = path_to_fieldmap_db, extra_variables = TRUE, processed = FALSE)
+#86399
+
+# data_shoots <- load_data_shoots(database = path_to_fieldmap_db, extra_variables = TRUE)
+data_shoots <- load_data_shoots(database = path_to_fieldmap_db)
+
+data_stems  <- compose_stem_data(data_dendro, data_shoots)
+
+height_model <- load_height_models(path_to_height_models)
+
+data_stems_calc <- calc_variables_stem_level(data_stems, height_model)
+
+data_dendro_calc <- calc_variables_tree_level(data_dendro, data_stems_calc)
+
+data_deadwood <- load_data_deadwood(database = path_to_fieldmap_db)
+
+```
+
+? 1986 zou nu ook ingeladen moeten worden mbv `load_data_dendrometry`
+
+(geen shoots, geen deadwood, reg of)
+
+```{r check_1986_OK}
+names(data_dendro)
+
+range(data_dendro$period)
+# [1] 0 3
+range(data_shoots$period)  # geen shoots in 1986
+range(data_dendro$year,na.rm = TRUE)
+
+check <- data_dendro %>% group_by(forest_reserve, plottype, period) %>% 
+  summarize() %>% 
+  ungroup()
+
+check_1986 <- data_dendro %>% 
+  filter(period == 0) %>% 
+  select(forest_reserve, plot_id
+         , species
+         , dbh_mm
+         , height_m
+         , alive_dead
+         , intact_snag
+         , ind_sht_cop
+         , period
+         , tree_measure_id 
+         , common_remark
+         , contains("dbh")
+)
+
+# 1986: pas vanaf dbh = 300 mm
+```
+
+
+## Berekeningen
+Vervolgens kunnen pas de berekeningen gebeuren.
+Dit kan met behulp van één globale functie "calculate_dendrometry" of met behulp van 6 afzonderlijke functies (zie verder).
+
+Resultaten kunnen weggeschreven worden naar access. Bv. naar "BR_resultaten.accdb" in folder "C:\3BR\2_VisualisatieDataBR\1DataVerwerkingBR\Output".
+
+Om een data-opvolgingssysteem te verkrijgen, moet weggeschreven worden naar git.
+
+
+```{r OverzichtFunctionsDendro}
+# zie Functions_ForresCalc.R
+# list_functions_dendro
+
+```
+
+
+```{r FunctionCalcDendroGlobal}
+dendro <- calculate_dendrometry(data_dendro, data_deadwood, data_shoots, height_model)
+
+```
+
+```{r save_to_access, eval = FALSE}
+save_results_access (results = dendro, database = path_to_analysis_set_db, remove_tables = TRUE)
+```
+
+
+```{r save_dendro_git, eval = FALSE}
+# geen plotinfo naar git
+save_results_git(
+  results = dendro,
+  repo_path = path_to_git_forresdat
+)
+```
+
+
+## Overzicht van functies opgenomen in "calculate_dendrometry"
+
+De functie "calculate_dendrometry" bestaat uit 6 onderliggende functies:
+
+1. calculate_dendro_plot(data_dendro, data_deadwood)
+
+2. calculate_dendro_plot_species(data_dendro, data_deadwood)
+
+3. calculate_logs_decay_plot(data_deadwood)
+
+4. calculate_logs_decay_plot_species(data_deadwood)
+
+5. calculate_diam_plot(data_stems, data_dendro, data_deadwood)
+
+6. calculate_diam_plot_species(data_stems, data_dendro, data_deadwood)
+
+
+```{r CreateSeparateDataframesDendro}
+for (tablename in names(dendro)) {
+     assign(tablename, dendro[[tablename]])
+} 
+
+```
+
+
+## Data op boomniveau
+
+De data op boomniveau wordt opgeslagen in de tabel data_dendro. 
+
+Deze tabel dient als basis voor de algemene berekeningen, maar kan ook dienen voor meer gedetailleerde, niet-standaard berekeningen.
+
+Enkele verduidelijkingen:
+
+* plotarea_ha = de oppervlakte van resp. A3 of A4, afh. van status en diameter van de boom
+(of LxB voor kernvlaktes of volledig BR voor andere plottypes) dus NIET de volledige cirkel
+
+
+
+### Tree-id
+
+Gecheckt: zie ook `test_create_unique_treeid_2022-03-09.R`
+
+In detail gekeken naar KV Kerss (4 decades): alles lijkt OK, 2 bomen waar verschuiving van  3 à 5 m op zit, maar lijkt OK!!!
+
+!! functie zelf moet nog aangepast worden, maar opbouw was OK
+
+Subfunctie `lookup_tree_id()` moet drie x gerund worden.
+
+```{r data_dendro}
+names(data_dendro)
+
+check_1986_tree_id <- data_dendro %>% 
+  filter(plottype == "CA" & forest_reserve == "Kersselaerspleyn") %>% 
+  select(forest_reserve, plot_id, x_local, y_local,
+         , species
+         , dbh_mm
+         , height_m
+         , alive_dead
+         , intact_snag
+         , ind_sht_cop
+         , period
+         , tree_measure_id, old_id
+         , common_remark
+)
+
+
+check_Muiz_tree_id <- data_dendro %>% 
+  filter(forest_reserve == "Muizenbos") %>% 
+  select(forest_reserve, plot_id
+         , species
+         , dbh_mm
+         , height_m
+         , alive_dead
+         , intact_snag
+         , ind_sht_cop
+         , period
+         , tree_measure_id, old_id
+         , common_remark
+)
+
+check_Kerss_CP_tree_id <- data_dendro %>% 
+  filter(plottype == "CP" & forest_reserve == "Kersselaerspleyn") %>% 
+  select(forest_reserve, plot_id
+         , species
+         , dbh_mm
+         , height_m
+         , alive_dead
+         , intact_snag
+         , ind_sht_cop
+         , period
+         , tree_measure_id, old_id
+         , common_remark
+)
+
+
+```
+
+```{r create_unique_tree_id, eval = FALSE}
+trees_with_id_Kerss2000 <- create_unique_tree_id(check_1986_tree_id)
+
+trees_with_id_all <- create_unique_tree_id(data_dendro)
+
+trees_with_id_all_Kerss <- trees_with_id_all %>% 
+  filter(forest_reserve == "Kersselaerspleyn") %>% 
+  select(-contains(c("dbh", "core", "r_A"))) %>% 
+  select(plot_id, tree_measure_id, old_id, coppice_id, tree_id, everything())
+
+```
+
+## Data op plotniveau
+
+Enkele verduidelijkingen:
+
+* "number_of_tree_species" = aantal soorten obv de levende bomen
+
+* "stems_per_tree" = meerstammigheid (stem_number_ha / number_of_trees_ha): heeft hier geen zin, maar dient als insteek voor berekeningen per soort
+
+* "vol_bole_alive_m3_ha" en "vol_bole_dead_m3_ha": volume zonder crown, 
+versus "vol_alive_m3_ha" en "vol_dead_standing_m3_ha"
+
+* "vol_log_m3_ha": liggend dood hout
+
+* "vol_deadw_m3_ha": staand en liggend dood hout
+
+```{r dendro_by_plot}
+str(dendro_by_plot)
+
+# head(dendro_by_plot, 10) %>% DT::datatable(rownames = NULL, filter = "top", options = list(pageLength = 5))
+
+summary(dendro_by_plot)
+
+# NA's bij 91000 wegens extra toegevoegde bomen en nog geen dh-curves
+```
+
+
+```{r dendro_by_plot_species}
+str(dendro_by_plot_species)
+
+# ev. koppelen aan qSpecies
+dendro_by_plot_species <- dendro_by_plot_species %>% 
+  left_join(qSpecies[, c("ID", "Value1")], by = c("species" = "ID")) %>% 
+  rename("NameNl" = "Value1")
+
+# head(dendro_by_plot_species, 10) %>% DT::datatable(rownames = NULL, filter = "top", options = list(pageLength = 5))
+
+```
+
+## Data op plotniveau, per diameterklasse
+
+```{r dendro_by_diam_plot}
+str(dendro_by_diam_plot)
+
+# head(dendro_by_diam_plot, 10) %>% DT::datatable(rownames = NULL, filter = "top", options = list(pageLength = 5))
+
+```
+
+
+```{r dendro_by_diam_plot_species}
+str(dendro_by_diam_plot_species)
+
+# ev. koppelen aan qSpecies
+dendro_by_diam_plot_species <- dendro_by_diam_plot_species %>% 
+  left_join(qSpecies[, c("ID", "Value1")], by = c("species" = "ID")) %>% 
+  rename("NameNl" = "Value1")
+
+# head(dendro_by_diam_plot_species, 10) %>% DT::datatable(rownames = NULL, filter = "top", options = list(pageLength = 5))
+
+```
+
+
+## Liggend dood hout op plotniveau, per afbraakklasse
+
+```{r logs_by_decay_plot}
+str(logs_by_decay_plot)
+
+# ev. koppelen aan qDecaystage
+logs_by_decay_plot <- logs_by_decay_plot %>% 
+  left_join(qDecaystage[, c("ID", "Value1")], by = c("decaystage" = "ID")) %>% 
+  rename("DecayNl" = "Value1")
+
+# head(logs_by_decay_plot, 10) %>% DT::datatable(rownames = NULL, filter = "top", options = list(pageLength = 5))
+
+t1 <- logs_by_decay_plot %>% 
+  filter(is.na(decaystage))
+```
+
+
+
+```{r logs_by_decay_plot_species}
+str(logs_by_decay_plot_species)
+
+# ev. koppelen aan qSpecies én aan qDecaystage
+logs_by_decay_plot_species <- logs_by_decay_plot_species %>% 
+  left_join(qDecaystage[, c("ID", "Value1")], by = c("decaystage" = "ID")) %>% 
+  rename("DecayNl" = "Value1") %>% 
+  left_join(qSpecies[, c("ID", "Value1")], by = c("species" = "ID")) %>% 
+  rename("NameNl" = "Value1")
+
+# head(logs_by_decay_plot_species, 10) %>% DT::datatable(rownames = NULL, filter = "top", options = list(pageLength = 5))
+
+t1 <- logs_by_decay_plot_species %>% 
+  filter(is.na(decaystage))
+t2 <- logs_by_decay_plot_species %>% 
+  filter(is.na(species))
+# OK, NA's worden ook meegegeven in het resultaat
+
+```
+
+## Controle mbv data Muizenbos
+
+De resultaten uit R worden vergeleken met de resultaten uit Fieldmap voor Muizenbos.
+Niet meer opnieuw gedaan in mrt 2022.
+
+Aandachtspunt:
+
+* diameterklasses: in InvAnalist wordt een "leftside closed interval" gebruikt: 15 cm behoort bij 15-20 cm; in R initieel net andersom, nu (mrt 2022) zelfde!! 
+(beter zo: 10 zit sowieso in eerste interval, dan beter 15 niet meer)
+(zie functie `compose_stem_data` en `give_diamclass_5cm`)
+
+
+```{r}
+test_interval <- data_stems_calc %>% 
+  group_by(dbh_mm, dbh_class_5cm) %>% 
+  summarize() %>% 
+  ungroup()
+
+```
+
+```{r ControleMuizenbos}
+str(dendro_by_plot)
+# info mbt BR en plottype zit in afzonderlijke tabel, dan moet ze niet elke keer opgeslagen worden
+plotinfo <- load_plotinfo(database = path_to_fieldmap_db)
+
+controle_plot <- dendro_by_plot %>% 
+  left_join(plotinfo, by= c("plot_id")) %>% 
+  filter(forest_reserve == "Muizenbos") 
+
+
+# alternatief is inladen vanuit forresdat (join_plotinfo standaard TRUE)
+controle_plot2 <- read_forresdat("dendro_by_plot", repo_path = path_to_git_forresdat) %>% 
+  filter(forest_reserve == "Muizenbos") 
+
+
+
+controle_plot_species <- dendro_by_plot_species %>% 
+  left_join(plotinfo, by= c("plot_id")) %>% 
+  filter(forest_reserve == "Muizenbos") 
+
+controle_diam_plot <- dendro_by_diam_plot %>% 
+  left_join(plotinfo, by= c("plot_id")) %>% 
+  filter(forest_reserve == "Muizenbos") 
+
+controle_diam_plot_species <- dendro_by_diam_plot_species %>% 
+  left_join(plotinfo, by= c("plot_id")) %>% 
+  filter(forest_reserve == "Muizenbos") 
+
+controle_logs_decay <- logs_by_decay_plot %>% 
+  left_join(plotinfo, by= c("plot_id")) %>% 
+  filter(forest_reserve == "Muizenbos") 
+
+controle_logs_decay_species <- logs_by_decay_plot_species %>% 
+    left_join(plotinfo, by= c("plot_id")) %>% 
+  filter(forest_reserve == "Muizenbos") 
+
+write.csv2(controle_plot, paste(here::here("Output"), "/Controle_forrescalc/Muizenbos_ ", "controle_plot", ".csv", sep = ""))
+write.csv2(controle_plot_species, paste(here::here("Output"), "/Controle_forrescalc/Muizenbos_ ", "controle_plot_species", ".csv", sep = ""))
+write.csv2(controle_diam_plot, paste(here::here("Output"), "/Controle_forrescalc/Muizenbos_ ", "controle_diam_plot", ".csv", sep = ""))
+write.csv2(controle_diam_plot_species, paste(here::here("Output"), "/Controle_forrescalc/Muizenbos_ ", "controle_diam_plot_species", ".csv", sep = ""))
+write.csv2(controle_logs_decay, paste(here::here("Output"), "/Controle_forrescalc/Muizenbos_ ", "controle_logs_decay", ".csv", sep = ""))
+write.csv2(controle_logs_decay_species, paste(here::here("Output"), "/Controle_forrescalc/Muizenbos_ ", "controle_logs_decay_species", ".csv", sep = ""))
+
+
+```
+
+```{r ControleMuizenbosDiff}
+# functie "compare_periods" ("calculate_dendro_plot_diff" bestaat niet meer)
+
+# All column names of the dataset that are not added to parameter measure_vars, are considered as grouping variables, except for period
+colnames(dendro_by_plot)
+
+data <- dendro_by_plot %>% 
+    left_join(plotinfo, by= c("plot_id")) %>% 
+    filter(forest_reserve == "Muizenbos") %>% 
+    select(-stems_per_tree, -plottype, -forest_reserve) %>%
+    distinct()
+
+controle_plot_diff <- compare_periods_per_plot(dataset = data, measure_vars = c("year","number_of_tree_species", "number_of_trees_ha", "stem_number_ha", "basal_area_alive_m2_ha", "basal_area_snag_m2_ha", "volume_alive_m3_ha", "volume_snag_m3_ha", "volume_stem_alive_m3_ha", "volume_stem_snag_m3_ha", "volume_log_m3_ha", "volume_deadwood_m3_ha"))
+
+# year moet uitdrukkelijk vermeld worden bij measure_vars, als je info wil verkrijgen over aantal jaar tss 
+# 2 metingen
+# soms wil je dat immers niet, wanneer je over alle bosreservaten heen variabelen wil vergelijken
+
+colnames(dendro_by_plot_species)
+
+data <- dendro_by_plot_species %>% 
+    left_join(plotinfo, by= c("plot_id")) %>% 
+    filter(forest_reserve == "Muizenbos") %>% 
+    select(-stems_per_tree, -plottype, -forest_reserve) %>%
+    distinct() 
+
+controle_plot_species_diff <- compare_periods(dataset = data, measure_vars = c("year","number_of_trees_ha", "stem_number_ha", "basal_area_alive_m2_ha", "basal_area_snag_m2_ha", "volume_alive_m3_ha", "volume_snag_m3_ha", "volume_stem_alive_m3_ha", "volume_stem_snag_m3_ha", "volume_log_m3_ha", "volume_deadwood_m3_ha"))
+
+
+write.csv2(controle_plot_diff, paste(here::here("Output"), "/Controle_forrescalc/Muizenbos_ ", "controle_plot_diff", ".csv", sep = ""))
+write.csv2(controle_plot_species_diff, paste(here::here("Output"), "/Controle_forrescalc/Muizenbos_ ", "controle_plot_species_diff", ".csv", sep = ""))
+
+```
+
+
+
+
+

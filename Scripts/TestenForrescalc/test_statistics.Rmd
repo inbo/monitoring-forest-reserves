@@ -1,0 +1,683 @@
+---
+title: "Package forrescalc - test functie statistics"
+author: "Anja Leyman"
+date: "4 mei 2020"
+output: 
+  html_document:
+    code_folding: hide
+    fig_caption: yes
+    number_sections: yes
+    toc: yes
+    toc_float:
+      collapsed: no
+      smooth_scroll: no
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+#rm(list = ls())
+library(here)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup_ForresCalc.R"))
+
+```
+
+# Vraagstelling
+
+Doel van dit script is het uittesten van de statistische functies uit het package forrescalc.
+Deze laten toe statistieken te berekenen per bosreservaat, en ook over alle bosreservaten heen (bv. voor een bepaald stratum).
+
+```{r Functions}
+
+# alle reeds aangemaakte functies uit ForresCalc laten runnen
+# source(here::here("scripts/Functions_ForresCalc.R"))
+# source("C:/3BR/2_VisualisatieDataBR/1DataVerwerkingBR/scripts/Functions_ForresCalc.R")
+
+# view(list_functions)
+
+# BETER WERKEN VIA PACKAGE FORRESCALC
+# is ingeladen in  setup
+
+```
+
+
+```{r Path}
+# deze worden ook in "Setup_ForresCalc.R" gedefinieerd, hier ev. extra "paths" toevoegen indien nodig voor huidig script
+      # path_to_fieldmap <- "C:/3BR/5_MDB_BOSRES_selectieEls/FieldMapData_MDB_BOSRES_selectieEls.accdb"
+      # path_to_git_forresdat <- "C:/3BR/2_VisualisatieDataBR/2Packages/forresdat"
+      # 
+      # path_to_results <- "C:/3BR/2_VisualisatieDataBR/1DataVerwerkingBR/Output/BR_resultaten.accdb"
+      # path_to_forrestcalc <- "C:/3BR/2_VisualisatieDataBR/2Packages/forrescalc/R/"
+
+```
+
+<!-- Onderstaande tabel geeft een overzicht van de gegevens die gebruikt worden voor de analyse.   -->
+
+```{r OverzichtInput, results="markup", include=FALSE}
+
+# data_overzicht <- data.frame(
+#   tabelnaam = c("FieldMapData_MDB_BOSRES_selectieEls.accdb", "tblTreeSpeciesCharacteristics_BR.csv"),
+#   locatie = c(path_to_fieldmap, paste (here("Data/ExterneData"))),
+#   md5 = c(md5(path_to_fieldmap), md5("tblTreeSpeciesCharacteristics_BR.csv"))
+# )
+
+data_overzicht <- data.frame(
+  tabelnaam = c("FieldMapData_MDB_BOSRES_selectieEls.accdb"),
+  locatie = c(path_to_fieldmap),
+  md5 = c(md5(path_to_fieldmap))
+)
+
+data_overzicht %>%
+  kable() %>%
+  kable_styling()
+
+```
+
+
+```{r LoadLookuplists}
+con <- odbcConnectAccess2007(path_to_fieldmap)
+  
+  qIufroheight <- sqlFetch(con, "qiufroheight", stringsAsFactors = FALSE)
+  qIndShootCop <- sqlFetch(con, "qIndShootCop", stringsAsFactors = FALSE)
+  qAliveDead <- sqlFetch(con, "qAliveDead", stringsAsFactors = FALSE)
+  qSpecies <- sqlFetch(con, "qspecies", stringsAsFactors = FALSE)
+  qDecaystage <- sqlFetch(con, "qdecaystage", stringsAsFactors = FALSE)
+  qHerbSpecies <- sqlFetch(con, "qHerbSpecies240810", stringsAsFactors = FALSE)
+  
+odbcClose(con)
+```
+
+
+
+# Werkwijze dataverwerking
+
+## Data inladen
+
+Eerst dienen de gegevens op plotniveau ingeladen worden. 
+Deze werden in een vorige stap opgeslagen in access, en zullen op termijn ook op git bewaard worden (forresdat). 
+
+
+```{r LoadAnalyseSetsDendro}
+path_to_analysis_set
+
+# overview tables in BR_analysedb.accdb
+con <- odbcConnectAccess2007(path_to_analysis_set)
+      dbtables <- sqlTables(con) %>% 
+                filter(str_detect(TABLE_NAME, "MSys", negate = TRUE ))
+                # wegfilteren van records waar TABLE_NAME "MSys" bevat
+odbcClose(con)
+
+
+```
+
+## Berekeningen
+Vervolgens kunnen pas de berekeningen gebeuren.
+
+Resultaten kunnen weggeschreven worden naar access. Bv. naar "BR_resultaten.accdb" in folder "C:\3BR\2_VisualisatieDataBR\1DataVerwerkingBR\Output".
+
+Om een data-opvolgingssysteem te verkrijgen, moet weggeschreven worden naar git, maar dat staat nog niet helemaal op punt.
+
+```{r OverzichtFunctionsStatistics}
+# zie Functions_ForresCalc.R
+# list_functions_statistics
+
+```
+
+
+### Dendrometrie
+
+
+```{r StatisticsDendroPlot}
+dendro_by_plot <- read_forresdat("dendro_by_plot", repo_path = path_to_git_forresdat, join_plotinfo = TRUE)
+
+# # library(tidyselect)
+# plotinfo <- load_plotinfo(database = path_to_fieldmap)
+# dendro_by_plot <- dendro_by_plot %>% 
+#   left_join(plotinfo, by = c("plot_id"))
+
+# standaard periode en forest_reserve als grouping variables
+stat1 <- create_statistics(dataset = dendro_by_plot, variables = c("volume_alive_m3_ha"))
+head(stat1)
+
+muiz_volume <- stat1 %>% 
+  filter(forest_reserve == "Muizenbos" & period == 2 & variable == "volume_alive_m3_ha") %>% 
+  group_by(forest_reserve, period) %>% 
+  summarise(totaal = sum(mean))
+
+# klopt met FM-IA: 304 m³/ha
+
+
+# enkel forest_reserve kan ook !! 2 periodes samen dan!!
+stat1b <- create_statistics(dataset = dendro_by_plot, level = c("forest_reserve", "plottype"), variables = c("volume_snag_m3_ha"))
+head(stat1b)
+
+# plottype toegevoegd
+stat1c <- create_statistics(dataset = dendro_by_plot, level = c("forest_reserve", "period", "plottype", "year"), variables = c("volume_snag_m3_ha"))
+head(stat1c)
+
+# meerdere bosreservaten samen
+stat1d <- create_statistics(dataset = dendro_by_plot, level = c("period", "plottype"), variables = c("volume_alive_m3_ha"), include_year_range = TRUE)
+head(stat1d)
+
+```
+
+
+```{r StatisticsDendroPlotSpecies}
+dendro_by_plot_species <- read_forresdat("dendro_by_plot_species", repo_path = path_to_git_forresdat, join_plotinfo = TRUE)
+
+dendro_by_plot_species <- dendro_by_plot_species %>%
+  left_join(qSpecies[, c("ID", "Value1")], by = c("species" = "ID")) %>%
+  rename("NameNl" = "Value1")
+# 
+# stat3 <- create_statistics(
+#    dataset = dendro_by_plot_species,
+#    level = c("period", "year", "forest_reserve","NameNl"),
+#    variables = c("volume_alive_m3_ha", "basal_area_alive_m2_ha")
+#    ) %>% 
+#   filter(forest_reserve == "Muizenbos" & period == 2)
+# head(stat3)
+# 
+# muiz_volume <- stat3 %>% 
+#   filter(forest_reserve == "Muizenbos" & period == 2 & variable == "volume_alive_m3_ha") %>% 
+#   group_by(forest_reserve, period) %>% 
+#   summarise(totaal = sum(mean))
+
+# KLOPT NIET, te hoog, want plots waar een bepaalde soort niet voorkomt (en dus volume = 0) wordt niet meegenomen
+# OPLOSSING: extra functie "add_zeros"
+
+dendro_by_plot_species_3 <- dendro_by_plot_species %>% 
+  filter(forest_reserve == "Muizenbos") %>% 
+  select(-year, -plottype, -NameNl) %>%    # NameNl terug weg, anders krijg je per species ook alle NameNl's
+  add_zeros(comb_vars = c("plot_id", "species"),grouping_vars = c("forest_reserve", "period"))
+
+stat3c <- create_statistics(
+   dataset = dendro_by_plot_species_3,
+   level = c("period", "forest_reserve", "species"),
+   variables = c("volume_alive_m3_ha", "basal_area_alive_m2_ha")
+   ) %>% 
+  filter(forest_reserve == "Muizenbos" & period == 2) %>%
+  left_join(qSpecies[, c("ID", "Value1")], by = c("species" = "ID")) %>%
+  rename("NameNl" = "Value1")
+head(stat3c)
+
+controle <- stat3c %>% 
+  filter(forest_reserve == "Muizenbos" & period == 2 & variable == "volume_alive_m3_ha") %>% 
+  group_by(forest_reserve, period) %>% 
+  summarise(totaal = sum(mean))
+controle$totaal
+# [1] 304.3078
+
+```
+
+
+```{r StatisticsDendroPlotDiamSpecies}
+dendro_by_diam_plot_species <- read_forresdat("dendro_by_diam_plot_species", repo_path = path_to_git_forresdat, join_plotinfo = TRUE)
+
+# ook hier terug extra combinaties toevoegen, zoadat elke diameterklasse en elke soort per plot vermeld wordt
+dendro_by_diam_plot_species_2 <- dendro_by_diam_plot_species %>% 
+  filter(forest_reserve == "Muizenbos") %>% 
+  select(-plottype) %>%    # om "year" te behouden,moet dat bij comb_vars geplaatst worden, anders ontstaan er nullen daar waar de soort niet voorkomt
+  add_zeros(comb_vars = c("year", "plot_id", "species", "dbh_class_5cm"),grouping_vars = c("forest_reserve", "period"))
+
+stat2 <- create_statistics(
+   dataset = dendro_by_diam_plot_species_2,
+   level = c("period", "year", "forest_reserve","species", "dbh_class_5cm"),   # HEEL BELANGRIJK dat ALLE variabelen vernoemd worden
+   variables = c("stem_number_alive_ha", "basal_area_shoot_alive_m2_ha", "basal_area_tree_alive_m2_ha")
+   )
+head(stat2)
+
+controle <- stat2 %>% 
+  filter(forest_reserve == "Muizenbos" & period == 2 & variable == "stem_number_alive_ha") %>% 
+  group_by(forest_reserve, period) %>% 
+  summarise(totaal = sum(mean))
+controle$totaal
+# [1] 1331.891    # 1330.6 in FM-IA
+
+
+```
+
+### Vegetatie
+
+```{r StatisticsVegPlot}
+vegetation_by_plot <- read_forresdat("vegetation_by_plot", repo_path = path_to_git_forresdat, join_plotinfo = TRUE)
+
+stat4 <- create_statistics(
+  dataset = vegetation_by_plot, 
+  level = c("period", "year", "forest_reserve"),
+  variables = c("number_of_species", "cumm_herb_coverage_class_average_perc")
+  )
+head(stat4)
+
+controle <- stat4 %>% 
+  filter(forest_reserve == "Muizenbos" & period == 2 & variable == "number_of_species")  
+# (c)A: is een analyse die we tot nu toe niet deden
+# We keken enkel naar aantal soorten per plot en cumm_herb_coverage, maar dat zit in vegetation_by_plot als pure berekening (geen statistiek)
+
+
+```
+
+
+```{r StatisticsVegPlotSpecies_KaraktBedekking}
+# !! data op plot en speciesniveau is eigenlijk zelfde als data_herblayer (vegetation_by_plot_species bestaat niet)
+data_herblayer <-
+  load_data_herblayer(
+    database = path_to_fieldmap
+  )
+
+str(data_herblayer)
+
+# we willen per soort de karakteristieke bedekking, dus de gemiddelde bedekking in de plots waar de soort voorkomt
+# create_statistics houdt enkel rekening met combinaties die in dataset zitten, dus enkel daar waar soort voorkomt => OK
+# (extra functie "add_zeros" moet hier dus NIET toegepast worden)
+
+stat5 <- create_statistics(
+  dataset = data_herblayer, 
+  level = c("period", "year", "forest_reserve", "species"),
+  variables = c("coverage_class_average_perc")
+  )
+head(stat5)
+
+controle <- stat5 %>% 
+  filter(forest_reserve == "Muizenbos" & period == 2 & variable == "coverage_class_average_perc") %>%
+  left_join(qHerbSpecies[, c("ID", "Value1")], by = c("species" = "ID")) %>%
+  rename("NameNl" = "Value1")
+
+```
+
+
+```{r StatisticsVegPlotSpecies_PercVraat}
+# dit is eigenlijk gewoon een berekening, die de kans op vraat benadert
+# Niet te berekenen met create_statistics, want is geen gemiddelde
+# ook niet op plotniveau te berekenen, moet over alle plots van een bosreservaat heen berekend worden 
+# voor KV wordt dit wel over alle subplots heen berekend (zie verder)
+
+
+```
+
+
+```{r StatisticsVegPlot_CoreArea}
+# aantal soorten per subplot en cumm_herb_coverage per subplot: dat zit in vegetation_by_plot als pure berekening (geen statistiek)
+KV_Pruikemakers_Veg0 <- vegetation_by_plot %>% 
+  filter(forest_reserve =="Pruikemakers" & plottype == 30)
+
+# gemiddelde bedekking van alle subplots
+stat6 <- create_statistics(
+  dataset = KV_Pruikemakers_Veg0, 
+  level = c("period", "year", "forest_reserve", "plottype"),
+  variables = c("herb_cover_min", "herb_cover_max")
+  )
+head(stat6)
+
+# !! van  1 subplot geen info => resultaat is NA
+# deze subplot manueel verwijderen uit dataset en dan opnieuw statistics laten lopen
+KV_Pruikemakers_Veg <- KV_Pruikemakers_Veg0 %>% 
+  filter(!is.na(herb_cover_min) & !is.na(herb_cover_max))
+
+stat6 <- create_statistics(
+  dataset = KV_Pruikemakers_Veg, 
+  level = c("period", "year", "forest_reserve", "plottype"),
+  variables = c("herb_cover_min", "herb_cover_max")
+  )
+head(stat6)
+
+# Soildisturbance
+KV_Pruikemakers_Veg <- KV_Pruikemakers_Veg0 %>% 
+  filter(!is.na(soildisturbance_game_cover_max))
+
+stat6b <- create_statistics(
+  dataset = KV_Pruikemakers_Veg, 
+  level = c("period", "year", "forest_reserve", "plottype"),
+  variables = c("soildisturbance_game_cover_max")
+  )
+head(stat6b)
+# OPGEPAST: 60 observaties => 38 NA's ?? klopt dat weel, zijn dat geen nullen? (gemaild naar Peter op 24/8/2020)
+
+
+```
+
+
+```{r StatisticsVegPlotSpecies_KaraktBedekking_CoreArea}
+# !! data op plot en speciesniveau is eigenlijk zelfde als data_herblayer (vegetation_by_plot_species bestaat niet)
+data_herblayer <-
+  load_data_herblayer(
+    database = path_to_fieldmap
+  )
+
+str(data_herblayer)
+
+# we willen per soort de karakteristieke bedekking, dus de gemiddelde bedekking in de plots waar de soort voorkomt
+# create_statistics houdt enkel rekening met combinaties die in dataset zitten, dus enkel daar waar soort voorkomt => OK
+# (extra functie "add_zeros" moet hier dus NIET toegepast worden)
+
+stat7 <- create_statistics(
+  dataset = data_herblayer, 
+  level = c("period", "year", "forest_reserve", "plottype","species"),
+  variables = c("coverage_class_average_perc")
+  )
+head(stat7)
+
+controle <- stat7 %>% 
+  filter(forest_reserve =="Pruikemakers" & plottype == 30 & period == 2 & variable == "coverage_class_average_perc") %>%
+  left_join(qHerbSpecies[, c("ID", "Value1")], by = c("species" = "ID")) %>%
+  rename("NameNl" = "Value1")
+
+```
+
+
+```{r StatisticsVegPlotSpecies_PercVraat_CoreArea}
+# dit is eigenlijk gewoon een berekening, die de kans op vraat benadert
+# Niet te berekenen met create_statistics, want is geen gemiddelde
+# ook niet op plotniveau te berekenen, moet over alle plots van een bosreservaat heen berekend worden 
+# voor KV wordt dit wel over alle subplots heen berekend:
+
+vegetation_by_core_area_species <- read_forresdat("vegetation_by_core_area_species", repo_path = path_to_git_forresdat, join_plotinfo = TRUE)
+
+
+
+```
+
+
+### Verjonging
+
+
+
+! Oppasen met statistics met hoogteklasses bij verjonging: in de tabel met aantal per soort en per hoogteklasse zijn geen nullen opgenomen!! (regeneration_by_plot_height en regeneration_by_plot_height_species)
+Dus bij een gemiddelde moet je in het achterhoofd houde dat het gaat over een gemiddelde daar waar de soort IN DIE HOOGTEKLASSE VOORKOMT!!!!
+
+OF
+
+Voorafgaand functie "add_zeros" gebruiken
+
+OPGEPAST: bij Muizenbos in periode 1 twee plots zonder verjonging en in periode 2 één plot zonder verjonging => deze worden niet toegeveogd mbv add_zeros omdat die als het ware niet bestaan
+
+#### Gemiddelde veegschade (game_damage)
+Aangezien de veegschade procentueel uitgedrukt wordt (aantal aangetaste individuen/totaal aantal individuen) per plot, is create_statistics niet de goede methode om dit op bosreservaat-niveau correct in te schatten.
+Er zal een afzonderlijke functie of code moeten geschreven worden: totaal aantal aangetaste individuen/totaal aantal individuen in het volledige bosreservaat
+
+```{r StatisticsRegPlotSpecies_GameDammage_NIETOK}
+# hier zijn we enkel geïnteresseerd in de game dammage daar waar de soort voorkomt => geen "add_zeros" nodig
+regeneration_by_plot_height_species0 <- read_forresdat("regeneration_by_plot_height_species", repo_path = path_to_git_forresdat, join_plotinfo = TRUE)
+
+regeneration_by_plot_height_species <- regeneration_by_plot_height_species0 %>% 
+  filter(period == 2  & year > 2013 & height_class > 2000) # enkel hier rubbing damage genoteerd
+
+stat8 <- create_statistics(dataset = regeneration_by_plot_height_species, 
+                           level = c("period", "year", "forest_reserve", "plottype", "species"), 
+                           variables = c("rubbing_damage_perc")) 
+# NA's voor bepaalde  hoogteklasses (3 bosreservaten) komen voort uit ontbrekende aantalsklasses => bij datacontrole beter op '0' zetten, of soort verwijderen als zeker is dat de soort er niet voorkomt
+# OF
+# voorafgaand aan create_statistics de NA's verwijderen
+# zie issue https://github.com/inbo/forrescalc/issues/32#issue-684763350
+    # -> Els ging mogelijkheid "na.rm = TRUE" toevoegen (standaard FALSE)
+
+
+regeneration_by_plot_height_species <- regeneration_by_plot_height_species %>% 
+  filter(!is.na (rubbing_damage_perc))
+
+stat8 <- create_statistics(dataset = regeneration_by_plot_height_species, 
+                           level = c("period", "year", "forest_reserve", "plottype", "species"), 
+                           variables = c("rubbing_damage_perc")) 
+
+controle <- stat8 %>% 
+  filter(forest_reserve =="Pruikemakers" & plottype == 30) %>% 
+  left_join(qSpecies[, c("ID", "Value1")], by = c("species" = "ID")) %>%
+  rename("NameNl" = "Value1")
+
+controle <- stat8 %>% 
+  filter(plottype == 20 & forest_reserve == "Bos Terrijst") %>% 
+  left_join(qSpecies[, c("ID", "Value1")], by = c("species" = "ID")) %>%
+  rename("NameNl" = "Value1")
+
+# WIJKT AF VAN MIJN EERDERE BEREKENINGEN
+# REDEN: gemiddelde van een percentage (in R) <> totaal aantal beschadigde individuen/totaal aantal individuen (in access)
+# (bij de percentages wordt geen rekening gehouden met om hoeveel exemplaren het gaat => eigenlijk minder correct)
+# => BETER OM AFZONDERLIJKE CODE TE SCHRIJVEN 
+# zie issue https://github.com/inbo/forrescalc/issues/34#issue-685451005
+
+```
+
+Uitzondering hierop zijn de kernvlaktes. Daar bestaat reeds een fucntie die de info van de subplots groepeert tot op niveau van de volledige kernvlakte: regeneration_by_core_area_height_species.
+Deze functie geeft ons het percentage beschadigde exemplaren, per soort en per hoogteklasse.
+
+```{r StatisticsRegPlotHeightSpecies_GameDammage_CoreArea}
+# game dammage wordt enkel genoteerd bij hogere hoogteklasses
+regeneration_by_core_area_height_species <-  read_forresdat("regeneration_by_core_area_height_species", repo_path = path_to_git_forresdat, join_plotinfo = TRUE)
+
+controle <- regeneration_by_core_area_height_species %>% 
+  filter(period == 2 & height_class > 2000)
+controle %>% filter(is.na (rubbing_damage_perc)) %>% nrow()
+ 
+```
+
+Wanneer we echter info op soortniveau willen (zonder info over hoogteklasses), wordt het moeilijker. Veegschade wordt enkel genoteerd bij de hogere hoogteklasses. Dat geeft veel NA's.
+Op dit moment bevat de fucntie "calculate_regeneration_core_area_species"" dan ook geen info over veegschade op soortniveau.
+Dit is aangekaart bij Els in issue33.
+(even gedacht om als alternatief de hogere hoogteklasses uit regeneration_by_core_area_height_species te selecteren, en vervolgens te groeperen per soort. Maar ook daar vertrek je direct van percentages, we zouden moeten teruggrijpen naar data_regeneration)
+
+```{r StatisticsRegPlotSpecies_GameDammage_CoreArea}
+# game dammage wordt enkel genoteerd bij hogere hoogteklasses
+regeneration_by_core_area_height_species <-  read_forresdat("regeneration_by_core_area_height_species", repo_path = path_to_git_forresdat, join_plotinfo = TRUE)
+
+controle <- regeneration_by_core_area_height_species %>% 
+  filter(period == 2 & height_class > 2000)
+controle %>% filter(is.na (rubbing_damage_perc)) %>% nrow()
+ 
+# op soortniveua geeft dit problemen, omdat daar alle hoogteklasses in opgenomen worden
+# in functie daarom na.rm = TRUE toegevoegd
+regeneration_by_core_area_species <-  read_forresdat("regeneration_by_core_area_species", repo_path = path_to_git_forresdat, join_plotinfo = TRUE)
+
+# OPGEPAST: periode = 1 , dan 0 !!
+# FOUT: zou NA moeten zijn
+# als issue aangekaart bij Els: https://github.com/inbo/forrescalc/issues/33#issue-685443132
+
+controle <- regeneration_by_core_area_species %>% 
+  filter(period == 2)
+controle %>% filter(is.na (rubbing_damage_perc)) %>% nrow()
+ 
+```
+
+#### Aantal verjonging per ha
+
+```{r StatisticsRegPlot_Number}
+regeneration_by_plot <- read_forresdat("regeneration_by_plot", repo_path = path_to_git_forresdat, join_plotinfo = TRUE)
+
+regeneration_by_plot <- regeneration_by_plot %>% 
+  left_join(plotinfo, by = c("plot_id")) 
+  
+# create_statistics
+stat10 <- create_statistics(dataset = regeneration_by_plot, 
+                           level = c("forest_reserve", "period"), 
+                           variables = c("min_number_of_trees_ha", "max_number_of_trees_ha")
+                           ) 
+head(stat10)
+# KLOPT
+
+# stamtalcontrole
+controle <- stat10 %>% 
+  filter(forest_reserve == "Muizenbos" & period == 2 & variable == "min_number_of_trees_ha") %>% 
+  group_by(forest_reserve, period) %>% 
+  summarise(totaal = sum(mean))
+controle$totaal
+# [1]  11799.51
+
+controle2 <- regeneration_by_plot %>% 
+  filter(forest_reserve == "Muizenbos" & period == 2) 
+
+```
+
+
+Indien we info op niveau vna hoogteklasse en/of soortniveau willen, moeten we nullen toevoegen, voor de plots waar bepaalde soorten en/of hoogteklasses niet voorkomen.
+
+```{r StatisticsRegPlotSpeciesHeight_Number}
+regeneration_by_plot_height_species <- read_forresdat("regeneration_by_plot_height_species", repo_path = path_to_git_forresdat, join_plotinfo = TRUE)
+# max_nr= NA, terwijl min_nr NIET NA is??
+      # number_class > 1001 heeft geen bovengrens
+
+
+# !! eerst add_zeros
+# direct create_statistics KLOPT NIET, te hoog, want plots waar een bepaalde soort niet voorkomt (en dus stamtal = 0) worden niet meegenomen
+# OPLOSSING: extra functie "add_zeros"
+
+plotinfo <- read_forresdat("plotinfo", repo_path = path_to_git_forresdat, join_plotinfo = FALSE)
+
+regeneration_by_plot_height_species_0 <- regeneration_by_plot_height_species %>% 
+  left_join(plotinfo, by = c("plot_id")) %>% 
+  # filter(!is.na(height_class)) %>% # blijkbaar ontstaat er een NA heightclass als er geen verjonging opgemeten werd in een bepaalde plot
+  # !! deze behouden, want anders haal je een plot weg, waar ook nullen moeten toegevoegd worden - pas op einde ev. NA's verwijderen
+  filter(forest_reserve == "Muizenbos") %>% 
+  select(-year, -plottype) %>%    
+  add_zeros(comb_vars = c("plot_id","subplot_id", "height_class", "species"), grouping_vars = c("forest_reserve", "period")) %>% 
+  filter(!is.na(height_class)) 
+
+stat9 <- create_statistics(dataset = regeneration_by_plot_height_species_0, 
+                           level = c("forest_reserve", "period", "height_class", "species"), 
+                           variables = c("min_number_of_trees_ha", "max_number_of_trees_ha"))
+head(stat9)
+
+controle <- stat9 %>% 
+  filter(forest_reserve == "Muizenbos" & period == 2 & variable == "min_number_of_trees_ha" & height_class == 3000) %>% 
+  group_by(forest_reserve, period) %>% 
+  summarise(totaal = sum(mean))
+controle$totaal
+# [1] 1650.5  #1650 in acess berekend
+# [1] 840.6 # 841 in access (heightclass 4000)
+
+```
+
+Omdat "regeneration_by_plot_species" niet standaard aangemaakt wordt, moeten we deze eerst zelf aanmaken, vertrekkende van regeneration_by_plot_height_species.  
+
+```{r StatisticsRegPlotSpecies_Number}
+regeneration_by_plot_height_species <- read_forresdat("regeneration_by_plot_height_species", repo_path = path_to_git_forresdat, join_plotinfo = TRUE)
+# max_nr= NA, terwijl min_nr NIET NA is??
+      # number_class > 1001 heeft geen bovengrens
+
+# !! eerst add_zeros (zie hoger)
+stat9c <- create_statistics(dataset = regeneration_by_plot_height_species_0, 
+                           level = c("forest_reserve", "period", "species"), 
+                           variables = c("min_number_of_trees_ha", "max_number_of_trees_ha")
+                           ) %>% 
+  left_join(qSpecies[, c("ID", "Value1")], by = c("species" = "ID")) %>%
+  rename("NameNl" = "Value1")
+head(stat9c)
+
+# stamtalcontrole
+controle <- stat9c %>% 
+  filter(forest_reserve == "Muizenbos" & period == 2 & variable == "min_number_of_trees_ha") %>% 
+  group_by(forest_reserve, period) %>% 
+  summarise(totaal = sum(mean))
+controle$totaal
+# [1] 3015.429 - FOUT
+
+# KLOPT NIET!! er wordt eeen gemiddelde gemaakt alsof elke hoogteklasse een plot is
+# OPLOSSING: afzonderlijke info op soortniveau "regeneration_by_plot_species", naast regeneration_by_plot_height en regeneration_by_plot_height_species
+# OF
+# eerst een group_by doen en dan pas statistics
+
+# group_by
+regeneration_by_plot_species_0 <- regeneration_by_plot_height_species_0 %>% 
+  group_by(forest_reserve, period, species, plot_id, subplot_id) %>% 
+  summarise(min_number_of_trees_ha = sum(min_number_of_trees_ha),
+            max_number_of_trees_ha = sum(max_number_of_trees_ha))
+
+# create_statistics
+stat9d <- create_statistics(dataset = regeneration_by_plot_species_0, 
+                           level = c("forest_reserve", "period", "species"), 
+                           variables = c("min_number_of_trees_ha", "max_number_of_trees_ha")
+                           ) %>% 
+  left_join(qSpecies[, c("ID", "Value1")], by = c("species" = "ID")) %>%
+  rename("NameNl" = "Value1")
+head(stat9d)
+# KLOPT
+
+# stamtalcontrole
+controle <- stat9d %>% 
+  filter(forest_reserve == "Muizenbos" & period == 2 & variable == "min_number_of_trees_ha") %>% 
+  group_by(forest_reserve, period) %>% 
+  summarise(totaal = sum(mean))
+controle$totaal
+# [1] 11799.51 # 14547 in access (gemiddelde ipv min)
+```
+
+#### Aantal plots met verjonging per soort en per hoogte (%)
+Dit is eerder een berekening, dan wel statistiek.
+
+Voor kernvlaktes wordt dit wel berekend.
+
+```{r}
+str(regeneration_by_core_area_height_species)
+str(regeneration_by_core_area_species)
+
+controle <- regeneration_by_core_area_height_species %>% 
+  filter (period ==2 & plot_id == 121000) %>% 
+  filter((height_class == 3000) & species %in% c(5,7)) %>% 
+  left_join(qSpecies[, c("ID", "Value1")], by = c("species" = "ID")) %>%
+  rename("NameNl" = "Value1")
+# ok
+
+controle <- regeneration_by_core_area_species %>% 
+  filter (period ==2 & plot_id == 121000)
+
+```
+
+
+### Statistics per stratum
+
+Steeds goed nadenken of we al dan niet extra nullen willen toevoegen.
+Dataset voorafgaand bekijken.
+
+```{r StatisticsDendroPlotSoil}
+# library(tidyselect)
+strata_stat <- read.csv2(paste(path_to_strata, "voorbeeld_bodemdata.csv", sep = ""))
+
+data <- dendro_by_plot %>% 
+  left_join(strata_stat, by = c("plot_id" = "Plotid"))
+
+stat11 <- create_statistics(dataset = data, level = c("period","textuur"), variables = c("volume_alive_m3_ha"))
+head(stat11)
+
+```
+
+### Statistics mbt verschillen tussen beide periodes
+
+```{r StatisticsDendroPlotDiff}
+data <- dendro_by_plot %>% 
+    # left_join(plotinfo, by= c("plot_id")) %>% 
+    filter(forest_reserve == "Muizenbos") %>% 
+    select(-stems_per_tree, -plottype, -forest_reserve) %>%
+    distinct()
+
+data_diff <- compare_periods(dataset = data, measure_vars = c("year","number_of_tree_species", "number_of_trees_ha", "stem_number_ha", "basal_area_alive_m2_ha", "basal_area_snag_m2_ha", "volume_alive_m3_ha", "volume_snag_m3_ha", "volume_stem_alive_m3_ha", "volume_stem_snag_m3_ha", "volume_log_m3_ha", "volume_deadwood_m3_ha")) %>% 
+  select(plot_id, year_diff, n_year, volume_alive_m3_ha_diff) 
+#  %>%  mutate(period = "1vs2")   # toch noiet nodig; ik kreeg soms melding waardoor ik dacht dat fctie create_statistics periode nodig heeft, maar is niet zo
+# melding: Unknown or uninitialised column: 'period'.
+# berekening gebeurt wel correct
+
+stat12 <- create_statistics(dataset = data_diff, level = c("year_diff"), variables = c("volume_alive_m3_ha_diff"))
+head(stat12)
+stat12$mean
+
+controle <- data_diff %>% 
+  group_by(year_diff) %>% 
+  summarise(verschil = mean(volume_alive_m3_ha_diff))
+controle$verschil
+
+controle$verschil - stat12$mean
+# [1] 0 - OK
+
+```
+
+

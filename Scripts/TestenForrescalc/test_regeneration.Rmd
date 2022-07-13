@@ -1,0 +1,403 @@
+---
+title: "Package forrescalc - test functie calculate_regeneration"
+author: "Anja Leyman"
+date: "4 mei 2020"
+output: 
+  html_document:
+    code_folding: hide
+    fig_caption: yes
+    number_sections: yes
+    toc: yes
+    toc_float:
+      collapsed: no
+      smooth_scroll: no
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r Rm, eval = FALSE}
+# rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+#rm(list = ls())
+
+library(here)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup_ForresCalc.R"))
+
+# library(tidyr)
+# library (rlang)
+# library(dplyr)
+# library(RODBC)
+# library(lubridate)
+# library(knitr)
+# library(here)
+# library(openssl)
+# library(kableExtra)
+# library(stringr)
+
+
+```
+
+# Vraagstelling
+
+Doel van dit script is het uittesten van de functies mbt vejonging (regeneration) uit het package forrescalc.
+Dit package wordt ingeladen in het script "Setup_ForresCalc.R".
+
+```{r Path}
+# deze worden ook in "Setup_ForresCalc.R" gedefinieerd, hier ev. extra "paths" toevoegen indien nodig voor huidig script
+      # path_to_fieldmap <- "C:/3BR/5_MDB_BOSRES_selectieEls/FieldMapData_MDB_BOSRES_selectieEls.accdb"
+      # path_to_git_forresdat <- "C:/3BR/2_VisualisatieDataBR/2Packages/forresdat"
+      # 
+      # path_to_analysis_set <- "C:/3BR/2_VisualisatieDataBR/1DataVerwerkingBR/Output/BR_analysedb.accdb"
+      # path_to_results <- "C:/3BR/2_VisualisatieDataBR/1DataVerwerkingBR/Output/BR_resultaten.accdb"
+      # path_to_forrestcalc <- "C:/3BR/2_VisualisatieDataBR/2Packages/forrescalc/R/"
+
+```
+
+<!-- Onderstaande tabel geeft een overzicht van de gegevens die gebruikt worden voor de analyse.   -->
+
+```{r OverzichtInput, results="markup", include=FALSE}
+
+# data_overzicht <- data.frame(
+#   tabelnaam = c("FieldMapData_MDB_BOSRES_selectieEls.accdb", "tblTreeSpeciesCharacteristics_BR.csv"),
+#   locatie = c(path_to_fieldmap, paste (here("Data/ExterneData"))),
+#   md5 = c(md5(path_to_fieldmap), md5("tblTreeSpeciesCharacteristics_BR.csv"))
+# )
+
+data_overzicht <- data.frame(
+  tabelnaam = c("FieldMapData_MDB_BOSRES_selectieEls.accdb"),
+  locatie = c(path_to_fieldmap),
+  md5 = c(md5(path_to_fieldmap))
+)
+
+data_overzicht %>%
+  kable() %>%
+  kable_styling()
+
+```
+
+
+```{r LoadLookuplists}
+con <- odbcConnectAccess2007(path_to_fieldmap)
+  
+  qHeightClass <- sqlFetch(con, "qHeightClass_regenaration", stringsAsFactors = FALSE)
+  qNumberClass <- sqlFetch(con, "qnumber_regeneration_classes", stringsAsFactors = FALSE)
+  qSpecies <- sqlFetch(con, "qspecies", stringsAsFactors = FALSE)
+
+odbcClose(con)
+```
+
+
+
+# Werkwijze dataverwerking
+
+## Data inladen
+
+Eerst dienen de verjongingsgegevens ingeladen te worden.
+
+```{r LoadDataRegeneration}
+data_regeneration <-
+  load_data_regeneration(
+    database = path_to_fieldmap
+  )
+
+```
+
+## Berekeningen
+Vervolgens kunnen pas de berekeningen gebeuren.
+Dit kan met behulp van één globale functie "calculate_regeneration" of met behulp van 4 afzonderlijke functies (zie verder).
+
+Resultaten kunnen weggeschreven worden naar access. Bv. naar "BR_resultaten.accdb" in folder "C:\3BR\2_VisualisatieDataBR\1DataVerwerkingBR\Output".
+
+Om een data-opvolgingssysteem te verkrijgen, moet weggeschreven worden naar git, maar dat staat nog niet helemaal op punt.
+
+
+```{r OverzichtFunctionsReg}
+# zie Functions_ForresCalc.R
+# list_functions_reg
+
+```
+
+```{r FunctionRegenerationGlobal}
+regeneration <- calculate_regeneration(data_regeneration)
+
+save_results_access (results = regeneration, database = path_to_analysis_set, remove_tables = TRUE)
+
+```
+
+## Overzicht van functies opgenomen in "calculate_regeneration"
+
+De functie "calculate_regeneration" bestaat uit 5 onderliggende functies:
+
+1. calculate_regeneration_plot(data_regeneration)
+
+2. calculate_regeneration_plot_height(data_regeneration)
+
+3. calculate_regeneration_plot_height_species(data_regeneration)
+  
+4. calculate_regeneration_core_area_species(data_regeneration_CA)
+
+5. calculate_regeneration_core_area_height_species(data_regeneration_CA)
+
+```{r CreateSeparateDataframesReg}
+for (tablename in names(regeneration)) {
+     assign(tablename, regeneration[[tablename]])
+} 
+
+```
+
+
+## Basisdata
+
+De basisdata wordt opgeslagen in de tabel data_regeneration. 
+
+Deze tabel dient als basis voor de algemene berekeningen, maar kan ook dienen voor meer gedetailleerde, niet-standaard berekeningen.
+
+Enkele verduidelijkingen:
+
+* plotarea_ha = de oppervlakte van de regeneration-opname dus NIET de volledige cirkel (= totalplotarea_ha)
+* number_class en reg_number: afh. van hoogteklasse wordt een exact aantal of een aantalsklasse genoteerd, dat vertaald wordt naar een min en max aantal_ha
+
+
+Aandachtspunt:
+
+* Aantalsklasse wordt omgevormd tot een min aantal en een max aantal volgens volgende regels:
+
+_number_class =
+        c("1", "2 - 5", "6 - 10", "11 - 20", "21 - 40", "41 - 60", "61 - 100", "> 100", "> 1000")_
+        
+_=>  min_number_of_trees = c(1, 2, 6, 11, 21, 41, 61, 101, 1001)_
+
+_=>  max_number_of_trees = c(1, 5, 10, 20, 40, 60, 100, 1000, NA)_
+
+_=> !! max_number = NA bij de hoogste klasse_
+
+```{r data_regeneration}
+str(data_regeneration)
+
+```
+
+
+## Data op plotniveau - cirkelplots
+
+Bij de berekening van verjonging wordt onderscheid gemaakt tussen cirkelplots en kernvlaktes (CA, core area).
+
+Voor cirkelplots is de belangrijkste output "regeneration_by_plot_height_species": aantal verjonging per plot, per soort en per hoogteklasse.
+
+Enkele verduidelijkingen:
+
+* "number_of_tree_species" = aantal soorten obv de levende bomen
+
+* 
+
+```{r regeneration_by_plot}
+str(regeneration_by_plot)
+
+# head(regeneration_by_plot, 10) %>% DT::datatable(rownames = NULL, filter = "top", options = list(pageLength = 5))
+
+```
+
+
+```{r regeneration_by_plot_height}
+str(regeneration_by_plot_height)
+
+# ev. koppelen aan qHeightClass
+regeneration_by_plot_height <- regeneration_by_plot_height %>% 
+  left_join(qHeightClass[, c("ID", "Value1")], by = c("height_class" = "ID")) %>% 
+  rename("HeightClass" = "Value1")
+
+# head(regeneration_by_plot_height, 10) %>% DT::datatable(rownames = NULL, filter = "top", options = list(pageLength = 5))
+
+```
+
+```{r regeneration_by_plot_height_species}
+str(regeneration_by_plot_height_species)
+
+# ev. koppelen aan qHeightClass en qSpecies
+regeneration_by_plot_height_species <- regeneration_by_plot_height_species %>% 
+  left_join(qHeightClass[, c("ID", "Value1")], by = c("height_class" = "ID")) %>% 
+  rename("HeightClass" = "Value1") %>% 
+  left_join(qSpecies[, c("ID", "Value1")], by = c("species" = "ID")) %>% 
+  rename("NameNl" = "Value1")
+
+# head(regeneration_by_plot_height_species, 10) %>% DT::datatable(rownames = NULL, filter = "top", options = list(pageLength = 5))
+
+```
+
+
+
+
+## Controle mbv data Muizenbos
+
+De resultaten uit R worden vergeleken met de resultaten uit Fieldmap voor Muizenbos.
+
+Aandachtspunt:
+
+* 
+
+```{r ControleMuizenbos}
+str(regeneration_by_plot)
+# info mbt BR en plottype zit in afzonderlijke tabel, dan moet ze niet elke keer opgeslagen worden
+plotinfo <- load_plotinfo(database = path_to_fieldmap)
+
+controle_plot <- regeneration_by_plot %>% 
+  left_join(plotinfo, by= c("plot_id")) %>% 
+  filter(forest_reserve == "Muizenbos") 
+
+controle_plot_height <- regeneration_by_plot_height %>%
+  left_join(plotinfo, by= c("plot_id")) %>% 
+  filter(forest_reserve == "Muizenbos")
+
+controle_plot_height_species <- regeneration_by_plot_height_species %>%
+  left_join(plotinfo, by= c("plot_id")) %>% 
+  filter(forest_reserve == "Muizenbos")
+
+write.csv2(controle_plot, paste(here::here("Output"), "/Controle_forrescalc/Muizenbos_ ", "controle_reg_plot", ".csv", sep = ""))
+write.csv2(controle_plot_height, paste(here::here("Output"), "/Controle_forrescalc/Muizenbos_ ", "controle_reg_plot_height", ".csv", sep = ""))
+write.csv2(controle_plot_height_species, paste(here::here("Output"), "/Controle_forrescalc/Muizenbos_ ", "controle_reg_plot_height_species", ".csv", sep = ""))
+
+
+```
+
+```{r ControleMuizenbosDiff} 
+# functie "compare_periods" ("calculate_dendro_plot_diff" bestaat niet meer)
+
+# All column names of the dataset that are not added to parameter measure_vars, are considered as grouping variables, except for period
+colnames(regeneration_by_plot_height_species)
+
+data <- regeneration_by_plot_height_species %>% 
+    left_join(plotinfo, by= c("plot_id")) %>% 
+    filter(forest_reserve == "Muizenbos") %>% 
+    select(-subplot_id, -rubbing_damage_perc, -plottype, -forest_reserve) %>%
+    distinct()
+
+controle_plot_height_species_diff <- 
+  compare_periods(dataset = data, 
+              measure_vars = c("year","min_number_of_trees_ha", "max_number_of_trees_ha"))
+
+# year moet uitdrukkelijk vermeld worden bij measure_vars, als je info wil verkrijgen over aantal jaar tss 
+# 2 metingen
+# soms wil je dat immers niet, wanneer je over alle bosreservaten heen variabelen wil vergelijken
+
+colnames(controle_plot_height_species_diff)
+
+write.csv2(controle_plot_height_species_diff, paste(here::here("Output"), "/Controle_forrescalc/Muizenbos_ ", "controle_reg_plot_height_species_diff", ".csv", sep = ""))
+
+
+#----
+colnames(regeneration_by_plot_height)
+
+data <- regeneration_by_plot_height %>% 
+    left_join(plotinfo, by= c("plot_id")) %>% 
+    filter(forest_reserve == "Muizenbos") %>% 
+    select(-subplot_id, -rubbing_damage_perc, -plottype, -forest_reserve) %>%
+    distinct()
+
+controle_plot_height_diff <- 
+  compare_periods(dataset = data, 
+              measure_vars = c("year","number_of_tree_species", "min_number_of_trees_ha", "max_number_of_trees_ha"))
+
+# year moet uitdrukkelijk vermeld worden bij measure_vars, als je info wil verkrijgen over aantal jaar tss 
+# 2 metingen
+# soms wil je dat immers niet, wanneer je over alle bosreservaten heen variabelen wil vergelijken
+
+colnames(controle_plot_height_diff)
+
+write.csv2(controle_plot_height_diff, paste(here::here("Output"), "/Controle_forrescalc/Muizenbos_ ", "controle_reg_plot_height_diff", ".csv", sep = ""))
+
+```
+
+
+```{r ControleAlgemeenDiff} 
+# waar niks gemeten is, ontstaan NaN => een record toevoegen met aantal = 0
+controle_plot_height_species_diff_NA <- 
+  controle_plot_height_species_diff  %>%  
+  filter(is.na (n_year)) 
+nrow(controle_plot_height_species_diff_NA)
+# [1] 0
+# probleem opgelost
+
+# write.csv2(controle_plot_height_species_diff_NA, paste(here::here("Output"), "/Controle_forrescalc/NA_ ", "controle_reg_plot_height_species_diff", ".csv", sep = ""))
+
+```
+
+## Data op plotniveau - kernvlaktes
+
+De output "regeneration_by_plot_height_species" bevat voor de kernvlaktes informatie op subplotniveau: aantal verjonging per plot, per soort en per hoogteklasse.
+
+Specifiek voor de kernvlaktes in hun geheel, is er de output "regeneration_core_area_species", met - per soort - het aantal subplots waar verjonging van die soort voorkomt (exact aantal + percentage). 
+Ook wordt aantal verjonging per ha van elke soort voor de volledige kernvlakte berekend.
+Aanvullend ook "regeneration_core_area_height_species", met dezelfde info per soort en per hoogteklasse.
+
+
+```{r regeneration_by_plot_height_species}
+# info op subplotniveau
+str(regeneration_by_plot_height_species)
+
+# filteren op kernvlakte
+regeneration_by_plot_height_species_CA <- regeneration_by_plot_height_species %>% 
+  filter(plot_id == 121000)
+
+```
+
+
+```{r regeneration_by_core_area_species}
+str(regeneration_by_core_area_species)
+
+# ev. koppelen aan qSpecies
+regeneration_by_core_area_species <- regeneration_by_core_area_species %>% 
+  left_join(qSpecies[, c("ID", "Value1")], by = c("species" = "ID")) %>% 
+  rename("NameNl" = "Value1") 
+
+```
+
+```{r regeneration_by_core_area_height_species}
+str(regeneration_by_core_area_height_species)
+
+# ev. koppelen aan qHeightClass en qSpecies
+regeneration_by_core_area_height_species <- regeneration_by_core_area_height_species %>% 
+  left_join(qHeightClass[, c("ID", "Value1")], by = c("height_class" = "ID")) %>% 
+  rename("HeightClass" = "Value1") %>% 
+  left_join(qSpecies[, c("ID", "Value1")], by = c("species" = "ID")) %>% 
+  rename("NameNl" = "Value1") 
+
+```
+
+## Controle mbv data Pruikemakers
+
+De resultaten uit R worden vergeleken met de resultaten uit Fieldmap voor Pruikemakers.
+
+Aandachtspunt:
+
+* 
+
+```{r ControlePruikemakers}
+controle_plot_height_species <- regeneration_by_plot_height_species %>%
+  left_join(plotinfo, by= c("plot_id")) %>%   
+  filter(forest_reserve == "Pruikemakers")
+
+controle_core_area_species <- regeneration_by_core_area_species %>%
+  left_join(plotinfo, by= c("plot_id")) %>% 
+  filter(forest_reserve == "Pruikemakers")
+
+controle_core_area_height_species <- regeneration_by_core_area_height_species %>%
+  left_join(plotinfo, by= c("plot_id")) %>% 
+  filter(forest_reserve == "Pruikemakers")
+
+write.csv2(controle_plot_height_species, paste(here::here("Output"), "/Controle_forrescalc/Pruikemakers_ ", "controle_reg_plot_height_species", ".csv", sep = ""))
+write.csv2(controle_core_area_species, paste(here::here("Output"), "/Controle_forrescalc/Pruikemakers_ ", "controle_reg_core_area_species", ".csv", sep = ""))
+write.csv2(controle_core_area_height_species, paste(here::here("Output"), "/Controle_forrescalc/Pruikemakers_ ", "controle_reg_core_area_height_species", ".csv", sep = ""))
+
+
+```

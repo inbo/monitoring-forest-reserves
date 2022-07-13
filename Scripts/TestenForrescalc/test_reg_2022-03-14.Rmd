@@ -1,0 +1,524 @@
+---
+title: "Package forrescalc - test functie calculate_regeneration"
+author: "Anja Leyman"
+date: "14/3/2022"
+output: 
+  html_document:
+    code_folding: hide
+    fig_caption: yes
+    number_sections: yes
+    toc: yes
+    toc_float:
+      collapsed: no
+      smooth_scroll: no
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = FALSE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+#rm(list = ls())
+
+library(here)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+
+# library(tidyr)
+# library (rlang)
+# library(dplyr)
+# library(RODBC)
+# library(lubridate)
+# library(knitr)
+# library(here)
+# library(openssl)
+# library(kableExtra)
+# library(stringr)
+
+
+```
+
+
+# Vraagstelling
+
+Doel van dit script is het uittesten van de functies mbt vejonging (regeneration) uit het package forrescalc.
+Dit package wordt ingeladen in het script "Setup.R".
+
+```{r LoadLookuplists}
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+  
+  qHeightClass <- sqlFetch(con, "qHeightClass_regeneration", stringsAsFactors = FALSE)
+  qNumberClass <- sqlFetch(con, "qnumber_regeneration_classes", stringsAsFactors = FALSE)
+  qSpecies <- sqlFetch(con, "qspecies", stringsAsFactors = FALSE)
+
+odbcClose(con)
+```
+
+
+
+# Werkwijze dataverwerking
+
+## Data inladen
+
+Eerst dienen de verjongingsgegevens ingeladen te worden.
+
+```{r LoadDataRegeneration}
+data_regeneration <-
+  load_data_regeneration(
+    database = path_to_fieldmap_db
+  )
+
+data_regeneration_CA <-
+  load_data_regeneration(
+    database = path_to_fieldmap_db,
+    plottype = "CA"
+  )
+
+
+```
+
+
+?klopt het dat ALLE subplots ingeladen zijn? 
+Ik dacht dat ik daar een opmerking over gemaakt had.
+Want in calc_reg_core_area_species gaat Els verder met n_subplots als zijnde alle subplots?
+
+KLOPT: zelfs als er geen opnames zijn, is er een record aangemaakt in layer regeneration (niet in reg_species)
+
+```{r}
+test_n_subplots <- data_regeneration %>%
+    group_by(plot_id, period) %>%
+    mutate(
+      n_subplots = n_distinct(.data$subplot_id)) %>% 
+    ungroup() %>% 
+  select(plot_id, plottype, forest_reserve, subplot_id, n_subplots, year_main_survey, height_class,
+         species, period) %>% 
+  filter(plottype == "CA")
+
+table(test_n_subplots$n_subplots, test_n_subplots$plottype)
+table(test_n_subplots$n_subplots, test_n_subplots$forest_reserve)  
+  
+```
+
+
+
+
+## Berekeningen
+Vervolgens kunnen de berekeningen gebeuren.
+Dit kan met behulp van één globale functie "calculate_regeneration" of met behulp van 4 afzonderlijke functies (zie verder).
+
+Resultaten kunnen weggeschreven worden naar access. Bv. naar "BR_resultaten.accdb" in folder "C:\3BR\2_VisualisatieDataBR\1DataVerwerkingBR\Output".
+
+Om een data-opvolgingssysteem te verkrijgen, moet weggeschreven worden naar git.
+
+
+```{r OverzichtFunctionsReg}
+# zie Functions_ForresCalc.R
+# list_functions_reg
+
+```
+
+```{r FunctionRegenerationGlobal}
+regeneration <- calculate_regeneration(data_regeneration)
+
+save_results_access (results = regeneration, database = path_to_analysis_set_db, remove_tables = TRUE)
+
+```
+
+
+## Overzicht van functies opgenomen in "calculate_regeneration"
+
+De functie "calculate_regeneration" bestaat uit 5 onderliggende functies:
+
+1. calculate_regeneration_plot(data_regeneration)
+
+2. calculate_regeneration_plot_height(data_regeneration)
+
+3. calculate_regeneration_plot_height_species(data_regeneration)
+  
+4. calculate_regeneration_core_area_species(data_regeneration_CA)
+
+5. calculate_regeneration_core_area_height_species(data_regeneration_CA)
+
+```{r CreateSeparateDataframesReg}
+for (tablename in names(regeneration)) {
+     assign(tablename, regeneration[[tablename]])
+} 
+
+```
+
+
+## Basisdata
+
+De basisdata wordt opgeslagen in de tabel data_regeneration. 
+
+Deze tabel dient als basis voor de algemene berekeningen, maar kan ook dienen voor meer gedetailleerde, niet-standaard berekeningen.
+
+Enkele verduidelijkingen:  
+
+* plotarea_ha = de oppervlakte van de regeneration-opname dus NIET de volledige cirkel (= totalplotarea_ha)  
+
+* number_class en reg_number: afh. van hoogteklasse wordt een exact aantal of een aantalsklasse genoteerd, dat vertaald wordt naar een min en max aantal_ha
+
+
+Aandachtspunt:
+
+* Aantalsklasse wordt omgevormd tot een min, max en mid aantal volgens volgende regels:
+
+_number_class =_
+        _c("1", "2 - 5", "6 - 10", "11 - 20", "21 - 40", "41 - 60", "61 - 100", "> 100", "> 1000")_
+        
+_=> min_number_of_regeneration = c(1, 2, 6, 11, 21, 41, 61, 101, 1001)_
+_=> max_number_of_regeneration = c(1, 5, 10, 20, 40, 60, 100, 1000, 10000)_
+_=> mid_number_of_regeneration = (min_number_of_regeneration + max_number_of_regeneration) / 2_
+
+
+```{r data_regeneration}
+str(data_regeneration)
+
+```
+
+## NA's
+
+Na's worden toegevoegd wanneer er wél een reg-record is, maar geen reg_species_record.
+
+Dan krijgen we NA bij species en heightclass en wordt reg_number = 0 gesteld.
+
+
+```{r NA_reg_species}
+data_reg_NA1 <- data_regeneration %>% 
+  filter_at(vars(species, height_class),any_vars(is.na(.)))
+
+data_reg_NA2 <- data_regeneration %>% 
+  filter_at(vars(number_class, nr_of_regeneration),all_vars(is.na(.)))
+# 0
+# DUS: steeds één van beide ingevuld: ofwel nr class ofwel exact nr
+
+```
+
+```{r}
+data_reg_NA1_plots <- data_reg_NA1 %>% 
+  group_by(plot_id, period, species, height_class) %>% 
+  summarize(aantal_subplots = n()) %>% 
+  ungroup()
+```
+MAAR: wordt een reg-opname niet soms vergeten?
+Dan mogen we daar geen "0" zetten, maar moet dat NA blijven.
+
+> nr_of_regeneration =
+        ifelse(
+          is.na(.data$nr_of_regeneration) & is.na(.data$species), 0
+          , .data$nr_of_regeneration
+
+Hierna gefilterd op species = NA.
+Dat komt op zelfde neer als nr_of_reg == 0.
+
+En dan gekeken of year_main_survey ingevuld werd: JA ==> OK
+          
+```{r main_survey_OK}
+t <- data_regeneration %>% 
+  select(plot_id, period, species, height_class, nr_of_regeneration, number_class,
+         date_regeneration, year_main_survey) %>% 
+  filter(nr_of_regeneration == 0) %>% 
+  filter(is.na(species))
+
+t %>% filter(is.na(year_main_survey)) %>% nrow == 0 
+# [1] TRUE
+```
+Rubbing damage number toch niet verkeerdelijk = 0??
+ 
+Zie Datacontrole6_regeneration.Rmd.
+ 
+Gevraagd om variabele (game_impact_reg_obs(erved)) toe te voegen bij load_data_reg én bij load_data_plotinfo.
+(branch `statistics_and_other_issues`)
+
+
+## Data op plotniveau - cirkelplots
+
+Bij de berekening van verjonging wordt onderscheid gemaakt tussen cirkelplots en kernvlaktes (CA, core area).
+
+Voor cirkelplots is de belangrijkste output "regeneration_by_plot_height_species": aantal verjonging per plot, per soort en per hoogteklasse.
+
+Enkele verduidelijkingen:
+
+* "number_of_tree_species" = aantal soorten obv de levende bomen
+
+* 
+
+```{r regeneration_by_plot}
+str(regeneration_by_plot)
+
+# head(regeneration_by_plot, 10) %>% DT::datatable(rownames = NULL, filter = "top", options = list(pageLength = 5))
+
+```
+
+
+```{r check_subcircle_NA}
+t <- data_regeneration %>% 
+  filter(is.na(subcircle))
+
+  # select(plot_id, subplot_id, period, species, height_class, 
+  #        nr_of_regeneration, number_class,
+  #        rubbing_damage_number, rubbing_damage_perc,
+  #        year_main_survey)
+
+
+```
+
+Waar is veld 'subcircle' = NA?
+Dat zijn de record zonder hoogteklasse of species/
+
+nr_of_regeneration is dan = 0 gezet, MAAR min/max/mid NIET
+Die zijn NA.
+
+Dat lijkt op eerste zicht OK, omdat we later sommeren (met na.rm = TRUE), MAAR als er niks is, blijft het wel een NA!!!
+
+Als suggestie toegevoegd aan branch 'statistics ...'.
+
+
+OPGEPAST: dan moet ook rubbing_damage = 0 gezet worden, tenminste als dat opgemeten werd!!
+
+
+
+## Interval versus exact aantal
+
+Probleem van onderscheid te maken tussen exacte aantallen en intervallen, is dat we beide niet kunnen combineren.
+Ik weet dat dat net de bedoeling is, maar dat maakt het voor ons moeilijk werkbaar.
+Er zijn weliswaar richtlijnen, maar zeker in het verleden kan het zijn dat daar (al dan niet per ongeluk) van afgeweken werd.
+Zeker wat betreft lage aantallen maakt dat niet veel verschil, maar kunnen we door de deze berekenigswijze plots niet meer vergelijken.
+
+Ik kan me nog vinden in feit dat nr_of_regeneration_ha enkel berekend wordt in case exact numbers are observed.
+Maar mean_number_of_regeneration_ha moet ook bij exacte aantallen berekend worden (nu enkel in case intervals are observed) .
+
+==> eens testen of er veel zijn bij zelfde hoogteklasse die anders berekend zijn
+
+JA!!!
+DAarom belangrijk dat beide samengevoegd worden:   
+- hetzij via een interval
+- hetzij via een (al dan niet afgeleide) mean of exact number
+
+
+```{r}
+t <- by_plot %>% 
+  group_by(height_class, period) %>% 
+  summarize(nr_of_reg = sum(nr_of_regeneration, na.rm = TRUE),
+            number_class = sum(number_class, na.rm = TRUE)) %>% 
+  ungroup()
+
+t
+```
+
+```{r qnumberclass_mid}
+qnumberclass_mid <- qNumberClass %>% 
+  mutate(min = str_extract(Value1, "\\w+"),
+         max = str_extract(Value1, "\\w-"))
+
+
+
+qnumberclass_mid2 <- str_extract_all(qNumberClass$Value1, "[^-]+")
+```
+
+
+
+```{r regeneration_by_plot_height}
+str(regeneration_by_plot_height)
+
+# ev. koppelen aan qHeightClass
+regeneration_by_plot_height <- regeneration_by_plot_height %>% 
+  left_join(qHeightClass[, c("ID", "Value1")], by = c("height_class" = "ID")) %>% 
+  rename("HeightClass" = "Value1")
+
+# head(regeneration_by_plot_height, 10) %>% DT::datatable(rownames = NULL, filter = "top", options = list(pageLength = 5))
+
+```
+
+```{r regeneration_by_plot_height_species}
+str(regeneration_by_plot_height_species)
+
+# ev. koppelen aan qHeightClass en qSpecies
+regeneration_by_plot_height_species <- regeneration_by_plot_height_species %>% 
+  left_join(qHeightClass[, c("ID", "Value1")], by = c("height_class" = "ID")) %>% 
+  rename("HeightClass" = "Value1") %>% 
+  left_join(qSpecies[, c("ID", "Value1")], by = c("species" = "ID")) %>% 
+  rename("NameNl" = "Value1")
+
+# head(regeneration_by_plot_height_species, 10) %>% DT::datatable(rownames = NULL, filter = "top", options = list(pageLength = 5))
+
+```
+
+
+
+
+## Controle mbv data Muizenbos
+
+De resultaten uit R worden vergeleken met de resultaten uit Fieldmap voor Muizenbos.
+
+Aandachtspunt:
+
+* 
+
+```{r ControleMuizenbos}
+str(regeneration_by_plot)
+# info mbt BR en plottype zit in afzonderlijke tabel, dan moet ze niet elke keer opgeslagen worden
+plotinfo <- load_plotinfo(database = path_to_fieldmap_db)
+
+controle_plot <- regeneration_by_plot %>% 
+  left_join(plotinfo, by= c("plot_id")) %>% 
+  filter(forest_reserve == "Muizenbos") 
+
+controle_plot_height <- regeneration_by_plot_height %>%
+  left_join(plotinfo, by= c("plot_id")) %>% 
+  filter(forest_reserve == "Muizenbos")
+
+controle_plot_height_species <- regeneration_by_plot_height_species %>%
+  left_join(plotinfo, by= c("plot_id")) %>% 
+  filter(forest_reserve == "Muizenbos")
+
+write.csv2(controle_plot, paste(here::here("Output"), "/Controle_forrescalc/Muizenbos_ ", "controle_reg_plot", ".csv", sep = ""))
+write.csv2(controle_plot_height, paste(here::here("Output"), "/Controle_forrescalc/Muizenbos_ ", "controle_reg_plot_height", ".csv", sep = ""))
+write.csv2(controle_plot_height_species, paste(here::here("Output"), "/Controle_forrescalc/Muizenbos_ ", "controle_reg_plot_height_species", ".csv", sep = ""))
+
+
+```
+
+```{r ControleMuizenbosDiff} 
+# functie "compare_periods" ("calculate_dendro_plot_diff" bestaat niet meer)
+
+# All column names of the dataset that are not added to parameter measure_vars, are considered as grouping variables, except for period
+colnames(regeneration_by_plot_height_species)
+
+data <- regeneration_by_plot_height_species %>% 
+    left_join(plotinfo, by= c("plot_id")) %>% 
+    filter(forest_reserve == "Muizenbos") %>% 
+    select(-subplot_id, -rubbing_damage_perc, -plottype, -forest_reserve) %>%
+    distinct()
+
+controle_plot_height_species_diff <- 
+  compare_periods(dataset = data, 
+              measure_vars = c("year","min_number_of_trees_ha", "max_number_of_trees_ha"))
+
+# year moet uitdrukkelijk vermeld worden bij measure_vars, als je info wil verkrijgen over aantal jaar tss 
+# 2 metingen
+# soms wil je dat immers niet, wanneer je over alle bosreservaten heen variabelen wil vergelijken
+
+colnames(controle_plot_height_species_diff)
+
+write.csv2(controle_plot_height_species_diff, paste(here::here("Output"), "/Controle_forrescalc/Muizenbos_ ", "controle_reg_plot_height_species_diff", ".csv", sep = ""))
+
+
+#----
+colnames(regeneration_by_plot_height)
+
+data <- regeneration_by_plot_height %>% 
+    left_join(plotinfo, by= c("plot_id")) %>% 
+    filter(forest_reserve == "Muizenbos") %>% 
+    select(-subplot_id, -rubbing_damage_perc, -plottype, -forest_reserve) %>%
+    distinct()
+
+controle_plot_height_diff <- 
+  compare_periods(dataset = data, 
+              measure_vars = c("year","number_of_tree_species", "min_number_of_trees_ha", "max_number_of_trees_ha"))
+
+# year moet uitdrukkelijk vermeld worden bij measure_vars, als je info wil verkrijgen over aantal jaar tss 
+# 2 metingen
+# soms wil je dat immers niet, wanneer je over alle bosreservaten heen variabelen wil vergelijken
+
+colnames(controle_plot_height_diff)
+
+write.csv2(controle_plot_height_diff, paste(here::here("Output"), "/Controle_forrescalc/Muizenbos_ ", "controle_reg_plot_height_diff", ".csv", sep = ""))
+
+```
+
+
+```{r ControleAlgemeenDiff} 
+# waar niks gemeten is, ontstaan NaN => een record toevoegen met aantal = 0
+controle_plot_height_species_diff_NA <- 
+  controle_plot_height_species_diff  %>%  
+  filter(is.na (n_year)) 
+nrow(controle_plot_height_species_diff_NA)
+# [1] 0
+# probleem opgelost
+
+# write.csv2(controle_plot_height_species_diff_NA, paste(here::here("Output"), "/Controle_forrescalc/NA_ ", "controle_reg_plot_height_species_diff", ".csv", sep = ""))
+
+```
+
+## Data op plotniveau - kernvlaktes
+
+De output "regeneration_by_plot_height_species" bevat voor de kernvlaktes informatie op subplotniveau: aantal verjonging per plot, per soort en per hoogteklasse.
+
+Specifiek voor de kernvlaktes in hun geheel, is er de output "regeneration_core_area_species", met - per soort - het aantal subplots waar verjonging van die soort voorkomt (exact aantal + percentage). 
+Ook wordt aantal verjonging per ha van elke soort voor de volledige kernvlakte berekend.
+Aanvullend ook "regeneration_core_area_height_species", met dezelfde info per soort en per hoogteklasse.
+
+
+```{r regeneration_by_plot_height_species}
+# info op subplotniveau
+str(regeneration_by_plot_height_species)
+
+# filteren op kernvlakte
+regeneration_by_plot_height_species_CA <- regeneration_by_plot_height_species %>% 
+  filter(plot_id == 121000)
+
+```
+
+
+```{r regeneration_by_core_area_species}
+str(regeneration_by_core_area_species)
+
+# ev. koppelen aan qSpecies
+regeneration_by_core_area_species <- regeneration_by_core_area_species %>% 
+  left_join(qSpecies[, c("ID", "Value1")], by = c("species" = "ID")) %>% 
+  rename("NameNl" = "Value1") 
+
+```
+
+```{r regeneration_by_core_area_height_species}
+str(regeneration_by_core_area_height_species)
+
+# ev. koppelen aan qHeightClass en qSpecies
+regeneration_by_core_area_height_species <- regeneration_by_core_area_height_species %>% 
+  left_join(qHeightClass[, c("ID", "Value1")], by = c("height_class" = "ID")) %>% 
+  rename("HeightClass" = "Value1") %>% 
+  left_join(qSpecies[, c("ID", "Value1")], by = c("species" = "ID")) %>% 
+  rename("NameNl" = "Value1") 
+
+```
+
+## Controle mbv data Pruikemakers
+
+De resultaten uit R worden vergeleken met de resultaten uit Fieldmap voor Pruikemakers.
+
+Aandachtspunt:
+
+* 
+
+```{r ControlePruikemakers}
+controle_plot_height_species <- regeneration_by_plot_height_species %>%
+  left_join(plotinfo, by= c("plot_id")) %>%   
+  filter(forest_reserve == "Pruikemakers")
+
+controle_core_area_species <- regeneration_by_core_area_species %>%
+  left_join(plotinfo, by= c("plot_id")) %>% 
+  filter(forest_reserve == "Pruikemakers")
+
+controle_core_area_height_species <- regeneration_by_core_area_height_species %>%
+  left_join(plotinfo, by= c("plot_id")) %>% 
+  filter(forest_reserve == "Pruikemakers")
+
+write.csv2(controle_plot_height_species, paste(here::here("Output"), "/Controle_forrescalc/Pruikemakers_ ", "controle_reg_plot_height_species", ".csv", sep = ""))
+write.csv2(controle_core_area_species, paste(here::here("Output"), "/Controle_forrescalc/Pruikemakers_ ", "controle_reg_core_area_species", ".csv", sep = ""))
+write.csv2(controle_core_area_height_species, paste(here::here("Output"), "/Controle_forrescalc/Pruikemakers_ ", "controle_reg_core_area_height_species", ".csv", sep = ""))
+
+
+```

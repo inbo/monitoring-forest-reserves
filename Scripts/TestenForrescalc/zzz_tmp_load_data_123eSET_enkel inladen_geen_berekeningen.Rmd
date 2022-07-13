@@ -1,0 +1,1406 @@
+---
+title: "Tijdelijke load_data mét derde set erbij"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: FALSE
+      smooth_scroll: FALSE
+---
+
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup_Forrescalc.R"))
+
+```
+
+
+```{r load_plotinfo}
+query_plot <-
+  "SELECT Plots.ID AS plot_id,
+      Plots.Plottype AS plottype,
+      pd.ForestReserve AS forest_reserve,
+      pd.Survey_Trees_YN AS survey_trees,
+      pd.Survey_Deadwood_YN AS survey_deadw,
+      pd.Survey_Vegetation_YN AS survey_veg,
+      pd.Survey_Regeneration_YN AS survey_reg,
+      pd.DataProcessed_YN AS data_processed, 
+      pd.Date_Dendro_1eSet AS date_dendro
+    FROM Plots INNER JOIN PlotDetails_1eSet pd ON Plots.ID = pd.IDPlots;"
+
+query_plot2 <-
+  "SELECT Plots.ID AS plot_id,
+      Plots.Plottype AS plottype,
+      pd.ForestReserve AS forest_reserve,
+      pd.Survey_Trees_YN AS survey_trees,
+      pd.Survey_Deadwood_YN AS survey_deadw,
+      pd.Survey_Vegetation_YN AS survey_veg,
+      pd.Survey_Regeneration_YN AS survey_reg,
+      pd.DataProcessed_YN AS data_processed, 
+      pd.Date_Dendro_2eSet AS date_dendro
+    FROM Plots INNER JOIN PlotDetails_2eSet pd ON Plots.ID = pd.IDPlots;"
+
+query_plot3 <-
+  "SELECT Plots.ID AS plot_id,
+      Plots.Plottype AS plottype,
+      pd.ForestReserve AS forest_reserve,
+      pd.Survey_Trees_YN AS survey_trees,
+      pd.Survey_Deadwood_YN AS survey_deadw,
+      pd.Survey_Vegetation_YN AS survey_veg,
+      pd.Survey_Regeneration_YN AS survey_reg,
+      pd.DataProcessed_YN AS data_processed, 
+      pd.Date_Dendro_3eSet AS date_dendro
+    FROM Plots INNER JOIN PlotDetails_3eSet pd ON Plots.ID = pd.IDPlots;"
+
+con <- odbcConnectAccess2007(path_to_fieldmap)
+plotinfo <- sqlQuery(con, query_plot, stringsAsFactors = FALSE) %>%
+  mutate(
+    period = 1
+  ) %>%
+  bind_rows(
+    sqlQuery(con, query_plot2, stringsAsFactors = FALSE) %>%
+      mutate(
+        period = 2
+      )
+  ) %>%
+  bind_rows(
+    sqlQuery(con, query_plot3, stringsAsFactors = FALSE) %>%
+      mutate(
+        period = 3
+      )
+  ) %>%
+  distinct() %>% 
+  left_join(plotinfo %>% 
+              filter(survey_trees == 10) %>% 
+              group_by(plot_id, plottype, forest_reserve, survey_trees) %>% 
+              summarize(min_period = min(period)) %>% 
+              ungroup()) %>% 
+  mutate(survey_number = period - min_period + 1, 
+         year = year(date_dendro)) %>% 
+  select(-min_period, -date_dendro)
+  
+odbcClose(con)
+
+names(plotinfo)
+
+# # survey_number = periode - aantal_meetperiodes
+# plotinfo <- plotinfo %>% 
+#   left_join(plotinfo %>% 
+#   filter(survey_trees == 10) %>% 
+#   group_by(plot_id, plottype, forest_reserve, survey_trees) %>% 
+#   summarize(min_period = min(period)) %>% 
+#   ungroup()) %>% 
+#   mutate(survey_number = period - min_period + 1) %>% 
+#   select(-min_period)
+
+summary(plotinfo)
+
+plotinfo %>% filter(is.na(survey_number)) %>% nrow()
+t <-plotinfo %>% filter(is.na(survey_number))
+table(t$forest_reserve, t$period)
+# 512
+# OK - immers enkel deze waar "survey_trees == 10" worden bekeken om een min_periode aan toe te kennen   
+table(t$survey_trees, t$period)
+
+table(plotinfo$survey_trees, plotinfo$survey_number)
+#         1    2    3
+  # 10 1022  647   54
+  # 20    0    0    0
+# ==> Enkel deze waar survey_trees gebeurd is, krijgen een survey_number - OK
+```
+```{r load_data_dendro}
+query_dendro <-
+    "SELECT Plots.ID AS plot_id,
+        Plots.Plottype AS plottype,
+        IIf(Plots.Area_ha IS NULL, Plots.Area_m2 / 10000, Plots.Area_ha) AS totalplotarea_ha,
+        Trees.ID AS tree_measure_id,
+        (Trees.X_m - Plots.Xorig_m) AS x_local, (Trees.Y_m - Plots.Yorig_m) AS y_local,
+        pd.ForestReserve AS forest_reserve,
+        pd.Date_dendro_1eSet AS date_dendro,
+        pd.rA1 AS r_A1, pd.rA2 AS r_A2, pd.rA3 AS r_A3, pd.rA4 AS r_A4,
+        pd.TresHoldDBH_Trees_A3_alive AS dbh_min_a3,
+        pd.TresHoldDBH_Trees_A3_dead AS dbh_min_a3_dead,
+        pd.TresHoldDBH_Trees_A4_alive AS dbh_min_a4,
+        pd.TresHoldDBH_Trees_A4_dead AS dbh_min_a4_dead,
+        pd.TresHoldDBH_Trees_CoreArea_alive AS dbh_min_core_area,
+        pd.TresHoldDBH_Trees_CoreArea_dead AS dbh_min_core_area_dead,
+        pd.LengthCoreArea_m AS length_core_area_m,
+        pd.WidthCoreArea_m AS width_core_area_m,
+        pd.Area_ha AS core_area_ha,
+        pd.Survey_Trees_YN AS survey_trees,
+        pd.DataProcessed_YN AS data_processed,
+        Trees.DBH_mm AS dbh_mm,
+        Trees.Height_m AS height_m,
+        Trees.Species AS species,
+        Trees.AliveDead AS alive_dead,
+        Trees.DecayStage AS decaystage,
+        Trees.Vol_tot_m3 AS vol_tot_m3,
+        Trees.Vol_stem_m3 AS vol_stem_m3,
+        Trees.Vol_crown_m3 AS vol_crown_m3,
+        Trees.BasalArea_m2 AS basal_area_m2,
+        Trees.IndShtCop AS ind_sht_cop,
+        Trees.TreeNumber AS tree_number,
+        Trees.Individual AS individual
+      FROM ((Plots INNER JOIN Trees ON Plots.ID = Trees.IDPlots)
+        INNER JOIN PlotDetails_1eSet pd ON Plots.ID = pd.IDPlots);"
+
+query_dendro2 <-
+    "SELECT Plots.ID AS plot_id,
+        Plots.Plottype AS plottype,
+        IIf(Plots.Area_ha IS NULL, Plots.Area_m2 / 10000, Plots.Area_ha) AS totalplotarea_ha,
+        Trees.ID AS tree_measure_id,
+        (Trees.X_m - Plots.Xorig_m) AS x_local, (Trees.Y_m - Plots.Yorig_m) AS y_local,
+        pd.ForestReserve AS forest_reserve,
+        pd.Date_dendro_2eSet AS date_dendro,
+        pd.rA1 AS r_A1, pd.rA2 AS r_A2, pd.rA3 AS r_A3, pd.rA4 AS r_A4,
+        pd.TresHoldDBH_Trees_A3_alive AS dbh_min_a3,
+        pd.TresHoldDBH_Trees_A3_dead AS dbh_min_a3_dead,
+        pd.TresHoldDBH_Trees_A4_alive AS dbh_min_a4,
+        pd.TresHoldDBH_Trees_A4_dead AS dbh_min_a4_dead,
+        pd.TresHoldDBH_Trees_CoreArea_alive AS dbh_min_core_area,
+        pd.TresHoldDBH_Trees_CoreArea_dead AS dbh_min_core_area_dead,
+        pd.LengthCoreArea_m AS length_core_area_m,
+        pd.WidthCoreArea_m AS width_core_area_m,
+        pd.Area_ha AS core_area_ha,
+        pd.Survey_Trees_YN AS survey_trees,
+        pd.DataProcessed_YN AS data_processed,
+        Trees.DBH_mm AS dbh_mm,
+        Trees.Height_m AS height_m,
+        Trees.Species AS species,
+        Trees.AliveDead AS alive_dead,
+        Trees.DecayStage AS decaystage,
+        Trees.Vol_tot_m3 AS vol_tot_m3,
+        Trees.Vol_stem_m3 AS vol_stem_m3,
+        Trees.Vol_crown_m3 AS vol_crown_m3,
+        Trees.BasalArea_m2 AS basal_area_m2,
+        Trees.IndShtCop AS ind_sht_cop,
+        Trees.TreeNumber AS tree_number,
+        Trees.Individual AS individual,
+        Trees.OldID as old_id
+      FROM ((Plots INNER JOIN Trees_2eSET Trees ON Plots.ID = Trees.IDPlots)
+        INNER JOIN PlotDetails_2eSet pd ON Plots.ID = pd.IDPlots);"
+
+query_dendro3 <-
+  "SELECT Plots.ID AS plot_id,
+        Plots.Plottype AS plottype,
+        IIf(Plots.Area_ha IS NULL, Plots.Area_m2 / 10000, Plots.Area_ha) AS totalplotarea_ha,
+        Trees.ID AS tree_measure_id,
+        (Trees.X_m - Plots.Xorig_m) AS x_local, (Trees.Y_m - Plots.Yorig_m) AS y_local,
+        pd.ForestReserve AS forest_reserve,
+        pd.Date_dendro_3eSet AS date_dendro,
+        pd.rA1 AS r_A1, pd.rA2 AS r_A2, pd.rA3 AS r_A3, pd.rA4 AS r_A4,
+        pd.TresHoldDBH_Trees_A3_alive AS dbh_min_a3,
+        pd.TresHoldDBH_Trees_A3_dead AS dbh_min_a3_dead,
+        pd.TresHoldDBH_Trees_A4_alive AS dbh_min_a4,
+        pd.TresHoldDBH_Trees_A4_dead AS dbh_min_a4_dead,
+        pd.TresHoldDBH_Trees_CoreArea_alive AS dbh_min_core_area,
+        pd.TresHoldDBH_Trees_CoreArea_dead AS dbh_min_core_area_dead,
+        pd.LengthCoreArea_m AS length_core_area_m,
+        pd.WidthCoreArea_m AS width_core_area_m,
+        pd.Area_ha AS core_area_ha,
+        pd.Survey_Trees_YN AS survey_trees,
+        pd.DataProcessed_YN AS data_processed,
+        Trees.DBH_mm AS dbh_mm,
+        Trees.Height_m AS height_m,
+        Trees.Species AS species,
+        Trees.AliveDead AS alive_dead,
+        Trees.DecayStage AS decaystage,
+        Trees.Vol_tot_m3 AS vol_tot_m3,
+        Trees.Vol_stem_m3 AS vol_stem_m3,
+        Trees.Vol_crown_m3 AS vol_crown_m3,
+        Trees.BasalArea_m2 AS basal_area_m2,
+        Trees.IndShtCop AS ind_sht_cop,
+        Trees.TreeNumber AS tree_number,
+        Trees.Individual AS individual,
+        Trees.OldID as old_id
+      FROM ((Plots INNER JOIN Trees_3eSET Trees ON Plots.ID = Trees.IDPlots)
+        INNER JOIN PlotDetails_3eSet pd ON Plots.ID = pd.IDPlots);"
+
+con <- odbcConnectAccess2007(path_to_fieldmap)
+data_dendro <- sqlQuery(con, query_dendro, stringsAsFactors = FALSE) %>%
+  mutate(
+    period = 1
+  ) %>%
+  bind_rows(
+    sqlQuery(con, query_dendro2, stringsAsFactors = FALSE) %>%
+      mutate(
+        period = 2
+      )
+  ) %>%
+  bind_rows(
+    sqlQuery(con, query_dendro3, stringsAsFactors = FALSE) %>%
+      mutate(
+        period = 3
+      )
+  ) %>%
+  mutate(
+    year = year(round_date(.data$date_dendro, "year")) - 1,
+    subcircle =
+      ifelse(
+        .data$alive_dead == 11 & .data$dbh_mm >= dbh_min_a4,
+        "A4",
+        ifelse(
+          .data$alive_dead == 12 & .data$dbh_mm >= dbh_min_a4_dead,
+          "A4",
+          "A3"
+        )
+      ),
+    subcirclearea_ha =
+      ifelse(
+        .data$subcircle == "A4",
+        (pi * .data$r_A4 ^ 2)/10000,
+        (pi * .data$r_A3 ^ 2)/10000
+      ),
+    plotarea_ha =
+      ifelse(
+        .data$plottype == 20,
+        .data$subcirclearea_ha,
+        NA
+      ),
+    plotarea_ha =
+      ifelse(
+        .data$plottype == 30,
+        (.data$length_core_area_m * .data$width_core_area_m)/10000,
+        .data$plotarea_ha
+      ),
+    plotarea_ha =
+      ifelse(
+        .data$plottype == 30 & is.na(.data$plotarea_ha),
+        .data$core_area_ha,
+        .data$plotarea_ha
+      ),
+    plotarea_ha =
+      ifelse(
+        is.na(.data$plotarea_ha),
+        .data$totalplotarea_ha,
+        .data$plotarea_ha
+      ),
+     basal_area_alive_m2_ha =
+        ifelse(
+          .data$alive_dead == 11,
+          .data$basal_area_m2 / .data$plotarea_ha,
+          0
+        ),
+      basal_area_snag_m2_ha =
+        ifelse(
+          .data$alive_dead == 12,
+          .data$basal_area_m2 / .data$plotarea_ha,
+          0
+        ),
+      volume_alive_m3_ha =
+        ifelse(
+          .data$alive_dead == 11,
+          .data$vol_tot_m3 / .data$plotarea_ha,
+          0
+        ),
+      volume_snag_m3_ha =
+        ifelse(
+          .data$alive_dead == 12,
+          .data$vol_tot_m3 / .data$plotarea_ha,
+          0
+        ),
+      volume_stem_alive_m3_ha =
+        ifelse(
+          .data$alive_dead == 11,
+          .data$vol_stem_m3 / .data$plotarea_ha,
+          0
+        ),
+      volume_stem_snag_m3_ha =
+        ifelse(
+          .data$alive_dead == 12,
+          .data$vol_stem_m3 / .data$plotarea_ha,
+          0
+        ),
+    dbh_class_5cm = give_diamclass_5cm(.data$dbh_mm)
+  )
+odbcClose(con)
+
+table(data_dendro$period, data_dendro$forest_reserve)
+
+```
+
+```{r controle_zero_trees}
+# ev. extra plots toevoegen waar géén trees opgemeten werden
+# BETER OM DIT TE DOEN AAN RESULTATEN
+# species = 1000 BRAAK
+
+# teruggrijpen naar plotinfo
+
+data_dendro2 <- data_dendro %>% 
+  full_join(plotinfo %>% filter(data_processed == 10 & data_processed == 10), by = c("period", "plot_id"))
+
+# CONTROLE
+extra_plots <- data_dendro2 %>% 
+  anti_join(data_dendro) %>% 
+  distinct(period, plot_id, forest_reserve.y, survey_trees.y, survey_deadw, survey_reg, survey_veg, data_processed.x, data_processed.y)
+
+write_csv2(extra_plots, "C:/3BR/1_DataVerwerkingBR/Output/Validatie/extra_plots_zero_trees.csv")
+
+names(data_dendro)
+# add_zero_values
+# data_dendro2 <- data_dendro2 %>% 
+#   mutate(vol_tot_m3 = ifelse(is.na(vol_tot_m3), 0, vol_tot_m3),
+#          vol_stem_m3 = ifelse(is.na(vol_stem_m3), 0, vol_stem_m3),
+#          vol_crown_m3 = ifelse(is.na(vol_crown_m3), 0, vol_crown_m3),
+#          basal_area_m2 = ifelse(is.na(basal_area_m2), 0, basal_area_m2),
+#          alive_dead = ifelse(is.na(alive_dead), 11, alive_dead),
+#          species = ifelse(is.na(species), 1000, species),  # braak/unstocked
+#          )
+
+```
+
+```{r load_data_dendro_only_processed}
+
+processed <- TRUE
+# default, kan ook FALSE voor datacontrole
+# momenteel hier nog niet mee werken, want nog te weinig extra processed én ook nog niet ingeladen in FM ...
+# Overlaten aan Els om te implementeren in package
+
+query_dendro <-
+    "SELECT Plots.ID AS plot_id,
+        Plots.Plottype AS plottype,
+        IIf(Plots.Area_ha IS NULL, Plots.Area_m2 / 10000, Plots.Area_ha) AS totalplotarea_ha,
+        Trees.ID AS tree_measure_id,
+        (Trees.X_m - Plots.Xorig_m) AS x_local, (Trees.Y_m - Plots.Yorig_m) AS y_local,
+        pd.ForestReserve AS forest_reserve,
+        pd.Date_dendro_1eSet AS date_dendro,
+        pd.rA1 AS r_A1, pd.rA2 AS r_A2, pd.rA3 AS r_A3, pd.rA4 AS r_A4,
+        pd.TresHoldDBH_Trees_A3_alive AS dbh_min_a3,
+        pd.TresHoldDBH_Trees_A3_dead AS dbh_min_a3_dead,
+        pd.TresHoldDBH_Trees_A4_alive AS dbh_min_a4,
+        pd.TresHoldDBH_Trees_A4_dead AS dbh_min_a4_dead,
+        pd.TresHoldDBH_Trees_CoreArea_alive AS dbh_min_core_area,
+        pd.TresHoldDBH_Trees_CoreArea_dead AS dbh_min_core_area_dead,
+        pd.LengthCoreArea_m AS length_core_area_m,
+        pd.WidthCoreArea_m AS width_core_area_m,
+        pd.Area_ha AS core_area_ha,
+        pd.Survey_Trees_YN AS survey_trees,
+        pd.DataProcessed_YN AS data_processed,
+        Trees.DBH_mm AS dbh_mm,
+        Trees.Height_m AS height_m,
+        Trees.Species AS species,
+        Trees.AliveDead AS alive_dead,
+        Trees.DecayStage AS decaystage,
+        Trees.Vol_tot_m3 AS vol_tot_m3,
+        Trees.Vol_stem_m3 AS vol_stem_m3,
+        Trees.Vol_crown_m3 AS vol_crown_m3,
+        Trees.BasalArea_m2 AS basal_area_m2,
+        Trees.IndShtCop AS ind_sht_cop,
+        Trees.TreeNumber AS tree_number,
+        Trees.Individual AS individual
+      FROM ((Plots INNER JOIN Trees ON Plots.ID = Trees.IDPlots)
+        INNER JOIN PlotDetails_1eSet pd ON Plots.ID = pd.IDPlots)
+        WHERE (((pd.Survey_Trees_YN)=10) AND ((pd.DataProcessed_YN)=10));"
+
+query_dendro2 <-
+    "SELECT Plots.ID AS plot_id,
+        Plots.Plottype AS plottype,
+        IIf(Plots.Area_ha IS NULL, Plots.Area_m2 / 10000, Plots.Area_ha) AS totalplotarea_ha,
+        Trees.ID AS tree_measure_id,
+        (Trees.X_m - Plots.Xorig_m) AS x_local, (Trees.Y_m - Plots.Yorig_m) AS y_local,
+        pd.ForestReserve AS forest_reserve,
+        pd.Date_dendro_2eSet AS date_dendro,
+        pd.rA1 AS r_A1, pd.rA2 AS r_A2, pd.rA3 AS r_A3, pd.rA4 AS r_A4,
+        pd.TresHoldDBH_Trees_A3_alive AS dbh_min_a3,
+        pd.TresHoldDBH_Trees_A3_dead AS dbh_min_a3_dead,
+        pd.TresHoldDBH_Trees_A4_alive AS dbh_min_a4,
+        pd.TresHoldDBH_Trees_A4_dead AS dbh_min_a4_dead,
+        pd.TresHoldDBH_Trees_CoreArea_alive AS dbh_min_core_area,
+        pd.TresHoldDBH_Trees_CoreArea_dead AS dbh_min_core_area_dead,
+        pd.LengthCoreArea_m AS length_core_area_m,
+        pd.WidthCoreArea_m AS width_core_area_m,
+        pd.Area_ha AS core_area_ha,
+        pd.Survey_Trees_YN AS survey_trees,
+        pd.DataProcessed_YN AS data_processed,
+        Trees.DBH_mm AS dbh_mm,
+        Trees.Height_m AS height_m,
+        Trees.Species AS species,
+        Trees.AliveDead AS alive_dead,
+        Trees.DecayStage AS decaystage,
+        Trees.Vol_tot_m3 AS vol_tot_m3,
+        Trees.Vol_stem_m3 AS vol_stem_m3,
+        Trees.Vol_crown_m3 AS vol_crown_m3,
+        Trees.BasalArea_m2 AS basal_area_m2,
+        Trees.IndShtCop AS ind_sht_cop,
+        Trees.TreeNumber AS tree_number,
+        Trees.Individual AS individual,
+        Trees.OldID as old_id
+      FROM ((Plots INNER JOIN Trees_2eSET Trees ON Plots.ID = Trees.IDPlots)
+        INNER JOIN PlotDetails_2eSet pd ON Plots.ID = pd.IDPlots)
+        WHERE (((pd.Survey_Trees_YN)=10) AND ((pd.DataProcessed_YN)=10));"
+
+query_dendro3 <-
+  "SELECT Plots.ID AS plot_id,
+        Plots.Plottype AS plottype,
+        IIf(Plots.Area_ha IS NULL, Plots.Area_m2 / 10000, Plots.Area_ha) AS totalplotarea_ha,
+        Trees.ID AS tree_measure_id,
+        (Trees.X_m - Plots.Xorig_m) AS x_local, (Trees.Y_m - Plots.Yorig_m) AS y_local,
+        pd.ForestReserve AS forest_reserve,
+        pd.Date_dendro_3eSet AS date_dendro,
+        pd.rA1 AS r_A1, pd.rA2 AS r_A2, pd.rA3 AS r_A3, pd.rA4 AS r_A4,
+        pd.TresHoldDBH_Trees_A3_alive AS dbh_min_a3,
+        pd.TresHoldDBH_Trees_A3_dead AS dbh_min_a3_dead,
+        pd.TresHoldDBH_Trees_A4_alive AS dbh_min_a4,
+        pd.TresHoldDBH_Trees_A4_dead AS dbh_min_a4_dead,
+        pd.TresHoldDBH_Trees_CoreArea_alive AS dbh_min_core_area,
+        pd.TresHoldDBH_Trees_CoreArea_dead AS dbh_min_core_area_dead,
+        pd.LengthCoreArea_m AS length_core_area_m,
+        pd.WidthCoreArea_m AS width_core_area_m,
+        pd.Area_ha AS core_area_ha,
+        pd.Survey_Trees_YN AS survey_trees,
+        pd.DataProcessed_YN AS data_processed,
+        Trees.DBH_mm AS dbh_mm,
+        Trees.Height_m AS height_m,
+        Trees.Species AS species,
+        Trees.AliveDead AS alive_dead,
+        Trees.DecayStage AS decaystage,
+        Trees.Vol_tot_m3 AS vol_tot_m3,
+        Trees.Vol_stem_m3 AS vol_stem_m3,
+        Trees.Vol_crown_m3 AS vol_crown_m3,
+        Trees.BasalArea_m2 AS basal_area_m2,
+        Trees.IndShtCop AS ind_sht_cop,
+        Trees.TreeNumber AS tree_number,
+        Trees.Individual AS individual,
+        Trees.OldID as old_id
+      FROM ((Plots INNER JOIN Trees_3eSET Trees ON Plots.ID = Trees.IDPlots)
+        INNER JOIN PlotDetails_3eSet pd ON Plots.ID = pd.IDPlots)
+        WHERE (((pd.Survey_Trees_YN)=10) AND ((pd.DataProcessed_YN)=10));"
+
+con <- odbcConnectAccess2007(path_to_fieldmap)
+data_dendro_processed <- sqlQuery(con, query_dendro, stringsAsFactors = FALSE) %>%
+  mutate(
+    period = 1
+  ) %>%
+  bind_rows(
+    sqlQuery(con, query_dendro2, stringsAsFactors = FALSE) %>%
+      mutate(
+        period = 2
+      )
+  ) %>%
+  #### 3de periode dan leeg
+  # bind_rows(
+  #   sqlQuery(con, query_dendro3, stringsAsFactors = FALSE) %>%
+  #     mutate(
+  #       period = 3
+  #     )
+  # ) %>%
+  mutate(
+    year = year(round_date(.data$date_dendro, "year")) - 1,
+    subcircle =
+      ifelse(
+        .data$alive_dead == 11 & .data$dbh_mm >= dbh_min_a4,
+        "A4",
+        ifelse(
+          .data$alive_dead == 12 & .data$dbh_mm >= dbh_min_a4_dead,
+          "A4",
+          "A3"
+        )
+      ),
+    subcirclearea_ha =
+      ifelse(
+        .data$subcircle == "A4",
+        (pi * .data$r_A4 ^ 2)/10000,
+        (pi * .data$r_A3 ^ 2)/10000
+      ),
+    plotarea_ha =
+      ifelse(
+        .data$plottype == 20,
+        .data$subcirclearea_ha,
+        NA
+      ),
+    plotarea_ha =
+      ifelse(
+        .data$plottype == 30,
+        (.data$length_core_area_m * .data$width_core_area_m)/10000,
+        .data$plotarea_ha
+      ),
+    plotarea_ha =
+      ifelse(
+        .data$plottype == 30 & is.na(.data$plotarea_ha),
+        .data$core_area_ha,
+        .data$plotarea_ha
+      ),
+    plotarea_ha =
+      ifelse(
+        is.na(.data$plotarea_ha),
+        .data$totalplotarea_ha,
+        .data$plotarea_ha
+      ),
+     basal_area_alive_m2_ha =
+        ifelse(
+          .data$alive_dead == 11,
+          .data$basal_area_m2 / .data$plotarea_ha,
+          0
+        ),
+      basal_area_snag_m2_ha =
+        ifelse(
+          .data$alive_dead == 12,
+          .data$basal_area_m2 / .data$plotarea_ha,
+          0
+        ),
+      volume_alive_m3_ha =
+        ifelse(
+          .data$alive_dead == 11,
+          .data$vol_tot_m3 / .data$plotarea_ha,
+          0
+        ),
+      volume_snag_m3_ha =
+        ifelse(
+          .data$alive_dead == 12,
+          .data$vol_tot_m3 / .data$plotarea_ha,
+          0
+        ),
+      volume_stem_alive_m3_ha =
+        ifelse(
+          .data$alive_dead == 11,
+          .data$vol_stem_m3 / .data$plotarea_ha,
+          0
+        ),
+      volume_stem_snag_m3_ha =
+        ifelse(
+          .data$alive_dead == 12,
+          .data$vol_stem_m3 / .data$plotarea_ha,
+          0
+        ),
+    dbh_class_5cm = give_diamclass_5cm(.data$dbh_mm)
+  )
+odbcClose(con)
+
+table(data_dendro_processed$period, data_dendro_processed$forest_reserve)
+
+```
+
+
+```{r load_data_deadwood}
+# con <- odbcConnectAccess2007(path_to_fieldmap)
+# deadw_FM <- sqlFetch(con, "Deadwood")
+# odbcClose(con)
+
+# TE ZWAAR
+
+query_deadwood <-
+      "SELECT Plots.ID AS plot_id,
+        Plots.Plottype AS plottype,
+        IIf(Plots.Area_ha IS NULL, Plots.Area_m2 / 10000, Plots.Area_ha) AS totalplotarea_ha,
+        pd.ForestReserve AS forest_reserve,
+        pd.Date_dendro_1eSet AS date_dendro,
+        pd.rA1 AS r_A1, pd.rA2 AS r_A2, pd.rA3 AS r_A3, pd.rA4 AS r_A4,
+        pd.LengthCoreArea_m AS length_core_area_m,
+        pd.WidthCoreArea_m AS width_core_area_m,
+        pd.Area_ha AS core_area_ha,
+        pd.Survey_Deadwood_YN AS survey_deadw,
+        pd.DataProcessed_YN AS data_processed,
+        Deadwood.ID AS lying_deadw_id,
+        Deadwood.Species AS species,
+        Deadwood.DecayStage AS decaystage,
+        Deadwood.CalcVolume_m3 AS calc_volume_m3,
+        Deadwood.MaxDiam_mm AS max_diam_mm,
+        Deadwood.TreeNumber AS tree_number
+      FROM ((Plots INNER JOIN Deadwood ON Plots.ID = Deadwood.IDPlots)
+        INNER JOIN PlotDetails_1eSet pd ON Plots.ID = pd.IDPlots);"
+
+  query_deadwood2 <-
+      "SELECT Plots.ID AS plot_id,
+        Plots.Plottype AS plottype,
+        IIf(Plots.Area_ha IS NULL, Plots.Area_m2 / 10000, Plots.Area_ha) AS totalplotarea_ha,
+        pd.ForestReserve AS forest_reserve,
+        pd.Date_dendro_2eSet AS date_dendro,
+        pd.rA1 AS r_A1, pd.rA2 AS r_A2, pd.rA3 AS r_A3, pd.rA4 AS r_A4,
+        pd.LengthCoreArea_m AS length_core_area_m,
+        pd.WidthCoreArea_m AS width_core_area_m,
+        pd.Survey_Deadwood_YN AS survey_deadw,
+        pd.DataProcessed_YN AS data_processed,
+        Deadwood.ID AS lying_deadw_id,
+        Deadwood.Species AS species,
+        Deadwood.DecayStage AS decaystage,
+        Deadwood.CalcVolume_m3 AS calc_volume_m3,
+        Deadwood.MaxDiam_mm AS max_diam_mm,
+        Deadwood.TreeNumber AS tree_number
+      FROM ((Plots INNER JOIN Deadwood_2eSET Deadwood ON Plots.ID = Deadwood.IDPlots)
+        INNER JOIN PlotDetails_2eSet pd ON Plots.ID = pd.IDPlots);"
+
+  query_deadwood3 <-
+      "SELECT Plots.ID AS plot_id,
+        Plots.Plottype AS plottype,
+        IIf(Plots.Area_ha IS NULL, Plots.Area_m2 / 10000, Plots.Area_ha) AS totalplotarea_ha,
+        pd.ForestReserve AS forest_reserve,
+        pd.Date_dendro_3eSet AS date_dendro,
+        pd.rA1 AS r_A1, pd.rA2 AS r_A2, pd.rA3 AS r_A3, pd.rA4 AS r_A4,
+        pd.LengthCoreArea_m AS length_core_area_m,
+        pd.WidthCoreArea_m AS width_core_area_m,
+        pd.Survey_Deadwood_YN AS survey_deadw,
+        pd.DataProcessed_YN AS data_processed,
+        Deadwood.ID AS lying_deadw_id,
+        Deadwood.Species AS species,
+        Deadwood.DecayStage AS decaystage,
+        Deadwood.CalcVolume_m3 AS calc_volume_m3,
+        Deadwood.MaxDiam_mm AS max_diam_mm,
+        Deadwood.TreeNumber AS tree_number
+      FROM ((Plots INNER JOIN Deadwood_3eSET Deadwood ON Plots.ID = Deadwood.IDPlots)
+        INNER JOIN PlotDetails_3eSet pd ON Plots.ID = pd.IDPlots);"
+
+
+  con <- odbcConnectAccess2007(path_to_fieldmap)
+  data_deadwood <- sqlQuery(con, query_deadwood, stringsAsFactors = FALSE) %>%
+    mutate(
+      period = 1
+    ) %>%
+    bind_rows(
+      sqlQuery(con, query_deadwood2, stringsAsFactors = FALSE) %>%
+        mutate(
+          period = 2
+        )
+    ) %>%
+    bind_rows(
+      sqlQuery(con, query_deadwood3, stringsAsFactors = FALSE) %>%
+        mutate(
+          period = 3
+        )
+    ) %>%
+    mutate(
+      year = year(round_date(.data$date_dendro, "year")) - 1,
+      dbh_class_5cm = give_diamclass_5cm(.data$max_diam_mm),
+      plotarea_ha =
+        ifelse(
+          .data$plottype == 20,
+          (pi * .data$r_A4 ^ 2)/10000,
+          NA
+        ),
+      plotarea_ha =
+        ifelse(
+          .data$plottype == 30,
+          .data$length_core_area_m * .data$width_core_area_m,
+          .data$plotarea_ha
+        ),
+      plotarea_ha =
+        ifelse(
+          is.na(.data$plotarea_ha),
+          .data$totalplotarea_ha,
+          .data$plotarea_ha
+        )
+    )
+  odbcClose(con)
+
+```
+
+
+```{r controle_zero_deadw}
+
+# ev. extra plots toevoegen waar géén deadw opgemeten werd
+# teruggrijpen naar plotinfo
+
+data_deadwood2 <- data_deadwood %>% 
+  full_join(plotinfo %>% filter(data_processed == 10 & survey_deadw == 10), by = c("period", "plot_id"))
+
+# CONTROLE
+extra_plots_deadw <- data_deadwood2 %>% 
+  anti_join(data_deadwood) %>% 
+  distinct(period, plot_id, forest_reserve.y, survey_trees, survey_deadw.y, survey_reg, survey_veg, data_processed.x, data_processed.y)
+
+write_csv2(extra_plots_deadw, "C:/3BR/1_DataVerwerkingBR/Output/Validatie/extra_plots_zero_deadw.csv")
+
+```
+
+```{r load_data_shoots}
+  query_shoots <-
+    "SELECT Shoots.IDPlots AS plot_id,
+      Shoots.IDTrees AS tree_measure_id,
+      Shoots.ID AS shoot_measure_id,
+      Shoots.DBH_mm AS dbh_mm,
+      Shoots.Height_m AS height_m,
+      Shoots.DecayStage_Shoots as decaystage
+    FROM Shoots;"
+
+  query_shoots2 <-
+    "SELECT Shoots.IDPlots AS plot_id,
+      Shoots.IDTrees_2eSet AS tree_measure_id,
+      Shoots.ID AS shoot_measure_id,
+      Shoots.DBH_mm AS dbh_mm,
+      Shoots.Height_m AS height_m,
+      Shoots.DecayStage_shoots as decaystage
+    FROM Shoots_2eSet Shoots;"
+
+  query_shoots3 <-
+    "SELECT Shoots.IDPlots AS plot_id,
+      Shoots.IDTrees_3eSet AS tree_measure_id,
+      Shoots.ID AS shoot_measure_id,
+      Shoots.DBH_mm AS dbh_mm,
+      Shoots.Height_m AS height_m,
+      Shoots.DecayStage_shoots as decaystage
+    FROM Shoots_3eSet Shoots;"
+
+
+  con <- odbcConnectAccess2007(path_to_fieldmap)
+  data_shoots <- sqlQuery(con, query_shoots, stringsAsFactors = FALSE) %>%
+    mutate(
+      period = 1
+    ) %>%
+    bind_rows(
+      sqlQuery(con, query_shoots2, stringsAsFactors = FALSE) %>%
+        mutate(
+          period = 2
+        )
+    ) %>%
+    bind_rows(
+      sqlQuery(con, query_shoots3, stringsAsFactors = FALSE) %>%
+        mutate(
+          period = 3
+        )
+    )
+  odbcClose(con)
+
+```
+
+```{r load_data_herblayer}
+ query_herblayer <-
+        "SELECT Plots.ID AS plot_id,
+          Plots.Plottype AS plottype,
+          IIf(Plots.Area_ha IS NULL, Plots.Area_m2 / 10000, Plots.Area_ha) AS totalplotarea_ha,
+          pd.ForestReserve AS forest_reserve,
+          pd.LengthCoreArea_m AS length_core_area_m,
+          pd.WidthCoreArea_m AS width_core_area_m,
+          pd.Area_ha AS core_area_ha,
+          Veg.ID AS subplot_id,
+          Herb.Deviating_date AS deviating_date,
+          Veg.Date AS date_vegetation,
+          Veg.Year AS year_record,
+          Herb.Species as species,
+          Herb.Coverage AS coverage_id,
+          qCoverHerbs.Value2 AS coverage_class_average,
+          Herb.BrowseIndex AS browse_index_id
+        FROM ((((Plots
+          INNER JOIN PlotDetails_1eSet pd ON Plots.ID = pd.IDPlots)
+          INNER JOIN Vegetation Veg ON Plots.ID = Veg.IDPlots)
+          INNER JOIN Herblayer Herb
+            ON Veg.IDPlots = Herb.IDPlots AND Veg.Id = Herb.IDVegetation)
+          INNER JOIN qCoverHerbs ON Herb.Coverage = qCoverHerbs.ID);"
+
+    query_herblayer2 <-
+        "SELECT Plots.ID AS plot_id,
+          Plots.Plottype AS plottype,
+          IIf(Plots.Area_ha IS NULL, Plots.Area_m2 / 10000, Plots.Area_ha) AS totalplotarea_ha,
+          pd.ForestReserve AS forest_reserve,
+          pd.LengthCoreArea_m AS length_core_area_m,
+          pd.WidthCoreArea_m AS width_core_area_m,
+          pd.Area_ha AS core_area_ha,
+          pd.Survey_Vegetation_YN AS survey_veg,
+          pd.DataProcessed_YN AS data_processed,
+          Veg.ID AS subplot_id,
+          Herb.Deviating_date AS deviating_date,
+          Veg.Date AS date_vegetation,
+          Veg.Year AS year_record,
+          Herb.Species as species,
+          Herb.Coverage AS coverage_id,
+          qCoverHerbs.Value2 AS coverage_class_average,
+          Herb.BrowseIndex AS browse_index_id
+        FROM ((((Plots
+          INNER JOIN PlotDetails_2eSet pd ON Plots.ID = pd.IDPlots)
+          INNER JOIN Vegetation_2eSet Veg ON Plots.ID = Veg.IDPlots)
+          INNER JOIN Herblayer_2eSet Herb
+            ON Veg.IDPlots = Herb.IDPlots AND Veg.Id = Herb.IDVegetation_2eSet)
+          INNER JOIN qCoverHerbs ON Herb.Coverage = qCoverHerbs.ID);"
+
+    query_herblayer3 <-
+        "SELECT Plots.ID AS plot_id,
+          Plots.Plottype AS plottype,
+          IIf(Plots.Area_ha IS NULL, Plots.Area_m2 / 10000, Plots.Area_ha) AS totalplotarea_ha,
+          pd.ForestReserve AS forest_reserve,
+          pd.LengthCoreArea_m AS length_core_area_m,
+          pd.WidthCoreArea_m AS width_core_area_m,
+          pd.Area_ha AS core_area_ha,
+          pd.Survey_Vegetation_YN AS survey_veg,
+          pd.DataProcessed_YN AS data_processed,
+          Veg.ID AS subplot_id,
+          Herb.Deviating_date AS deviating_date,
+          Veg.Date AS date_vegetation,
+          Veg.Year AS year_record,
+          Herb.Species as species,
+          Herb.Coverage AS coverage_id,
+          qCoverHerbs.Value2 AS coverage_class_average,
+          Herb.BrowseIndex AS browse_index_id
+        FROM ((((Plots
+          INNER JOIN PlotDetails_3eSet pd ON Plots.ID = pd.IDPlots)
+          INNER JOIN Vegetation_3eSet Veg ON Plots.ID = Veg.IDPlots)
+          INNER JOIN Herblayer_3eSet Herb
+            ON Veg.IDPlots = Herb.IDPlots AND Veg.Id = Herb.IDVegetation_3eSet)
+          INNER JOIN qCoverHerbs ON Herb.Coverage = qCoverHerbs.ID);"
+
+  con <- odbcConnectAccess2007(path_to_fieldmap)
+  data_herblayer <- sqlQuery(con, query_herblayer, stringsAsFactors = FALSE) %>%
+    mutate(
+      period = 1
+    ) %>%
+    bind_rows(
+      sqlQuery(con, query_herblayer2, stringsAsFactors = FALSE) %>%
+        mutate(
+          period = 2
+        )
+    ) %>%
+    bind_rows(
+      sqlQuery(con, query_herblayer3, stringsAsFactors = FALSE) %>%
+        mutate(
+          period = 3
+        )
+    )%>%
+    mutate(
+      year =
+        ifelse(
+          is.na(.data$deviating_date),
+          year(.data$date_vegetation),
+          year(.data$deviating_date)
+        ),
+      year = ifelse(is.na(.data$year), .data$year_record, .data$year),
+      plotarea_ha =
+        ifelse(
+          .data$plottype == 20,
+          0.16 * 0.16,
+          NA
+        ),
+      plotarea_ha =
+        ifelse(
+          .data$plottype == 30,
+          (.data$length_core_area_m * .data$width_core_area_m)/10000,
+          .data$plotarea_ha
+        ),
+      plotarea_ha =
+        ifelse(
+          .data$plottype == 30 & is.na(.data$plotarea_ha),
+          .data$core_area_ha,
+          .data$plotarea_ha
+        ),
+      plotarea_ha =
+        ifelse(
+          is.na(.data$plotarea_ha),
+          .data$totalplotarea_ha,
+          .data$plotarea_ha
+        ),
+      coverage_class_average_perc =
+        as.numeric(gsub(",", ".", .data$coverage_class_average)) * 100,
+      coverage_class_average = NULL
+    )
+  odbcClose(con)
+
+```
+
+```{r load_data_regeneration}
+# In issue aan Els gevraagd om ook mean_nr toe te voegen (hier reeds zelf  gedaan
+# ook gevraagd om obv heightclass )
+
+
+query_regeneration <-
+        "SELECT Plots.ID AS plot_id,
+          Plots.Plottype AS plottype,
+          IIf(Plots.Area_ha IS NULL, Plots.Area_m2 / 10000, Plots.Area_ha) AS totalplotarea_ha,
+          pd.ForestReserve AS forest_reserve, pd.rA2 AS r_A2, pd.rA1 AS r_A1,
+          pd.LengthCoreArea_m AS length_core_area_m,
+          pd.WidthCoreArea_m AS width_core_area_m,
+          pd.Area_ha AS core_area_ha,
+          pd.Survey_Regeneration_YN AS survey_reg,
+          pd.DataProcessed_YN AS data_processed,
+          Reg.ID AS subplot_id,
+          Reg.Date AS date_regeneration,
+          Reg.Year AS year_record,
+          Subquery.height_class,
+          Subquery.species,
+          Subquery.number_class,
+          Subquery.reg_number,
+          Subquery.rubbing_damage_number
+        FROM (((Plots INNER JOIN PlotDetails_1eSet AS pd ON Plots.ID = pd.IDPlots)
+          INNER JOIN Regeneration AS Reg ON Plots.ID = Reg.IDPlots)
+          LEFT JOIN
+            (SELECT HeightClass.HeightClass AS height_class,
+              RegSpecies.Species AS species,
+              RegSpecies.NumberClass AS number_class,
+              RegSpecies.Number AS reg_number,
+              RegSpecies.GameDamage_number AS rubbing_damage_number,
+              HeightClass.IDRegeneration, HeightClass.IDPlots
+            FROM HeightClass INNER JOIN RegSpecies
+                ON HeightClass.IDRegeneration = RegSpecies.IDRegeneration
+                AND HeightClass.IDPlots = RegSpecies.IDPlots
+                AND HeightClass.ID = RegSpecies.IDHeightClass) AS Subquery
+            ON Reg.ID = Subquery.IDRegeneration
+            AND Reg.IDPlots = Subquery.IDPlots)
+            WHERE Reg.Date Is Not Null OR Reg.Year Is Not Null;"
+
+    query_regeneration2 <-
+        "SELECT Plots.ID AS plot_id,
+          Plots.Plottype AS plottype,
+          IIf(Plots.Area_ha IS NULL, Plots.Area_m2 / 10000, Plots.Area_ha) AS totalplotarea_ha,
+          pd.ForestReserve AS forest_reserve,  pd.rA2 AS r_A2, pd.rA1 AS r_A1,
+          pd.LengthCoreArea_m AS length_core_area_m,
+          pd.WidthCoreArea_m AS width_core_area_m,
+          pd.Area_ha AS core_area_ha,
+          pd.Survey_Regeneration_YN AS survey_reg,
+          pd.DataProcessed_YN AS data_processed,
+          Reg.ID AS subplot_id,
+          Reg.Date AS date_regeneration,
+          Reg.Year AS year_record,
+          Subquery.height_class,
+          Subquery.species,
+          Subquery.number_class,
+          Subquery.reg_number,
+          Subquery.rubbing_damage_number
+        FROM (((Plots INNER JOIN PlotDetails_2eSet AS pd ON Plots.ID = pd.IDPlots)
+          INNER JOIN Regeneration_2eSet AS Reg ON Plots.ID = Reg.IDPlots)
+          LEFT JOIN
+            (SELECT hc.HeightClass AS height_class,
+              rs.Species AS species,
+              rs.NumberClass AS number_class,
+              rs.Number AS reg_number,
+              rs.GameDamage_number AS rubbing_damage_number,
+              hc.IDRegeneration_2eSet, hc.IDPlots
+            FROM HeightClass_2eSet hc
+              INNER JOIN RegSpecies_2eSet rs
+                ON hc.IDRegeneration_2eSet = rs.IDRegeneration_2eSet
+                AND hc.IDPlots = rs.IDPlots
+                AND hc.ID = rs.IDHeightClass_2eSet) AS Subquery
+            ON Reg.ID = Subquery.IDRegeneration_2eSet
+            AND Reg.IDPlots = Subquery.IDPlots)
+            WHERE Reg.Date Is Not Null OR Reg.Year Is Not Null;"
+
+query_regeneration3 <-
+        "SELECT Plots.ID AS plot_id,
+          Plots.Plottype AS plottype,
+          IIf(Plots.Area_ha IS NULL, Plots.Area_m2 / 10000, Plots.Area_ha) AS totalplotarea_ha,
+          pd.ForestReserve AS forest_reserve,  pd.rA2 AS r_A2, pd.rA1 AS r_A1,
+          pd.LengthCoreArea_m AS length_core_area_m,
+          pd.WidthCoreArea_m AS width_core_area_m,
+          pd.Area_ha AS core_area_ha,
+          pd.Survey_Regeneration_YN AS survey_reg,
+          pd.DataProcessed_YN AS data_processed,
+          Reg.ID AS subplot_id,
+          Reg.Date AS date_regeneration,
+          Reg.Year AS year_record,
+          Subquery.height_class,
+          Subquery.species,
+          Subquery.number_class,
+          Subquery.reg_number,
+          Subquery.rubbing_damage_number
+        FROM (((Plots INNER JOIN PlotDetails_3eSet AS pd ON Plots.ID = pd.IDPlots)
+          INNER JOIN Regeneration_3eSet AS Reg ON Plots.ID = Reg.IDPlots)
+          LEFT JOIN
+            (SELECT hc.HeightClass AS height_class,
+              rs.Species AS species,
+              rs.NumberClass AS number_class,
+              rs.Number AS reg_number,
+              rs.GameDamage_number AS rubbing_damage_number,
+              hc.IDRegeneration_3eSet, hc.IDPlots
+            FROM HeightClass_3eSet hc
+              INNER JOIN RegSpecies_3eSet rs
+                ON hc.IDRegeneration_3eSet = rs.IDRegeneration_3eSet
+                AND hc.IDPlots = rs.IDPlots
+                AND hc.ID = rs.IDHeightClass_3eSet) AS Subquery
+            ON Reg.ID = Subquery.IDRegeneration_3eSet
+            AND Reg.IDPlots = Subquery.IDPlots)
+            WHERE Reg.Date Is Not Null OR Reg.Year Is Not Null;"
+
+  number_classes <-
+    data.frame(
+      id = c(1, 3, 8, 15, 30, 50, 80, 101, 1001),
+      number_class =
+        c("1", "2 - 5", "6 - 10", "11 - 20", "21 - 40", "41 - 60", "61 - 100", "> 100", "> 1000"),
+      min_number_of_trees = c(1, 2, 6, 11, 21, 41, 61, 101, 1001),
+      max_number_of_trees = c(1, 5, 10, 20, 40, 60, 100, 1000, NA),  
+      mean_number_of_trees = c(1, 3, 8, 15, 30, 50, 80, 101, 1001), 
+      stringsAsFactors = FALSE
+    )
+
+  con <- odbcConnectAccess2007(path_to_fieldmap)
+  data_regeneration <- sqlQuery(con, query_regeneration, stringsAsFactors = FALSE) %>%
+    mutate(
+      period = 1
+    ) %>%
+    bind_rows(
+      sqlQuery(con, query_regeneration2, stringsAsFactors = FALSE) %>%
+        mutate(
+          period = 2
+        )
+    ) %>%
+    bind_rows(
+      sqlQuery(con, query_regeneration3, stringsAsFactors = FALSE) %>%
+        mutate(
+          period = 3
+        )
+    ) %>%
+    mutate(
+      year = year(.data$date_regeneration),
+      year = ifelse(is.na(.data$year), .data$year_record, .data$year),
+      subcircle =
+        ifelse(
+          .data$height_class %in% c(3000, 4000, 6000, 7000, 8000),
+          "A2",
+          ifelse(
+            .data$height_class %in% c(1000, 2000, 5000),
+            "A1",
+            NA_character_
+          )
+        ),
+      subcirclearea_ha =
+        ifelse(
+          .data$subcircle == "A2",
+          (pi * .data$r_A2 ^ 2)/10000,
+          (pi * .data$r_A1 ^ 2)/10000
+        ),
+      plotarea_ha =
+        ifelse(
+          .data$plottype == 20,
+          .data$subcirclearea_ha,
+          NA
+        ),
+      plotarea_ha =
+        ifelse(
+          .data$plottype == 30,
+          (.data$length_core_area_m * .data$width_core_area_m)/10000,
+          .data$plotarea_ha
+        ),
+      plotarea_ha =
+        ifelse(
+          .data$plottype == 30 & is.na(.data$plotarea_ha),
+          .data$core_area_ha,
+          .data$plotarea_ha
+        ),
+      plotarea_ha =
+        ifelse(
+          is.na(.data$plotarea_ha),
+          .data$totalplotarea_ha,
+          .data$plotarea_ha
+        ),
+      rubbing_damage_perc = .data$rubbing_damage_number * 100 / .data$reg_number
+    ) %>%
+    left_join(
+      number_classes %>%
+        select(-.data$number_class),
+      by = c("number_class" = "id")
+    ) %>%
+    mutate(
+      min_number_of_trees =
+        ifelse(
+          is.na(.data$min_number_of_trees),
+          .data$reg_number,
+          .data$min_number_of_trees
+        ),
+      max_number_of_trees =
+        ifelse(
+          is.na(.data$max_number_of_trees),
+          .data$reg_number,
+          .data$max_number_of_trees
+        ),
+      min_number_of_trees =
+        ifelse(
+          is.na(.data$min_number_of_trees) & is.na(.data$species),
+          0,
+          .data$min_number_of_trees
+        ),
+      max_number_of_trees =
+        ifelse(
+          is.na(.data$max_number_of_trees) & is.na(.data$species),
+          0,
+          .data$max_number_of_trees
+        ),
+      mean_number_of_trees =
+        # als lage hoogteklasse dan class, als hoger dan exact aantal, als dat niet beschikbaar is, net andersom
+        ifelse(subcircle == "A2" & !is.na(.data$reg_number), 
+               .data$reg_number,
+               ifelse(!is.na(.data$number_class), .data$mean_number_of_trees, reg_number)), 
+       mean_number_of_trees =
+        # als lage hoogteklasse dan class, als hoger dan exact aantal, als dat niet beschikbaar is, net andersom
+        ifelse(subcircle == "A1" & !is.na(.data$number_class),
+               .data$mean_number_of_trees,
+               ifelse(!is.na(.data$reg_number), .data$reg_number, mean_number_of_trees)),
+      # case_when geen optie
+      # mean_number_of_trees = case_when(
+      #   # als lage hoogteklasse dan class, als hoger dan exact aantal, als dat niet beschikbaar is, net andersom
+      #   # !! case_when: als niet voldaan wordt aan voorwaarde, dan NA
+      #   is.na(.data$mean_number_of_trees) ~ reg_number,
+      #   is.na(.data$mean_number_of_trees) ~ 0)
+    )
+  odbcClose(con)
+
+t <- data_regeneration %>% filter(is.na(height_class))
+t2 <- data_regeneration %>% filter(is.na(subcircle) & !is.na(height_class))
+# subcircle steeds ingevuld
+t3 <- data_regeneration %>% filter(is.na(height_class) & plottype == 20)
+# OK, plots zonder hoogteklasse, maar wel een IDreg bevatten geen verjonging => number = 0, heightclass = NA
+
+t4 <- data_regeneration %>% filter(plottype == 30)
+# verwarrend dat er een subcircle is, terwijl het over KV gaat
+# anderzijds kan het helpen om obdaarvan te kiezen voor number of number_class
+
+t5 <- data_regeneration %>% filter(is.na(mean_number_of_trees) & !is.na(max_number_of_trees) & subcircle == "A2")
+t6 <- data_regeneration %>% filter(is.na(mean_number_of_trees) & !is.na(max_number_of_trees) & subcircle == "A1")
+
+t7 <- data_regeneration %>% filter(is.na(number_class) & subcircle == "A1")
+t8 <- data_regeneration %>% filter(is.na(reg_number) & subcircle == "A2")
+t78 <- rbind(t7, t8) %>% 
+  select(plot_id, plottype, forest_reserve, period, height_class, species, number_class, reg_number, mean_number_of_trees)
+
+write_csv2(t78, paste0(path_to_output, "Validatie/reg_aantal_vs_aantalsklasse.csv"))
+table(t78$height_class)
+table(t78$forest_reserve)
+```
+
+
+
+```{r controle_zero_reg}
+
+# ev. extra plots toevoegen waar géén deadw opgemeten werd
+# teruggrijpen naar plotinfo
+
+data_regeneration2 <- data_regeneration %>% 
+  full_join(plotinfo %>% filter(data_processed == 10 & survey_reg == 10), by = c("period", "plot_id"))
+
+# CONTROLE
+extra_plots_reg <- data_regeneration2 %>% 
+  anti_join(data_regeneration) %>% 
+  distinct(period, plot_id, forest_reserve.y, survey_trees, survey_deadw, survey_reg.y, survey_veg, data_processed.x, data_processed.y)
+
+write_csv2(extra_plots_reg, "C:/3BR/1_DataVerwerkingBR/Output/Validatie/extra_plots_zero_reg.csv")
+
+# Hier enkel extra plots wanneer IDreg niet ingevuld is => daarom maar één plot
+# DUS normaalgezien reeds mee!!
+
+names(data_regeneration2)
+# # add_zero_values
+# data_regeneration3 <- data_regeneration2 %>% 
+#   mutate(mean_number_of_trees = ifelse(is.na(mean_number_of_trees), 0, mean_number_of_trees),
+#          rubbing_damage_perc = ifelse(is.na(rubbing_damage_perc), 0, rubbing_damage_perc)
+#   )
+# 
+# check <- data_regeneration3 %>% 
+#   filter(mean_number_of_trees == 0 & is.na(species))
+# # OK
+
+```
+
+
+
+```{r load_data_vegetation}
+# In issue aan Els gevraagd om ook mean_nr toe te voegen
+query_vegetation <-
+        "SELECT Plots.ID AS plot_id,
+          Plots.Plottype AS plottype,
+          IIf(Plots.Area_ha IS NULL, Plots.Area_m2 / 10000, Plots.Area_ha) AS totalplotarea_ha,
+          pd.ForestReserve AS forest_reserve,
+          pd.LengthCoreArea_m AS length_core_area_m,
+          pd.WidthCoreArea_m AS width_core_area_m,
+          pd.Area_ha AS core_area_ha,
+          pd.Survey_Vegetation_YN AS survey_veg,
+          pd.DataProcessed_YN AS data_processed,
+          Veg.ID AS subplot_id,
+          Veg.Date AS date_vegetation,
+          Veg.Year AS year_record,
+          Veg.Total_moss_cover AS total_moss_cover_id,
+          Veg.Total_herb_cover AS total_herb_cover_id,
+          Veg.Total_shrub_cover AS total_shrub_cover_id,
+          Veg.Total_tree_cover AS total_tree_cover_id,
+          Veg.Total_waterlayer_cover AS total_waterlayer_cover_id,
+          Veg.Total_SoildisturbanceGame As total_soildisturbance_game_id
+        FROM ((Plots
+          INNER JOIN PlotDetails_1eSet pd ON Plots.ID = pd.IDPlots)
+          INNER JOIN Vegetation Veg ON Plots.ID = Veg.IDPlots);"
+
+    query_vegetation2 <-
+        "SELECT Plots.ID AS plot_id,
+          Plots.Plottype AS plottype,
+          IIf(Plots.Area_ha IS NULL, Plots.Area_m2 / 10000, Plots.Area_ha) AS totalplotarea_ha,
+          pd.ForestReserve AS forest_reserve,
+          pd.LengthCoreArea_m AS length_core_area_m,
+          pd.WidthCoreArea_m AS width_core_area_m,
+          pd.Area_ha AS core_area_ha,
+          pd.Survey_Vegetation_YN AS survey_veg,
+          pd.DataProcessed_YN AS data_processed,
+          Veg.ID AS subplot_id,
+          Veg.Date AS date_vegetation,
+          Veg.Year AS year_record,
+          Veg.Total_moss_cover AS total_moss_cover_id,
+          Veg.Total_herb_cover AS total_herb_cover_id,
+          Veg.Total_shrub_cover AS total_shrub_cover_id,
+          Veg.Total_tree_cover AS total_tree_cover_id,
+          Veg.Total_waterlayer_cover AS total_waterlayer_cover_id,
+          Veg.Total_SoildisturbanceGame As total_soildisturbance_game_id
+        FROM ((Plots
+          INNER JOIN PlotDetails_2eSet pd ON Plots.ID = pd.IDPlots)
+          INNER JOIN Vegetation_2eSet Veg ON Plots.ID = Veg.IDPlots);"
+
+    query_vegetation3 <-
+        "SELECT Plots.ID AS plot_id,
+          Plots.Plottype AS plottype,
+          IIf(Plots.Area_ha IS NULL, Plots.Area_m2 / 10000, Plots.Area_ha) AS totalplotarea_ha,
+          pd.ForestReserve AS forest_reserve,
+          pd.LengthCoreArea_m AS length_core_area_m,
+          pd.WidthCoreArea_m AS width_core_area_m,
+          pd.Area_ha AS core_area_ha,
+          pd.Survey_Vegetation_YN AS survey_veg,
+          pd.DataProcessed_YN AS data_processed,          
+          Veg.ID AS subplot_id,
+          Veg.Date AS date_vegetation,
+          Veg.Year AS year_record,
+          Veg.Total_moss_cover AS total_moss_cover_id,
+          Veg.Total_herb_cover AS total_herb_cover_id,
+          Veg.Total_shrub_cover AS total_shrub_cover_id,
+          Veg.Total_tree_cover AS total_tree_cover_id,
+          Veg.Total_waterlayer_cover AS total_waterlayer_cover_id,
+          Veg.Total_SoildisturbanceGame As total_soildisturbance_game_id
+        FROM ((Plots
+          INNER JOIN PlotDetails_3eSet pd ON Plots.ID = pd.IDPlots)
+          INNER JOIN Vegetation_3eSet Veg ON Plots.ID = Veg.IDPlots);"
+
+    query_total_cover <-
+      "SELECT tc.ID AS id, tc.Value1 AS cover_interval FROM qtotalCover tc"
+
+  con <- odbcConnectAccess2007(path_to_fieldmap)
+  total_cover <- sqlQuery(con, query_total_cover, stringsAsFactors = FALSE) %>%
+    mutate(
+      min_cover = gsub("^(\\d+) - (\\d+) %", "\\1", .data$cover_interval),
+      max_cover = gsub("^(\\d+) - (\\d+) %", "\\2", .data$cover_interval),
+      min_cover = ifelse(.data$min_cover == "< 1%", 0, .data$min_cover),
+      max_cover = ifelse(.data$max_cover == "< 1%", 1, .data$max_cover),
+      min_cover = ifelse(.data$min_cover == "nvt", NA, .data$min_cover),
+      max_cover = ifelse(.data$max_cover == "nvt", NA, .data$max_cover),
+      min_cover = as.numeric(.data$min_cover),
+      max_cover = as.numeric(.data$max_cover)
+    )
+  data_vegetation <- sqlQuery(con, query_vegetation, stringsAsFactors = FALSE) %>%
+    mutate(
+      period = 1
+    ) %>%
+    bind_rows(
+      sqlQuery(con, query_vegetation2, stringsAsFactors = FALSE) %>%
+        mutate(
+          period = 2
+        )
+    ) %>%
+    bind_rows(
+      sqlQuery(con, query_vegetation3, stringsAsFactors = FALSE) %>%
+        mutate(
+          period = 3
+        )
+    ) %>%
+    mutate(
+      year = year(.data$date_vegetation),
+      year = ifelse(is.na(.data$year), .data$year_record, .data$year),
+      plotarea_ha =
+        ifelse(
+          .data$plottype == 20,
+          0.16 * 0.16,
+          NA
+        ),
+      plotarea_ha =
+        ifelse(
+          .data$plottype == 30,
+          (.data$length_core_area_m * .data$width_core_area_m)/10000,
+          .data$plotarea_ha
+        ),
+      plotarea_ha =
+        ifelse(
+          .data$plottype == 30 & is.na(.data$plotarea_ha),
+          .data$core_area_ha,
+          .data$plotarea_ha
+        ),
+      plotarea_ha =
+        ifelse(
+          is.na(.data$plotarea_ha),
+          .data$totalplotarea_ha,
+          .data$plotarea_ha
+        )
+    ) %>%
+    left_join(total_cover, by = c("total_moss_cover_id" = "id")) %>%
+    rename(
+      moss_cover_interval = .data$cover_interval,
+      moss_cover_min = .data$min_cover,
+      moss_cover_max = .data$max_cover
+    ) %>%
+    left_join(total_cover, by = c("total_herb_cover_id" = "id")) %>%
+    rename(
+      herb_cover_interval = .data$cover_interval,
+      herb_cover_min = .data$min_cover,
+      herb_cover_max = .data$max_cover
+    ) %>%
+    left_join(total_cover, by = c("total_shrub_cover_id" = "id")) %>%
+    rename(
+      shrub_cover_interval = .data$cover_interval,
+      shrub_cover_min = .data$min_cover,
+      shrub_cover_max = .data$max_cover
+    ) %>%
+    left_join(total_cover, by = c("total_tree_cover_id" = "id")) %>%
+    rename(
+      tree_cover_interval = .data$cover_interval,
+      tree_cover_min = .data$min_cover,
+      tree_cover_max = .data$max_cover
+    ) %>%
+    left_join(total_cover, by = c("total_waterlayer_cover_id" = "id")) %>%
+    rename(
+      waterlayer_cover_interval = .data$cover_interval,
+      waterlayer_cover_min = .data$min_cover,
+      waterlayer_cover_max = .data$max_cover
+    ) %>%
+    left_join(total_cover, by = c("total_soildisturbance_game_id" = "id")) %>%
+    rename(
+      soildisturbance_game_cover_interval = .data$cover_interval,
+      soildisturbance_game_cover_min = .data$min_cover,
+      soildisturbance_game_cover_max = .data$max_cover
+    )
+  odbcClose(con)
+  
+
+```
+
+
+```{r controle_zero_veg}
+# ev. extra plots toevoegen waar géén deadw opgemeten werd
+# teruggrijpen naar plotinfo
+
+data_vegetation2 <- data_vegetation %>% 
+  full_join(plotinfo %>% filter(data_processed == 10 & survey_veg == 10), by = c("period", "plot_id"))
+
+# CONTROLE
+extra_plots_veg <- data_vegetation2 %>% 
+  anti_join(data_vegetation) %>% 
+  distinct(period, plot_id, forest_reserve.y, survey_trees, survey_deadw, survey_veg.y, survey_reg, data_processed.x, data_processed.y)
+
+# 0 records
+write_csv2(extra_plots_reg, "C:/3BR/1_DataVerwerkingBR/Output/Validatie/extra_plots_zero_reg.csv")
+
+# Hier enkel extra plots wanneer IDreg niet ingevuld is => daarom maar één plot
+# DUS normaalgezien reeds mee!!
+
+
+names(data_vegetation2)
+# add_zero_values
+# data_vegetation3 <- data_vegetation2 %>% 
+#   mutate(mean_number_of_trees = ifelse(is.na(mean_number_of_trees), 0, mean_number_of_trees),
+#          rubbing_damage_perc = ifelse(is.na(rubbing_damage_perc), 0, rubbing_damage_perc)
+#   )
+# 
+# check <- data_vegetation3 %>% 
+#   filter(mean_number_of_trees == 0 & is.na(species))
+# OK
+
+```
+```{r remove_xxx_2}
+rm(data_deadwood2, data_dendro2, data_regeneration2, data_vegetation2)
+rm(t, t2, t3, t4)
+rm(t5, t6, t7, t78, t8)
+```
+

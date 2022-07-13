@@ -1,0 +1,339 @@
+---
+title: "Bekijken DH-curves van reeds "processed" bosreservaten"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: FALSE
+      smooth_scroll: FALSE
+---
+
+
+```{r Rm, eval = FALSE}
+# rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup_Forrescalc.R"))
+source(here::here("scripts/ExtraFunctions_volume.R"))
+```
+
+
+# De Heide
+Verwerkt in 2017.
+
+- Pas gestart met opnames, dus enkel 2eSET, geen 1eSET
+- Enkel cirkelplots
+- Niet in volledige perimeter, enkel in middelhout-stukken: zie beheer.shp
+
+
+Zie "hoogtecurves_DeHeide.xlsx" in C:\3BR\DeHeide\!Verwerking
+
+```{r import_DHorigineel_DeHeide}
+DH_DeHeide_origineel <- read_xlsx("C:/3BR/DeHeide/!Verwerking/hoogtecurves_DeHeide.xlsx")
+
+```
+
+## Welke boomsoorten komen voor?
+
+```{r bms_DeHeide}
+data_dendro_DeHeide <- data_dendro %>% 
+  filter(forest_reserve == "De heide")
+
+table(data_dendro$forest_reserve)
+
+bms <- data_dendro_DeHeide %>% distinct(species)
+
+# hoogtecurves
+bms_DH <- DH_DeHeide_origineel %>% distinct(Species)
+
+# evenveel bms-en
+table(DH_DeHeide_origineel$Species)
+
+```
+
+! De Heide: nog curves op plotniveau!
+
+Aangepast zdd algemene curves: immers maar één meting per soort op plotniveau, dus dan dat overnemen voor de andere.
+
+Is wel exp.  functie!!
+
+Waarom voor bepaalde soorten curves <ALL> en voor ander soorten enkel op plotniveau?
+Voor deze laatste te weinig metingen, dus gebaseerd op DHcurve voor alle soorten samen en dan aangepast op plotniveau.
+Daarom verschillen deze per plot.
+MAAR slechts één plot per soort => kan veralgemeend worden, want sowieso maar één meting
+OK, is gebeurd!!
+
+
+```{r definitief_DeHeide}
+file <- "HeightParams_DeHeide_CP_2.xlsx"
+model <- read_xlsx(paste0(path_to_height_models, file))
+
+bms_model <- model %>% distinct(Species)
+
+# OK
+
+```
+
+
+```{r check_range_curves}
+# in IA snel bekijken wat range is van de DHcurves (per soort) en dan vergelijken met range in data_dendro
+
+range_dbh <- data_dendro_DeHeide %>% 
+  group_by(species) %>% 
+  summarize(min_dbh = min(dbh_mm),
+            max_dbh = max(dbh_mm)) %>% ungroup()
+
+
+# specifiek berk en wil - OK
+rberk <- data_dendro_DeHeide %>% filter(species %in% c(57))
+range(rberk$dbh_mm)
+
+bwilg <- data_dendro_DeHeide %>% filter(species %in% c(77))
+range(bwilg$dbh_mm)
+
+```
+
+
+
+# Ename
+
+Aangepast zdd algemene curves: immers maar één meting per soort op plotniveau, dus dan dat overnemen voor de andere.
+
+Is exp. functie!!
+
+```{r dendro_Ename}
+data_dendro_Ename <- data_dendro %>% 
+  filter(forest_reserve == "Ename")
+
+berk <- data_dendro_Ename %>% filter(species %in% c(57,86))
+range(berk$dbh_mm)
+
+rberk <- data_dendro_Ename %>% filter(species %in% c(57))
+range(rberk$dbh_mm)
+
+range_dbh <- data_dendro_Ename %>% 
+  group_by(species) %>% 
+  summarize(min_dbh = min(dbh_mm),
+            max_dbh = max(dbh_mm)) %>% ungroup()
+
+
+# zachte  berk
+zberk <- data_dendro_Ename %>% filter(species %in% c(86))
+
+# smal wil
+swilg <- data_dendro_Ename %>% filter(species %in% c(78))
+bwilg <- data_dendro_Ename %>% filter(species %in% c(77))
+
+# gecheckt en lijkt toch best om curve van smalbladige wilg te behouden en NIET deze van breedbvlaidge over te nemen
+# misschien was het beter geweest om ze te clusteern vooraleer de curves op te stellen ...
+
+```
+
+
+## Welke boomsoorten komen voor?
+
+```{r bms_Ename}
+bms <- data_dendro_Ename %>% distinct(species)
+
+```
+
+
+
+```{r definitief_Ename}
+file <- "HeightParams_Ename_CP_2.xlsx"
+model <- read_xlsx(paste0(path_to_height_models, file))
+
+bms_model <- model %>% distinct(Species)
+
+# OK
+bms_model %>% anti_join(bms, by = c("Species" = "species"))
+# 2 soorten in de curves die nu niet meer in db zitten? 
+# Species
+# <dbl>
+# NA				
+# 40	Lork species			
+# 74	Wilde kardinaalsmuts
+bms %>% anti_join(bms_model, by = c("species" = "Species"))
+# OK, voor elke soort een curve
+
+
+# 40 en 74 komen voor in plot 1300 
+# MAAR dat is de navigatieplot !!!
+
+# Deze niet meenemen bij opmaak curves!! - OK
+# Slechts 2 opgemeten, dat zijn snags
+
+
+```
+
+
+# Withoefse heide
+Deze heeft ook voorrang, want 2 trees waarvan geen hoogte gekend is, omdat ze achteraf toegevoegd werde,
+
+In de Withoefse heide werd zowel in 1e als in 2eSET gebruik gemaakt van de hoogtemetingen in het transect (1eSET).
+Zie 
+
+Aangepast zdd algemene curves: immers maar één meting per soort op plotniveau, dus dan dat overnemen voor de andere.
+
+Is exp. functie!!
+
+
+Zie "hoogtecurves_gebruikt_bij_CP_1eSET.xls" en "hoogtecurves_gebruikt_bij_CP_2eSET.xlsx"
+in C:\3BR\With_heide_DEELS\!Verwerking
+
+```{r import_DHorigineel_With}
+DH_With_origineel1 <- read_xlsx("C:/3BR/With_heide_DEELS/!Verwerking/hoogtecurves_gebruikt_bij_CP_1eSET.xlsx")
+DH_With_origineel2 <- read_xlsx("C:/3BR/With_heide_DEELS/!Verwerking/hoogtecurves_gebruikt_bij_CP_2eSET.xlsx")
+
+```
+
+```{r dendro_With}
+table(data_dendro$forest_reserve)
+
+data_dendro_With <- data_dendro %>% 
+  filter(forest_reserve == "Withoefse heide")
+
+berk <- data_dendro_With %>% filter(species %in% c(57,86))
+range(berk$dbh_mm)
+
+rberk <- data_dendro_With %>% filter(species %in% c(57))
+range(rberk$dbh_mm)
+
+range_dbh <- data_dendro_With %>% 
+  group_by(species) %>% 
+  summarize(min_dbh = min(dbh_mm),
+            max_dbh = max(dbh_mm)) %>% ungroup()
+
+
+# zachte  berk
+zberk <- data_dendro_With %>% filter(species %in% c(86))
+
+# smal wil
+swilg <- data_dendro_With %>% filter(species %in% c(78))
+bwilg <- data_dendro_With %>% filter(species %in% c(77))
+
+# aantal hoogtes
+
+```
+
+
+## Welke boomsoorten komen voor?
+
+```{r bms_With}
+bms <- data_dendro_With %>% distinct(species)
+
+
+bms_DH1 <- DH_With_origineel1 %>% distinct(Species)
+bms_DH2 <- DH_With_origineel2 %>% distinct(Species)
+
+bms_DH2 %>% anti_join(bms, by = c("Species" = "species"))
+# 1 soort in de curves die nu niet meer in db zitten? 
+# Species
+# <dbl>
+# 48 - komt nu niet meer voor (Onbekende boomsoort)
+bms_DH1 %>% anti_join(bms, by = c("Species" = "species"))
+
+
+bms %>% anti_join(bms_DH1, by = c("species" = "Species"))
+# 86 - OK, komt enkel voor in periode 2
+bms %>% anti_join(bms_DH2, by = c("species" = "Species"))
+
+table(data_dendro_With$period, data_dendro_With$species)
+
+```
+
+
+
+```{r definitief_With}
+file1 <- "HeightParams_WithHeide_CP_1.xlsx"
+model1 <- read_xlsx(paste0(path_to_height_models, file))
+
+bms_model1 <- model1 %>% distinct(Species)
+
+
+file2 <- "HeightParams_WithHeide_CP_2.xlsx"
+model2 <- read_xlsx(paste0(path_to_height_models, file))
+
+bms_model2 <- model2 %>% distinct(Species)
+
+
+# OK
+bms_model2 %>% anti_join(bms, by = c("Species" = "species"))
+# 48 - komt nu niet meer voor (Onbekende boomsoort)
+bms %>% anti_join(bms_model2, by = c("species" = "Species"))
+# OK, voor elke soort een curve
+
+```
+
+
+```{r calc_height_zomereik}
+# range niet OK
+
+str(model1)
+
+data_dendro_With1 <- data_dendro_With %>% 
+  left_join(model2, by = c("species" = "Species", "forest_reserve" = "BR")) %>% 
+  mutate(calc_height_R = 1.3 + exp(P1 + P2/(dbh_mm/10)),
+         test = calc_height_R - calc_height_m) %>% 
+  # als calc_height_R bestaat, dan calc_height_m vervangen
+  # mutate(calc_height_m = ifelse(!is.na(calc_height_R), calc_height_R, calc_height_m)) %>% 
+  filter(species == 87)
+ 
+
+# view(t)
+range(data_dendro_With1$test, na.rm = TRUE)
+range(data_dendro_With1$calc_height_m, na.rm = TRUE)
+range(data_dendro_With1$calc_height_R, na.rm = TRUE)
+
+# check 
+check <- data_dendro_With1 %>%  
+  filter(abs(test) > 0) %>% 
+  select(plot_id, tree_measure_id, dbh_mm, height_m, calc_height_m, calc_height_R, test, species, alive_dead, period, ind_sht_cop, intact_snag, dbh_class_5cm, forest_reserve)
+
+nrow(check)
+table(check$period, check$forest_reserve)
+# [1] 42
+
+
+# 46 cm dbh --> hoogte 20 m = vergelijkbaar met globale curve => OK, behouden
+
+```
+
+
+# Pruikemakers
+
+
+
+
+
+
+Op termijn ev. ook allemaal samen ... én ev. logfunctie?
+Maar dan moet ik dat voor allemaal herdoen, nu beter nog niet ...
+
+Want ook nog:
+- Ename
+- Jansheide
+- With heide
+- Everzwijnbad
+- Heirnisse
+- Pruikemakers
+- Wijnendale
+DUS: 8 in totaal !!
