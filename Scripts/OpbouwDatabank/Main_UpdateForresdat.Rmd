@@ -1,0 +1,1359 @@
+---
+title: "Update forresdat"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: yes
+      smooth_scroll: yes
+---
+
+# Vraagstelling
+DOEL van dit script is een update van forresdat gegevens naar github.
+
+
+# Stand van zaken
+- 21/2/2022: update nalv correctie coppice-id (+ kleine aanpassing plotinfo)
+=> enkel tree level data & plotinfo bijgewerkt  
+
+- 8/3/2022: update dendro nalv nieuwe dh-curves Zonien (Kerss CP&KV, Zwaenep CP, Harras KV) - 
+obv branch "statistics_and_other_issues".  
+
+- 9/3/2022: ook tree-id toegevoegd, functie was nog niet in orde, maar licht aangepast  
+
+- 11/3/2022:  
+
+* tabellen `trees_calc` en `stems_calc`: processed mét correcte tree_id en non-unique tree_id, beide obv coppice waar nodig (= alle CP's en een deel van de KV's die ik vroeger ooit verwerkt heb, maar die nog geen hoogtemodellen hebben)
+* `tree_wide`: enkel processed, obv tree_id based on coppice_id
+* `trees_calc_non_processed` en `stems_calc_non_processed`: bevatten alle bomen, ook van non-processed plots ==> tree_id obv old_id
+
+
+- 8/4/2022: 
+
+* branch statistics in reg_Al gemerged: alles ivm shoots(iufro, ..) en reg nu normaal in orde
+* foutjes in db ook gecorrigeerd
+* enkel obv datum en niet meer opnamejaar (opnamejaar wordt enkel nog gebruikt als date niet beschikbaar is)
+
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = FALSE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+
+```
+
+# Update lookuplijsten - EVENTUEEL
+
+Enkel indien de q-tabellen gewijzigd zijn.
+Enkel de gewijzigde tabellen vermelden.
+
+## Input from access fieldmap
+
+```{r lulist1, eval = FALSE}
+from_access_to_git(
+  database = path_to_fieldmap_db,
+  tables = c("qAliveDead", "qSpecies", "qHerbSpecies240810", "qHeightClass_regeneration", "qnumber_regeneration_classes", "qdecaystage",
+             "qcommenremark", "qiufrosocialstatus", "qiufroheight", "qiufrovitality", "qBrowsIndex",
+             "qPlotType", "qIntactSnag", "qIndShootCop"),
+  repo_path = path_to_git_forresdat #,
+  # strict = FALSE
+)
+
+# !!!! argument "strict": keep default TRUE to update data without structural changes,
+                  #    change to FALSE only if tables are structurally changed
+                  #          (e.g. additional column, change in sorting order,...)
+
+
+from_access_to_git(
+  database = path_to_fieldmap_db,
+  tables = c("qCrownVolRedu","qBranchLenghtReduction"),
+  repo_path = path_to_git_forresdat,
+  strict = FALSE
+)
+
+from_access_to_git(
+  database = path_to_fieldmap_db,
+  tables = c("qCoverHerbs"),
+  repo_path = path_to_git_forresdat,
+  strict = FALSE
+)
+
+```
+
+
+## Save in analysis database
+
+```{r lulist2, eval = FALSE}
+from_git_to_access(tables = c("qAliveDead", "qSpecies", "qHerbSpecies240810", "qHeightClass_regeneration", "qnumber_regeneration_classes", "qdecaystage",
+                              "qcommenremark", "qiufrosocialstatus", "qiufroheight", "qiufrovitality", "qBrowsIndex",
+                              "qPlotType", "qIntactSnag", "qIndShootCop"),
+                   repo_path = path_to_git_forresdat,
+                   database = path_to_analysis_set_db)
+
+from_git_to_access(tables = c("qCrownVolRedu","qBranchLenghtReduction"),
+                   repo_path = path_to_git_forresdat,
+                   database = path_to_analysis_set_db)
+
+# lookuplijsten niet als csv of xls geëxporteerd, want teveel rompslomp, zit in de access-db
+
+```
+
+
+## Als git niet werkt ...
+
+```{r lulist_manueel, eval = FALSE}
+# inladen
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+
+qBrowsIndex <- sqlFetch(con, "qBrowsIndex")
+qCoverHerbs <- sqlFetch(con, "qCoverHerbs")
+
+odbcClose(con)
+
+# exporteren - access & csv
+save_results_access (
+  results = list(qCoverHerbs = qCoverHerbs),
+  database = path_to_analysis_set_db,
+  remove_tables = TRUE
+)
+
+save_results_csv(
+    results = list(qCoverHerbs = qCoverHerbs),
+    output_dir = path_to_analysis_set_csv
+  )
+
+
+# exporteren - tsv - eigen simpele functie
+save_results_tsv(list(qCoverHerbs = qCoverHerbs), 
+                 root = path_to_forresdat_data)
+```
+
+
+```{r lkplists_to_csv, eval = FALSE}
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+
+  qIndShootCop <- sqlFetch(con, "qIndShootCop", stringsAsFactors = FALSE)
+  qAliveDead <- sqlFetch(con, "qAliveDead", stringsAsFactors = FALSE)
+  qSpecies <- sqlFetch(con, "qAliveDead", stringsAsFactors = FALSE)
+  qDecaystage <- sqlFetch(con, "qdecaystage", stringsAsFactors = FALSE)
+  qIntactSnag <- sqlFetch(con, "qIntactSnag", stringsAsFactors = FALSE)
+    
+  qCrownVolRedu <- sqlFetch(con, "qCrownVolRedu", stringsAsFactors = FALSE)
+  qBranchLenghtReduction <- sqlFetch(con, "qBranchLenghtReduction", stringsAsFactors = FALSE)
+
+  qiufroheight <- sqlFetch(con, "qiufroheight", stringsAsFactors = FALSE)
+  qiufroheight_shoots <- sqlFetch(con, "qiufroheight_shoots", stringsAsFactors = FALSE)
+  qiufrovitality <- sqlFetch(con, "qiufrovitality", stringsAsFactors = FALSE)
+  qiufrovitality_shoots <- sqlFetch(con, "qiufrovitality_shoots", stringsAsFactors = FALSE)
+  qiufrosocialstatus <- sqlFetch(con, "qiufrosocialstatus", stringsAsFactors = FALSE)
+  qiufrosocialstatus_shoots <- sqlFetch(con, "qiufrosocialstatus_shoots", stringsAsFactors = FALSE)
+  
+odbcClose(con)
+
+
+# list maken van alle lookuplijsten en als csv opslaan
+list_lkp <- list(qIndShootCop = qIndShootCop, qAliveDead = qAliveDead, qSpecies = qSpecies, 
+                 qDecaystage = qDecaystage, qIntactSnag = qIntactSnag, 
+                 qCrownVolRedu = qCrownVolRedu, qBranchLenghtReduction = qBranchLenghtReduction,
+                 qiufroheight = qiufroheight, qiufroheight_shoots = qiufroheight_shoots,
+                 qiufrosocialstatus = qiufrosocialstatus, 
+                 qiufrosocialstatus_shoots = qiufrosocialstatus_shoots,
+                 qiufrovitality = qiufrovitality, 
+                 qiufrovitality_shoots = qiufrovitality_shoots)
+
+names(list_lkp)
+
+save_results_csv(
+    results = list_lkp,
+    output_dir = path_to_analysis_set_csv
+  )
+
+```
+
+
+
+
+# Plotinfo - OK - 08/4/2022
+
+## Load plotinfo
+
+Plotinfo samenstellen, zijnde plottype, naam forest_reserve en info over survey en data al dan niet processed.
+Wegschrijven naar git, access en opslaan als csv
+
+```{r plotinfo_load}
+plotinfo <- load_plotinfo(database = path_to_fieldmap_db)
+
+```
+
+
+```{r plotinfo_processed}
+# enkel checken bij deze waar er een dendro-opname gebeurd is
+check_processed <- plotinfo %>% 
+  filter(survey_trees == TRUE)
+
+table(check_processed$forest_reserve, check_processed$data_processed)
+
+```
+
+```{r plotinfo_processed_check}
+plotinfo_check <- plotinfo %>% 
+  group_by(forest_reserve, plottype, period, survey_trees, data_processed) %>% 
+  summarize(n_plots = n()) %>% 
+  ungroup()
+
+plotinfo_check_not_processed <- plotinfo_check %>% 
+  filter(survey_trees == TRUE & data_processed == FALSE)
+```
+
+Enkel nog Rodebos en Walenbos KV's te doen + CP's derde set Withoefse heide (dd 8/4/2022).
+Hoogtemodellen reeds aangemaakt.
+
+
+## Export plotinfo
+
+```{r plotinfo_save_git, eval=FALSE}
+save_results_git(
+  results = list(plotinfo = plotinfo)
+  , repo_path = path_to_git_forresdat
+  # , strict = TRUE
+  , strict = FALSE
+)
+
+```
+
+```{r plotinfo_save_git_manueel, eval=FALSE}
+# manueel - eigen simpele functie - als save_results_git niet werkt
+save_results_tsv(list(plotinfo = plotinfo), 
+                 root = path_to_forresdat_data, 
+                 strict = FALSE)
+
+```
+
+
+```{r plotinfo_save_access_csv, eval=FALSE}
+save_results_access (
+  results = list(plotinfo = plotinfo),
+  database = path_to_analysis_set_db,
+  remove_tables = TRUE
+)
+
+save_results_csv(
+    results = list(plotinfo = plotinfo),
+    output_dir = path_to_analysis_set_csv
+  )
+
+```
+
+
+# Dendro - OK - 8/4/2022
+
+## Load dendro data
+
+<!-- (Er zijn geen shoots, en ook geen deadwood, reg of veg in Kerss KV 1986) -->
+
+```{r load_dendro1_processed_or_not}
+data_dendro <- load_data_dendrometry(database = path_to_fieldmap_db, 
+                                     extra_variables = TRUE, 
+                                     processed = TRUE)
+# 79866
+
+# ook éénmalig eens non_processed op 11/3/2022 (ook zo weggeschreven): stems en trees
+# # data_dendro <- load_data_dendrometry(database = path_to_fieldmap_db, 
+#                                      extra_variables = TRUE, 
+#                                      processed = FALSE)
+#86399
+
+```
+
+```{r load_dendro2}
+data_shoots <- load_data_shoots(database = path_to_fieldmap_db, extra_variables = TRUE)
+
+data_stems  <- compose_stem_data(data_dendro, data_shoots, extra_variables = TRUE)
+
+height_model <- load_height_models(path_to_height_models)
+
+data_deadwood <- load_data_deadwood(database = path_to_fieldmap_db)
+```
+
+
+## Calculate dendro data
+
+```{r calc_dendro}
+data_stems_calc <- calc_variables_stem_level(data_stems, height_model)
+
+data_dendro_calc <- calc_variables_tree_level(data_dendro, data_stems_calc)
+
+dendro <- calculate_dendrometry(data_dendro, data_deadwood, data_shoots, height_model)
+```
+
+```{r check_warning, eval = FALSE}
+# Warning messages:                                                                                                                                                                    
+# 1: Problem with `mutate()` column `vol_bole_t2_m3`.
+# i `vol_bole_t2_m3 = ifelse(...)`.
+# i NaNs produced
+
+
+# !! OK - enkel wanneer vol_bole niet kan berekend worden wegens ontbrekende hoogte
+  # dan wordt vol_bole berekend mbv tarief 1 ingang
+
+data_stems_calc_check <- data_stems_calc %>% 
+  filter(is.na(calc_height_m)) %>%   
+  select(plot_id, period,
+         dbh_mm, species, alive_dead, 
+         height_m, calc_height_m, vol_bole_m3, vol_bole_alive_m3_ha,
+         decaystage, intact_snag,
+         ind_sht_cop,
+         contains(c("iufro", "remark"))
+         ) %>% 
+  left_join(plotinfo, by = c("plot_id", "period")) 
+
+```
+
+
+```{r join_plottype_surveynr_BR}
+dendro_plotinfo <- lapply(dendro, function(x) left_join(x, plotinfo %>% select(plot_id, forest_reserve, plottype, period, survey_number), by = c("plot_id", "period")))
+# lapply: same function over all elements of the list
+```
+
+No deadwood survey wordt nu opgevangen door extra parameter in de `load_data_xxx`-functies, nl. `data_processed = TRUE`.
+Dit wordt in de code van de functie uitgebreid met `xxx_survey = TRUE`.
+
+
+## Controle plot-level-data
+
+```{r CreateSeparateDataframesDendro}
+for (tablename in names(dendro)) {
+     assign(tablename, dendro[[tablename]])
+} 
+
+```
+
+
+## Export plot-level-data
+
+!!!! ENKEL PLOTS EXPORTEREN WAARVAN DATA PROCESSED ZIJN!!
+Is standaard parameter bij inladen dendro-data 
+
+**DUS: zorgen dat dit veld in Fieldmap up-to-date is, zie chunck "plotinfo_processed"**
+
+Issue #58: afgesproken met Els dat standaard enkel processed_data ingeladen worden bij load_data
+==> ook bij de dataverwerking enkel deze data mee
+  IS OK, opgelost in branch `statistic_and_other_issues`
+
+ 
+Enkele verduidelijkingen:
+
+* "number_of_tree_species" = aantal soorten obv de levende bomen
+
+* "stems_per_tree" = meerstammigheid (stem_number_ha / number_of_trees_ha): heeft hier geen zin, maar dient als insteek voor berekeningen per soort
+
+* "vol_bole_alive_m3_ha" en "vol_bole_dead_m3_ha": volume zonder crown, 
+versus "vol_alive_m3_ha" en "vol_dead_standing_m3_ha"
+
+* "vol_log_m3_ha": liggend dood hout
+
+* "vol_deadw_m3_ha": staand en liggend dood hout
+
+```{r save_dendro_git, eval = FALSE}
+# geen plotinfo naar git
+save_results_git(
+  results = dendro,
+  repo_path = path_to_git_forresdat
+)
+```
+
+```{r save_dendro_git_manueel, eval = FALSE}
+# manueel - eigen simpele functie - als save_results_git niet werkt
+save_results_tsv(dendro, 
+                 root = path_to_forresdat_data, 
+                 strict = FALSE)
+```
+
+
+```{r save_dendro_access_csv, eval = FALSE}
+# hier wel plotinfo (plottyupe, BR, surveynr mee wegschrijven)
+
+# volgende functie heb ik zelf geschreven, zit niet in het package!
+save_results_csv (
+    results = dendro_plotinfo,
+    output_dir = path_to_analysis_set_csv
+    )
+
+# afgerond voor export naar access
+dendro_round <- dendro_plotinfo %>% 
+  lapply(., function(x) round_df(x, 2))
+
+save_results_access (
+  results = dendro_round,
+  database = path_to_analysis_set_db,
+  remove_tables = TRUE
+  )
+
+```
+
+
+## Create unique tree-id
+
+`Data_dendro_calc` bevat een unieke `tree_id` per boom (die constant blijft doorheen de tijd),
+verschillend van de `tree_measure_id` uit fieldmap, die wel varieert doorheen de tijd.
+
+Deze `tree_id` wordt in het package aangemaakt obv old_id.
+
+**OPGEPAST**
+Bij hakhout kan/kon dit soms tot gemiste linken leiden. 
+(zie ook "TreeMortalityData_DetailHakhout.Rmd")
+
+Hakhoutstoven worden opgesplitst in een levend en dood deel, 
+en elk deel wordt dan als een afzonderlijke boom beschouwd 
+(een boom kan immers niet én levend én dood tegelijk zijn)
+
+OldID wordt standaard toegekend aan het levende deel van de hakhoutstoof.
+Het dode deel wordt gelinkt via CoppiceID.
+Indien er enkel een dood deel is (en geen levend deel), dan wordt daar OldID aan toegekend.
+
+Dat wil zeggen dat er zich enkel een probleem stelt wanneer er in één van de 
+twee periodes zowel een levend als een dood deel voorkomt.
+In de andere gevallen is de koppeling die gebeurt via OldID correct.
+
+**OPLOSSING**
+Daarom wordt in code hierna voor hakhout dat in één van de 
+twee periodes uit zowel een levend als een dood deel bestaat, de tree_id bepaald obv coppice_id.
+
+Voor de 11 verwerkte CP's + KV Muizenbos is die koppeling gecheckt en OK bevonden.
+
+Dit houdt in dat tree_id niet meer uniek is per periode.
+Dat geeft dan weer problemen wanneer we er een "wijde" tabel van willen maken.
+
+Daarom wordt er een _a of _b toegevoegd, afh. of het om levend of dood deel van een hakhoutstoof gaat.
+Indien we toch één ID per hakhout willen, ongeacht levend/dood, dan kunnen we makkelijk de _a en _b verwijderen (= `tree_id_non_unique`).
+
+
+### Op boomniveau - obv old-id
+
+De branch `statistics_and_other_issues` heeft een manier gevonden om tree-id te berekenen, ook voor 4 decades. 
+
+```{r mbv_oldid_obv_package}
+tree_id <- create_unique_tree_id(data_dendro = data_dendro_calc)
+# Deze tabel wordt NIET bewaard in forresdat (daar enkel geaggregeerde resultaten op plotniveau)
+
+# check
+tree_id %>% filter(is.na(tree_id)) %>% nrow()
+tree_id_missing <- tree_id %>% filter(is.na(tree_id))
+table(tree_id_missing$forest_reserve, tree_id_missing$period)
+
+# selectie om wijde tabel aan te maken
+tree_id_long <- tree_id %>%
+  select(plot_id, species, tree_id, period, dbh_mm, vol_tot_m3, alive_dead)
+
+```
+
+
+### Op boomniveau - obv coppice-id
+
+**EVENTUEEL EXTRA TOEVOEGEN**  
+> 21/2/2022: link obv coppice-id, want dat wordt veel gevraagd.
+> Zie ook `Euforia_TreePlotData_Flanders_Olalla_2022-01-13.Rmd`.
+
+Uitsplitsen van hakhoutstoven in dood en levend deel is nodig, want een "tree" kan niet zowel levend als dood zijn.
+Bovendien kan een `oldID` niet aan twee "trees" toegekend worden, omdat er anders problemen ontstaan met de koppeling die gebaseerd is op OldID (moet een één-op-één relatie zijn tussen de 2 periodes).
+
+In de databank wordt OldID standaard toegekend aan het levende deel van de hakhoutstoof.   
+Het dode deel wordt gelinkt via CoppiceID.   
+Indien er enkel een dood deel is (en geen levend deel), dan wordt daar OldID aan toegekend.   
+
+Dus bij de hakhoutstoven die (in eenzelfde periode) uit een levend en dood deel bestaan, hebben de twee delen niet dezelfde oldID, maar wel dezelfde coppice_id.    
+
+Dat wil zeggen dat er zich enkel een probleem stelt wanneer er in één van de twee periodes zowel een levend als een dood deel voorkomt.   
+In de andere gevallen kan de koppeling gebeuren via OldID.   
+
+Zo werken we dan ook:  
+
+- 2 delen: koppeling via OldID
+- 3 of 4 delen: koppeling via CoppiceID  
+
+In kader van het TreeMortality project hebben we nog een extra onderscheid gemaakt tss levend en dood deel van een hakhoutstoof, door _a en _b toe te voegen voor resp. levend of dood deel van een stoof.
+Dat was toen nodig omdat we extra records "fallen" toe moesten voegen voor het dood hout dat er niet meer was.
+
+Dat is ook nodig wanneer we er ooit een "wijde" tabel van willen maken.
+
+Het is echter niet zeker dat dat een correcte link is, want beide delen lopen als het ware in elkaar over. 
+Bv. - periode 1 levend gekoppeld aan periode 2 levend
+    - periode 1 dood gekoppeld aan periode 2 dood
+--> mogelijks zijn er van de levende wat extra dood gegaan, en van de dode wat omgevallen (fallen)
+maar dat is niet te bepalen (kan vergeleken worden met dode takken in een boom)
+(zie ook `TreeMortalityData_DetailHakhout.Rmd`)
+
+Indien we een correcte link willen, moeten we _a en _b terug verwijderen, met als gevolg dat tree-id géén uniek veld meer is.
+
+> !! controle van die coppice_id nodig obv aantal soorten en afwijking van XY
+> reeds gedaan voor de 11 CP's in forresdat op 16/2/2022
+
+__Werkwijze:__
+
+* bepalen hoeveel delen er per hakhoutstoof aanwezig zijn
+
+* data opsplitsen:
+    (1) een deel waarbij link via OldID behouden blijft (= treeid): **_data_OldID_**
+    (individuele bomen en coppice dat uit max. één deel bestaat per periode)
+    (2) een deel waarbij link via CoppiceID gecreëerd wordt (= nieuwe tree_id): **_data_CoppID_**
+    (coppice met ergens een periode met 2 delen)
+ 
+* in data_CoppID de treeid vervangen door period_plotid_coppiceID_a indien levend 
+en period_plotid_coppiceID_b indien dood
+
+* samenvoegen van data_OldID, data_CoppID
+
+-----
+Vanaf 3 decades wordt het moeilijker.
+Dan zouden we moeten kijken of er max. één per decade is, dan obv old_id
+Zodra er meer dan één per decade is, dan moeten we werken met coppice_id voor allemaal en dan onderscheid tss levend en dood mbv suffix "a" en "b". 
+
+
+```{r NumberOfPartsPerCoppicePerDecade}
+tree_id %>% filter(coppice_id > 0) %>% nrow()
+# [1] 17224 - 18015
+
+# coppice_id en plot_id samen uniek => hoeveel metingen zijn er per stoof en per decade (max.2 - klopt)
+summ_coppice_id <- tree_id %>% 
+  filter(coppice_id > 0) %>%
+  group_by(coppice_id, plot_id, period) %>% 
+  summarise(aantal = n()) %>% 
+  ungroup()
+# 16138
+
+table(summ_coppice_id$aantal)
+#     1     2 
+# 14261  1877
+
+summ_coppice_id %>% filter(aantal > 2) %>% distinct(plot_id)
+
+summ_coppice_id %>% filter(aantal > 2)
+
+# vb van 3 decades
+tree_id %>%  filter(coppice_id == 32 & plot_id == 31000) %>% 
+  select(period, tree_measure_id, species, alive_dead, nr_of_stems, x_local, y_local, tree_id, coppice_id)
+
+
+# summ_coppice_id
+summ_coppice_id_def <- summ_coppice_id %>% 
+  group_by(coppice_id, plot_id) %>% 
+  summarise(max_aantal = max(aantal)) %>% 
+  ungroup()
+# 9690
+```
+
+```{r SplitDataTrees_OldID_CoppID}
+tree_id_  <- tree_id %>% 
+  left_join(summ_coppice_id_def, by = c("plot_id","coppice_id")) %>% 
+  rename (max_nr_parts_coppice = max_aantal) 
+
+str(tree_id_)
+str(summ_coppice_id_def)
+
+# tree_data via OldID
+tree_data_OldID <- tree_id_ %>% 
+  filter (ind_sht_cop != 12 | max_nr_parts_coppice < 2 | is.na(coppice_id))
+
+# tree_data via coppice ID
+tree_data_CoppID <- tree_id_ %>% 
+  filter (max_nr_parts_coppice > 1)
+
+nrow(tree_data_OldID) + nrow(tree_data_CoppID) - nrow(tree_id) == 0
+# [1] 0
+
+```
+
+Daar waar coppice in één van de (twee of drie) decades uit meer dan twee delen bestaat, `tree_id` vervangen door een id obv `coppice_id`.
+
+```{r CreateNewTreeID_TreeData_CoppID}
+tree_data_CoppID_ <- tree_data_CoppID %>% 
+  rename (treeid_old = tree_id) %>% 
+  mutate (tree_id = paste(1, plot_id, coppice_id, sep = "_")) %>%
+  mutate (tree_id = ifelse(alive_dead == 11, paste(tree_id, "a", sep = "_"),
+                          ifelse(alive_dead == 12, paste(tree_id, "b", sep = "_"),
+                                 NA)))
+
+names(tree_data_CoppID_)
+
+check_coppID <- tree_data_CoppID_ %>% 
+  select(plot_id, 
+         tree_id, tree_measure_id, coppice_id,
+         max_nr_parts_coppice,
+         x_local, y_local, 
+         period, 
+         species, 
+         alive_dead, intact_snag, ind_sht_cop, decaystage,
+         dbh_mm, height_m, calc_height_m, vol_tot_m3
+         ) 
+
+tree_data_CoppID <- tree_data_CoppID_
+```
+
+
+```{r Controle_TreeData_OldID}
+# str(tree_data_OldID)
+nrow(tree_data_OldID)
+# [1] 36615
+# [1] 75907 - 77402
+# summary(tree_data_OldID)
+
+```
+
+
+```{r Controle_TreeData_CoppID}
+# str(tree_data_CoppID)
+nrow(tree_data_CoppID)
+# [1] 2038
+# [1] 3959 - 4892
+# summary(tree_data_CoppID)
+
+table(tree_data_CoppID$max_nr_parts_coppice)
+#    2 
+# 4892 
+
+tree_data_CoppID_check <- tree_data_CoppID_ %>% 
+  mutate(tree_id_non_unique = ifelse(max_nr_parts_coppice < 2, tree_id,
+                                 str_sub(tree_id, 1, -3)),
+         test = (tree_id_non_unique == tree_id)) %>% 
+  select(plot_id, 
+         tree_id, tree_measure_id, coppice_id, old_id,
+         tree_id_non_unique, test,
+         max_nr_parts_coppice,
+         x_local, y_local, 
+         period, 
+         species, 
+         alive_dead, intact_snag, ind_sht_cop, decaystage,
+         dbh_mm, height_m, calc_height_m, vol_tot_m3
+         )
+  
+
+# 5 => !! 3 periodes opgemeten  (Hannecart, Rodebos) - ?? Harras?
+
+# !! Kerss en Zwaenepoel en Harras (3 decades): heel weinig coppice => daarom nu nog zo geen probleem
+# maar het kan wel dat er nu hakhout is dat er al 3 decades staat (bv. 3x levend), dat via coppice_id gekoppeld wordt ipv via oldID, maar dat is geen probleem
+# Beter in die richting een afwijking dan andersom
+
+```
+
+Zijn er geen foute linken obv coppice_id? 
+
+```{r check_XY}
+# checken obv XY
+
+verschil_XY_coppiceid <- tree_data_CoppID_check %>% 
+  group_by(plot_id, tree_id_non_unique, coppice_id) %>% 
+  summarize(aantal_records = n(),
+            aantal_soorten = n_distinct(species),
+            aantal_statussen = n_distinct(alive_dead),
+            x1 = first(x_local), 
+            x_mean = mean(x_local),
+            y1 = first(y_local),
+            y_mean = mean(y_local)) %>% 
+  ungroup() %>% 
+  mutate(verschilX = abs(x1 - x_mean),
+         verschily = abs(y1 - y_mean)
+  ) %>% 
+  filter(verschilX > 0.99 | verschily > 0.99)
+  # filter(verschilX > 0.2 | verschily > 0.2)
+  
+nrow(verschil_XY_coppiceid)
+# 25 - 43
+# 20 (1m)
+
+verschil_XY_coppiceid_detail <- tree_data_CoppID_check %>% 
+  select(plot_id, tree_id,
+         tree_id_non_unique, tree_measure_id, 
+         coppice_id, old_id,
+         x_local, y_local, 
+         period, 
+         species, 
+         alive_dead, intact_snag, ind_sht_cop, decaystage,
+         dbh_mm, height_m, calc_height_m, vol_tot_m3
+         ) %>% 
+  inner_join(verschil_XY_coppiceid, by = c("plot_id", "tree_id_non_unique", "coppice_id")) %>% 
+  filter(aantal_soorten < 2) %>%  # deze apart checken zodat er geen overlap is
+  select(-decaystage, -height_m, -tree_id_non_unique, 
+         -vol_tot_m3, -calc_height_m, -contains("aantal"))
+  
+names(verschil_XY_coppiceid_detail)
+#   pivot_wider(names_from = tree_id, values_from = x_local) 
+# 
+# %>% 
+#   rename(individual = "10", coppice = "12") %>% 
+#   mutate(perc_hakhout = round(100*coppice/(individual + coppice), ))
+
+```
+
+```{r check_meerdere_soorten}
+verschillende_soorten_coppiceid <- tree_data_CoppID_check %>% 
+  group_by(plot_id, tree_id_non_unique, coppice_id) %>% 
+  summarize(aantal_records = n(),
+            aantal_soorten = n_distinct(species),
+            aantal_statussen = n_distinct(alive_dead),
+            x1 = first(x_local), 
+            x_mean = mean(x_local),
+            y1 = first(y_local),
+            y_mean = mean(y_local)) %>% 
+  ungroup() %>% 
+  mutate(verschilX = abs(x1 - x_mean),
+         verschily = abs(y1 - y_mean)
+  ) %>% 
+  filter(aantal_soorten > 1)
+
+# verschillende soorten
+meerdere_soorten_zelfde_coppice_id <- tree_data_CoppID_check %>% 
+  # select(-x_local, -y_local) %>% 
+  inner_join(verschillende_soorten_coppiceid,
+             by = c("plot_id", "tree_id_non_unique", "coppice_id")) %>% 
+  select(plot_id, 
+         tree_id, tree_id_non_unique, tree_measure_id, 
+         coppice_id, old_id,
+         x_local, y_local, 
+         period, 
+         species, 
+         alive_dead, intact_snag, ind_sht_cop, decaystage,
+         dbh_mm, height_m, calc_height_m, vol_tot_m3
+         ) %>% 
+  select(-decaystage, -height_m, -tree_id_non_unique, -vol_tot_m3, -calc_height_m)
+
+meerdere_soorten_zelfde_coppice_id %>% distinct(plot_id)
+
+```
+
+
+```{r te_controleren_door_Peter, eval=FALSE}
+# write_csv2(meerdere_soorten_zelfde_coppice_id, "Data_controle/nalv_Euforia_2022-02-15/meerdere_soorten_zelfde_coppice_id.csv")
+# 
+# write_csv2(verschil_XY_coppiceid_detail, "Data_controle/nalv_Euforia_2022-02-15/verschil_XY_coppiceid_detail.csv") 
+# 
+# # OK, verzonden op 15/2/2022 naar Peter !! enkel data voor Euforia, niet van KV's of 2109 of 723 of 
+# # (enkel processed én 2x opgemeten)
+# 
+# 
+# write_csv2(meerdere_soorten_zelfde_coppice_id, "Data_controle/meerdere_soorten_zelfde_coppice_id2.csv")
+# # OK, opgelost!!
+# 
+# write_csv2(verschil_XY_coppiceid_detail, "Data_controle/verschil_XY_coppiceid_detail2.csv") 
+# # OK, verzonden op 21/2/2022 naar Peter !! gezegd dat dat geen haast had
+# # Bevat ook de niet processed data
+# 
+
+write_csv2(meerdere_soorten_zelfde_coppice_id, "Data_controle/meerdere_soorten_zelfde_coppice_id3.csv")
+
+write_csv2(verschil_XY_coppiceid_detail, "Data_controle/verschil_XY_coppiceid_detail3.csv") 
+# OK, verzonden op 18/4/2022 naar Peter !! gezegd dat dat geen haast had
+
+```
+
+```{r rbind_tree_data_OldID_CoppID}
+tree_data_CoppID <- tree_data_CoppID %>% 
+  select(-treeid_old)
+
+tree_data_all <- rbind(tree_data_OldID, tree_data_CoppID)
+
+nrow(tree_data_all) == nrow(tree_id)
+names(tree_data_all)
+names(tree_id)
+
+# check_a_b <- tree_data_all %>% 
+#   select(plot_id, 
+#          tree_id, tree_measure_id, coppice_id,
+#          nr_parts_coppice,
+#          x_local, y_local, 
+#          period, 
+#          species, 
+#          alive_dead, intact_snag, ind_sht_cop, decaystage,
+#          dbh_mm, height_m, calc_height_m, vol_tot_m3
+#          ) %>% 
+#   filter(nr_parts_coppice > 2)
+
+tree_id_ <- tree_data_all %>% 
+  mutate(tree_id_non_unique = ifelse(max_nr_parts_coppice < 2 | is.na(max_nr_parts_coppice), tree_id,
+                                 str_sub(tree_id, 1, -3)),
+         test = (tree_id_non_unique == tree_id))
+# %>%
+#   select(plot_id,
+#          tree_id, tree_measure_id,
+#          coppice_id, old_id,
+#          tree_id_non_unique, test,
+#          max_nr_parts_coppice,
+#          x_local, y_local,
+#          period,
+#          species,
+#          alive_dead, intact_snag, ind_sht_cop, decaystage,
+#          dbh_mm, height_m, calc_height_m, vol_tot_m3
+#          )
+
+tree_id <- tree_id_ %>% 
+  select(-test, -max_nr_parts_coppice)
+
+names(tree_id)
+```
+
+
+### Op spilniveau
+
+!! OPGEPAST !! 
+
+Tree-id wordt overgenomen van boomniveau, aangemaakt via `old_id` of `coppice_id` afhankelijk van "delen" hakhout (zie hoger).
+
+```{r copy_tree_id}
+names(data_stems_calc)
+names(tree_id)
+
+tree_id_ <- tree_id %>% 
+  select(plot_id, tree_measure_id, tree_id, tree_id_non_unique, period)
+# tree_id_ <- tree_id %>% 
+#   select(plot_id, tree_measure_id, tree_id, period)
+
+stem_id <- data_stems_calc %>% 
+  filter(tree_measure_id != 0) %>% 
+  left_join(tree_id_, by = c("plot_id", "tree_measure_id", "period"))
+
+names(stem_id)
+```
+
+```{r check_id_hakhout, eval=FALSE}
+stem_id %>% filter(is.na(tree_id)) %>% nrow()
+# 0
+stem_id %>% filter(is.na(tree_id)) %>% select(plot_id, period)
+
+
+tree_id_hakhout <- stem_id %>% 
+  group_by(plot_id, tree_measure_id, period) %>% 
+  summarize(aantal = n()) %>% 
+  ungroup()
+
+table(tree_id_hakhout$aantal)
+```
+
+
+## Op boomniveau: wijde tabel met één record per boom doorheen de tijd
+
+```{r tree_id_long}
+# selectie om wijde tabel aan te maken
+tree_id_long <- tree_id %>%
+  select(plot_id, period, tree_id, 
+         species, ind_sht_cop,
+         dbh_mm, vol_tot_m3, alive_dead) %>% 
+  arrange(period) %>% 
+  left_join(plotinfo %>% select(plot_id, period, survey_number)) %>% 
+  select(-period)
+
+# ? survey_number => joinen met plotinfo
+```
+
+Om één record per boom te verkrijgen met info uit beide periodes, dient functie "make_table_wide" gebruikt te worden.
+Dit werkt enkel bij een unieke tree_id.
+
+!!Opgepast: soms daalt dbh doorheen de tijd: dat is het geval bij dode bomen.
+
+```{r tree_id_wide_check}
+check_dubbele_tree_id <- tree_id %>% 
+  group_by(plot_id, tree_id, period) %>% 
+  summarize(aantal_per_periode = n()) %>% 
+  ungroup() %>% 
+  filter(aantal_per_periode > 1) %>% 
+  inner_join(tree_data_CoppID_check)
+
+check_dubbele_tree_id
+# A tibble: 3 x 4
+#   plot_id tree_id       period aantal_per_periode
+#     <int> <chr>          <dbl>              <int>
+# 1   41000 1_41000_164_a      2                  2
+# 2   51000 1_51000_4_a        1                  2
+# 3   53000 1_53000_258_b      1                  2
+
+check_dubbele_tree_id %>% distinct(plot_id)
+
+# anti_join met deze die al gecheckt worden obv andere X en/of Y
+check_dubbele_tree_id_ <- check_dubbele_tree_id %>% 
+  anti_join(verschil_XY_coppiceid_detail %>%  select(plot_id, tree_id)) %>% 
+  anti_join(meerdere_soorten_zelfde_coppice_id %>%  select(plot_id, tree_id))
+
+# twee stoven met verschillend afbraakstadium !! afbraak wordt ingevuld op niveau van stems
+
+```
+
+```{r te_controleren_door_Peter2, eval=FALSE}
+# write_csv2(check_dubbele_tree_id, "Data_controle/nalv_Euforia_2022-02-15/hakhout_verschillende_id_zelfde_status_levend_dood.csv")
+
+write_csv2(check_dubbele_tree_id_, "Data_controle/hakhout_verschillende_id_zelfde_status_levend_dood3.csv") 
+```
+
+```{r tree_id_wide}
+# TIJDELIJK
+tree_id_long_ <- tree_id_long %>% 
+  anti_join(check_dubbele_tree_id %>%  select(plot_id, tree_id))  # tijdelijk de dubbele tree_id's verwijderen
+
+tree_id_long <- tree_id_long_
+
+tree_id_wide <- make_table_wide(table_long = tree_id_long,
+                                    column_to_repeat = "survey_number",
+                                    columns_for_comparison = c("alive_dead", "dbh_mm", "vol_tot_m3"))
+
+names(tree_id_wide)
+```
+
+
+
+## Export tree level data
+
+Met unieke en non-unieke (voor hakhout) tree-id én berekende variabelen.
+Enkel processed data.
+
+Niet alle variabelen mee exporteren, enkel deze relevant voor de meeste gebruikers.
+
+Enkele verduidelijkingen:
+
+* plotarea_ha = de oppervlakte van resp. A3 of A4, afh. van status en diameter van de boom
+(of LxB voor kernvlaktes of volledig BR voor andere plottypes) dus NIET de volledige cirkel
+
+
+```{r trees_less_variables}
+names(tree_id)
+
+tree_id_less_var <- tree_id %>% 
+  select(-old_id, -r_A1, -r_A2, -r_A3, -r_A4, -contains(c("dbh_min", "core_area_")), -subcirclearea_ha)
+
+tree_id_less_var <- tree_id_less_var %>% 
+  select(forest_reserve, plot_id, plottype, 
+         period, 
+         tree_measure_id, tree_id, tree_id_non_unique, coppice_id, 
+         x_local, y_local, 
+         species, 
+         dbh_mm, height_m, calc_height_m, 
+         alive_dead, ind_sht_cop, intact_snag, 
+         iufro_hght, iufro_vital, iufro_socia, 
+         decaystage, crown_volume_reduction, branch_length_reduction, 
+         remark, common_remark, 
+         year, date_dendro, 
+         subcircle, plotarea_ha, totalplotarea_ha, 
+         dbh_class_5cm, 
+         nr_of_stems, 
+         basal_area_m2, 
+         vol_bole_m3, vol_crown_m3, vol_tot_m3, 
+         basal_area_alive_m2_ha, basal_area_dead_m2_ha, 
+         vol_alive_m3_ha, vol_dead_standing_m3_ha, 
+         vol_bole_alive_m3_ha, vol_bole_dead_m3_ha, 
+         number_of_trees_alive_ha, number_of_trees_dead_ha
+         )
+
+```
+
+
+```{r save_trees, eval = FALSE}
+# volgende functies heb ik zelf geschreven, zitten niet in het package!!!
+save_results_csv (
+    results = list(trees_calc = tree_id_less_var),
+    output_dir = paste0(path_to_output, "raw-data/")
+    )
+
+# afgerond voor export naar access
+tree_id_round <- tree_id_less_var %>% 
+  mutate(round_df(., 4))
+
+# save_results_access (
+#   results = list(trees_calc = data_dendro_calc_round),
+#   database = path_to_analysis_set_db,
+#   remove_tables = TRUE
+#   )
+
+# Functie "save_results_access" (< package) geeft problemen met dates => hierna manueel
+
+con <- odbcConnectAccess2007(path_to_analysis_set_db)
+
+dbtables <- sqlTables(con)
+if ("trees_calc" %in% dbtables$TABLE_NAME) {
+        sqlDrop(con, "trees_calc")
+      }
+sqlSave(con, dat = tree_id_round, tablename = "trees_calc", varTypes = c(date_dendro="datetime"))
+
+odbcClose(con)
+```
+
+
+```{r save_trees_wide, eval = FALSE}
+# volgende functies heb ik zelf geschreven, zitten niet in het package!!!
+save_results_csv (
+    results = list(trees_wide = tree_id_wide),
+    output_dir = paste0(path_to_output, "raw-data/")
+    )
+
+# afgerond voor export naar access
+tree_id_wide_round <- tree_id_wide %>% 
+  mutate(round_df(., 4))
+
+save_results_access (
+  results = list(trees_wide = tree_id_wide_round),
+  database = path_to_analysis_set_db,
+  remove_tables = TRUE
+  )
+
+```
+
+
+## Export stem level data
+
+Met unieke en non-unieke (voor hakhout) tree-id (uniek op boomniveau, niet op spilniveau) én berekende variabelen.
+
+**!! OPGEPAST !!**
+Unieke en non-unieke (voor hakhout) tree-id overgenomen van trees berekend op boomniveau.
+
+<!--  na 16/2/2022: voor hakhout met meer dan twee delen: tree-id obv coppice-id (zie hoger) -->
+
+Niet alle variabelen mee exporteren, enkel deze relevant voor de meeste gebruikers
+
+```{r stems_less_variables}
+stem_id_less_var <- stem_id %>% 
+  select(-old_id, -r_A1, -r_A2, -r_A3, -r_A4, -contains(c("dbh_min", "core_area_")), -subcirclearea_ha)
+## stemnumber_alive werd weggefilterd
+
+stem_id_less_var <- stem_id_less_var %>% 
+  select(forest_reserve, plot_id, plottype, 
+         period, 
+         tree_measure_id, shoot_measure_id, 
+         tree_id, tree_id_non_unique, coppice_id, 
+         x_local, y_local, 
+         species, 
+         dbh_mm, height_m, calc_height_m, 
+         alive_dead, ind_sht_cop, intact_snag, 
+         iufro_hght, iufro_vital, iufro_socia, 
+         decaystage, crown_volume_reduction, branch_length_reduction, 
+         remark, common_remark, 
+         year, date_dendro, 
+         subcircle, plotarea_ha, totalplotarea_ha, 
+         dbh_class_5cm, 
+         basal_area_m2, 
+         vol_bole_m3, vol_crown_m3, vol_tot_m3, 
+         basal_area_alive_m2_ha, basal_area_dead_m2_ha, 
+         vol_alive_m3_ha, vol_dead_standing_m3_ha, 
+         vol_bole_alive_m3_ha, vol_bole_dead_m3_ha, 
+         stem_number_dead_ha, stem_number_alive_ha
+         )
+
+```
+
+
+```{r save_stems, eval = FALSE}
+# volgende functies heb ik zelf geschreven, zitten niet in het package!!!
+save_results_csv (
+    results = list(stems_calc = stem_id_less_var),
+    output_dir = paste0(path_to_output, "raw-data/")
+    )
+
+# afgerond voor export naar access
+stem_id_round <- stem_id_less_var %>% 
+  mutate(round_df(., 4))
+
+# save_results_access (
+#   results = list(trees_calc = data_dendro_calc_round),
+#   database = path_to_analysis_set_db,
+#   remove_tables = TRUE
+#   )
+
+# Functie "save_results_access" (< package) geeft problemen met dates => hierna manueel
+
+con <- odbcConnectAccess2007(path_to_analysis_set_db)
+
+dbtables <- sqlTables(con)
+if ("stems_calc" %in% dbtables$TABLE_NAME) {
+        sqlDrop(con, "stems_calc")
+      }
+sqlSave(con, dat = stem_id_round, tablename = "stems_calc", varTypes = c(date_dendro="datetime"))
+
+odbcClose(con)
+```
+
+
+
+# Regeneration - OK - 8/4/2022
+
+## Calculate
+
+```{r load_calc_reg}
+data_regeneration <-
+  load_data_regeneration(
+    database = path_to_fieldmap_db,
+    processed = TRUE
+  )
+
+regeneration <- calculate_regeneration(data_regeneration)
+```
+
+
+## Controle plot-level-data
+
+```{r CreateSeparateDataframesReg}
+for (tablename in names(regeneration)) {
+     assign(tablename, regeneration[[tablename]])
+} 
+
+```
+
+## Export
+
+```{r join_plottype_surveynr_BR_reg}
+reg_plotinfo <- lapply(regeneration, function(x) left_join(x, plotinfo %>% select(plot_id, forest_reserve, plottype, period, survey_number), by = c("plot_id", "period")))
+# lapply: same function over all elements of the list
+
+```
+
+```{r save_reg_git, eval = FALSE}
+save_results_git(
+  results = regeneration,
+  repo_path = path_to_git_forresdat,
+  strict = TRUE,
+  # strict = FALSE
+)
+```
+
+
+```{r save_reg_git_manueel, eval = FALSE}
+# manueel - eigen simpele functie
+save_results_tsv(regeneration, 
+                 root = path_to_forresdat_data,
+                 strict = FALSE)
+```
+
+
+```{r save_reg_access_csv, eval = FALSE}
+save_results_csv (
+  results = reg_plotinfo,
+  output_dir = path_to_analysis_set_csv
+)
+
+# afgerond voor export naar access
+# de df's van CP mogen op 0 afgerond worden (= 1ste drie dataframes)
+# de KV's op 2 cijfers na de komma
+
+reg_CP <- reg_plotinfo[c(1:3)]
+reg_CP <- reg_CP %>% 
+  lapply(., function(x) round_df(x, 0)) 
+  
+reg_CA  <- reg_plotinfo[c(4:5)]
+reg_CA <- reg_CA %>% 
+  lapply(., function(x) round_df(x, 2))
+
+reg_round <- c(reg_CP, reg_CA)
+
+save_results_access(
+    results = reg_round,
+    database = path_to_analysis_set_db,
+    remove_tables = TRUE
+  )
+
+```
+
+
+# Vegetation - OK - 8/4/2022
+
+## Calculate
+
+```{r load_veg}
+data_vegetation <-
+  load_data_vegetation(
+    database = path_to_fieldmap_db,
+    processed = TRUE
+  )
+data_herblayer <-
+  load_data_herblayer(
+    database = path_to_fieldmap_db,
+    processed = TRUE
+  )
+
+vegetation <- calculate_vegetation(data_vegetation, data_herblayer)
+```
+
+
+```{r join_plotinfo_veg}
+veg_plotinfo <- lapply(vegetation, function(x) left_join(x, plotinfo %>% select(plot_id, forest_reserve, plottype, period, survey_number), by = c("plot_id", "period")))
+# lapply: same function over all elements of the list
+```
+
+
+## Controle plot-level-data
+
+```{r CreateSeparateDataframesVeg}
+for (tablename in names(vegetation)) {
+     assign(tablename, vegetation[[tablename]])
+} 
+
+```
+
+## Export
+
+```{r save_veg_git, eval = FALSE}
+# geen plotinfo naar git
+save_results_git(
+  results = vegetation,
+  repo_path = path_to_git_forresdat,
+  # strict = TRUE, 
+  strict = FALSE
+)
+```
+
+```{r save_veg_git_manueel, eval = FALSE}
+# manueel - eigen simpele functie - als save_results_git niet werkt
+save_results_tsv(vegetation, 
+                 root = path_to_forresdat_data, 
+                 strict = FALSE)
+```
+
+
+```{r save_veg_access_csv, eval = FALSE}
+# volgende functie heb ik zelf geschreven, zit niet in het package!
+save_results_csv (
+    results = veg_plotinfo,
+    output_dir = path_to_analysis_set_csv
+    )
+
+# afgerond voor export naar access
+# de df's van CP mogen op 0 afgerond worden (= 1ste drie dataframes)
+# de KV's op 2 cijfers na de komma
+veg_round <- veg_plotinfo %>% 
+  lapply(., function(x) round_df(x, 2))
+
+# save_results_access (
+#   results = veg_round,
+#   database = path_to_analysis_set_db,
+#   remove_tables = TRUE
+#   )
+
+# Functie "save_results_access" (< package) geeft problemen met dates => hierna manueel
+
+con <- odbcConnectAccess2007(path_to_analysis_set_db)
+
+# vegetation_by_plot
+dbtables <- sqlTables(con)
+if ("vegetation_by_plot" %in% dbtables$TABLE_NAME) {
+        sqlDrop(con, "vegetation_by_plot")
+      }
+sqlSave(con, dat = vegetation_by_plot, tablename = "vegetation_by_plot", varTypes = c(date_vegetation="datetime"))
+
+# vegetation_by_core_area_species
+dbtables <- sqlTables(con)
+if ("vegetation_by_core_area_species" %in% dbtables$TABLE_NAME) {
+        sqlDrop(con, "vegetation_by_core_area_species")
+      }
+sqlSave(con, dat = vegetation_by_core_area_species, tablename = "vegetation_by_core_area_species")
+
+odbcClose(con)
+```
+
+
+# Herblayer - bezig - 11/3/2022
+
+## Export
+Ook herblayer naar forresdat wegschrijven
+
+```{r select_variables}
+names(data_herblayer)
+
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+qBrowsIndex <- sqlFetch(con, "qBrowsIndex")
+# qCoverHerbs <- sqlFetch(con, "qCoverHerbs")
+odbcClose(con)
+
+herblayer <- data_herblayer %>%
+  select(plot_id, subplot_id, period, 
+         date_vegetation, year, 
+         species, coverage_class_average_perc, 
+         browse_index_id) %>%
+  left_join(qBrowsIndex %>% select(ID, Value2), by = c("browse_index_id" = "ID")) %>% 
+  rename(browse_index = Value2) %>% 
+  mutate(date_vegetation = as.Date(date_vegetation)) 
+
+# save_results_xxxx: gemaakt om list weg te schrijven
+# hier maar één dataframe
+herblayer_list <- list(herblayer_by_plot = herblayer)
+herblayer_list_git <- list(herblayer_by_plot = herblayer %>% select(-browse_index))
+# summary(herblayer)
+
+
+```
+
+
+```{r join_plotinfo_herb}
+herb_plotinfo <- lapply(herblayer_list, function(x) left_join(x, plotinfo %>% select(plot_id, forest_reserve, plottype, period, survey_number), by = c("plot_id", "period")))
+# lapply: same function over all elements of the list
+
+```
+
+
+
+```{r save_herb_git, eval = FALSE}
+# geen plotinfo naar git
+save_results_git(
+  results = herblayer_list_git,
+  repo_path = path_to_git_forresdat,
+  strict = FALSE
+)
+
+```
+
+```{r save_herb_git_manueel, eval = FALSE}
+# manueel - eigen simpele functie - als save_results_git niet werkt
+save_results_tsv(herblayer_list_git, 
+                 root = path_to_forresdat_data, 
+                 strict = FALSE)
+```
+
+
+```{r save_herb_access_csv, eval = FALSE}
+# volgende functie heb ik zelf geschreven, zit niet in het package!
+save_results_csv (
+    results = herb_plotinfo,
+    output_dir = path_to_analysis_set_csv
+    )
+
+# afgerond voor export naar access
+herb_round <- herb_plotinfo %>% 
+  lapply(., function(x) round_df(x, 2))
+
+# save to access nog steeds niet opgelost, is alsof access date niet herkent
+# => manueel gedaan (csv opgeslagen als xlsx en dan geïmporteerd; csv gaf zelfd eproblemen als access)
+        # save_results_access(
+        #   results = herb_[1],
+        #   database = path_to_analysis_set_db,
+        #   remove_tables = TRUE
+        # )
+
+# probleem met datumvelden => varTypes aanduiden
+con <- odbcConnectAccess2007(path_to_analysis_set_db)
+
+dbtables <- sqlTables(con)
+if ("herblayer_by_plot" %in% dbtables$TABLE_NAME) {
+        sqlDrop(con, "herblayer_by_plot")
+      }
+# sqlSave(con, dat = herblayer, tablename = "herblayer_by_plot", fast = FALSE)
+sqlSave(con, dat = herb_round[[1]], tablename = "herblayer_by_plot", varTypes = c(date_vegetation="datetime"))
+
+odbcClose(con)
+
+```
+
+
+**Na update van forresdat, project "forresdat" openen en alles naar de cloud pushen**
+**Ook csv en access op gdrive plaatsen**
+
+

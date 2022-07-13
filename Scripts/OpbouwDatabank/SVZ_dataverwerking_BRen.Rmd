@@ -1,0 +1,256 @@
+---
+title: "SVZ import in dbEls deel 2"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: FALSE
+      smooth_scroll: FALSE
+---
+
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+source(here::here("scripts/ExtraFunctions_volume.R"))
+```
+
+# Inleiding
+
+Doel is zicht te krijgen op 
+
+- welke bosreservaten/periodes processed zijn en opgeladen naar forresdat  
+- welke bosreservaten een CalcHeight en CalcVolume hebben:  
+    - CalcHeight kan van hoogtemodellen of van dochterdb komen  
+    - calcvolume werd herberekend door Peter over alle plots heen  
+    (er is wel nog een backup met de calcvolumes uit de dochterdb)
+
+
+# Overzichten
+
+## Hoogtemodellen
+
+```{r load_hoogtemodellen}
+height_model <- load_height_models(path_to_height_models)
+
+# str(height_model)
+
+# TIJDELIJK 
+height_model <- height_model %>% 
+  mutate(plottype = ifelse(plottype == 20 & !is.na(plottype), "CP", "CA"))
+
+
+```
+
+```{r overzicht_hoogtemodellen}
+hoogtemodellen_SVZ <- height_model %>% 
+  group_by(forest_reserve, plottype) %>% 
+  summarise(n_models = n(),
+            n_period = n_distinct(period)) %>% 
+  ungroup() 
+
+hoogtemodellen_SVZ %>% DT :: datatable(options = list(dom = 'tip'),rownames = FALSE, filter = "top") 
+write_csv2(hoogtemodellen_SVZ, paste0(path_to_output,"SVZ_hoogtemodellen.csv"))
+
+```
+
+Welke bosresrevaten hebben wél curves voor CP's maar nog niet voor CA
+
+```{r modellen_CP_niet_CA}
+done_CP <- hoogtemodellen_SVZ %>% 
+  filter(plottype == "CP") %>% 
+  mutate(dh_CP = TRUE)
+
+done_CA <- hoogtemodellen_SVZ %>% 
+  filter(plottype == "CA") %>% 
+  mutate(dh = TRUE)
+
+to_do_CA <- done_CP %>% 
+  anti_join(done_CA, by = c("forest_reserve")) %>% 
+  select(-plottype) %>% 
+  filter(!forest_reserve %in% c("Zwaenepoel", "Liedekerke", "Sevendonck", "Ename", "Kluisbos"))
+
+# Zwaenepoel heeft geen KV (= Harras), Liedekerke en Sevendonck hebben andere naam bij KV's
+  
+```
+
+Er zijn ook natuurreservaten die alleen maar KV hebben en geen CP's
+
+```{r CA_to_do_obv_plotinfo}
+plotinfo <- load_plotinfo(path_to_fieldmap_db)
+
+plotinfo_CA <- plotinfo %>% 
+  filter(plottype == 30) %>% 
+  group_by(plot_id, forest_reserve, plottype) %>% 
+  summarise(n_models = n(),
+            n_period = n_distinct(period), 
+            survey_trees = sum(survey_trees), 
+            data_processed = sum(data_processed)) %>% 
+  ungroup() %>% 
+  left_join(done_CA %>% select(forest_reserve, dh), by = c("forest_reserve")) %>% 
+  left_join(done_CP %>% select(forest_reserve, dh_CP), by = c("forest_reserve"))
+
+to_do_CA <- plotinfo_CA %>% 
+  filter(is.na(dh))
+
+subset_ook_CPs <- to_do_CA %>% 
+  filter(dh_CP == TRUE)
+
+subset_ook_CPs$forest_reserve
+subset_ook_CPs$plot_id
+
+
+subset_geen_CPs <- to_do_CA %>% 
+  filter(is.na(dh_CP))
+
+unique(subset_geen_CPs$plot_id)
+unique(subset_geen_CPs$forest_reserve)
+
+write_csv2(to_do_CA, paste0(path_to_output,"ontbrekende_hoogtemodellen_CA.csv"))
+```
+
+
+
+## Berekende hoogtes (relevant indien geen hoogtemodel)
+
+```{r overzicht_CalcHeight}
+data_dendro <- load_data_dendrometry(database = path_to_fieldmap, extra_variables = TRUE)
+data_shoots <- load_data_shoots(database = path_to_fieldmap, extra_variables = TRUE)
+data_stems  <- compose_stem_data(data_dendro, data_shoots)
+data_stems_calc <- calc_variables_stem_level(data_stems, height_model)
+data_dendro_calc <- calc_variables_tree_level(data_dendro, data_stems_calc)
+
+# str(data_dendro_calc)
+
+calc_height_SVZ <- data_dendro_calc %>% 
+  group_by(forest_reserve, period, plottype) %>% 
+  summarise(n_trees = n(), 
+            min_plot_id = min(plot_id),
+            max_plot_id = max(plot_id), 
+            calc_height = sum(!is.na(calc_height_m)) > 0) %>% 
+  ungroup() %>% 
+  left_join(hoogtemodellen_SVZ, by = c("forest_reserve", "plottype","period")) %>% 
+  mutate(calculated_in_R = (!is.na(n_models))) %>% 
+  select(-n_models)
+
+calc_height_SVZ %>% DT :: datatable(options = list(dom = 'tip'),rownames = FALSE, filter = "top") 
+write_csv2(calc_height_SVZ, paste0(path_to_output,"SVZ_calc_height.csv"))
+```
+
+
+## Berekend volume dood hout
+
+```{r overzicht_CalcVolume_deadwood}
+data_deadwood <- load_data_deadwood(database = path_to_fieldmap)
+# str(data_deadwood)
+
+calc_volume_SVZ <- data_deadwood %>% 
+  #filter(plottype == 20) %>% 
+  group_by(forest_reserve, period, plottype) %>% 
+  summarise(n_trees = n(), 
+            min_plot_id = min(plot_id),
+            max_plot_id = max(plot_id),
+            calc_volume = sum(!is.na(calc_volume_m3)) > 0) %>% 
+  ungroup() 
+
+# allemaal OK, want Peter heeft ze herberekend
+calc_volume_SVZ %>% DT :: datatable(options = list(dom = 'tip'),rownames = FALSE, filter = "top") 
+write_csv2(calc_volume_SVZ, paste0(path_to_output,"SVZ_calc_volume_deadw.csv"))
+
+```
+
+
+## Verwerkte bosreservaten
+
+
+### Data_processed
+
+In de databank wordt het al dan niet verwerkt zijn van het bosreservaat aangeduid mbv veld data_processed = TRUE.
+
+Omvat datacontrole, aanmaak hoogtemodellen en het bijwerken van forresdat.
+
+OPGEPAST: soms per bosreservaat 2 jaartallen, wel zelfde survey => dan max_jaartal in onderstaand overzicht. 
+
+```{r overzicht_processed}
+# enkel Kerss en Zwaenepoel geen hoogtes
+plotinfo <- load_plotinfo(database = path_to_fieldmap)
+# str(plotinfo)
+
+SVZ_processed <- plotinfo %>% 
+  group_by(forest_reserve, period, plottype, survey_number) %>% 
+  summarise(max_year = max(year),
+            n_plots = n(),
+            survey_trees = sum(survey_trees == TRUE) > 0,
+            survey_deadw = sum(survey_deadw == TRUE) > 0,
+            survey_veg = sum(survey_veg == TRUE) > 0,
+            survey_reg = sum(survey_reg == TRUE) > 0,
+            data_processed = sum(data_processed == TRUE) > 0,
+            ) %>% 
+  ungroup() 
+
+SVZ_processed %>% select(-n_plots, -period) %>% DT :: datatable(options = list(dom = 'tip'),rownames = FALSE, filter = "top") 
+write_csv2(SVZ_processed, paste0(path_to_output,"SVZ_processed.csv"))
+
+```
+
+Bovenstaand overzicht lijkt voor Kersselaerspleyn wat verwarrend: eenzelfde periode, maar toch ander survey-number.
+De verklaring is dat er 11 plots pas in periode 2 voor de eerste keer opgemeten werden (uitbreiding).
+
+
+### Verwerkte data in forresdat
+
+Soms wordt het veld "data_processed" niet tijdig aangevuld in de databank.
+Daarom is het ook interssant om zicht te hebben wat al in forresdat zit.
+
+
+```{r overzicht_in_forresdat}
+plotinfo <- read_vc(file = "plotinfo", root = path_to_forresdat_data)
+# str(plotinfo)
+# hier werd scriptmatig voor kolmont en Kluisbos data_processed = TRUE gezet
+
+dendro_by_plot <- read_vc(file = "dendro_by_plot", root = path_to_forresdat_data)
+# str(dendro_by_plot)
+
+dendro_by_plot_ <- dendro_by_plot %>% 
+  left_join(plotinfo %>% select(-year), by = c("plot_id","period"))
+
+# dendro_by_plot_ %>% filter_at(c("forest_reserve"), any_vars(is.na(.))) %>% nrow()
+
+SVZ_forresdat <- dendro_by_plot_ %>% 
+  group_by(forest_reserve, period, plottype, survey_number) %>% 
+  summarise(max_year = max(year),
+            n_plots = n(),
+            survey_trees = sum(survey_trees == TRUE) > 0,
+            survey_deadw = sum(survey_deadw == TRUE) > 0,
+            survey_veg = sum(survey_veg == TRUE) > 0,
+            survey_reg = sum(survey_reg == TRUE) > 0,
+            data_processed = sum(data_processed == TRUE) > 0,
+            ) %>% 
+  ungroup() 
+
+SVZ_forresdat %>% select(-n_plots, -period, -max_year) %>% DT :: datatable(options = list(dom = 'tip'),rownames = FALSE, filter = "top") 
+write_csv2(SVZ_forresdat, paste0(path_to_output,"SVZ_forresdat.csv"))
+
+```
+
+

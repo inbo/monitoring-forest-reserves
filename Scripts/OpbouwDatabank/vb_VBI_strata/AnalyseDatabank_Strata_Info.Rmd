@@ -1,0 +1,212 @@
+---
+title: "Aanmaak strata - info"
+author: "Anja Leyman - Leen Govaere"
+date: "15-10-2019 - update 27-02-2020"
+output: 
+  html_document:
+    toc : TRUE
+    # toc : false
+    toc_float : true
+    number_sections : TRUE
+    
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(knitr)
+library(git2rdata)
+library(kableExtra)
+library(here)
+# opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+
+getwd()
+```
+
+# Inleiding
+
+Volgende info werd overgenomen uit "LEESMIJ_STRATA_20190708.txt""
+
+Bevat info over de bron van de toegevoegde strata  
+
+Meerdere bronnen van strata, deels shapefile, deels csv
+
+
+# Shapefile "invb2_ecod_bodem_BHR_ANB_GW"
+invb2_ecod_bodem_BHR_ANB_GW.shp: aangemaakt door Leen Govaere/Anja Leyman
+Bevat info over: ecodistrict, provincie, beheerregio, eigenaarscategorie, gewestplan, bodemkaart, beheerder (obv RechtenANB)
+
+Versie 5 : deze shape zal opnieuw aangemaakt moeten worden wegens nieuwe beheerregio's, update van beheerder (patbank).
+? evt meteen ook bodemkaart.
+
+Datum extractie gegevens:
+- ecodistrict, bodem: blijft stabiel: bodemkaart dateert van jaren '60, ecodistricten van begin 2000
+!! v5 --> nieuwe bodemgegevens beschikbaar
+
+- beheerregio: zou volgens mij steeds meest recente moeten zijn, weinig zin om te rapporteren over vroegere beheerregio's  
+- eigenaarscategorie -> 2013
+- RechtenANB (< patrDB versie 01/2013 van INBO-Gisserver) !!niet beschikbaar voor VBI1
+(op basis van veld "RechtenANB", alles behalve ‘Technisch beheer conform bosdecreet’)
+
+
+# Eigenaarscategorie (privé versus openbaar)
+
+* VBI1 : kadastergegevens per jaar 1997, 1998, 1999: < veld "EIGENCAT" in tblHoofd in bosinv1_2011.accdb
+* VBI2 : kadastergegevens 2013 (midden van de periode 2009-2018)
+
+v5 : voor VBI1 en VBI2 overnemen. 
+      voor VBI3 : opnieuw opvragen voor reeks 123 en vanaf nu jaarlijks.
+
+# Extra strata: bodemtextuur en bosleeftijd
+ExtraStrata.shp: < Toon Westra
+- bodemtextuur # nieuwe bodemkaart?
+- bosleeftijd (ForestAgeClass)
+
+
+# Bodemassociatieklasses
+Bodemassociatieklassen_Wim.csv: < Wim Buysse: opgemaakt in kader van zijn vraag naar DH-curve voor QD
+=> per plot een afgeleid bodemtype; 13 ruwe bodemtypes: veld "Bodemassociatieklasse":
+	Adroog
+	Anat
+	Avochtig
+	Edroog
+	Enat
+	Evochtig
+	Ldroog
+	Lnat
+	Lvochtig
+	Uvochtig
+	Zdroog
+	Znat
+	Zvochtig
+(A=leem;E=(zware) klei;L=zandleem;Z=zand;U=zware klei)
+
+
+# BODEM - update 2017
+Vanaf 27/5/2020 wordt bodemkaart 2017 gebruikt.
+_De bodemkaart werd in juni 2017 geupdate met enkele militaire domeinen en een unibodemtype voor de classficatie van de zeepolders en verschillende fouten werden verbeterd._
+Overlay gedaan door Maarten Stevens obv XY_coordinaten van de plots: obv ingemeten coordinaten VBI2 waar beschikbaar, elders obv theoretische coordinaten.
+Opgepast: 15 plots zonder bodemtype, waaronder maar één bosplot (188051: deze bosplot kreeg ook obv oude bodemkaart geen bodemtype toegekend)
+
+Koppeling met Bodemassociatieklassen_Wim (zie hoger) werd vernieuwd - ok!
+
+
+# Uitgebreide bosbeheerplannen
+invb2_UBBPvsBBBP.shp < Asbet (dd 22/5/2017)
+
+Bevat info over type beheerplan (ikv studiedag, op vraag van Carl De Schepper)
+!! soms meerdere polygonen op één plaats => dan zowel UBBP als BBBP => afzonderlijke shapefile van gemaakt, want meerdere records per plotnr mogelijk
+Vervolgens in R aggregeren per plot (zdd maar 1 record per plot): als UBBP beschikbaar (of BABR, BANR, GIBP, HPGB, BPMD) dan UBBP, anders BBBP
+
+2 velden: TypeBHP en TypeBHP_sinds10jr: z<owel voor VBI1 als VBI2
+
+Afgesproken om voor versie4 van dataverwerking (100% data) geen update te doen van deze gegevens, 
+aangezien er bij de dataverwerking versie 3 (85% data) reeds bleek dat er uit de info mbt type en duur BHP weinig conclusies konden getrokken worden 
+(immers nog niet veel plots waar een uitgebreid beheerplan reeds langer dan 10 jr in werking is)
+
+v5 : nieuwe perimeter van goedgekeurde beheerplan komt ter beschikking (publicatie januari 2022)
+
+ ----
+
+(c)A: dd. 3/6/2019: Wegens complexiteit mbt datums gekozen om enkel te focussen op UBBP (BBP niet veel meer waard dan afzonderlijke kapaanvragen)
+=> volgende variabelen weerhouden (per periode):
+	- UBBP: T/F
+	- UBBP_MeerDan10Jr: T/F
+	- JrGoedkUBBP: integer
+	- DuurUBBP: integer (vgl met DateDendro)
+
+v5 : UBBP bestaat niet meer : vanaf v5 werken met natuurbeheerplannen, types 1-4
+
+
+# Rechten ANB: management én eigenaarsinfo
+invb3_RechtenANB.shp < Patrimoniumdb (dd 16/5/2019) 
+=> variabele "Management2019" (al dan niet in beheer bij ANB = obv RechtenANB: alles behalve ‘Technisch beheer conform bosdecreet’)
+ + variabele "RechtenANB_2019"
+
+Wat reeds in StrataDynamic_vs3 zat (zie hoger), was gebaseerd op toestand in 2013 => variabele "Management2013"
+
+Beide variabelen zijn nuttig: 
+"wat is toestand in bos dat op dit moment in beheer van ANB zit" <-> "wat is toestand van bos dat (+/-) ten tijde van opname in beheer van ANB zat"
+
+(c) AL obv info Leen:
+"RechtenANB_2019" = meer up-to-date info over eigenaarscategorie: alles met uitz. van leeg of ‘geen specifieke rechten’ 
+(punt wellicht in privaat bezit, alleszins niet beheerd door ANB/ openbaar bos onder technisch beheer).
+Eigenaarscategorie obv kadaster dateert van 2013 en die info kan niet meer verkregen worden.
+
+
+# ENR, VNR, BR, HRL, VRL
+ENR, VNR, BR, HRL, VRL: overlay door Leen dd ?? (2018-2019)
+
+(c)A: op vraag van Leen datum erkenning toevoegen: NIET GEDAAN
+    # WANT 
+    # !! in shapefile zit géén datum voor Vlaamse NR, voor erkende NR ontbreken er datums ("DatumMB"), 
+        # enkel voor bosreservaat is "erk_dat" consequent ingevuld 
+    # !! datums van géén reservaat worden fout ingelezen (als 1899): cfr. UBBP_BBBP
+=> enkel te gebruiken als stratum mbt VBI2 (wat nu reservaat is en wat niet)
+
+
+v5 : reservaten worden vervangen door natuurbeheerplan. 
+
+# Bostypologie cfr. Cornelis et al. 
+Bostypologie: zie ook "InfoMbtAfleidenBostype.docx"
+
+Op vraag van Bart Roelandt (okt. 2017): ev. I2 tem I6 samenvoegen tot één grotere groep
+!! eerst nahoren bij Johnny of Bart hoe:
+      - Zeker niet enkel “als I_3 of I_5 of …., dan is het I_23456”
+      - Maar is het zo eenvoudig als: de verwantschappen van I_2 tem I_6 optellen en dan bekijken of dit
+         hoger uitkomt dan verwantschap met een ander bostype? Zo ja, dan is het bostype I_23456
+
+
+# Boswijzer2012 (soms 2013 genoemd, d.i. de tweede boswijzer)
+
+
+# Boswijzer2015 (Boswijzer 2.0 - herziene methodologie)
+Toegevoegd in februari 2020 ivm de bepaling van de bosoppervlakte.
+De bosinventaris bepaalt of een punt bos is cfr de juridische bepaling in het bosdecreet. Voor sommige rapporteringen is het beter de FAO definitie zoveel mogelijk te volgen. 
+
+FAO 2000a (FRA 2000 Main Report) Forest includes natural forests and forest plantations. It is used to refer to land with a tree canopy cover of more than 10 percent and area of more than 0.5 ha.
+Forests are determined both by the presence of trees and the absence of other predominant land uses.
+
+--> strata BOSW creëert de subset aan juridisch bos plots die een minimale oppervlakte van 0.5ha hebben.
+
+
+# PNV
+Overlay uitgevoerd door Maarten Stevens (INBO) ikv NARA2020: zie https://www.vlaanderen.be/inbo/backgroundindicatoren/bos-samenstelling-van-boomsoorten-en-kruidachtigen
+
+De stuurvariabelen PNV-type en bosleeftijd worden bepaald op basis van de xy-coördinaten van de steekproefpunten en gebiedsdekkende kaarten van de potentieel natuurlijke vegetatie en de bosleeftijd. De oorspronkelijke PNV-kaart bevat een aantal gebieden waarvoor geen PNV bepaald werd (polders, antropogene bodems, militaire domeinen). Voor een aantal steekproefpunten kan het ontbrekende PNV-type bepaald worden op basis van de aangepaste bodemkaart van 2015, waarin een aantal militaire domeinen zijn aangevuld. Het PNV-type van de resterende steekproefpunten die in een zone liggen met een ongekende bodemserie (bv. antropogeen) wordt bepaald via ruimtelijke interpolatie. Voor de polders wordt de conversietabel uit Wouters e.a. (2013) gebruikt om de kusteenheden om te zetten naar de klassieke bodemseries en vervolgens in PNV-types. 
+
+De PNV-kaart onderscheidt 11 klassen. Voor de analyse van de VBI werden de klassen gegroepeerd in 6 hoofdtypes (Tabel 1).
+
+```{r tabel-pnv, echo=FALSE, message=FALSE, warning=FALSE}
+read_vc(file = "PNV_types_overzicht", root = here::here("Data/Strata")) %>%
+  rename("PNV-type" = "PNV.type", "PNV-hoofdtype" = "PNV.hoofdtype") %>%
+  kbl(caption = "Tabel 1. Groepering PNV-types in hoofdtypes.") %>%
+  kable_styling(c("striped", "hover"), full_width = FALSE)
+```
+
+
+# Bosfragmentatie
+Bosfragmentatie berekend door Maarten Stevens (INBO) ikv NARA2020: zie  https://www.vlaanderen.be/inbo/backgroundindicatoren/bos-versnippering-van-bos
+
+Als indicator voor de stuurvariabele fragmentatie gebruikt men de **Forest Area Density** (FAD) (Vogt e.a. 2019). 
+
+Forest Area Density is het aandeel bospixels binnen een vast analysevenster rond een boscel. 
+
+Als basiskaart voor de berekening van de FAD gebruikt men de Groenkaart 2015. De originele Groenkaart werd herschaald naar een 10 x 10 m resolutie via ‘nearest neighbour resampling’. Daarbij krijgt elke 10 x 10 m rastercel de waarde van de 1 x 1 m rasterlaag die het dichtst bij zijn centroide gelegen is. De FAD wordt berekend voor vijf omgevingsvensters van verschillende omvang (lengte: 70 m, 13 m, 27 m, 81 m en 2430 m) via een Focal Statistics-operatie in ArcGIS. De vijf fragmentatiekaarten worden vervolgens gecombineerd in een synthesekaart die de gemiddelde FAD-waarde per boscel weergeeft. De FAD is gelijk aan 1 voor een cel die volledig omgeven is door bos en nul voor een cel zonder bos in de omgeving. Voor een gedetailleerde beschrijving van de methodologie verwijzen we naar Vogt e.a. (2019). Via de xy-coördinaten van de steekproefpunten en de gebiedsdekkende FAD-kaart bepalen we de FAD-waarde voor elk steekproefpunt. De **fragmentatiegraad (FragInv)** berekenen we als één min de FAD-waarde, **zodat de index stijgt met toenemende fragmentatiegraad.**
+
+<br>
+**Referentie**
+
+Vogt, P., K. H. Riitters, G. Caudullo, B. Eckhardt, en R. Raši. 2019. “An approach for pan-European monitoring of forest fragmentation, EUR 29944 EN”. Publications Office of the European Union. https://op.europa.eu/s/pahx.
+
+# Aanvulling VBI3
+
+Voor VBI3 is de aanvulling van de tabellen met strata van v4 geregeld via een afzonderlijk script AnlayseDatabank_Strata_Update_VBI3.
+Dit omdat het anders allemaal een beetje veel wordt, er geen aanleiding is om de tabellen opnieuw aan te maken voor periode 1 en periode 2 (tenzij landuse, omdat dit verwarrend was en anders is geregeld in tblRecordsVBI1 (?) en tblRecordsVBI23).
+
+Jaarlijks worden de v4 tabellen verder aangevuld als v5 tabel met Eigenaar (reeks 1,2,3 : situatie 1/1/2021), verder jaarlijks recente data en met de berekende Foresttypegroup obv de uitgevoerde vegetatie-opnames.
+
+Boswijzer, beheerder (management) worden overgenomen van v4 en periode 2.
+
+

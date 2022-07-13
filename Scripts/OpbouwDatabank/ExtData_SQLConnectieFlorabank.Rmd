@@ -1,0 +1,184 @@
+---
+title: "connectie florabank sql"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: FALSE
+      smooth_scroll: FALSE
+---
+
+Zorgen dat je verbonden bent met vpn!
+
+
+```{r libraries}
+library(tidyverse)
+library(inbodb)
+install.packages("inbodb")
+
+```
+
+Package "inbodb" laat toe om inbodb-en zoals inboveg en florabank te bevragen
+Zie [inbodb] (https://inbo.github.io/inbodb/reference/index.html) 
+
+```{r connect}
+florabank <- connect_inbo_dbase("D0021_00_userFlora")
+
+```
+
+Soorten zitten in tblTaxon, met unieke ID
+Andere tabellen verwijzen naar deze ID met TaxonID, met ParentID als ev. tussenstap voor soorten die van naam veranderd zijn 
+of samengesmolten of gesplitst ....
+
+
+```{r alle_soorten}
+fb_allspecies <- tbl(florabank, "tblTaxon") %>% collect()
+# collect vormt query om tot dataframe
+
+# !! beter enkel de vaatplanten ?zitten daar mossen bij? 
+  
+tbl(florabank, "tblTaxon") %>% filter(NaamNederlands == "Grijze mosterd")
+tbl(florabank, "tblTaxon") %>% filter(NaamNederlands %LIKE% "%eenmos%")
+
+```
+
+
+```{r}
+get_florabank_taxon_ifbl_year(florabank)
+
+# standaard wordt een query uitgevoerd, en worden de eerste 1000 records ingeladen
+# Als je volledige lijst wil moet je commandao collect() gebruiken
+```
+
+
+```{r enkele_queries_als_vb}
+gebogen_kransblad_query <- "SELECT NaamWetenschappelijk
+                            FROM tblTaxon
+                            WHERE NaamNederlands = 'Gebogen kransblad'"
+
+t2 <- tbl(src = florabank,
+    sql(gebogen_kransblad_query))
+view(t2)
+
+
+t3 <- tbl(src = florabank, "tblTaxon") %>%
+  filter(NaamNederlands == "Gebogen kransblad") %>%
+  select(NaamWetenschappelijk)
+
+tbl(florabank, sql("SELECT TOP 10 *
+                   FROM tblTaxon"))
+```
+
+Om kenmerken in te laden, wordt gewerkt met specifieke functie die "traits" (= eigenschappen) binnenhaalt: **get_florabank_traits**
+
+Deze kenmerken komen overeen met veld "kenmerk" in de tabel "inbo_vw_Kenmerken_Florabank1", dat zijn er 84 ...
+We kunnen deze kenmerk per kenmerk binnenhalen, of alles in één keer (trait = "")
+
+Misschien beter eerst aftoetsen bij ons team wat gebruikt wordt?
+
+
+```{r mogelijke_traits}
+#if the trait_name argument is missing, a list of possible names is printed
+get_florabank_traits(florabank)
+
+```
+
+
+```{r overzicht_kenmerken}
+kenmerken <- get_florabank_traits(
+ connection = florabank, 
+ trait_name = "", 
+ collect = FALSE) %>% 
+ distinct(Kenmerk) %>% 
+ collect()
+```
+
+All kenmerken, maar eventueel filteren op vaatplanten + veenmos en kussentjesmos
+Zie tblTaxonGroep
+
+```{r alle_kenmerken}
+tblTaxonGroep <- tbl(florabank, "tblTaxonGroep") %>% collect() 
+tblTaxonGroep %>% distinct(Naam)
+
+fb_kenmerken <- get_florabank_traits(
+ connection = florabank, 
+ trait_name = "") %>% 
+  # left_join (relTaxonTaxonGroup, by = c("ID" = "") %>% 
+  # left_join (tblTaxonGroup, by = c()) %>% 
+ # filter(code = "VP" | species %in% c(veenmos, kussentjesmos) %>%   
+ collect()
+
+? of bestaat er ergens een functie die soort en taxongroep weergeeft?
+
+```
+
+
+```{r ellenberg}
+fb_ellenberg <- get_florabank_traits(
+ connection = florabank, 
+ trait_name = "Ellenb", 
+ collect = TRUE)   
+# alle traits die beginnen met "Ellenb"
+# collect = TRUE => data wordt effectief binnengehaaald, anders enkel query die binnengehaald wordt (eerste 100 records zijn dan zichtbaar)
+
+fb_ellenberg %>% distinct(Kenmerk)
+```
+
+```{r red_list}
+# get all red lists via partial matching
+fb_rodelijst <- get_florabank_traits(florabank, "rode") 
+
+# get only the red list for vascular plant species
+fb_rodelijstvaatplanten <- get_florabank_traits(florabank, "Rode lijst Vaatplanten") %>% collect()
+view(fb_rodelijstvaatplanten)
+# bevat ook de momenteel niet bedreigde soorten én TaxonID
+
+
+```
+
+```{r wettelijke_status}
+fb_wettelijk <- get_florabank_traits(florabank, "wet")  %>% collect()
+view(fb_wettelijk)
+
+
+fb_conventies <- get_florabank_traits(florabank, "conv")  %>% collect()
+view(fb_conventies)
+
+
+```
+
+
+```{r indigenity_list}
+fb_indigeniteit <- get_florabank_traits(florabank, "indig") %>% collect()
+view(fb_indigeniteit)
+
+```
+
+Exporteren naar dbExterneData om zo makkelijk toegankelijk te zijn, ook voor anderen (zonder vpn-toegang).
+Al deze tabellen zijn via TaxonID of TaxonWetenschappelijk te koppelen.
+
+```{r export}
+odbcConnectAccess2007(dbExterneData)
+
+if ("fb_kenmerken" %in% sqlTables(connectieExterneData)$TABLE_NAME) {
+  sqlDrop(connectieExterneData,"fb_kenmerken")
+  sqlSave(connectieExterneData, qHerbspecies_vs2, "fb_kenmerken")
+  } else {
+  sqlSave(connectieExterneData, qHerbspecies_vs2, "fb_kenmerken")
+  }
+
+odbcClose(connectieExterneData)
+
+```
+
+
+```{r disconnect}
+dbDisconnect(florabank)
+```
+

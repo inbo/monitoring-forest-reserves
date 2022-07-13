@@ -1,0 +1,76 @@
+---
+title: "connectie watina en inboveg sql"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: FALSE
+      smooth_scroll: FALSE
+---
+
+Zorgen dat je verbonden bent met vpn!
+
+
+```{r libraries}
+library(tidyverse)
+library(inbodb)
+library(watina)
+
+```
+
+
+```{r connect}
+watina <- connect_watina()
+inboveg <- connect_inbo_dbase("D0010_00_Cydonia")
+
+```
+
+Er kan gewerkt worden met traits 
+
+Package "inbodb" laat toe om inbodb-en zoals inboveg en florabank te bevragen
+Zie [inbodb] (https://inbo.github.io/inbodb/reference/index.html) 
+
+Package "watina" is specifiek ontwikkeld om watina te bevragen
+Zie [watina] (https://inbo.github.io/watina/reference/index.html) 
+
+
+```{r ellenberg}
+
+ellenberg <- get_florabank_traits(
+ connection = florabank, 
+ trait_name = "Ellenb", 
+ collect = TRUE)
+# alle traits die beginnen met "Ellenb"
+
+all_taxons <- get_florabank_traits(
+ connection = florabank, 
+ # trait_name = "test", 
+ collect = TRUE)
+
+# Please provide (part of) a trait name from this list: Aantal zaden per vrucht, AbundantieDuinen, AbundantieKempen, AbundantieLeem, AbundantieMaas, AbundantiePolder, AbundantieZandleem, Afdeling, Afmetingen zaad, Anatomische bouw, Areaal, Areaal mossen, bioom aanduiding, Bestuiving, Bladfenologie, Bladseizoen (BBR), Bladvorm, Bloei/BestuivingTot, Bloei/BestuivingVan, Bloemkleur, Carnivorie, Conventie van Bern en habitatrichtlijn, CSR-Strategie, Doelsoort, Ecologische amplitude, Ecotopensysteem voor Nederland en Vlaanderen, Ellenberg Continentaliteit, Ellenberg Licht, Ellenberg Reactiegetal, Ellenberg Saliniteit, Ellenberg Stikstof, Ellenberg Temperatuur, Ellenberg Vocht, Ellenberg zware metalen, Eunis habitat klassen, Eunis habitat klassen mossen, Gebruik, Geslachtsverdeling, Gewicht zaad, Graad van polyploidie, Groeivorm, Grondwater, Herkomst, Hoogte (ECPE), HoogteBiobaseExt, HoogteBiobaseMax, HoogteBiobaseMin, Indicator oud bos, Indigeniteit, Kiemtijdoperator, KiemtijdTot, KiemtijdVan, Kroonvorm, Laatste waarneming, Levensvorm (BBR), LichtbehoefteMax, LichtbehoefteMin, Maaigevoeligheid, Monocarp, Mycorrhizen, Oecologische groepen Van Der Maarel, Plantengemeenschappen Westhoff en Den Held, Rode Lijst Mossen, Rode lijst Vaatplanten, Socio-ecologische groepen Stieperaere en Fransen, Stekel/Doorn, StromingExt, StromingMax, StromingMin, Substraat klassen mossen, Trendindex, Vector migratie, Verbreidingseenheid, Verbreidingsperiode, Verbreidingsstrategie, Verbreidingswijze, VochtgehalteMax, VochtgehalteMin, VoedselrijkdomMax, VoedselrijkdomMin, Voorkomen Amerika, Voorkomen Azie, Voorkomen Europa, Voorkomen Holarctis, Voorkomen Midden-Europa, Voorkomen Noord-Europa, Voorkomen Noord-Zuid, Voorkomen Oost-Europa, Voorkomen Oost-West, Voorkomen West-Europa, Voorkomen Zuid-Europa, Voorkomen Zuid-Oost-Europa, Vrucht/ZaadTot, Vrucht/ZaadVan, Vruchtkleur, Vruchttype (BBR), Wettelijke status, Worteldiepte, Wortelknol, Zaadbank ECPE, Zaadbank Milberg Bewaaromstandigheden, Zaadbank Milberg Bewaaromstandigheden Extra, Zaadkleur, Zaadvorm, ZaadvormExt, Zeldzaamheid KFK, Zelfbestuiving, Zink, Zoet/Zout water Max, Zoet/Zout water Min, ZuurtegraadMax, Zuur
+
+bl <- get_florabank_traits(
+ connection = florabank, 
+ trait_name = "bl", 
+ collect = TRUE)
+
+substraat <- get_florabank_traits_2(florabank, 
+  trait_name = "Substraat klassen mossen", 
+  collect = TRUE)
+
+
+```
+
+
+```{r disconnect}
+dbDisconnect(inboveg)
+dbDisconnect(watina)
+
+```
+

@@ -1,0 +1,137 @@
+---
+title: "Soortenljst VBI en BR om aan te leveren aan Wouter VL"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: FALSE
+      smooth_scroll: FALSE
+---
+
+DOEL van dit script is om de soorten uit qspecies en qherbspecies uit de fieldmap-databanken van BR en VBI samen te zetten om aan Wouter VL te bezorgen
+Hij zal er een parentID en childID aan koppelen, conform florabank.
+
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup_Forrescalc.R"))
+
+```
+
+
+**Bosreservaten:**
+
+- qHerbSpecies240810: gebruik bij vegetatie-opname
+- qspecies: gebruikt bij tree layer en regeneration
+
+**VBI**
+
+- qTreeSpecies: zelfde ID bij VBI1 els VBI2: gebruikt bij trees layer, en regeneration
+- qVEG_HerbSpecies: gebruikt in kruidlaag van vegetatie-opname
+- qVEG_TreeSpecies: gebruikt in struik- en boomlaag van vegetatie-opname
+- tblSpeciesListComb uit dbExterneData combineert IDSpVBI1 en IDSpVBI2 (IDSp is nieuwe unieke ID, wordt nergens gebruikt)
+(VBI1 wordt gekoppeld via IdSpVBI1; VBI2 via NameSc)
+(bevat T/F-velden "InvasiveTree", "ExoticTree", "Tree")
+(qVEG_HerbSpecies en qVEG_TreeSpecies zitten beide volledig in tblSpecieslistComb & worden gekoppeld obv scientific name => ID doet er niet toe)
+- koppeling met florabank, oud bosplanten, rode lijsten, ... gebeuren allemaal via Scientific Name
+
+=> in tblspeciesListComb een extra unieke ID die naar de florabank verwijst
+
+```{r LoadSpeciesLists}
+# fieldmap BR
+conBR <- odbcConnectAccess2007(path_to_fieldmap)
+
+qHerbSpecies_BR <- sqlFetch (conBR, "qHerbSpecies240810", stringsAsFactors = TRUE)
+qTreeSpecies_BR <- sqlFetch (conBR, "qspecies", stringsAsFactors = TRUE)
+
+odbcClose(conBR)
+
+# fieldmap VBI
+path_to_VBI <- "C:/1Bosinventaris_finaal_vs4/Data/MeetgegevensRuw/FieldMapData_Bosinventaris_v4.accdb"
+path_to_externe_data_VBI <- "C:/1Bosinventaris_finaal_vs4/Data/ExterneData/VBIExterneData.accdb"
+  
+conVBI1 <- odbcConnectAccess2007(path_to_VBI)
+
+  qTreeSpecies_VBI <- sqlFetch (conVBI1, "qTreeSpecies", stringsAsFactors = TRUE)
+# qTreeSpecies: zelfde ID voor VBI1 en VBI2
+
+odbcClose(conVBI1)
+
+
+conVBI2 <- odbcConnectAccess2007(path_to_externe_data_VBI)
+
+  qHerbSpecies_VBI<-sqlFetch(conVBI2, "tblspeciesListComb")
+
+odbcClose(conVBI2)
+
+```
+
+
+```{r CombineLists}
+names(qHerbSpecies_BR)
+names(qHerbSpecies_VBI)
+names(qTreeSpecies_BR)
+names(qTreeSpecies_BR)
+
+all_BR <- qTreeSpecies_BR %>% 
+  mutate(VBI_BR = "BR_tree") %>% 
+  select(ID, NameNl = Value1, NameSc = Value2, VBI_BR) %>% 
+  rbind(qHerbSpecies_BR %>% 
+          mutate(VBI_BR = "BR_herb") %>% 
+  select(ID, NameNl = Value1, , NameSc = Value2, VBI_BR))
+
+nrow(qHerbSpecies_BR) + nrow(qTreeSpecies_BR)
+
+all_VBI <- qTreeSpecies_VBI %>% 
+  mutate(VBI_BR = "VBI_tree") %>% 
+  select(ID, NameNl = Value1, NameSc = Value2, VBI_BR) %>% 
+  rbind(qHerbSpecies_VBI %>% 
+          mutate(VBI_BR = "VBI_herb") %>% 
+  select(ID = IDSp, NameNl, NameSc, VBI_BR))
+
+all <- all_BR %>% 
+  rbind(all_VBI)
+
+all_for_Wouter <- all %>% 
+  # select(NameNl, NameSc) %>% 
+  distinct(NameNl, NameSc) %>% 
+  filter(!NameNl %in% c("_ANDERE SOORT", "BRAAK", "DOOD", "Niet van toepassing", 
+  "dood (dead forest)", "braak (unstocked)"))
+
+```
+
+Exporteren
+
+```{r export}
+colnames(all_for_Wouter)
+
+write_csv2(all_for_Wouter, here("output/soortenlijst_BR_VBI.csv"))
+
+```
+
+
+Als Wouter aan deze tabel de ID's van de florabank hangt, kan ik de 4 brontabellen obv scientific én nederlandse naam terug koppelen.
+Met behulp van ene left_join: enkel deze van de brontabellen, en dan overhouden waar NameSc en NameBNl zelfde is met nieuwe tabel van Wouter.
+
+
+

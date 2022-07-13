@@ -1,0 +1,122 @@
+---
+title: "Untitled"
+output: html_document
+---
+
+```{r plotdetails_1986, eval = FALSE}
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+
+tables_fieldmap <- sqlTables(con) %>% filter(!str_detect(TABLE_NAME, "MSys"))
+
+PlotDetails_1986 <- sqlFetch (con, "PlotDetails_1986", stringsAsFactors = TRUE) %>% 
+  mutate(period = 0) %>% 
+  rename(Date_Dendro = Date_Dendro_1986,
+         FieldTeam_Dendro = FieldTeam_Dendro_1eSet) %>% 
+  select(-FieldStatus)
+PlotDetails_1eSet <- sqlFetch (con, "PlotDetails_1eSet", stringsAsFactors = TRUE) %>% 
+  mutate(period = 1) %>% 
+  rename(Date_Dendro = Date_Dendro_1eSet,
+         FieldTeam_Dendro = FieldTeam_Dendro_1eSet) %>% 
+  select(-FieldStatus)
+PlotDetails_2eSet <- sqlFetch (con, "PlotDetails_2eSet", stringsAsFactors = TRUE) %>% 
+  mutate(period = 2) %>% 
+  rename(Date_Dendro = Date_Dendro_2eSet,
+         FieldTeam_Dendro = FieldTeam_Dendro_2eSet) %>% 
+  select(-FieldStatus)
+PlotDetails_3eSet <- sqlFetch (con, "PlotDetails_3eSet", stringsAsFactors = TRUE) %>% 
+  mutate(period = 3) %>% 
+  rename(Date_Dendro = Date_Dendro_3eSet,
+         FieldTeam_Dendro = FieldTeam_Dendro_3eSet) %>% 
+  select(-FieldStatus)
+
+odbcClose(con)
+
+# tables_fieldmap %>% filter(str_detect(TABLE_NAME, "PlotDet"))
+
+# names(PlotDetails_1986)
+# names(PlotDetails_1eSet)
+# names(PlotDetails_2eSet)
+# names(PlotDetails_3eSet)
+
+plotDetails <- rbind(PlotDetails_1986, PlotDetails_1eSet, PlotDetails_2eSet, PlotDetails_3eSet)
+
+# colnames(PlotDetails_1eSet) == colnames(PlotDetails_2eSet)
+# nrow(plotDetails) == nrow(PlotDetails_1eSet) + nrow(PlotDetails_1986) + nrow(PlotDetails_2eSet) + nrow(PlotDetails_3eSet)
+
+names(plotDetails)
+
+# n_distinct(plotDetails$plot_id)
+
+plotdetails_ <- plotDetails %>% 
+  mutate(year = year(round_date(.data$Date_Dendro, "year")) - 1, 
+         survey_trees = ifelse(.data$Survey_Trees_YN == 10 & !is.na(.data$Survey_Trees_YN), TRUE, FALSE),
+          survey_deadw = ifelse(.data$Survey_Deadwood_YN == 10 & !is.na(.data$Survey_Deadwood_YN), TRUE, FALSE),
+          survey_veg = ifelse(.data$Survey_Vegetation_YN == 10 & !is.na(.data$Survey_Vegetation_YN), TRUE, FALSE),
+          survey_reg = ifelse(.data$Survey_Regeneration_YN == 10 & !is.na(.data$Survey_Regeneration_YN), TRUE, FALSE),
+          data_processed = ifelse(.data$DataProcessed_YN == 10 & !is.na(.data$DataProcessed_YN), TRUE, FALSE)
+           ) %>% 
+  rename(CoreArea_ha = Area_ha) %>% 
+    select(plot_id = IDPlots, forest_reserve = ForestReserve, period, year,
+           Date_Dendro, 
+           contains("survey"), data_processed,
+         rA1_m = rA1, rA2_m = rA2, rA3_m = rA3, rA4_m = rA4, 
+         TresHoldDBH_A3_alive_mm = TresHoldDBH_Trees_A3_alive, 
+         TresHoldDBH_A3_dead_mm = TresHoldDBH_Trees_A3_dead, 
+         TresHoldDBH_A4_alive_mm = TresHoldDBH_Trees_A4_alive, 
+         TresHoldDBH_A4_dead_mm = TresHoldDBH_Trees_A4_dead, 
+         TresHoldDBH_CoreArea_dead_mm = TresHoldDBH_Trees_CoreArea_dead, 
+         TresHoldDBH_CoreArea_alive_mm = TresHoldDBH_Trees_CoreArea_alive, 
+         TresHoldDiam_Deadw_A4_mm = TresHoldDiam_Deadwood_A4,
+         TresHoldDiam_Deadw_CoreArea_mm = TresHoldDiam_Deadwood_CoreArea,
+         contains("Area"),
+         -contains("YN")
+         )
+```
+
+
+```{r vgl_plotinfo_plotdetails, eval=FALSE}
+names(plotdetails_)
+names(plotinfo)
+nrow(plotdetails_)
+nrow(plotinfo)
+
+# plotdetails: geen info over survey-number en plottype
+plotdetails_ <- plotdetails_ %>% 
+  select(plot_id, forest_reserve, contains("survey"), data_processed,
+         period, year)
+
+# extra: BR Kerss 1986
+extra_plotdetails <- plotdetails_ %>% 
+  anti_join(plotinfo, by = c("plot_id", "period")) %>% 
+  mutate(plottype = "CA",
+         survey_number = 0)
+
+extra_plotdetails
+
+```
+
+Initieel extra plotinfo 1986 toegevoegd aan plotinfo, maar deze branch voegt year NIET toe aan plotinfo 
+Daarom toch beter zelf obv plotdetails.
+Maar dan zit survey_number er niet bij ...
+Dus eerst joinen.
+
+
+```{r join_year}
+plotinfo_ <- plotinfo %>% 
+  left_join(plotdetails_ %>% select(plot_id, period, year), by = c("plot_id", "period"))
+```
+
+
+```{r add_plotinfo_1986, eval = FALSE}
+# samenvoegen
+plotinfo_ <- rbind(plotinfo_, extra_plotdetails) 
+
+# aanpassen survey_numbers Kerss KV
+plotinfo_ <- plotinfo_ %>% 
+  mutate(survey_number = ifelse(plot_id == 11000, survey_number + 1, survey_number)) %>% 
+  rename(year_dendro = year)
+
+# OK
+plotinfo <- plotinfo_
+
+```

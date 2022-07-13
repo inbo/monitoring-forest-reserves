@@ -1,0 +1,1058 @@
+---
+title: "Aanmaak strata"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: TRUE
+      smooth_scroll: FALSE
+---
+
+# Vraagstelling
+
+
+
+
+> !!!!!!!!!!!!!!!!!!!!!!!!!
+> Bij volgende keer dat ik dit script doorloop TOCH forest_reserve_fieldmap in ALLE tabellen behouden om makkelijk te koppelen
+
+> ?? strata_remaining: bevat niet period, maar toch record per periode??
+
+
+
+DOEL van dit script is om alle beschikbare strata te bundelen in één databank.
+
+Zie [gdrive](https://drive.google.com/drive/folders/1z3l6VVCa1FIPiL1SkZu9VVQKF6Eeh7BN?usp=sharing) - PRJ_BR_AanvraagGegevens/!METADATA-ALL_PLOTS
+
+Brondata: 
+
+<!-- 1) de strata aangemaakt door Marc (via overlays in GIS) : "00_Bosreservaten_allecirkels-versieME-2020-11-18.xlsx":  -->
+<!-- zie gdrive "G:\Mijn Drive\6TeamData\PRJ_BOSECO_ALGEMEEN\PRJ_BR_AanvraagGegevens\!METADATA-ALL_PLOTS' -->
+
+1) strata aangemaakt door Marc Esprit (via overlays in GIS) : `boseco_alleproefvlakken_centraalpunt_lam72_metinfo.shp`  
+
+2) strata samengezet door Kris VdK: `00_referentiefile-meestcompleet-Bosreservaten_allecirkels.gsheet`
+
+3) strata berekend obv de metingen, op dit moment enkel de hoofdboomsoort (dominant tree)
+Op termijn kunen ook kenmerken zoals standtype (LH, NH, gemengd LH, kapvlakte, open plek), foresttype (eiken-beuken..°), .... naar analogie met de VBI.
+
+4) gegevens op niveau van bosreservaat (CP's en KV apart) door Kris VdK in kader van data-vraag EUFORIA: `INBO_info_forest_reserve.xlsx`, kopie van `Metadata_Permanent_Plots` van  [EUFORIA-network](https://drive.google.com/drive/folders/1F4bmaNFoXNpvkiqYbn7Dmq9LlodjwQGa) - Forest Reserves Working Group/Metadata_collection.
+
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = FALSE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+
+```
+
+
+```{r import_data_reserve_level}
+# Kris Vdk heeft allerlei data samen gezet voor Euforia, op niveau van het volledige bosreservaat (CP vs KV)
+path_to_EUFORIA_algemeen <- paste0(path_to_datarequests, "EUFORIA_algemeen/enkel_INBO/")
+
+forest_reserve_list_EUFORIA <- read_xlsx(paste0(path_to_EUFORIA_algemeen, "INBO_link_forestreserve_EUFORIA_fieldmap.xlsx"))
+
+forest_reserve_info_EUFORIA <- read_xlsx(paste0(path_to_EUFORIA_algemeen, "INBO_info_forest_reserve.xlsx")) %>% 
+  select(2:12) %>% 
+  rename(reserve_name_euforia = reserve_name,
+         reserve_area_ha = reserve_area,
+         primeval_YN = primeval) %>% 
+  filter(!is.na(res_ID_inst))
+
+
+names(forest_reserve_info_EUFORIA)
+
+forest_reserve_info_EUFORIA_ <- forest_reserve_info_EUFORIA %>% 
+  left_join(forest_reserve_list_EUFORIA, by = c("reserve_name_euforia" = "reserve_name", "res_ID_inst", "institute")) %>% 
+  select(forest_reserve = forest_reserve_fieldmap, plottype, everything()) %>% 
+  select(-institute, -res_ID_inst, -SiteID_EUFORIA)
+
+names(forest_reserve_info_EUFORIA_)
+```
+
+```{r import_data_reserve_level2}
+# uit monitoringrapport 
+con <- odbcConnectAccess2007(path_to_strata_db)
+  info_forest_reserve <- sqlFetch(con, "info_forest_reserve_level", stringsAsFactors = FALSE)  # reserve establishment date
+odbcClose(con)
+
+
+```
+
+```{r import_data_gsheet}
+input_gsheet <- read_xlsx(paste0(path_to_strata, "input/00_referentiefile-meestcompleet-Bosreservaten_allecirkels.xlsx")) %>% 
+  rename(plot_id = PlotID)
+# als gsheet op gdrive - aangevuld door Kris VdK
+
+```
+
+```{r variables_gsheet}
+names(input_gsheet)
+
+```
+
+
+```{r import_data_shp}
+fc_strata_shp <-read_sf("C:/03_BR/1_Dataverwerking/Data/Strata/input/boseco_alleproefvlakken_centraalpunt_lam72_metinfo.shp", crs = 31370) %>% rename(plot_id = PlotID)
+
+df_strata_shp <- fc_strata_shp %>% st_drop_geometry()  # cfr forresdat
+
+```
+
+
+```{r verschil_gsheet_shp}
+niet_in_input_gsheet <- df_strata_shp %>% 
+  anti_join(input_gsheet %>% select(plot_id))
+# kernvlaktes
+range(niet_in_input_gsheet$Unieknr)
+```
+
+
+```{r nr_records}
+nrow(df_strata_shp) == 1063
+nrow(input_gsheet) == 1009
+
+n_distinct(df_strata_shp$plot_id) == 1055
+
+```
+
+`Unieknr` werd in de shapefile door Marc geïntroduceerd voor de transecten in de kernvlaktes.
+Bij alle ander plots is `plot_id` gelijk aan `Unieknr`..
+
+```{r dubbele_plot_id}
+dubbele_plotids <- df_strata_shp %>% 
+  group_by(plot_id) %>% 
+  summarize(aantal = n()) %>% 
+  ungroup() %>% 
+  filter(aantal > 1)
+
+check_dubbels <- df_strata_shp %>% inner_join(dubbele_plotids)
+# transecten van kernvlaktes, onderscheid via Unieknr
+```
+
+In elke tabel wordt `Unieknr`, `plot_id`, `SiteName` en `SubArea` als standaard variabele mee opgenomen, met uitzondering van de tabellen `info_survey` en `dominant tree`.  
+
+*Even getwijfeld om de velden SiteName en SubArea enkel in tabel `info_survey` mee te nemen, om koppeling in latere R-scripts eenvoudig te houden. Maar omdat de naam in forresdat (forest_reserve) toch anders is, maakt het niet uit. Koppeling doen obv plot_id.*
+*!! Anderzijds: als er meerdere strata gekoppeld moeten worden, hebben we toch dat probleem. Daarom bij inladen van strata zo snel mogelijk enkel de relevante info weerhouden*
+
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!
+Bij volgende keer dat ik dit script doorloop TOCH forest_reserve_fieldmap in ALLE tabellen behouden om makkelijk te koppelen
+
+?? strata_remaining: beva niet period, maar toch record per periode??
+
+
+```{r}
+basic_variables <- c("Unieknr", "plot_id", "SiteName", "SubArea")
+```
+
+
+# Statische strata
+
+Onafhankelijk van periode
+
+## Klimaat
+
+Bron: GIS-data INBO: S:\Europa\Klimatologie_Meteorologie - Current climate_30s_EU.lyr
+
+Referentie: Klimaatdata (afkomstig van WorldClim;[](http://www.worldclim.org/);versie 1.3, download juli-augustus 2009)
+
+
+Voor klimaat (neerslag en temp) heb ik Current climate_30s_EU.lyr gebruikt. Bij "metadata" staat er alleen maar: Klimaatdata (afkomstig van [WorldClim](http://www.worldclim.org/), versie 1.3, download juli-augustus 2009)(zie ook bijlage waar ook nog andere uitleg staat over welke modellen er gebruikt zijn) of S:\Europa\Klimatologie_Meteorologie.
+
+```{r strata_klimaat}
+names(df_strata_shp)
+
+strata_klimaat <- df_strata_shp %>% 
+  select(basic_variables, contains(c("Regen", "Temp")))
+
+names(strata_klimaat)
+head(strata_klimaat)
+```
+
+
+## Bodem
+
+**Bron1**: GIS-data INBO: S:\Vlaanderen\GeoData\Bodemkaart\WRB Soil Units 40k.
+
+WRB Soil Units 40k: Bodemkaart van het Vlaamse Gewest volgens het internationale bodemclassificatiesysteem "World Reference Base for Soil Resources" (WRB) op schaal 1:40.000
+
+Ook te vinden op [geopunt](https://www.geopunt.be/catalogus/datasetfolder/83c46eae-a202-454c-b063-a858be3e4335).
+
+Referentie: Databank Ondergrond Vlaanderen - (vermelding van de beheerder en de specifieke geraadpleegde gegevens) - Geraadpleegd op dd/mm/jjjj, op https://www.dov.vlaanderen.be
+
+
+**Bron2**: GIS-data INBO: S:\Vlaanderen\GeoData\Bodemkaart_2_0.lyr 
+
+Bevat de gegegevens van de Belgische bodemkaart.
+Metadata: zie S:\Vlaanderen\GeoData\_Metadata\Bodemkaart\DOV bodemkaart_2_0.pdf
+
+Referentie: Digitale bodemkaart van het Vlaams Gewest: bodemtypes, substraten, fasen en varianten van het moedermateriaal en de profielontwikkeling, v2.0. Vlaamse overheid, Departement Omgeving, Vlaams Planbureau voor Omgeving (VPO)
+
+> !! moet nog bijgewerkt worden, want initieel bevatte layerfile nog de ude bodemkaart en had Marc daar de overlay mee gedaan
+
+
+```{r strata_bodem}
+strata_bodem <- df_strata_shp %>% 
+  select(basic_variables, 52:72) %>% 
+  select(basic_variables,
+         # international (WRB Soil Units 40k)
+         soil_unit = Soil_unit,
+         reference_soil_group = Referenc_1,
+         contains("pq"), contains("sq"),
+         belgisch_bodemtype = uniBodemty,
+         belgisch_bodemdistrict = belgisch_b,
+         # Belgische bodemkaart
+         bodemkaart_streek_afk = Streek_afk,
+         bodemserie = Bodemserie,
+         everything()
+  )
+         
+names(strata_bodem)
+head(strata_bodem)
+```
+
+
+## Boshistoriek
+
+### Detail obv meerdere historische kaarten 
+
+9 historische kaarten, referenties in shapefile zelf opgeslagen en mee geëxporteerd.
+
+```{r strata_historiek_obv_shp_marc}
+strata_hist <- df_strata_shp %>% 
+  select(basic_variables, 30:51)
+
+names(strata_hist)
+unique(strata_hist$Boshis_sam)
+
+head(strata_hist)
+
+```
+
+De codes gebruikt bij de historische kaarten kunnen geraadpleegd worden in tabel `qHistoriek`.
+
+```{r lkp_boshist_shp}
+qHist <- read_xlsx(paste0(path_to_strata, "qHistoriek.xlsx"))
+```
+
+Zelf aanmaken van bosleeftijdscode cfr bosleeftijdskaart, door 0 en 1 toe te voegen voor al dan niet bos op de 4 sleutelmomenten.
+
+```{r boslftd_afgeleid_van_shp_marc}
+names(strata_hist)
+
+strata_hist_ <- strata_hist %>%
+  mutate(Ferr_bos = ifelse(str_detect(Ferr, "B") & Ferr != "H/B" & !str_detect(Ferr, "\\+"), 1, 0)
+         , VDM_bos = ifelse(str_detect(VDM, "B") & VDM != "H/B" & !str_detect(VDM, "\\+"), 1, 0)
+         , DG3_bos = ifelse(str_detect(DG3, "B") & DG3 != "H/B", 1, 0)
+         , NGI2_bos = ifelse(str_detect(NGI2, "B") & NGI2 != "H/B", 1, 0)
+  ) %>%
+  mutate(Boshis_sam_beknopt = paste0("\'", Ferr_bos, VDM_bos, DG3_bos, NGI2_bos)) %>%
+  mutate(Boshis_sam_extract = paste0("\'", as.character(str_sub(Boshis_sam, 1,2))
+                                     , as.character(str_sub(Boshis_sam, 6,6))
+                                     , as.character(str_sub(Boshis_sam, 9,9))
+                                     )
+         ) %>%
+  select(-c(5:7), -contains(c("DG1", "DG2", "MGI", "NGI1", "Gkad"))) %>%
+  mutate(zelfde_hist = ifelse(Boshis_sam_beknopt == Boshis_sam_extract, TRUE, FALSE))
+
+
+# strata_hist_ <- strata_hist %>% 
+#   mutate(Ferr_bos = ifelse(str_detect(Ferr, "B") & Ferr != "H/B" & !str_detect(Ferr, "\\+"), 1, 0)
+#          , VDM_bos = ifelse(str_detect(VDM, "B") & VDM != "H/B" & !str_detect(VDM, "\\+"), 1, 0)
+#          , DG3_bos = ifelse(str_detect(DG3, "B") & DG3 != "H/B", 1, 0)
+#          , NGI2_bos = ifelse(str_detect(NGI2, "B") & NGI2 != "H/B", 1, 0)
+#   ) %>% 
+#   mutate(Boshis_sam_beknopt = paste0(Ferr_bos, VDM_bos, DG3_bos, NGI2_bos)) %>% 
+#   mutate(Boshis_sam_extract = paste0(str_sub(Boshis_sam, 1,2)
+#                                      , str_sub(Boshis_sam, 6,6)
+#                                      , str_sub(Boshis_sam, 9,9)
+#                                      )
+#          ) %>% 
+#   select(-c(5:7), -contains(c("DG1", "DG2", "MGI", "NGI1", "Gkad"))) %>% 
+#   mutate(zelfde_hist = ifelse(Boshis_sam_beknopt == Boshis_sam_extract, TRUE, FALSE))
+
+check_verschil <- strata_hist_ %>% 
+  filter(zelfde_hist == FALSE)
+
+
+write.csv2(check_verschil, here::here("output/Muizenbos_hist_afwijkend.csv"))
+# write.csv2(check_verschil %>% arrange(desc(Boshis_sam_extract)), here::here("output/Muizenbos_hist_afwijkend.csv"))
+# write_csv2(check_verschil, here::here("output/Muizenbos_hist_afwijkend.csv"), quote = "all") # zorgt dat alles als character geëxporteerd wordt - TOCH NIET
+# write_csv(check_verschil, here::here("output/Muizenbos_hist_afwijkend.csv"), col_types = "c") # zorgt dat alles als character geëxporteerd wordt
+
+
+
+check_NA <- strata_hist_ %>% 
+  filter(is.na(zelfde_hist))
+# 0
+# logisch, want voor elke plot ene historiek bepaald door Marc
+
+
+```
+
+
+### Bosleeftijd
+
+Zie [geopunt](https://www.geopunt.be/catalogus/datasetfolder/680321a6-99d2-4ff2-8048-0dd1d5012377)  
+Referentie: Bosleeftijd, Opname 1771-2001, actualisatie 2021 (versiedatum	17/12/2021). ANB.
+
+De bosleeftijdskaart baseert zich op slechts 4 tijdstippen.
+Nochtans is het interessant om deze mee te nemen ter vgl met VBI.
+
+
+```{r load_boslftd_shp}
+# via gedownlade shapefile (< geopun)
+
+fc_blftd <- read_sf("C:/01_VBI/1Bosinventarisatie_v5/Data/Strata/blftd.shp", crs = 31370)
+# inladen zonder crs  te vermelden kan ook, dan later transform doen, komt hier op zelfde neer
+
+str(fc_blftd) 
+st_crs(fc_blftd)
+unique(fc_blftd$BLK)
+unique(fc_blftd$BLKCODE)
+
+# ggplot(fc_blftd) + geom_sf()
+```
+
+
+```{r overlay_points_bosres}
+class(fc_strata_shp)
+fc_bosres <- fc_strata_shp %>% select(basic_variables)
+
+st_crs(fc_bosres) == st_crs(fc_blftd)
+
+fc_bosres_blftd <- fc_bosres %>% 
+  st_join(fc_blftd)
+
+nrow(fc_bosres) == nrow(fc_bosres_blftd)
+
+df_bosres_blftd <- fc_bosres_blftd %>% st_drop_geometry() %>% 
+  select(-OIDN, -UIDN, -LENGTE, -OPPERVL)
+
+```
+
+Ter controle vergelijken we de bosleeftijdskaart met de inschattingen door Marc (shapefile). 
+
+```{r check_no_hist_blftd}
+no_hist <- df_bosres_blftd %>% filter(is.na(BLKCODE))
+
+no_hist_strata <- no_hist %>% 
+  left_join(strata_hist_, by = c("Unieknr", "plot_id", "SiteName", "SubArea")) %>% 
+  filter(str_sub(Boshis_sam, 9, 9) != 0)  # wegfilteren van deze die geen bos zijn
+
+nrow(no_hist_strata)
+table(no_hist_strata$SiteName)
+
+write.csv2(no_hist_strata, here::here("output/geen_bos_volgens_boslftdkaart.csv"))
+
+```
+
+Blijkbaar wordt bij de nieuwe versie van de bosleeftijdskaart het gereduceerd kadaster gedateerd op zowel ca 1930 als ca 1940.
+
+```{r vgl_boshist_2shps_tabel}
+# vergeljken met Marcs strata
+names(strata_hist_)
+names(df_bosres_blftd)
+
+names(vgl_boshist)
+
+vgl_boshist <- df_bosres_blftd %>% 
+  left_join(strata_hist_ %>% select(Unieknr, plot_id, Ferr, VDM, DG3, NGI2, contains("Boshis_sam")), by = c("Unieknr", "plot_id")) 
+
+vgl_boshist_tbl <- vgl_boshist %>% 
+  group_by(BLKCODE, Boshis_sam_beknopt) %>% 
+  summarise(aantal = n(),
+            BLK = first(BLK)) %>% 
+  ungroup()
+
+```
+
+Er is precies toch een lichte afwijking.
+Daarom eens zelf codes toekennen en zo de "foute" eruithalen en aan Marc bezorgen.
+
+Ik wacht nog op reactie (mail 9/2/2022)
+
+NA's vooor BLK en BLKCODE zijn degene die op dit moment niet als bos aangeduid staan.
+
+```{r vgl_boshist_2shps_obv_BLKCODE}
+names(vgl_boshist)
+
+vgl_boshist_ <- vgl_boshist %>% 
+  mutate(BLKCODE_new = case_when(str_sub(Boshis_sam_beknopt, 5, 5) == "1" 
+                                 & str_sub(Boshis_sam_beknopt, 4, 4) == "0"~ 4,
+                                 str_sub(Boshis_sam_beknopt, 4, 5) == "11" 
+                                 & str_sub(Boshis_sam_beknopt, 3, 3) == "0" ~ 3,
+                                 str_sub(Boshis_sam_beknopt, 3, 5) == "111" 
+                                 & str_sub(Boshis_sam_beknopt, 2, 2) == "0" ~ 2,
+                                 Boshis_sam_beknopt == "'1111" ~ 1
+                                 )) %>% 
+  mutate(zelfde_BLK = ifelse(BLKCODE == BLKCODE_new, TRUE, FALSE)) %>% 
+  select(Unieknr, plot_id, SiteName, zelfde_BLK, BLKCODE, BLKCODE_new, everything()) %>% 
+  mutate(Boshis_sam = paste0("'", Boshis_sam))
+
+andere_boshist <- vgl_boshist_ %>% 
+  filter(zelfde_BLK == FALSE)
+nrow(andere_boshist)
+
+table(andere_boshist$SiteName)
+
+write.csv2(andere_boshist, here::here("output/hist_afwijkend_boslftdkaart.csv"))
+```
+
+
+### Combinatie
+
+Info uit beide shapefiles integreren:   
+
+- gedetailleerde historische info cfr shapefile Marc
+- bosleeftijd cfr blftd-kaart: 4 codes met "bebost sinds xxxxx"
+
+!! wachten op info Marc of ik BLKCODE_new gebruik (zelf aangemaakt), of die uit blftd.shp
+Als ik de zelf aangemaakte neem, dan moet ik blftd.shp niet inladen
+
+```{r integrate_info_2shps}
+names(strata_hist) # uitgebreide shp 
+names(df_bosres_blftd) # originele overlay met blftd-kaart
+names(vgl_boshist_)  # BLKCODE_new
+
+strata_hist_def <- strata_hist %>% 
+  left_join(vgl_boshist_ %>% select(Unieknr, plot_id, BLKCODE_new, BLK), 
+            by = c("Unieknr", "plot_id"))
+
+table(df_bosres_blftd$BLK, df_bosres_blftd$BLKCODE)
+# meestal 1940, uitz. 1930
+
+mean(strata_hist_def$DG3_t) # 1922
+median(strata_hist_def$DG3_t) # 1928
+summary(strata_hist_def$DG3_t)
+
+# => beter overal 1930 nemen, zo was het ook bij de vorige boslftd-kaart
+
+unique(strata_hist_def$BLK)
+
+strata_hist_def <- strata_hist %>% 
+  left_join(vgl_boshist_ %>% select(Unieknr, plot_id, BLKCODE_new), 
+            by = c("Unieknr", "plot_id")) %>% 
+  mutate(BLK_new = case_when(BLKCODE_new == 1 ~ "Bos ontstaan voor 1775",
+                         BLKCODE_new == 2 ~ "Bos ontstaan tussen 1775 en 1850",
+                         BLKCODE_new == 3 ~ "Bos ontstaan tussen 1850 en +/- 1930",
+                         BLKCODE_new == 4 ~ "Bos ontstaan na +/- 1930"
+                         ))
+
+names(strata_hist_def) 
+```
+
+
+
+## Locatie
+
+```{r strata_locatie}
+names(df_strata_shp)
+strata_locatie <- df_strata_shp %>% 
+  select(basic_variables, 4:10, 24:29,
+         survey_Y1, survey_Y2, survey_Y3, survey_Y4, survey_Y5)
+
+names(strata_locatie)
+```
+
+Hier ook survey_Y1, survey_Y2, ..., survey_Y5 aan toegevoegd zodat deze info ergens samen staat.  
+!! Is obv info uit shapefile, wijkt soms licht af van jaartal in `info_survey` (zie verder) dat obv dendro_date berekend werd.  
+Is eerder richtingegevend.  
+
+Even gedacht om hillshade toe te voegen, maar lijkt niet relvant, is eerder bedoeld om mooie kaarten aan te maken.  
+
+
+## Overige (beheer, fisheye, veg-type)
+
+Eigenlijk zijn dit eerder dynamische strata (kunnen veranderen doorheen de tijd).
+Met uitzondering van PNV.
+
+(wat is huidig beheer? Zo zijn er immers een aantal plots waar tss 1e en 2e SET exotenbeheer gebeurd is (Heirnisse: 701, 709, ...).
+
+Maar nu beschouwen we ze nog als statisch:  
+
+- cte pnv
+- cte vegtype
+- cte beheer 
+- ...
+
+Indien nodig kan dat snel omgevormd worden naar één record per periode (dynamisch).
+
+
+### PNV Bohn
+
+Werd samengezet door Kris VdK in kader van een data-aanvraag.
+
+Referentie: Bohn U, Gollub G, Hettwer C, Neuh€auslova Z, Schl€uter H, Weber H (2003) Karte der natürlichen Vegetation Europas. Massstab 1:2,500,000. Erläuterungstext. Bundesamt f. Naturschutz, Bad
+Godesberg
+
+Engelse referentie met kaarten: 
+https://is.muni.cz/el/1431/podzim2012/Bi9420/um/Bohn_etal2004_Map-Nat-Veg-Europe.pdf
+
+
+### European forest types - EUNIS-EEA
+
+Werd samengezet door Kris VdK in kader van een data-aanvraag.
+
+Zie "strata/info_european_forest_types.xlsx" voor een overzichtslijst van types.
+
+p 28 from: European forest types. Categories and types for sustainable forest management reporting and policy. EEA Technical report No 9/2006
+
+
+### Beheer
+Velden zoals 
+
+- `Management` (en `Beheer`: vertaling): uit shapefile, voor alle plots
+- `Management_type`: uit gsheet - enkel cirkelplots
+- `Unmanaged_since` (wordt `plot_unmanaged_since`): uit gsheet - enkel cirkelplots
+- `reserve_establishment_yr`: uit monitoringrapport op niveau van bosreservaat
+- `last_commercial_intervention`: uit monitoringrapport op niveau van bosreservaat
+- unmanaged_since (wordt `reserve_unmanaged_since`): uit monitoringrapport op niveau van bosreservaat
+
+```{r}
+names(strata_overige_shp)
+names(strata_overige_xls)
+names(info_forest_reserve)
+```
+
+----
+**"Unmanaged_since" uit monitoringrapport is verschillend van info uit gsheet**
+
+Beide behouden, andere naam geven: `plot_unmanaged_since` en `reserve_unmanaged_since` .
+
+**Verklaring Kris VdK (22/2/2022):**
+
+Ik denk dat het verschil heeft te maken met interpretatie van 'unmanaged'.
+De eerste tabel is een interpretatie van mezelf, (op vraag van BOTTOMS-UP) en is te interpreteren als 'laatste bosbouwkundige ingreep', terwijl uit het rapport het jaartal staat sinds wanneer er absoluut niets meer gebeurt.
+Het verschil zit hem dus in kleine startingrepen (een paar exoten ringen, een pad dat nog een tijd gemaaid is ...) die echter vaak geen impact hebben op de bosstructuur in de cirkelplots.
+
+Neem het eerste voorbeeld Bos Terrijst: daar zijn in 1983 nog eindkappen gebeurd met heraanplant met beuk over meerdere ha, en dunningen in de rest. Dan is Zwaenepoel daar beheerder geworden en heeft niets meer gedaan. Bij de instelling als reservaat zijn nog een paar douglassparren en lorken geveld of geringd, maar dat had geen invloed op de cirkelplots.
+Dus strict genomen is het reservaat officieel 'onbeheerd' sinds 2003, maar de plots zelf zijn onbeheerd sinds 1983.
+En dat verschilt dan nog eens met de datum van de officiele instelling als reservaat...
+
+Nog complexer voor Liedekerke: daar was in de bosbestanden sinds de jaren 50 geen ingreep meer gebeurd, enkel maaien van de paden, en wat hakhout waar geen meetpunten lagen tot rond 1970, maar dan in 2005 (?) is daar de vogelkers bestreden (ferm tegen mijn gedacht maar soit). Hoe steek je dat er dan in... Dus in de boomlaag is er niets meer gebeurd sinds 1950, behalve selectief kappen van vogelkers: uit de opnames van daarvoor zou je dus kunnen afleiden in welke plots er sinds 1950 niets meer is gebeurd en andere waar er begin jaren 2000 nog een ingreep was... Voor de bosstructuur en doodhoutvoorraad zal het cijfer 1950 meer relevant zijn, behalve in de plots waar er veel vogelkers stond. Moeilijk om al die interpretatie in één of twee cijfers te vatten.
+
+
+
+### Ev. nog toe te voegen
+
+?? Surface area in monitoringrapport : total reserve : 48.98 ha	Monitored area = 38,40 ha	 
+
+? PNV uit onze PNV-kaart
+
+? Vegetation types: bv. Endymio-Carpinetum, Endymio-Fagetum, Alno-Padion - EEA: 6.6.2 & 6.11.2
+cfr monitoringrapport
+
+? beheer: 3 klasses: zero management/startbeheer/exotenbeheer tss periode 1 en 2
+(zie plots_management_startbeheer_exotenbeheer.xlsx, ook geïmporteerd in db strata)
+
+
+
+### Praktisch
+
+```{r strata_overige_shp}
+strata_overige_shp <- df_strata_shp %>% 
+  select(basic_variables, Management, Beheer)
+
+names(strata_overige_shp)
+```
+
+
+```{r strata_overige_xls}
+names(input_gsheet)
+
+strata_overige_xls <- input_gsheet %>% 
+  select(plot_id, Site_subsite, 
+         Management_type, Unmanaged_since, 
+         EUNIS_EEA_category, EUNIS_EEA_foresttype, 
+         PNV_Bohn, Habtype,
+         S1_fisheyedate, LAI_1ste, VisSky_1st
+         ) %>% 
+  mutate(Unmanaged_since = str_sub(Unmanaged_since, 1, 4),
+         Habtype = ifelse(str_detect(Habtype, ".0"), 
+                                     str_sub(Habtype, 1, 4),
+                                     Habtype)) %>% 
+  mutate(Unmanaged_since = ifelse(Unmanaged_since == "NA", NA, as.numeric(Unmanaged_since))) %>% 
+  # Ename voorlopig unknown (tot we meer weten) => NA  
+  # !! bevat ook intervention!
+  mutate(Unmanaged_since = ifelse(Site_subsite == "Bos t'Ename", NA, Unmanaged_since)) %>% 
+  rename(plot_unmanaged_since = Unmanaged_since)
+
+unique(strata_overige_xls$Habtype)
+names(strata_overige_xls)
+
+```
+
+
+```{r group_strata_shp_xls}
+names(strata_overige_shp)
+names(strata_overige_xls)
+
+unique(strata_overige_shp$Management)
+# unique(strata_overige_shp$Beheer)  # zelfde als "Management", maar nederlands
+unique(strata_overige_xls$Management_type) 
+
+check_beheer <- strata_overige_shp %>% 
+  left_join(strata_overige_xls %>% select(plot_id, Management_type),
+            by = c("plot_id"))
+
+table(check_beheer$Management, check_beheer$Management_type)
+# één inconsistentie
+check_beheer %>% filter(Management == "managed forest" & Management_type == "Non-intervention") %>% 
+  dplyr::pull(plot_id)
+
+# Kluisbos: zowel managed forest als Non-intervention
+# beide behouden!!
+
+nrow(strata_overige_shp)
+nrow(strata_overige_xls)
+
+strata_overige <- strata_overige_shp %>% 
+  left_join(strata_overige_xls,by = c("plot_id"))
+
+
+```
+
+Uit monitoringrapport ook nog info over unmanaged_since en establishment_yr
+
+```{r unmanaged_since_rapport}
+names(strata_overige) # bevat geen "forest_reserve"
+
+plotinfo_fm <- read_vc(file = "plotinfo", root = path_to_forresdat_data)
+# OPGEPAST: bevat 1986 NIET
+names(plotinfo_fm)
+
+names(info_forest_reserve)
+
+# Joinen
+strata_overige_ <- strata_overige %>% 
+  left_join(plotinfo_fm %>% select(plot_id, plottype, forest_reserve), by = c("plot_id")) %>% 
+  left_join(info_forest_reserve %>% rename(reserve_unmanaged_since = unmanaged_since), by = c("forest_reserve", "plottype")) %>% 
+  select(-plottype, -forest_reserve, -Id) %>% 
+  select(1:8, 
+         plot_unmanaged_since, reserve_unmanaged_since, 
+         reserve_establishment_yr, last_commercial_intervention, everything())
+
+
+> !!!!!!! OPGEPAST: hier wordt één record per periode aangemaakt (left_join(plotinfo_fm)) MAAR "period" niet bewaard!!!!
+
+
+names(strata_overige_)
+
+strata_overige <- strata_overige_
+```
+
+
+# Dynamische strata
+
+Deze strata veranderen afhankelijk van de periode
+
+## Dominante boomsoort
+
+Info over dominante boomsoort als afzonderlijke tabel behouden, want is een dynamisch strata, terwijl al de rest statische strata zijn. 
+
+Dus één record per periode!
+
+
+```{r bms_plotlevel_results}
+dendro_by_plot_species <- read_vc(file = "dendro_by_plot_species", root = path_to_forresdat_data)
+names(dendro_by_plot_species)
+
+dominant_tree <- dendro_by_plot_species %>% 
+  arrange(desc(basal_area_alive_m2_ha)) %>% 
+  group_by(plot_id, period) %>% 
+  summarize(MaxStamtal=max(number_of_trees_ha),
+            MaxBasalArea=max(basal_area_alive_m2_ha),
+            MaxStamtalSpeciesID=species[which.max(number_of_trees_ha)[1]],     
+            MaxBasalAreaSpeciesID=species[which.max(basal_area_alive_m2_ha)[1]],  
+            ) %>% 
+  ungroup() %>% 
+  mutate_if(is.numeric, round, digits = 1)
+
+summary(dominant_tree)
+
+# zijn er waar stamtal of basal area 0 is voor alle soorten
+check_stamtal_nul <- dendro_by_plot_species %>% 
+  group_by(plot_id, period) %>% 
+  summarize(stamtal=sum(number_of_trees_ha)) %>% 
+  ungroup() %>% 
+  filter(stamtal == 0)
+nrow(check_stamtal_nul) == 0
+
+```
+
+```{r link_species}
+qspecies <- read_vc(file = "qSpecies", root = path_to_forresdat_data) %>% 
+  select(ID, Value1)
+
+names(qspecies)
+names(dominant_tree)
+
+dominant_tree_ <- dominant_tree %>% 
+  left_join(qspecies, by = c("MaxStamtalSpeciesID" = "ID")) %>% 
+  rename(MaxStamtalSpeciesName = Value1) %>% 
+  left_join(qspecies, by = c("MaxBasalAreaSpeciesID" = "ID")) %>% 
+  rename(MaxBasalAreaSpeciesName = Value1)
+
+dominant_tree <- dominant_tree_
+```
+
+
+
+# Info opname
+
+Enerzijds jaartallen van opname: uit plotinfo (obv plotdetails in FM)  
+
+Anderzijds de grootte van de plots: uit shapefile én rechtstreeks uit fieldmap via plotdetails.
+Waarom beide? Is op andere manier samen gezet, beide kunnen nuttig zijn. 
+
+Maar toch best integreren in één tabel.
+
+
+**OPGEPAST**
+Ook in de shapefile van Marc staan jaartallen van surveys.  
+Mogelijks wijken die data af van de data uit FieldMap.
+
+Daar is geen controle op gebeurd, immers andere insteek: de shapefile bevat één jaartal per bosreservaat (voor alle plots hetzelfde jaar).   
+
+Deze jaartallen werden toegeveogd aan `strata_location` (zie hoger).
+
+
+## Fieldmap
+
+Eén record per plot én opname (period/survey).
+
+Info uit plotinfo (aangemaakt mbv package `forrescalc` obv plotdetails), aangevuld met extra variabelen uit plotdetails (zoals plot size en tresholds)
+
+### Plotinfo
+
+Plotinfo uit forresdat, met info over   
+
+- welke opnames er reeds gebeurd zijn (reg, veg, dendro, deadw)
+- welke period cfr de decades uit monitoringcycli
+- de hoeveelste survey voor die plot
+- year (afgeleid van Dendro_Date)
+
+```{r load_plotinfo_fm_yrs}
+# met jaartallen van opnames
+# is deels afgeleid uit plotdetails Fieldmap
+
+plotinfo_fm <- read_vc(file = "plotinfo", root = path_to_forresdat_data)
+# OPGEPAST: bevat 1986 NIET
+
+names(plotinfo_fm)
+# !! bevat geen info over opp. A1234
+
+```
+
+### Plotdetails
+
+- rA1234
+- size core area
+- Tresholds
+- Date_Dendro
+
+```{r load_plotdetails_fm}
+con <- odbcConnectAccess2007(path_to_fieldmap)
+
+tables_fieldmap <- sqlTables(con) %>% filter(!str_detect(TABLE_NAME, "MSys"))
+
+PlotDetails_1986 <- sqlFetch (con, "PlotDetails_1986", stringsAsFactors = TRUE) %>% 
+  mutate(period = -1) %>% 
+  rename(Date_Dendro = Date_Dendro_1986,
+         FieldTeam_Dendro = FieldTeam_Dendro_1eSet) %>% 
+  select(-FieldStatus)
+PlotDetails_1eSet <- sqlFetch (con, "PlotDetails_1eSet", stringsAsFactors = TRUE) %>% 
+  mutate(period = 1) %>% 
+  rename(Date_Dendro = Date_Dendro_1eSet,
+         FieldTeam_Dendro = FieldTeam_Dendro_1eSet) %>% 
+  select(-FieldStatus)
+PlotDetails_2eSet <- sqlFetch (con, "PlotDetails_2eSet", stringsAsFactors = TRUE) %>% 
+  mutate(period = 2) %>% 
+  rename(Date_Dendro = Date_Dendro_2eSet,
+         FieldTeam_Dendro = FieldTeam_Dendro_2eSet) %>% 
+  select(-FieldStatus)
+PlotDetails_3eSet <- sqlFetch (con, "PlotDetails_3eSet", stringsAsFactors = TRUE) %>% 
+  mutate(period = 3) %>% 
+  rename(Date_Dendro = Date_Dendro_3eSet,
+         FieldTeam_Dendro = FieldTeam_Dendro_3eSet) %>% 
+  select(-FieldStatus)
+
+odbcClose(con)
+
+# tables_fieldmap %>% filter(str_detect(TABLE_NAME, "PlotDet"))
+
+names(PlotDetails_1986)
+names(PlotDetails_1eSet)
+names(PlotDetails_2eSet)
+names(PlotDetails_3eSet)
+
+plotDetails <- rbind(PlotDetails_1986, PlotDetails_1eSet, PlotDetails_2eSet, PlotDetails_3eSet)
+
+colnames(PlotDetails_1eSet) == colnames(PlotDetails_2eSet)
+
+nrow(plotDetails) == nrow(PlotDetails_1eSet) + nrow(PlotDetails_1986) + nrow(PlotDetails_2eSet) + nrow(PlotDetails_3eSet)
+
+```
+
+```{r select_variables}
+names(plotDetails)
+
+# n_distinct(plotDetails$plot_id)
+
+plotdetails_fm <- plotDetails %>% 
+  mutate(year = year(round_date(.data$Date_Dendro, "year")) - 1, 
+         survey_trees = ifelse(.data$Survey_Trees_YN == 10 & !is.na(.data$Survey_Trees_YN), TRUE, FALSE),
+          survey_deadw = ifelse(.data$Survey_Deadwood_YN == 10 & !is.na(.data$Survey_Deadwood_YN), TRUE, FALSE),
+          survey_veg = ifelse(.data$Survey_Vegetation_YN == 10 & !is.na(.data$Survey_Vegetation_YN), TRUE, FALSE),
+          survey_reg = ifelse(.data$Survey_Regeneration_YN == 10 & !is.na(.data$Survey_Regeneration_YN), TRUE, FALSE),
+          data_processed = ifelse(.data$DataProcessed_YN == 10 & !is.na(.data$DataProcessed_YN), TRUE, FALSE)
+           ) %>% 
+  rename(CoreArea_ha = Area_ha) %>% 
+    select(plot_id = IDPlots, forest_reserve = ForestReserve, period, year,
+           Date_Dendro, 
+           contains("survey"), data_processed,
+         rA1_m = rA1, rA2_m = rA2, rA3_m = rA3, rA4_m = rA4, 
+         TresHoldDBH_A3_alive_mm = TresHoldDBH_Trees_A3_alive, 
+         TresHoldDBH_A3_dead_mm = TresHoldDBH_Trees_A3_dead, 
+         TresHoldDBH_A4_alive_mm = TresHoldDBH_Trees_A4_alive, 
+         TresHoldDBH_A4_dead_mm = TresHoldDBH_Trees_A4_dead, 
+         TresHoldDBH_CoreArea_dead_mm = TresHoldDBH_Trees_CoreArea_dead, 
+         TresHoldDBH_CoreArea_alive_mm = TresHoldDBH_Trees_CoreArea_alive, 
+         TresHoldDiam_Deadw_A4_mm = TresHoldDiam_Deadwood_A4,
+         TresHoldDiam_Deadw_CoreArea_mm = TresHoldDiam_Deadwood_CoreArea,
+         contains("Area"),
+         -contains("YN")
+         )
+
+names(plotdetails_fm)
+
+```
+
+
+## Shapefile
+
+Uit de shapefile halen we textuele info over plottype, plotsize (dendro vs veg) en jaartal van de surveys.  
+
+Eén record per plot.
+
+```{r select_plotinfo_shp}
+names(df_strata_shp)
+
+plotinfo_shp <- df_strata_shp %>% 
+  select(basic_variables, plottype_txt = PlotType, plotsize_dendro = DendroPlot, plotsize_veg = VegePlot, survey_Y1, survey_Y2, survey_Y3, survey_Y4, survey_Y5)
+
+# plotinfo_shp %>% filter(PlotSize != DendroPlot)
+
+names(plotinfo_shp)
+```
+
+
+## Gecombineerd
+
+? Hoe gaan we info uit FM en uit shapefile combineren, aangezien de info uit fieldmap één record heeft per periode.   
+Treshold diameters kunnen immers (uitzonderlijk) veranderen van periode tot periode.
+
+Maar blijkbaar is dat enkel zo voor Kersselaerspleyn, zie hierna:
+
+```{r check_dubbele_treshold}
+names(plotdetails_fm)
+
+check_tresholds <- plotdetails_fm %>% 
+  group_by(plot_id, TresHoldDBH_A3_alive_mm, TresHoldDBH_A3_dead_mm, TresHoldDBH_A4_alive_mm, TresHoldDBH_A4_dead_mm, TresHoldDBH_CoreArea_dead_mm, TresHoldDBH_CoreArea_alive_mm, TresHoldDiam_Deadw_A4_mm, TresHoldDiam_Deadw_CoreArea_mm) %>% 
+  summarize(aantal = n()) %>% 
+  ungroup() %>% 
+  filter(!is.na(TresHoldDBH_A4_alive_mm) & !is.na(TresHoldDBH_A4_dead_mm))
+
+check_tresholds %>% group_by(plot_id) %>% summarize(aantal = n()) %>% filter(aantal > 1) %>% nrow() == 0
+
+# !! dat zijn enkel de cirkelplots, bij KV's soms wel verschil
+check_tresholds <- plotdetails_fm %>% 
+  group_by(plot_id, TresHoldDBH_A3_alive_mm, TresHoldDBH_A3_dead_mm, TresHoldDBH_A4_alive_mm, TresHoldDBH_A4_dead_mm, TresHoldDBH_CoreArea_dead_mm, TresHoldDBH_CoreArea_alive_mm, TresHoldDiam_Deadw_A4_mm, TresHoldDiam_Deadw_CoreArea_mm) %>% 
+  summarize(aantal = n()) %>% 
+  ungroup() %>% 
+  filter(!is.na(TresHoldDBH_CoreArea_alive_mm))
+
+check_tresholds %>% group_by(plot_id) %>% summarize(aantal = n()) %>% filter(aantal > 1) %>% nrow() 
+check_tresholds %>% group_by(plot_id) %>% summarize(aantal = n()) %>% filter(aantal > 1)
+#   plot_id aantal
+#     <int>  <int>
+# 1   11000      3
+
+# Enkel bij kersselaerspleyn een verschil
+# Geen probleem als we per periode info behouden
+
+plotdetails_fm %>% filter(plot_id == 11000)
+
+```
+
+Voor later gebruik makkelijker om dit in één tabel te combineren: info_survey, per plot en per periode.
+
+
+<!-- - plotinfo_fm2 -->
+<!-- - info_opname_per_plot -->
+
+**OPGEPAST:** 
+Date_Dendro (< plotdetails FM) wijkt soms af van year (< forresdat, berekend door Els package).  
+Dat komt omdat er beslist is om naar groeiseizoen te kijken voor de bepaling van `year` en dus af te ronden naar beneden (niet jaar van dendro, want soms in dec én jan opgemeten, dan jaar van dec nemen).  
+
+Vanaf 3 juli horen de opnames bij het huidige jaar.
+Alles vroeger dan 3 juli hoort bij het voorgaande jaar.
+
+(functie `load_plotinfo` uit package `forrescalc`)
+
+Ook tov Survey_Y1/2/3/4/5 van Marcs shapefile soms een verschil.
+
+
+
+**MOET NOG AANGEPAST WORDEN in forrescalc**
+Ik wacht nog op input van team over vanaf welke maand naar voorgaande jaar afronden (mails 14/2/2022)
+
+
+```{r compare_variables}
+# library(forrescalc)
+
+names(plotinfo_fm)
+names(plotdetails_fm)
+names(plotinfo_shp)
+
+nrow(plotdetails_fm) == 2236  # bevat ook Kerss periode -1 (1986)
+nrow(plotinfo_fm) == 2235
+nrow(plotinfo_shp) == 1063  # want geen onderscheid in periodes
+
+```
+
+```{r combine_plotdetails_plotinfo_fm}
+
+plotdetails_fm %>% filter(!is.na(Date_Dendro)) %>% nrow() == 1724
+plotinfo_fm %>% filter(!is.na(survey_number)) %>% nrow() == 1723
+
+plotinfo_fm2 <- plotinfo_fm %>% 
+  select(-forest_reserve, -year, -survey_trees, -survey_deadw, -survey_veg, -survey_reg, -data_processed) %>% 
+  # plotdetails bevat ook 1986/1985, plotinfo niet
+  filter(!is.na(survey_number)) %>% 
+  full_join(plotdetails_fm %>% filter(!is.na(Date_Dendro)), by = c("plot_id", "period")) %>% 
+  mutate(survey_number = ifelse(!is.na(survey_number), survey_number, 
+                                ifelse(year(Date_Dendro) == 1986, -1, NA)),
+         plottype = ifelse(!is.na(plottype), plottype, 
+                                ifelse(plot_id == 11000, 30, NA))) %>% 
+  select(plot_id, plottype, everything())
+
+# Vgl DateDendro en year
+
+# plotinfo_fm2_ <- plotinfo_fm2 %>%
+#   mutate(test_yr = year(round_date(.data$Date_Dendro, "year")) - 1,
+#          test_yr_2 = year(.data$Date_Dendro),
+#          month = month(.data$Date_Dendro))
+# 
+# test_yr <- plotinfo_fm2_ %>%
+#   select(plot_id, year, test_yr, test_yr_2, Date_Dendro, month) %>%
+#   mutate(gelijk = ifelse(year - test_yr == 0, TRUE, FALSE),
+#          gelijk_2 = ifelse(year - test_yr_2 == 0, TRUE, FALSE))
+
+summary(plotinfo_fm2)
+
+plotinfo_fm2 %>% filter(is.na(survey_number)) %>% nrow() == 0
+# initieel Kerss 1986
+# foutje in moederdb - aan Peter aanpassing gevraagd
+
+names(plotinfo_fm2)
+```
+
+
+```{r combine_info_fm_shp}
+names(plotinfo_fm2)
+names(plotinfo_shp)  # Unieknr => plot_id niet uniek
+
+plotinfo_def <- plotinfo_fm2 %>% 
+  left_join(plotinfo_shp, by = c("plot_id")) %>% 
+  select(Unieknr, plot_id, forest_reserve, 
+         plottype, plottype_txt,
+         survey_trees, survey_deadw, survey_reg, survey_veg, data_processed,
+         period, survey_number, year_dendro = year, date_dendro = Date_Dendro,
+         rA1_m, rA2_m, rA3_m, rA4_m, 
+         TresHoldDBH_A3_alive_mm, TresHoldDBH_A3_dead_mm, 
+         TresHoldDBH_A4_alive_mm, TresHoldDBH_A4_dead_mm, 
+         TresHoldDBH_CoreArea_dead_mm, TresHoldDBH_CoreArea_alive_mm, 
+         TresHoldDiam_Deadw_A4_mm, TresHoldDiam_Deadw_CoreArea_mm,
+         plotsize_dendro, plotsize_veg)
+# survey_Y1, survey_Y2, survey_Y3, survey_Y4, survey_Y5 toegevoegd aan strata_locatie
+
+```
+
+# Resultaat
+
+## Statische strata
+Blijft constant doorheen de tijd
+
+- strata_bodem
+- strata_klimaat
+- strata_hist_def
+- strata_locatie  (XY, provincie, ..., ook survey_y1, survey_Y2, ... )
+
+Voorlopig  
+
+- strata_overige (beheer, fish-eye, vegetatie, PNV)
+
+
+## Dynamische strata
+Afhankelijk van periode
+
+- dominant_tree
+
+
+## Info mbt de opname 
+Per plot en per periode
+
+- info_survey (plotsize, tresholds, survey_nr, period, year)
+
+
+## Info op niveau van bosreservaat 
+
+- forest_reserve_info_EUFORIA (opp_volledig reservaat, forest type, mean annual temp/precipitation)
+
+
+## Export
+
+```{r save_strata, eval = FALSE}
+con <- odbcConnectAccess2007(path_to_strata_db)
+
+sqlSave(con, qHist, "qHistoriek")
+
+sqlSave(con, strata_bodem, "strata_soil")
+sqlSave(con, strata_klimaat, "strata_climate")
+sqlSave(con, strata_hist_def, "strata_history")
+sqlSave(con, strata_locatie, "strata_location")
+sqlSave(con, strata_overige, "strata_remaining", varTypes = c(S1_fisheyedate="datetime"))
+
+sqlSave(con, dominant_tree, "dominant_tree")  # op termijn ev. als strata_dynamic?
+
+sqlSave(con, plotinfo_def, "info_survey", varTypes = c(date_dendro="datetime"))
+
+sqlSave(con, forest_reserve_info_EUFORIA_, "info_forest_reserve_level_EUFORIA")
+
+odbcClose(con)
+```
+

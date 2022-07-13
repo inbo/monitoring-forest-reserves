@@ -1,0 +1,182 @@
+---
+title: "Controle year of survey"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: FALSE
+      smooth_scroll: FALSE
+---
+
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = FALSE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+
+```
+
+
+
+# Vraagstelling
+
+Controle year of survey
+
+Twee verschillende bronnen:  
+
+- shapefile Marc 
+- info uit fieldmap: functie `load_plotinfo` van package `forrescalc` haalt `Date_Dendro` uit tabel `PlotDetails` en vormt dat om naar `year` 
+
+
+Zou properder en correcter zijn mocht Els gebruik maken van `month` om `year` te berekenen uit `Date_Dendro.`
+
+Vergelijking met shapefile Marc ga ik niet doen, die data zijn op niveau bosreservaat.
+Op plotniveau kan daar licht van afgeweken zijn.
+
+----
+
+Zie ook AanmaakStrat_01.Rmd:
+
+**OPGEPAST:** Date_Dendro (< plotdetails FM) wijkt soms af van year (< forresdat, berekend door Els package).  
+Dat komt omdat er beslist is om naar groeiseizoen te kijken voor de bepaling van `year` en dus af te ronden naar beneden (niet jaar van dendro, want soms in dec én jan opgemeten, dan jaar van dec nemen).  
+
+Vanaf 3 juli horen de opnames bij het huidige jaar.
+Alles vroeger dan 3 juli hoort bij het voorgaande jaar.
+
+(functie `load_plotinfo` uit package `forrescalc`)
+
+
+```{r_functie}
+load_plotinfo
+```
+
+# Data inladen
+
+```{r import_data_shp}
+fc_strata <-read_sf("C:/03_BR/1_Dataverwerking/Data/Strata/input_marc/boseco_alleproefvlakken_centraalpunt_lam72_metinfo.shp", crs = 31370)
+
+df_strata <- fc_strata %>% st_drop_geometry()
+
+```
+
+```{r load_plotinfo_fm_yrs}
+# met jaartallen van opnames
+# ?? beter uit plotdetails Fieldmap halen!!
+plotinfo_fm <- read_vc(file = "plotinfo", root = path_to_forresdat_data)
+
+names(plotinfo_fm)
+# !! bevat geen info over opp. A1234
+
+```
+
+
+```{r load_plotdetails_fm}
+con <- odbcConnectAccess2007(path_to_fieldmap)
+
+tables_fieldmap <- sqlTables(con) %>% filter(!str_detect(TABLE_NAME, "MSys"))
+
+PlotDetails_1986 <- sqlFetch (con, "PlotDetails_1986", stringsAsFactors = TRUE) %>% 
+  mutate(period = -1) %>% 
+  rename(Date_Dendro = Date_Dendro_1986,
+         FieldTeam_Dendro = FieldTeam_Dendro_1eSet) %>% 
+  select(-FieldStatus)
+PlotDetails_1eSet <- sqlFetch (con, "PlotDetails_1eSet", stringsAsFactors = TRUE) %>% 
+  mutate(period = 1) %>% 
+  rename(Date_Dendro = Date_Dendro_1eSet,
+         FieldTeam_Dendro = FieldTeam_Dendro_1eSet) %>% 
+  select(-FieldStatus)
+PlotDetails_2eSet <- sqlFetch (con, "PlotDetails_2eSet", stringsAsFactors = TRUE) %>% 
+  mutate(period = 2) %>% 
+  rename(Date_Dendro = Date_Dendro_2eSet,
+         FieldTeam_Dendro = FieldTeam_Dendro_2eSet) %>% 
+  select(-FieldStatus)
+PlotDetails_3eSet <- sqlFetch (con, "PlotDetails_3eSet", stringsAsFactors = TRUE) %>% 
+  mutate(period = 3) %>% 
+  rename(Date_Dendro = Date_Dendro_3eSet,
+         FieldTeam_Dendro = FieldTeam_Dendro_3eSet) %>% 
+  select(-FieldStatus)
+
+odbcClose(con)
+
+# tables_fieldmap %>% filter(str_detect(TABLE_NAME, "PlotDet"))
+
+names(PlotDetails_1986)
+names(PlotDetails_1eSet)
+names(PlotDetails_2eSet)
+names(PlotDetails_3eSet)
+
+PlotDetails <- rbind(PlotDetails_1986, PlotDetails_1eSet, PlotDetails_2eSet, PlotDetails_3eSet)
+
+colnames(PlotDetails_1eSet) == colnames(PlotDetails_2eSet)
+
+nrow(PlotDetails) == nrow(PlotDetails_1eSet) + nrow(PlotDetails_1986) + nrow(PlotDetails_2eSet) + nrow(PlotDetails_3eSet)
+
+```
+
+# Vergelijking
+
+```{r select_relevant_data}
+plot_details <- PlotDetails %>% select(PlotID = IDPlots, Date_Dendro, period)
+plotinfo_fm_ <- plotinfo_fm %>% select(PlotID = plot_id, year, period)
+year_shp <- df_strata %>% select(PlotID, contains("survey"))
+
+```
+
+```{r join}
+plot_details_info_fm <- plot_details %>% 
+  left_join(plotinfo_fm_,by = c("PlotID", "period")) %>% 
+  filter(period != -1)
+
+
+```
+
+```{r calculate}
+# zelf nagerekend cfr package
+plot_details_info_fm_ <- plot_details_info_fm %>% 
+  mutate(yr_fm = year(round_date(.data$Date_Dendro, "year")) - 1,
+         yr_standard = year(.data$Date_Dendro),
+         month = month(.data$Date_Dendro)) %>% 
+  mutate(vgl_yr_fm = year - yr_fm,
+         vgl_yr_standard = year - yr_standard) %>% 
+  mutate(test = year(round_date(.data$Date_Dendro, "year")))
+
+afw_yr_standard <- plot_details_info_fm_ %>% 
+  filter(vgl_yr_standard == -1)
+#895 records van de 2235
+
+# ? welke maanden zijn dat vooral
+table(afw_yr_standard$month)
+#   1   2   3   4   5   6   7 
+# 265 427 122  23  16  16  26 
+
+table(plot_details_info_fm_$month)
+
+# Dus toch 58 records met opnames in mei
+table(afw_yr_standard$month, afw_yr_standard$period)
+# geen lijn in te trekken
+
+```
+
+# Besluit 
+
+De shapefile bevat een algemeen jaartal voor volledig bosreservaat (zie `info_survey_plotsize_per_plot`).
+Wanneer we data aanleveren per plot gebruiken we beter `date_dendro` uit de `plotdetails` (zie  `info_survey_per_year`).

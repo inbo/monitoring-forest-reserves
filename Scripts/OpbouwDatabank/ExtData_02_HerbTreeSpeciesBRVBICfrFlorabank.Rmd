@@ -1,0 +1,426 @@
+---
+title: "Species in FieldMap conform maken aan species in Florabank"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: FALSE
+      smooth_scroll: FALSE
+---
+
+# Vraagstelling
+
+DOEL van dit script is om aan de soorten uit qspecies en qherbspecies uit de fieldmap-databank de TaxonID uit de florabank toe te kennen.
+ZODAT florabank en soorten uit FM kunnen gekoppeld worden obv deze taxonID (Value3 in qspecies/qherbspecies fieldmap)
+
+Hierbij vertrek ik van de lijst die Wouter reeds zo goed mogelijk gekoppeld heeft aan TaxconID van de florabank.
+
+TaxonID dient dan via ParentID gekoppeld te worden aan de info-tabellen uit de florabank mbt Ellenberg, oud bos, ....
+
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup_Forrescalc.R"))
+
+```
+
+In script "ExtData_01_ListSpeciesVBIBRforWouter.Rmd" heb ik een lijst aangemaakt van alle tree- en herbspecies in BR en VBI.
+Deze kunnen achteraf terug gekoppeld worden aan de originele soortenlijsten obv hun wetenschappelijke en nederlandse naam.
+
+Sommige zullen geen link naar de florabank krijgen, maar dat is op zich geen probleem.
+
+Bijvoorbeeld:. 
+
+- ander loofhout, ander ...
+- mossen uit VBI1
+- ...
+
+Deze worden aangeduid met no_link = TRUE.
+
+De link naar de florabank is vooral van belang voor de bepaling van de Ellenbergwaarden, 
+het detecteren van oud-bossoorten, zeldzaamheid van een soort, ....
+
+# Inladen soortenlijsten
+
+```{r LoadSpeciesLists}
+# Wouter VL
+tblWouter <- read_xlsx("C:/3BR/1_DataVerwerkingBR/Data/ExterneData/WouterVL/Soortenlijst_BR_VBI.xlsx")
+# tblWouter <- read_xlsx("C:/3BR/1_DataVerwerkingBR/Data/ExterneData/WouterVL/Soortenlijst_BR_VBI_bijgewerkt_AL.xlsx")
+
+str(tblWouter)
+summary(tblWouter)
+# # florabank VBI
+# connectieExterneData <- odbcConnectAccess2007(dbExterneData)
+# tblFlorabank <- sqlFetch (connectieExterneData, "inbo_vw_Kenmerken_Florabank1", stringsAsFactors = TRUE)
+# odbcClose(connectieExterneData)
+
+```
+
+# Koppelen aan TaxonID van florabank
+
+## Tabel van Wouter vervolledigen
+
+Wouter bezorgde me een tabel waar nog 401 records niet gekoppeld waren.
+
+```{r AantalNoLink}
+tblWouter %>% filter(is.na(TaxonID)) %>% nrow()
+```
+
+Deze waar geen link voor mogelijk is, markeren
+
+```{r onbekende_soorten}
+# NoLink_onbekend <- tblWouter %>% 
+#   filter(str_detect(NameNl, "nbekend"))
+
+tblWouter <- tblWouter %>% 
+  mutate(no_link = ifelse(str_detect(NameNl, "nbekend"), TRUE, NA))
+
+```
+
+Link eens proberen leggen via nederlandse naam
+
+```{r link_NameNl}
+fb_allspecies_zonderdubbels <- fb_allspecies %>% 
+  arrange(desc(ID)) %>% 
+  group_by(NaamNederlands) %>% 
+  summarize(NaamWetenschappelijk = first(NaamWetenschappelijk), 
+            ID = first(ID))
+
+# lijst wouter aanpassen
+tblWouter_LinkNameNl <- tblWouter %>% 
+  left_join(fb_allspecies_zonderdubbels, by = c("NameNl" = "NaamNederlands")) %>% 
+  mutate(TaxonID = ifelse(is.na(TaxonID) & !is.na(ID), ID, TaxonID),
+         NaamNederlands = ifelse(is.na(NaamNederlands) & !is.na(NameNl) & !is.na(ID), NameNl, NaamNederlands),
+         NaamWetenschappelijk.x = ifelse(is.na(NaamWetenschappelijk.x) & !is.na(NaamWetenschappelijk.y) & !is.na(ID), NaamWetenschappelijk.y, NaamWetenschappelijk.x)) %>% 
+  select(NameNl, NameSc, TaxonID, NaamNederlands, NaamWetenschappelijk = NaamWetenschappelijk.x, NameSc2, no_link)
+
+```
+
+```{r AantalNoLink2}
+tblWouter_LinkNameNl %>% filter(is.na(TaxonID)& is.na(no_link)) %>% nrow()
+
+```
+
+
+```{r onbekende_mossen}
+NoLink2_onbekend <- tblWouter_LinkNameNl %>% 
+  filter(str_detect(NameNl, "mos") & !str_detect(NameNl, "eenmos"))
+# enkel veenmos spec toch proberen koppelen
+
+tblWouter2 <- tblWouter_LinkNameNl %>% 
+  mutate(no_link = ifelse(str_detect(NameNl, "mos") & !str_detect(NameNl, "eenmos"), TRUE, no_link))
+
+```
+
+
+```{r AantalNoLink3}
+tblWouter2 %>% filter(is.na(TaxonID) & is.na(no_link)) %>% nrow()
+# nog 111 niet gekoppeld
+
+# welke zijn dat
+t1 <- tblWouter2 %>% 
+  filter(str_detect(NameNl, "naaldhout") | str_detect(NameNl, "loofhout") | NameNl == "NA" | str_detect(NameNl, "aailing"))
+
+t2 <- tblWouter2 %>% 
+  filter(is.na(TaxonID)) %>% 
+  filter(str_detect(NameNl, "spec") | str_detect(NameNl, "\\(G\\)"))
+
+# => no_link = TRUE
+tblWouter3 <- tblWouter2 %>% 
+  mutate(no_link = ifelse(str_detect(NameNl, "naaldhout") | str_detect(NameNl, "loofhout") | NameNl == "NA", TRUE, no_link)) %>% 
+  mutate(no_link = ifelse(str_detect(NameNl, "spec") | str_detect(NameNl, "\\(G\\)") & is.na(TaxonID), TRUE, no_link))
+
+tblWouter3 %>% filter(is.na(TaxonID) & is.na(no_link)) %>% nrow()
+# nog 90
+```
+
+
+```{r ExportVoorManueleAanpassing}
+write_csv2(tblWouter3,"C:/3BR/1_DataVerwerkingBR/Data/ExterneData/WouterVL/Soortenlijst_BR_VBI_bijgewerkt_AL2.csv")
+
+# fb_allspecies %>% filter(ID == 5827)
+```
+
+```{r ImportNaManueleAanpassing}
+tblWouterBijgewerkt <- read_csv2("C:/3BR/1_DataVerwerkingBR/Data/ExterneData/WouterVL/Soortenlijst_BR_VBI_bijgewerkt_AL4.csv") %>% 
+  as.data.frame()
+class(tblWouterBijgewerkt2)
+```
+
+## Vervolledigde tabel linken aan de vier soortenlijsten
+
+De tabel van Wouter bevat alle soorten uit tree- en herbspecies van BR en VBI, dus 4 soortenlijsten.
+
+Deze tabel moet nu terug "verdeeld" worden over de 4 initiële soortenlijsten (zie ListSpeciesVBIBRforWouter.Rmd).
+
+```{r LoadSpeciesListsBRVBI}
+# fieldmap BR
+conBR <- odbcConnectAccess2007(path_to_fieldmap)
+
+qHerbSpecies_BR <- sqlFetch (conBR, "qHerbSpecies240810", stringsAsFactors = TRUE)
+qTreeSpecies_BR <- sqlFetch (conBR, "qspecies", stringsAsFactors = TRUE)
+
+odbcClose(conBR)
+
+# fieldmap VBI
+path_to_VBI <- "C:/1Bosinventaris_finaal_vs4/Data/MeetgegevensRuw/FieldMapData_Bosinventaris_v4.accdb"
+path_to_externe_data_VBI <- "C:/1Bosinventaris_finaal_vs4/Data/ExterneData/VBIExterneData.accdb"
+  
+conVBI1 <- odbcConnectAccess2007(path_to_VBI)
+
+  qTreeSpecies_VBI <- sqlFetch (conVBI1, "qTreeSpecies", stringsAsFactors = TRUE)
+# qTreeSpecies: zelfde ID voor VBI1 en VBI2
+
+odbcClose(conVBI1)
+
+
+conVBI2 <- odbcConnectAccess2007(path_to_externe_data_VBI)
+
+  qHerbSpecies_VBI<-sqlFetch(conVBI2, "tblspeciesListComb")
+  tblTreeSpeciesCharacteristicsVBI <-sqlFetch(conVBI2, "tblTreeSpeciesCharacteristics")
+  
+odbcClose(conVBI2)
+
+```
+
+### BR
+
+```{r Link_BR_qSpecies}
+# trees
+qTreeSpecies_BR2 <- qTreeSpecies_BR %>% 
+  left_join(tblWouterBijgewerkt, by = c("Value1" = "NameNl", "Value2" = "NameSc")) %>% 
+  mutate(Value3 = TaxonID) %>% 
+  select(ID, Value1, Value2, Value3)
+
+t <- qTreeSpecies_BR2 %>% filter(is.na(TaxonID)) 
+nrow(t)
+# 10 - OK
+
+# !! export naar access
+```
+
+
+```{r Link_BR_qHerbSpecies}
+# obv NameNl en NameSC
+qHerbSpecies_BR2 <- qHerbSpecies_BR %>% 
+  left_join(tblWouterBijgewerkt, by = c("Value1" = "NameNl", "Value2" = "NameSc")) 
+
+t <- qHerbSpecies_BR2 %>% filter(is.na(TaxonID) & is.na(no_link)) 
+nrow(t)
+# 21 !!
+# REDEN: NameSc is door export naar csv (naar Wouter) gewijzigd
+
+# deze 21 via Namenl koppelen
+# en NameSc overnemen van Value2
+
+qHerbSpecies_BR2_ <- qHerbSpecies_BR2 %>% 
+  filter(!is.na(TaxonID) | !is.na(no_link)) %>% 
+  mutate(Value3 = TaxonID) %>% 
+  select(ID, Value1, Value2, Value3)
+  
+nrow(qHerbSpecies_BR2_) + nrow(t) - nrow(qHerbSpecies_BR2)
+
+# Obv NameNL
+t2 <- t %>% 
+  select(ID, Value1, Value2) %>% 
+  left_join(tblWouterBijgewerkt, by = c("Value1" = "NameNl")) %>% 
+  select(-NameSc) %>% 
+  distinct()
+
+## die 21 zou je moeten de Value2 (NameSc) geven van qHerbSpecies_BR
+qHerbSpecies_BR %>% filter(Value1 == "Bosorchis")
+t2 %>% filter(Value1 == "Bosorchis")
+
+qHerbSpecies_BR3 <- t2 %>% 
+  mutate(Value3 = TaxonID) %>% 
+  select(ID, Value1, Value2, Value3)
+
+# SAMENVOEGEN
+qHerbSpecies_BR4 <- rbind(qHerbSpecies_BR2_, qHerbSpecies_BR3)
+
+```
+
+
+Exporteren naar dbExterneData als qHerbspecies_vs2 en qspecies_vs2
+(!! niet naar csv want dan worden scientific names soms vervormd)
+
+```{r export_BR_value3_Florabank}
+colnames(qTreeSpecies_BR2)
+colnames(qHerbSpecies_BR4)
+
+connectieExterneData <- odbcConnectAccess2007(dbExterneData)
+
+if ("qspecies_value3_Florabank" %in% sqlTables(connectieExterneData)$TABLE_NAME) {
+  sqlDrop(connectieExterneData,"qspecies_value3_Florabank")
+  sqlSave(connectieExterneData, qTreeSpecies_BR2, "qspecies_value3_Florabank")
+  } else {
+  sqlSave(connectieExterneData, qTreeSpecies_BR2, "qspecies_value3_Florabank")
+  }
+
+if ("qHerbspecies_value3_Florabank" %in% sqlTables(connectieExterneData)$TABLE_NAME) {
+  sqlDrop(connectieExterneData,"qHerbspecies_value3_Florabank")
+  sqlSave(connectieExterneData, qHerbSpecies_BR4, "qHerbspecies_value3_Florabank")
+  } else {
+  sqlSave(connectieExterneData, qHerbSpecies_BR4, "qHerbspecies_value3_Florabank")
+  }
+
+odbcClose(connectieExterneData)
+
+```
+
+### VBI
+
+```{r Link_VBI_qSpecies}
+# trees
+qTreeSpecies_VBI2 <- qTreeSpecies_VBI %>% 
+  left_join(tblWouterBijgewerkt, by = c("Value1" = "NameNl", "Value2" = "NameSc")) %>% 
+  mutate(Value3 = TaxonID) %>% 
+  select(ID, Value1, Value2, Value3)
+
+t <- qTreeSpecies_VBI2 %>% filter(is.na(TaxonID)) 
+nrow(t)
+# 12 - OK
+
+# !! export naar access
+```
+```{r Link_VBI_TreeSpecCharact}
+# beter koppelen aan treespec characteristics en daar TaxonID toevoegen
+
+tblTreeSpeciesCharacteristicsVBI2 <- tblTreeSpeciesCharacteristicsVBI %>% 
+  left_join(qTreeSpecies_VBI2, by = c("IDTreeSp" = "ID")) %>% 
+  select(-NaamNederlands, -NaamWetenschappelijk, - NameSc2, -no_link, -Value1, -Value2, -Value3, -OrderField, -Active) 
+
+# !! malus manueel aanpassen in db
+
+```
+
+
+
+```{r Link_VBI_qHerbSpecies}
+####### obv NameNl en NameSC => qHerbSpecies_VBI2_
+names(qHerbSpecies_VBI)
+
+qHerbSpecies_VBI2 <- qHerbSpecies_VBI %>% 
+  left_join(tblWouterBijgewerkt, by = c("NameNl", "NameSc")) 
+
+t <- qHerbSpecies_VBI2 %>% filter(is.na(TaxonID) & is.na(no_link)) 
+nrow(t)
+# 58 !!
+# REDEN: NameSc is door export naar csv (naar Wouter) gewijzigd
+# deze 58 enkel obv Namenl of NameSc koppelen
+
+names(qHerbSpecies_VBI2_)
+qHerbSpecies_VBI2_ <- qHerbSpecies_VBI2 %>% 
+  filter(!is.na(TaxonID) | !is.na(no_link)) %>% 
+  # mutate(TaxonID_Flora = TaxonID) %>% 
+  select(-NaamNederlands, -NaamWetenschappelijk, - NameSc2, -no_link)
+  
+nrow(qHerbSpecies_VBI2_) + nrow(t) - nrow(qHerbSpecies_VBI2)
+
+
+
+####### obv NameNl => qHerbSpecies_VBI3
+t2 <- t %>% 
+  select(-NaamNederlands, -NaamWetenschappelijk, - NameSc2, -no_link, -TaxonID) %>% 
+  left_join(tblWouterBijgewerkt, by = c("NameNl")) %>% 
+  select(-NameSc.y) %>% 
+  distinct() %>% 
+  dplyr::rename(NameSc = NameSc.x)
+
+# die 21 zou je moeten de Value2 (NameSc) geven van qHerbSpecies_BR
+qHerbSpecies_VBI %>% filter(NameNl == "Bosorchis")
+t2 %>% filter(NameNl == "Bosorchis")
+
+qHerbSpecies_VBI3 <- t2 %>% 
+  select(-NaamNederlands, -NaamWetenschappelijk, - NameSc2, -no_link) %>% 
+  filter(!is.na(TaxonID))
+
+####### obv NameSc => qHerbSpecies_VBI4 
+qHerbSpecies_VBI4 <- t2 %>% 
+  filter(is.na(TaxonID)) %>% 
+  select(-NaamNederlands, -NaamWetenschappelijk, - NameSc2, -no_link, -TaxonID) 
+
+  
+qHerbSpecies_VBI4_ <- qHerbSpecies_VBI4 %>% 
+  left_join(tblWouterBijgewerkt, by = c("NameSc")) %>% 
+  select(-NameNl.y) %>% 
+  distinct() %>% 
+  dplyr::rename(NameNl = NameNl.x) %>% 
+  select(-NaamNederlands, -NaamWetenschappelijk, - NameSc2, -no_link)
+
+# nog 8 niet gekoppeld => manueel in access doen
+
+# SAMENVOEGEN
+nrow(qHerbSpecies_VBI2_) + nrow(qHerbSpecies_VBI3) + nrow(qHerbSpecies_VBI4_) - nrow(qHerbSpecies_VBI)
+qHerbSpecies_VBI5 <- rbind(qHerbSpecies_VBI2_, qHerbSpecies_VBI3, qHerbSpecies_VBI4_)
+
+```
+
+
+Exporteren naar dbExterneData als qHerbspecies_value3_Florabank en qspecies_value3_Florabank
+(!! niet naar csv want dan worden scientific names soms vervormd)
+
+```{r export_VBI_vs2_florabank}
+colnames(qTreeSpecies_VBI2)
+colnames(qHerbSpecies_VBI5)
+
+path_to_externe_data_VBI <- "C:/1Bosinventaris_finaal_vs4/Data/ExterneData/VBIExterneData.accdb"
+
+con <- odbcConnectAccess2007(path_to_externe_data_VBI)
+
+if ("qTreespecies_vs2" %in% sqlTables(con)$TABLE_NAME) {
+  sqlDrop(con,"qTreespecies_vs2")
+  sqlSave(con, qTreeSpecies_VBI2, "qTreespecies_vs2")
+  } else {
+  sqlSave(con, qTreeSpecies_VBI2, "qTreespecies_vs2")
+  }
+
+if ("tblTreeSpeciesCharacteristics_vs2" %in% sqlTables(con)$TABLE_NAME) {
+  sqlDrop(con,"tblTreeSpeciesCharacteristics_vs2_florabank")
+  sqlSave(con, tblTreeSpeciesCharacteristicsVBI2, "tblTreeSpeciesCharacteristics_vs2_florabank")
+  } else {
+  sqlSave(con, tblTreeSpeciesCharacteristicsVBI2, "tblTreeSpeciesCharacteristics_vs2_florabank")
+  }
+
+if ("tblspeciesListComb_vs2_florabank" %in% sqlTables(con)$TABLE_NAME) {
+  sqlDrop(con,"tblspeciesListComb_vs2_florabank")
+  sqlSave(con, qHerbSpecies_VBI5, "tblspeciesListComb_vs2_florabank")
+  } else {
+  sqlSave(con, qHerbSpecies_VBI5, "tblspeciesListComb_vs2_florabank")
+  }
+
+odbcClose(con)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,389 @@
+---
+title: "Species in FieldMap conform maken aan species in Florabank"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: FALSE
+      smooth_scroll: FALSE
+---
+
+# Vraagstelling
+
+DOEL van dit script is om de "kenmerken"-lijsten uit de florabank te halen, mbt Ellenberg, oud bos, rode lijst, .....
+en ook de abundantie (obv qryKenmerkTaxonAbundantieRegio.xlsx van Wouter)
+
+AANDACHTSPUNT: onduidelijk of de kenmerken gekoppeld worden via ParentID of ChildID of beide.
+
+<!-- Bekeken in oude versie van het script, en blijkt dat noch het koppelen via ParentID, noch het koppelen via ChildID alle soorten meeheeft. -->
+<!-- Zo blijkt Betula alba NIET gekoppeld te owrden via zijn childID -->
+<!-- Maar Duitse Dot (wilgesoort) wordt dan weer enkel via zijn ChildID gekoppeld. Zijn ParentIFD komt niet voor in de kenmerken-lijst en ook niet in de taxongroup -->
+
+DAAROM wordt geopteerd om toch via ChildID te gaan, en te checken of ONZE soorten dan allemaal gedekt zijn.
+
+ZODAT florabank en soorten uit FM kunnen gekoppeld worden obv deze taxonID (Value3 in qspecies/qherbspecies fieldmap).
+
+DAT BLIJKT OK TE ZIJN ZO!!
+
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup_Forrescalc.R"))
+
+```
+
+# Inladen van onze soortenlijsten 
+
+Soortenlijsten waar reeds TaxonID in zit
+
+```{r LoadSpeciesLists}
+# BR
+conBR <- odbcConnectAccess2007(dbExterneData)
+
+qHerbSpecies_BR <- sqlFetch (conBR, "qHerbspecies_value3_Florabank", stringsAsFactors = TRUE)
+qTreeSpecies_BR <- sqlFetch (conBR, "qspecies_value3_Florabank", stringsAsFactors = TRUE)
+
+odbcClose(conBR)
+
+# fieldmap VBI
+path_to_externe_data_VBI <- "C:/1Bosinventaris_finaal_vs4/Data/ExterneData/VBIExterneData.accdb"
+  
+conVBI <- odbcConnectAccess2007(path_to_externe_data_VBI)
+
+  qTreeSpecies_VBI <- sqlFetch (conVBI, "tmp_qTreespecies_vs2_taxonID_fb", stringsAsFactors = TRUE)
+# qTreeSpecies: zelfde ID voor VBI1 en VBI2
+  qHerbSpecies_VBI<-sqlFetch(conVBI, "tblspeciesListComb_vs2_florabank")
+
+odbcClose(conVBI)
+
+```
+
+
+```{r CombineLists}
+names(qHerbSpecies_BR)
+names(qHerbSpecies_VBI)
+names(qTreeSpecies_BR)
+names(qTreeSpecies_VBI)
+
+all_BR <- qTreeSpecies_BR %>% 
+  mutate(VBI_BR = "BR_tree") %>% 
+  select(ID, NameNl = Value1, NameSc = Value2, VBI_BR, TaxonID = Value3) %>% 
+  rbind(qHerbSpecies_BR %>% 
+          mutate(VBI_BR = "BR_herb") %>% 
+          select(ID, NameNl = Value1, , NameSc = Value2, TaxonID = Value3, VBI_BR))
+
+nrow(qHerbSpecies_BR) + nrow(qTreeSpecies_BR)
+
+all_VBI <- qTreeSpecies_VBI %>% 
+  mutate(VBI_BR = "VBI_tree") %>% 
+  select(ID, NameNl = Value1, NameSc = Value2, TaxonID, VBI_BR) %>% 
+  rbind(qHerbSpecies_VBI %>% 
+          mutate(VBI_BR = "VBI_herb") %>% 
+  select(ID = IDSp, NameNl, NameSc, TaxonID = TaxonID_fb, VBI_BR))
+
+all_species <- all_BR %>% 
+  rbind(all_VBI) %>% 
+  filter(!is.na(TaxonID))
+
+```
+
+
+# Connectie met Florabank
+
+Package "inbodb" laat toe om inbodb-en zoals inboveg en florabank te bevragen
+Zie [inbodb] (https://inbo.github.io/inbodb/reference/index.html) 
+
+!! connectie met vpn nodig !!!
+
+```{r connect}
+florabank <- connect_inbo_dbase("D0021_00_userFlora")
+```
+
+
+**Opbouw sql-db**
+  
+- tblTaxon - ID, NaamNederlands, ...
+- tblTaxonGroep - ID, Code, Naam
+- relTaxonTaxonGroep - ID, TaxonGroepID, TaxonID
+- relTaxonTaxon - (ID), TaxonTaxonRelTypeCode = Syn, TaxonIDParent, TaxonIDChild
+- kenmerken (mbv fctie "get_florabank_traits") - TaxonID, TaxonWetenschappelijk, TaxonNederlands, Kenmerk, Code, Omschrijving, Rekenwaarde
+
+
+# Taxongroep inladen
+
+We kiezen ervoor om enkel de kenmerken van de vaatplanten te downloaden.
+
+<!-- !! daarom checken of al ONZE soorten via parent of childID gekoppeld kunnen worden. -->
+<!-- OK, dat is zo -->
+
+Zie tblTaxonGroep.
+
+```{r TaxonGroep}
+# Vaatplanten versus ...
+tblTaxonGroep <- tbl(florabank, "tblTaxonGroep") %>% collect() 
+tblTaxonGroep %>% distinct(Naam)
+# Er bestaat geen functie die soort en taxongroep weergeeft, zelf te zoeken op sql-server
+
+```
+
+```{r LinkTaxonGroep}
+# link met soorten
+relTaxonTaxon <- tbl(florabank, "relTaxonTaxon") %>% collect()
+relTaxonTaxonGroep <- tbl(florabank, "relTaxonTaxonGroep") %>% collect()
+# tblTaxonGroup <- tbl(florabank, "tblTaxonGroep") %>% collect()
+
+# checken of er een taxongroep is voor al onze soorten, gebaseerd op hun TaxonID (childID)
+test_taxongroep <- all_species %>% 
+  left_join(relTaxonTaxonGroep, by = c("TaxonID"))
+
+test_taxongroep %>% filter(is.na(TaxonGroepID)) %>% nrow()
+# [1] 0 - OK
+```
+
+
+# Kenmerken inladen
+Om kenmerken in te laden, wordt gewerkt met specifieke functie die "traits" (= eigenschappen) binnenhaalt: **get_florabank_traits**
+
+Deze kenmerken komen overeen met veld "kenmerk" in de tabel "inbo_vw_Kenmerken_Florabank1", dat zijn er 84 ...
+We kunnen deze kenmerk per kenmerk binnenhalen, of alles in één keer (trait = "")
+
+Beslist om direct alles binnen te  halen, cfr VBI in tabel "inbo_vw_Kenmerken_Florabank1".   
+
+Daarin nzitten dan o.a. volgende "ususal suspects":
+- Ellenberg
+- Indicator oud bos
+- Wettelijke status
+- Rode lijst Vaatplanten (?? status_nl, status_iucn)
+- Conventie Bern Habitat
+- Indigeniteit
+
+
+```{r overzicht_kenmerken}
+mogelijke_kenmerken <- get_florabank_traits(
+ connection = florabank, 
+ trait_name = "", 
+ collect = FALSE) %>% 
+ distinct(Kenmerk) %>% 
+ collect() %>% 
+  as.data.frame()
+
+# view(mogelijke_kenmerken)
+
+bron <- tbl(florabank, "tblTaxonKenmerk") %>% collect()
+
+tbl(florabank, "tblTaxonKenmerk") %>% filter(Naam %LIKE% "%oud%")
+view(bron)
+```
+
+```{r alle_kenmerken}
+fb_kenmerken <- get_florabank_traits(
+ connection = florabank, 
+ trait_name = "") %>% 
+  # left_join (relTaxonTaxonGroup, by = c("ID" = "") %>% 
+  # left_join (tblTaxonGroup, by = c()) %>% 
+ # filter(code = "VP" | species %in% c(veenmos, kussentjesmos) %>%   
+ collect()
+
+head(fb_kenmerken)
+```
+
+```{r alle_soorten}
+fb_allspecies <- tbl(florabank, "tblTaxon") %>% collect()
+# collect vormt query om tot dataframe
+
+tbl(florabank, "tblTaxon") %>% filter(NaamNederlands == "Grijze mosterd")
+tbl(florabank, "tblTaxon") %>% filter(NaamNederlands %LIKE% "%eenmos%")
+
+```
+
+Kunnen al onze soorten via hun TaxonID gekoppeld worden aan de kenmerken? JA
+
+Hierna vergelijking van onze soortenlijst met de lijst van soorten die in kenmerken zit.
+
+```{r vgl_soorten_kenmerkenlijst}
+fb_kenmerken_TaxonID <- fb_kenmerken %>% 
+  group_by(TaxonID) %>% 
+  summarize(NameNl_first = first(TaxonNederlands)) %>% 
+  ungroup()
+
+all_species_TaxonID <- all_species %>% 
+  group_by(TaxonID) %>% 
+  summarize(NameNl_first = first(NameNl)) %>% 
+  ungroup()
+
+check <- all_species_TaxonID %>% 
+  anti_join(fb_kenmerken_TaxonID, by = c("TaxonID"))
+
+# geen probleem als het (G) is
+
+check_ <- check %>% 
+  filter(!str_detect(NameNl_first, "spec") & !str_detect(NameNl_first, "\\(G\\)"))
+
+fb_allspecies %>% filter(ID %in% c(8248, 8080, 8086))
+relTaxonTaxon %>% filter(TaxonIDChild %in% c(8248, 8080, 8086))
+fb_kenmerken %>% filter(TaxonID %in% c(4641, 8445))
+relTaxonTaxonGroep %>% filter(TaxonID %in% c(8248, 8080))
+
+check_ %>% filter(!TaxonID %in% relTaxonTaxonGroep$TaxonID) %>% nrow()
+# ze zitten wel allemaal in de lijst met vaatplanten
+# misschien gewoon geen info over? 
+
+
+# ?? allemaal zelfde IDParent en IDChild
+check_ %>% filter(!TaxonID %in% relTaxonTaxon$TaxonIDChild) %>% nrow()
+
+check2_ <- check_ %>% left_join(relTaxonTaxon, by = c("TaxonID" = "TaxonIDChild")) %>%  filter(TaxonIDParent != TaxonID & TaxonTaxonRelTypeCode == "syn")
+# slechts 5 met andere parentID, warvan er 3 opduiken in fb_kenmerken:
+fb_kenmerken %>% filter(TaxonID %in% check2_$TaxonIDParent) %>% distinct(TaxonID, TaxonWetenschappelijk, TaxonNederlands)
+# 744	Pseudocrossidium hornschuchianum (Schultz) R.H.Zander	Spits smaragdsteeltje		
+# 4641	Cardamine pratensis L. subsp. paludosa (Knaf.) Celak.	NA		
+# 8445	Syntrichia ruralis (Hedw.) F.Weber & D.Mohr s.l.
+```
+
+
+
+
+```{r selectie_soorten}
+fb_allspecies_ %>% filter(TaxonIDChild %in% c(2290, 2291, 4146))
+```
+
+
+# Beperkte lijst kenmerken
+
+Lijst met kenmerken kan rechtstreeks via TaxonID in onze soortenlijsten gekoppeld worden.
+
+We slaan een subset op, van enkel vaatplanten
+
+```{r link_kenmerken_taxongroep}
+fb_kenmerken_ <- fb_kenmerken %>% 
+  left_join(relTaxonTaxonGroep, by = c("TaxonID")) %>% 
+  left_join(tblTaxonGroep %>% select(-Code, -Omschrijving), by = c("TaxonGroepID" = "ID")) %>% 
+  filter(Naam == "Vaatplanten")
+
+names(fb_kenmerken_)
+
+fb_kenmerken_vaatplanten <- fb_kenmerken_ %>% 
+  select(-ID, -TaxonGroepID, -Naam)
+
+```
+
+Er is ook de mogelijkheid om elke keer enkel de kenmerken waar men in geïnteresseerd is te donwnloaden van de SQL-db.
+
+```{r ellenberg}
+fb_ellenberg <- get_florabank_traits(
+ connection = florabank, 
+ trait_name = "Ellenb", 
+ collect = TRUE)   
+# alle traits die beginnen met "Ellenb"
+# collect = TRUE => data wordt effectief binnengehaaald, anders enkel query die binnengehaald wordt (eerste 100 records zijn dan zichtbaar)
+
+fb_ellenberg %>% distinct(Kenmerk)
+# nadeel: ook alle mossen ...
+```
+
+```{r red_list}
+# get all red lists via partial matching
+fb_rodelijst <- get_florabank_traits(florabank, "rode") 
+
+# get only the red list for vascular plant species
+fb_rodelijstvaatplanten <- get_florabank_traits(florabank, "Rode lijst Vaatplanten") %>% collect()
+view(fb_rodelijstvaatplanten)
+# bevat ook de momenteel niet bedreigde soorten én TaxonID
+
+```
+
+```{r wettelijke_status}
+fb_wettelijk <- get_florabank_traits(florabank, "wet")  %>% collect()
+view(fb_wettelijk)
+
+fb_conventies <- get_florabank_traits(florabank, "conv")  %>% collect()
+view(fb_conventies)
+
+```
+
+
+```{r indigenity_list}
+fb_indigeniteit <- get_florabank_traits(florabank, "indig") %>% collect()
+view(fb_indigeniteit)
+
+```
+
+
+(c)Wouter: het kenmerk KFK (kilometerhokfrequentie klasse) in Florabank bepaald de zeldzaamheid over heel Vlaanderen
+
+```{r zeldzaamheid}
+fb_zeldzaamheid <- get_florabank_traits(florabank, "Zeldzaamheid KFK") %>% collect()
+view(fb_zeldzaamheid)
+
+
+```
+
+
+
+# Export
+
+Exporteren naar dbExterneData om zo makkelijk toegankelijk te zijn, ook voor anderen (zonder vpn-toegang).
+Te koppelen via TaxonID.
+
+## BR
+
+```{r export_BR}
+con <- odbcConnectAccess2007(dbExterneData)
+
+sqlSave(con, mogelijke_kenmerken, "tblFlorabank_overzicht_kenmerken")
+sqlSave(con, fb_kenmerken_vaatplanten, "tblFlorabank_kenmerken_vaatplanten_20210212")
+
+odbcClose(con)
+
+```
+
+
+## VBI 
+Idem voor VBI (recentere tabellen dan deze die er al zijn)
+
+```{r export_VBI}
+path_to_externe_data_VBI <- "C:/1Bosinventaris_finaal_vs4/Data/ExterneData/VBIExterneData.accdb"
+
+con <- odbcConnectAccess2007(path_to_externe_data_VBI)
+
+sqlSave(con, mogelijke_kenmerken, "tblFlorabank_overzicht_kenmerken")
+sqlSave(con, fb_kenmerken_vaatplanten, "tblFlorabank_kenmerken_vaatplanten_20210212")
+
+odbcClose(con)
+
+```
+
+
+```{r disconnect}
+dbDisconnect(florabank)
+```
+
+
+
+
+
+
+
+
+
+
