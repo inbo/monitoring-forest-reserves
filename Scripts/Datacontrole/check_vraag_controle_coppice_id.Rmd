@@ -1,0 +1,158 @@
+---
+title: "Update forresdat"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: yes
+      smooth_scroll: yes
+---
+
+# Vraagstelling
+
+Twee keer aan Peter een lijst met afwijkende copice_id's doorgemaild: 
+zorgen dat eerste niet opnieuw bevraagd worden
+
+
+## Mail Peter 31/3/2022
+Deze eerste over onderstaande (coppice-id run2) , was de lastigste, ben ik gisteren heel lang met bezig geweest!!
+Op een bepaald moment met 3 schermen open om alle sets te gelijk ik beeld te hebben (lukt met 2 getac's en laptop).
+
+Heb alle elementen individueel bekeken, de fouten heb ik eruit gehaald, dit zijn degene die niet aan elkaar gekoppeld kunnen/mogen zijn
+omwille van dubbel gebruik van dezelfde CoppiceID, liggen ook meters uit elkaar, of andere soort ook, tik of leesfouten (3 ipv 8 enzo ).
+Moeten misschien eens nadenken of we geen alternatief hebben voor die CoppiceID, of we die echt wel nodig hebben of dat we die niet gewoon overboord kunnen gooien.
+
+Let wel een hele reeks heb ik onveranderd gelaten, dat zijn er vooral van Rodebos KV1
+en Muizenbos KV, hier is iets aan de hand met verschil in X,Y tot 1,5m, die ik momenteel niet helder krijg (geen verplaatsingen, denk ik,) maar naar mijn inziens juiste koppelingen.
+Zou goed zijn als we van deze de coördinaten kunnen synchroniseren over de dirie sets heen.
+Hiervoor hebben we momenteel nog geen tool ter beschikking.
+In alle geval manueel (met 3 sets) is dit momenteel niet meer te doen (ook omwille van een actuele FMfout op mijn desktop versie)
+Zou goed zijn, denk ik, om de coppice-id run nog eens opnieuw te laten lopen, daar zou dan moeten uitkomen welke ik wel als juiste gekoppelde heb geïnterpreteerd en welke we dus 
+in overweging kunnen nemen om te synchroniseren.
+
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = FALSE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+
+```
+
+
+# Inladen
+
+```{r}
+# verschil_XY_coppiceid_detail2.csv & meerdere_soorten_zelfde_coppice_id2.csv: 21/2/2022
+# verschil_XY_coppiceid_detail3.csv & meerdere_soorten_zelfde_coppice_id3.csv: 8/4/2022
+
+verschil_XY_2 <- read_csv2("Data_controle/verschil_XY_coppiceid_detail2.csv") 
+verschil_XY_3 <- read_csv2("Data_controle/verschil_XY_coppiceid_detail3.csv") 
+
+meerdere_soorten_2 <-  read_csv2("Data_controle/meerdere_soorten_zelfde_coppice_id2.csv") 
+meerdere_soorten_3 <-  read_csv2("Data_controle/meerdere_soorten_zelfde_coppice_id3.csv") 
+
+zelfde_status_3 <-  read_csv2("Data_controle/hakhout_verschillende_id_zelfde_status_levend_dood3.csv")
+
+```
+
+
+!! Peter suggereerde om ook maar vanaf 3 m te kijken
+
+# Verschil
+
+meerdere_soorten_2/3: geen dubbels
+
+```{r}
+names(verschil_XY_3)
+verschil_XY_3_niet_2 <- verschil_XY_3 %>% 
+  anti_join(verschil_XY_2, by = c("plot_id", "tree_measure_id", "species"))
+
+verschil_XY_3_en_2 <- verschil_XY_3 %>% 
+  inner_join(verschil_XY_2, by = c("plot_id", "tree_measure_id", "species"))
+# !! toch één die zou moeten behouden blijven
+
+```
+
+```{r}
+verschil_XY_3_niet_2_ <- verschil_XY_3_niet_2 %>% 
+  filter(verschilX > 2 | verschily > 2)
+# 23
+
+verschil_XY_3_niet_2_ <- verschil_XY_3_niet_2 %>% 
+  filter(verschilX > 3 | verschily > 3)
+# 18
+
+verschil_XY_3_niet_2_ <- verschil_XY_3_niet_2 %>% 
+  filter(between(verschilX, 2, 3) | between(verschily, 2, 3))
+# 5 extra 
+
+```
+
+Bekeken en alle records in de lijst (verschil_XY_3_niet_2) hebben verschil > 3 m OF zijn 2x zelfde status
+
+Eventeel wel één lijst maken van meerdere soorten en van zelfde status
+
+```{r}
+te_checken1 <- verschil_XY_3_niet_2 %>% 
+  select(plot_id, tree_id, tree_measure_id, coppice_id, old_id, x_local, y_local, 
+  period, species, alive_dead, intact_snag, ind_sht_cop, dbh_mm) %>% 
+  mutate(mogelijke_fout = "andere XY") %>%
+  mutate(mogelijke_fout = ifelse(coppice_id == 176,
+                "2 x zelfde status (levend/dood)",
+                mogelijke_fout)
+  )
+
+te_checken2 <- zelfde_status_3 %>% 
+  select(plot_id, tree_id, tree_measure_id, coppice_id, old_id, x_local, y_local, 
+  period, species, alive_dead, intact_snag, ind_sht_cop, dbh_mm) %>% 
+  mutate(mogelijke_fout = "2 x zelfde status (levend/dood)")
+
+te_checken3 <- meerdere_soorten_3 %>% 
+  select(plot_id, tree_id, tree_measure_id, coppice_id, old_id, x_local, y_local, 
+  period, species, alive_dead, intact_snag, ind_sht_cop, dbh_mm) %>% 
+  mutate(mogelijke_fout = "andere soort")
+
+te_checken <- rbind(te_checken1, te_checken2, te_checken3) %>% 
+  unique() %>% 
+  arrange(plot_id, tree_measure_id, period)
+
+
+```
+
+```{r}
+table(te_checken$plot_id)
+table(te_checken$mogelijke_fout)
+
+```
+
+```{r}
+
+write_csv2(te_checken, "Data_controle/te_checken_coppiceid_soort_status4.csv") 
+
+```
+
+Mail Peter: "heb je voor je eerste mail van gisteren betreffende coppice id's rekening gehouden met opmerkingen hieronder, vooral betreffende stoven van KV Muizenbos en KV Rodebos? Als toch nieuwe run dan zou het makkelijk zijn om voorgaande meegegeven records uit te sluiten kwestie van ze niet nog eens te checken!!
+Kan de coördinaten immers voorlopig niet synchroniseren!! "
+
+
+KV Muizenbos: 151000
+KV Rodebos: 41000 en 43000

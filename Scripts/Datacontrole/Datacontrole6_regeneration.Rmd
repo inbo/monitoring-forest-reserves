@@ -1,0 +1,163 @@
+---
+title: "Controle vegetatiedata"
+author: "Anja Leyman"
+date: "14 mrt 2022"
+output: 
+  html_document:
+    code_folding: hide
+    fig_caption: yes
+    number_sections: yes
+    toc: yes
+    toc_float:
+      collapsed: no
+      smooth_scroll: no
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = FALSE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+#rm(list = ls())
+
+library(here)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+
+# library(tidyr)
+# library (rlang)
+# library(dplyr)
+# library(RODBC)
+# library(lubridate)
+# library(knitr)
+# library(here)
+# library(openssl)
+# library(kableExtra)
+# library(stringr)
+
+
+```
+
+
+# Vraagstelling
+
+Doel van dit script is datacontrole vegetatie (vegetation & herblayer).
+
+
+```{r LoadLookuplists}
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+  
+  qHeightClass <- sqlFetch(con, "qHeightClass_regeneration", stringsAsFactors = FALSE)
+  qNumberClass <- sqlFetch(con, "qnumber_regeneration_classes", stringsAsFactors = FALSE)
+  qSpecies <- sqlFetch(con, "qspecies", stringsAsFactors = FALSE)
+
+odbcClose(con)
+```
+
+## Data inladen
+
+Eerst dienen de verjongingsgegevens ingeladen te worden.
+
+Enkele verduidelijkingen:
+
+* year: afgeleid van het veld `Datum`, of van `Opnamejaar` als `Datum` niet ingevuld is
+
+* year_main_survey: overgenomen van veld `Opnamejaar` - zou zelfde moeten zijn als `year`
+
+* date_regeneration: op niveau van regeneration 
+
+* totalplotarea_ha: area of total plot; in case of circular plot: area of A4 circle
+
+* plotarea_ha: area of plot (ha): area of vegetation plot (16 x 16 m2 = 0.0256 ha)
+
+* naast range van cover, wordt ook min, max en mid toegevoegd 
+
+```{r LoadDataRegeneration}
+data_regeneration <-
+  load_data_regeneration(
+    database = path_to_fieldmap_db
+  )
+
+data_regeneration_CA <-
+  load_data_regeneration(
+    database = path_to_fieldmap_db,
+    plottype = "CA"
+  )
+
+
+```
+
+
+# Datacontrole
+
+## NA's ...
+
+
+```{r rubbing_zero}
+t <- data_regeneration %>% 
+  select(plot_id, subplot_id, period, species, height_class, 
+         nr_of_regeneration, number_class,
+         rubbing_damage_number, rubbing_damage_perc,
+         year_main_survey) %>% 
+  filter(rubbing_damage_number == 0)
+```
+
+Gevraagd om variabele (game_impact_reg_obs(erved)) toe te voegen bij load_data_reg én bij load_data_plotinfo.
+(branch `statistics_and_other_issues`)
+
+
+```{r load_plotdetails_game_impact}
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+
+tables_fieldmap <- sqlTables(con) %>% filter(!str_detect(TABLE_NAME, "MSys"))
+
+PlotDetails_1eSet <- sqlFetch (con, "PlotDetails_1eSet", stringsAsFactors = TRUE) %>% 
+  mutate(period = 1) %>% 
+  rename(Date_Dendro = Date_Dendro_1eSet,
+         FieldTeam_Dendro = FieldTeam_Dendro_1eSet) %>% 
+  select(-FieldStatus)
+PlotDetails_2eSet <- sqlFetch (con, "PlotDetails_2eSet", stringsAsFactors = TRUE) %>% 
+  mutate(period = 2) %>% 
+  rename(Date_Dendro = Date_Dendro_2eSet,
+         FieldTeam_Dendro = FieldTeam_Dendro_2eSet) %>% 
+  select(-FieldStatus)
+PlotDetails_3eSet <- sqlFetch (con, "PlotDetails_3eSet", stringsAsFactors = TRUE) %>% 
+  mutate(period = 3) %>% 
+  rename(Date_Dendro = Date_Dendro_3eSet,
+         FieldTeam_Dendro = FieldTeam_Dendro_3eSet) %>% 
+  select(-FieldStatus)
+
+odbcClose(con)
+
+plotDetails <- rbind(PlotDetails_1eSet, PlotDetails_2eSet, PlotDetails_3eSet)
+
+names(plotDetails)
+
+# n_distinct(plotDetails$plot_id)
+```
+
+```{r rubbing_zero_no_game_obs}
+t_ <- t %>% 
+  left_join(plotDetails %>% select(plot_id = IDPlots, period, GameImpactRegObserved)) %>% 
+  filter(GameImpactRegObserved == 20)  # géén game impact observed
+
+```
+
+
+```{r export_veg1}
+write_csv2(t_, here::here("Data_controle/nalv_package_review_2022-03-08/geen_game_obs_maar_reg_is_nul.csv"))
+# via mail aan Peter gevraagd (conecpt 14/3/2022)
+
+```
+

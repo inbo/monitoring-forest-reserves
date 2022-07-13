@@ -1,0 +1,145 @@
+---
+title: "Controle plotdetails"
+author: "Anja Leyman"
+date: "14 mrt 2022"
+output: 
+  html_document:
+    code_folding: hide
+    fig_caption: yes
+    number_sections: yes
+    toc: yes
+    toc_float:
+      collapsed: no
+      smooth_scroll: no
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = FALSE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+#rm(list = ls())
+
+library(here)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+
+# library(tidyr)
+# library (rlang)
+# library(dplyr)
+# library(RODBC)
+# library(lubridate)
+# library(knitr)
+# library(here)
+# library(openssl)
+# library(kableExtra)
+# library(stringr)
+
+
+```
+
+
+# Vraagstelling
+
+Doel van dit script is datacontrole plotdetails.
+
+Meer bepaald:  
+
+- year dendro: sommige plots ander jaartal dan andere
+- .. klopt dit met groeiseizoen?
+
+
+# Data inladen
+
+## Plotinfo
+
+```{r load_plotinfo}
+plotinfo <- load_plotinfo(database = path_to_fieldmap_db)
+```
+
+```{r plotinfo_1986_nog_niet_ok}
+# gevraagd aan Els op github
+# hier geen probleem, al aan Peter gevraagd om 1/1/1986 te vervangen door 1/12/1986
+range(plotinfo$period)
+
+```
+
+Plotinfo bevat year niet => trees inladen 
+
+```{r LoadDataDendro}
+data_dendro <- load_data_dendrometry(database = path_to_fieldmap_db, extra_variables = TRUE, processed = FALSE)
+#80849
+
+```
+
+
+# Datacontrole
+
+```{r year_trees}
+year <- data_dendro %>% 
+  group_by(forest_reserve, plot_id, plottype, date_dendro, period, year) %>% 
+  summarize() %>% 
+  ungroup()
+
+year_summ <- year %>% 
+  group_by(forest_reserve, plottype, period, year) %>% 
+  summarize(min_date = min(date_dendro),
+            max_date = max(date_dendro)) %>% 
+  ungroup()
+
+```
+
+Bij welke bosreservaten zijn er twee jaartallen?
+
+```{r year_diff}
+two_years <- year_summ %>% 
+  group_by(forest_reserve, plottype, period) %>% 
+  summarize(aantal_yr = n(), 
+            min_yr = min(year),
+            max_yr = max(year)) %>% 
+  ungroup() %>% 
+  filter(aantal_yr > 1)
+```
+```{r}
+year_select_diff <- year %>% 
+  inner_join(two_years) %>% 
+  mutate(month = month(date_dendro))
+
+table(year_select_diff$month)
+
+table(year_select_diff$forest_reserve, year_select_diff$year)
+
+table <- year_select_diff %>% 
+  group_by(forest_reserve, year) %>% 
+  summarize(aantal_plots = n()) %>% 
+  ungroup() %>% 
+  pivot_wider(names_from = year,
+              values_from = aantal_plots) %>% 
+  
+
+```
+
+```{r select}
+afwijkende_plots <- 
+```
+
+# Export
+
+```{r export, eval = FALSE}
+write_csv2(year_select_diff, here::here("Data_controle/nalv_package_review_2022-03-08/plots_ander_jaartal.csv"))
+# via mail aan Peter gevraagd (16/3/2022)
+
+write_csv2(table, here::here("Data_controle/nalv_package_review_2022-03-08/overzicht_ander_jaartal.csv"))
+```
+
