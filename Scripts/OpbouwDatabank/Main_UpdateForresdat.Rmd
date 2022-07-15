@@ -41,6 +41,18 @@ obv branch "statistics_and_other_issues".
 * enkel obv datum en niet meer opnamejaar (opnamejaar wordt enkel nog gebruikt als date niet beschikbaar is)
 
 
+- 13/7/2022: 
+
+* reg_AL aangepast: overal nr_regeneration verwijderd (of nr_established and nr_seedlings)
+Immers in approx_nr_reg hebben we zelfde info.
+Was verwarrend: werd berekend obv enkel de exacte aantallen, maar als er dan gegroepeerd werd op niveau plot, 
+werd geen rekening gehouden met de aantallen uit de intervallen.
+
+Approx_nr_reg: zou steeds obv een aantalsklasse moeten zijn bij seedlings en obv exact aantal bij established => datacontrole
+Als allebei, dan wordt aantalsklasse genomen.
+Dus dan moet bij de datacontrole gezorgd worden dat bij de established enkel een aantal staat (of enkel een antalsklasse als geen exact aantal gekend is) (is opgenomen in instructies voor datacontrole)
+
+
 ```{r Rm, eval = FALSE}
 rm(list=ls())
 ```
@@ -224,8 +236,15 @@ plotinfo_check_not_processed <- plotinfo_check %>%
   filter(survey_trees == TRUE & data_processed == FALSE)
 ```
 
-Enkel nog Rodebos en Walenbos KV's te doen + CP's derde set Withoefse heide (dd 8/4/2022).
-Hoogtemodellen reeds aangemaakt.
+Enkel nog CP's derde set Withoefse heide (dd 13/7/2022), is gepland voor 2023.
+
+Zelf aangepast in dbEls als processed, ook gevraagd aan Peter:  
+
+- Sevendonck A en Q - 1e & 2e decade
+- Liedekerke TR - 1e & 2e decade
+- Hannecart - 3e decade
+- Rodebos (2 KV's: KV en KV2) - 3e decade
+
 
 
 ## Export plotinfo
@@ -1109,6 +1128,85 @@ for (tablename in names(regeneration)) {
 } 
 
 ```
+
+## TEMP: foute nullen vs NA bij mean_reg_ha
+
+Bv. plot 130 vs 133: 
+
+- als seedlings ingevuld zijn maar established niet (plot 133), dan NA ipv 0
+- als niks ingevuld staat, maar wel een reg_date: dan 0 (plot 130) !! lci = 0 en uci = NA)
+
+
+Data_regeneration bevat voor plot 133 enkel de seedlings en voor plot 130 enkel een lijn met heightclass en species = NA
+
+```{r}
+check0 <- data_regeneration %>% filter(period == 1 & plot_id %in% c(133, 130))
+# OK!
+
+check <- regeneration_by_plot %>% filter(period == 1 & plot_id %in% c(133, 130))
+
+check2 <- regeneration_by_plot_height %>% filter(period == 1 & plot_id %in% c(133, 130))
+
+check3 <- regeneration_by_plot_height_species %>% filter(period == 1 & plot_id %in% c(133, 130))
+
+check4 <- by_plot1 %>% filter(period == 1 & plot_id %in% c(133, 130))
+
+```
+
+
+```{r}
+by_plot1 <- data_regeneration %>%
+    mutate(
+      plotarea_ha = ifelse(.data$plottype == "CA", 0.01, .data$plotarea_ha),
+      min_number_established_ha =
+        ifelse(is.na(.data$subcircle) | .data$subcircle == "A2",
+               .data$min_number_of_regeneration / .data$plotarea_ha, NA),
+      max_number_established_ha =
+        ifelse(is.na(.data$subcircle) | .data$subcircle == "A2",
+               .data$max_number_of_regeneration / .data$plotarea_ha, NA),
+      min_number_seedlings_ha =
+        ifelse(is.na(.data$subcircle) | .data$subcircle == "A1",
+               .data$min_number_of_regeneration / .data$plotarea_ha, NA),
+      max_number_seedlings_ha =
+        ifelse(is.na(.data$subcircle) | .data$subcircle == "A1",
+               .data$max_number_of_regeneration / .data$plotarea_ha, NA),
+      approx_nr_established_ha =
+        ifelse(is.na(.data$subcircle) | .data$subcircle == "A2",
+               .data$approx_nr_regeneration / .data$plotarea_ha, NA),
+      approx_nr_seedlings_ha =
+        ifelse(is.na(.data$subcircle) | .data$subcircle == "A1",
+               .data$approx_nr_regeneration / .data$plotarea_ha, NA)
+    ) %>% 
+    group_by(
+      .data$plot_id, .data$year, .data$period, .data$subplot_id
+    ) %>%
+    summarise(
+      established_interval =
+        sum_intervals(
+          var_min = .data$min_number_established_ha,
+          var_max = .data$max_number_established_ha,
+          transformation = "log", na_rm = TRUE
+        ),
+      seedlings_interval =
+        sum_intervals(
+          var_min = .data$min_number_seedlings_ha,
+          var_max = .data$max_number_seedlings_ha,
+          transformation = "log", na_rm = TRUE
+        )
+    ) %>%
+    ungroup() %>%
+    mutate(
+      mean_number_established_ha = .data$established_interval$sum,
+      lci_number_established_ha = .data$established_interval$lci,
+      uci_number_established_ha = .data$established_interval$uci,
+      mean_number_seedlings_ha = .data$seedlings_interval$sum,
+      lci_number_seedlings_ha = .data$seedlings_interval$lci,
+      uci_number_seedlings_ha = .data$seedlings_interval$uci,
+    )
+
+
+```
+
 
 ## Export
 
