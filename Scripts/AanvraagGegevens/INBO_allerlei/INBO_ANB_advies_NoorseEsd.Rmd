@@ -1,0 +1,281 @@
+---
+title: "Verjonging Noorse esdoorn in KV Harras/Muizenbos"
+author: "Anja Leyman"
+date: "25 aug 2022"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: FALSE
+      smooth_scroll: FALSE
+---
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+# source(here::here("scripts/Paths.R")) # wordt aangeroepen in Setup.R
+```
+
+
+# Vraagstelling
+
+**Adviesvraag van ANB mbt invasiviteit Noorse esdoorn** (op vraag van Kris Vdk)
+
+Klopt het dat er veel kieming is van Noorse esdoorn (zaailingen < 50 cm H), maar weinig doorgroeiende verjonging?
+
+Data aan te leveren:    
+
+- aantal zaailingen
+- aantal doorgroeiende verjonging
+- aantal bomen > 5 cm DBH
+- KV Muizenbos en KV Harras 
+
+<!-- Zowel dendrometrie als verjonging wordt bekeken. -->
+
+<!-- - boomdata (+ repreArea, IUFRO_Vitaliteit en waar mogelijk unieke tree-id) + lookuplijsten -->
+<!-- - verjonging: ruwe data + lookuplijsten -->
+<!-- - vegetatie: ruwe data + lookuplijsten -->
+
+
+
+
+```{r Path}
+# deze worden ook in "Setup.R" gedefinieerd (aanroepen van "Paths.R")
+# hier ev. extra "paths" toevoegen indien nodig 
+
+# resultaten
+path_to_datarequest <- "C:/03_BR/9_AanvraagGegevens/INBO_ANB_advies_NoorseEsd/"
+```
+
+
+```{r overview_raw_data}
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+      dbtablesRaw <- sqlTables(con) %>% 
+                filter(str_detect(TABLE_NAME, "MSys", negate = TRUE ))
+                # wegfilteren van records waar TABLE_NAME "MSys" bevat
+odbcClose(con)
+
+```
+
+
+
+```{r overview_analyse_data}
+con <- odbcConnectAccess2007(path_to_analysis_set_db)
+      dbtablesAnalysed <- sqlTables(con) %>% 
+                filter(str_detect(TABLE_NAME, "MSys", negate = TRUE ))
+                # wegfilteren van records waar TABLE_NAME "MSys" bevat
+odbcClose(con)
+
+```
+
+
+```{r load_data}
+plotinfo <- read_vc(file = "plotinfo", root = path_to_forresdat_data)
+colnames(plotinfo)
+
+dendro_by_plot_species <- read_vc(file = "dendro_by_plot_species", root = path_to_forresdat_data)
+colnames(dendro_by_plot_species)
+
+# trees <- read_csv2(paste0(path_to_treelevel_csv, "trees_calc.csv")) 
+# stems <- read_csv2(paste0(path_to_treelevel_csv, "stems_calc.csv")) 
+
+regeneration_by_plot_height_species <- read_vc(file = "regeneration_by_plot_height_species", root = path_to_forresdat_data)
+colnames(regeneration_by_plot_height_species)
+
+regeneration_by_core_area_height_species <- read_vc(file = "regeneration_by_core_area_height_species", root = path_to_forresdat_data)
+colnames(regeneration_by_core_area_height_species)
+
+# herblayer_by_plot <- read_vc(file = "herblayer_by_plot", root = path_to_forresdat_data)
+# colnames(herblayer_by_plot)
+
+```
+
+
+
+```{r load_lookuplists, results='hide'}
+qSpecies <- read_vc(file = "qSpecies", root = path_to_forresdat_data)
+colnames(qSpecies)
+
+qHeightClass <- read_vc(file = "qHeightClass_regeneration", root = path_to_forresdat_data)
+colnames(qHeightClass)
+
+qPlotType <- read_vc(file = "qPlotType", root = path_to_forresdat_data)
+colnames(qPlotType)
+
+qnumber <- read_vc(file = "qnumber_regeneration_classes", root = path_to_forresdat_data)
+colnames(qnumber)
+
+# niet nodig in dit script:
+  # qHerbSpecies240810
+  # qiufrovitality
+  # qHeightClass_regeneration
+  # qAliveDead
+  # qdecaystage
+  # qIndShootCop
+  # qIntactSnag
+  # qnumber_regeneration_classes
+  # qPlotType
+
+```
+
+
+# Selectie van de twee kernvlaktes
+
+- KV Harras: plot_id 21000, plottype = CA  
+- KV Muizenbos: plot_id 151000, plottype = CA  
+
+```{r select_plots}
+plots <- plotinfo %>% 
+  filter(plottype == 'CA' 
+         & forest_reserve %in% c("Harras", "Muizenbos"))
+
+BR_list <- plots %>% 
+  group_by(forest_reserve, plot_id, plottype) %>% 
+  summarize() %>% 
+  ungroup()
+
+```
+
+
+# Selectie data
+
+Hierna selectie van alle data: `plot_id` komt voor in `plots`.
+
+## Dendro
+
+```{r select_dendro, results='hide'}
+dendro <- dendro_by_plot_species %>% 
+  inner_join(plots %>% select(plot_id, period, plottype)) %>% 
+  left_join(qSpecies %>% select(ID, species_nl = Value1), by = c("species" = "ID")) 
+# filter(str_detect(Value2, "Fraxinus excelsior"))
+
+colnames(dendro)
+
+check <- dendro %>% 
+  group_by(plot_id, period) %>% 
+  summarize(nr_species = n()) %>% 
+  ungroup()
+
+nrow(check) == 4
+```
+
+
+## Verjonging
+
+### Ruwe data - niet nodig
+
+Gebruikt ter controle van forresdat-data => OK
+
+```{r load_calc_reg, eval=FALSE}
+data_regeneration <-
+  load_data_regeneration(
+    database = path_to_fieldmap_db,
+    processed = TRUE
+  )
+
+regeneration <- calculate_regeneration(data_regeneration)
+```
+
+
+```{r CreateSeparateDataframesReg, eval=FALSE}
+for (tablename in names(regeneration)) {
+     assign(tablename, regeneration[[tablename]])
+} 
+
+```
+
+### Niveau subplots
+
+```{r select_reg_subplots}
+reg_subplots <- regeneration_by_plot_height_species %>% 
+  inner_join(plots %>% select(plot_id, period, plottype)) %>% 
+  left_join(qSpecies %>% select(ID, species_nl = Value1), by = c("species" = "ID")) %>% 
+  left_join(qHeightClass %>% select(ID, height_class_txt = Value1), by = c("height_class" = "ID")) %>% 
+  select(-contains(c("rubbing", "of_regeneration_ha")))
+
+colnames(reg_subplots)
+
+```
+
+```{r results='hide'}
+check <- reg_subplots %>% 
+  group_by(plot_id, period) %>% 
+  summarize(nr_records = n()) %>% # height_class, subplot_id, species
+  ungroup()
+
+nrow(check) == 4
+```
+
+
+### Niveau kernvlakte
+
+Forrescalc heeft dit reeds berekend
+
+Niveau subplots gebruikt ter controle van forresdat-data => OK
+
+```{r controle, eval=FALSE}
+# ter controle obv subplot-niveau
+colnames(reg_subplots)
+
+reg_CA_test <- reg_subplots %>% 
+  group_by(plot_id, period, species, species_nl, height_class, height_class_txt) %>% 
+  summarize(approx_nr_mean_98subplots = sum(approx_nr_regeneration_ha)/98,
+            approx_nr_mean_R = mean(approx_nr_regeneration_ha)) %>% 
+  ungroup() %>% 
+  filter(species == 44)
+# !! Muizenbos: 105 subplots
+
+```
+
+```{r reg_CA}
+reg_CA <- regeneration_by_core_area_height_species %>% 
+  inner_join(plots %>% select(plot_id, period, plottype)) %>% 
+  left_join(qSpecies %>% select(ID, species_nl = Value1), by = c("species" = "ID")) %>% 
+  left_join(qHeightClass %>% select(ID, height_class_txt = Value1), by = c("height_class" = "ID")) %>% 
+  mutate(n_subplots = 100*nr_of_subplots_with_regeneration/perc_subplots_with_regeneration) %>% 
+  select(-contains(c("rubbing", "of_regeneration_ha")))
+  # %>% filter(species == 44)
+
+colnames(reg_CA)
+
+```
+
+```{r results='hide'}
+check <- reg_CA %>% 
+  group_by(plot_id, period) %>% 
+  summarize(nr_records = n()) %>% # height_class, subplot_id, species
+  ungroup()
+
+nrow(check) == 4
+```
+
+
+# Wegschrijven output
+
+De resultaten worden weggeschreven naar csv.
+
+```{r WegschrijvenOutput, eval = FALSE}
+write.csv2(BR_list, paste0(path_to_datarequest, "/lijst_plots.csv"))
+
+write.csv2(dendro, paste0(path_to_datarequest, "/plotdata_dendro.csv"))
+write.csv2(reg_subplots, paste0(path_to_datarequest, "/verjonging_subplotniveau.csv"))
+write.csv2(reg_CA, paste0(path_to_datarequest, "/verjonging_volledige_KV.csv"))
+```
