@@ -27,7 +27,7 @@ obv branch "statistics_and_other_issues".
 
 - 9/3/2022: ook tree-id toegevoegd, functie was nog niet in orde, maar licht aangepast  
 
-- 11/3/2022:  
+-/11/3/2022:  
 
 * tabellen `trees_calc` en `stems_calc`: processed mét correcte tree_id en non-unique tree_id, beide obv coppice waar nodig (= alle CP's en een deel van de KV's die ik vroeger ooit verwerkt heb, maar die nog geen hoogtemodellen hebben)
 * `tree_wide`: enkel processed, obv tree_id based on coppice_id
@@ -51,6 +51,21 @@ werd geen rekening gehouden met de aantallen uit de intervallen.
 Approx_nr_reg: zou steeds obv een aantalsklasse moeten zijn bij seedlings en obv exact aantal bij established => datacontrole
 Als allebei, dan wordt aantalsklasse genomen.
 Dus dan moet bij de datacontrole gezorgd worden dat bij de established enkel een aantal staat (of enkel een antalsklasse als geen exact aantal gekend is) (is opgenomen in instructies voor datacontrole)
+
+
+- 20/9/2022:
+
+* een NA in CalcVolume_m3 van deadwood kersselaerspleyn (3eSET) zorgde voor een nulwaarde 
+=> Calcvolume bijgewerkt in access (op termijn te programmeren in R) voor fragmenten
+(nog 2 intacte bomen in KV 43000, periode 3, die berekend moeten worden mbv Dagnelie)
+
+* plotarea_ha obv lengte$breedte (KV) was een factor 10000 te groot => aangepast in forrescalc
+
+* NA's voor vol_log_m3_ha in dendro_by_plot(_xxx) werden als '0' ingesteld in forrescalc
+=> aanpassing gevraagd aan Els (via commit)
+=> tijdelijk gecorrigeerd in onderstaand script
+
+*
 
 
 ```{r Rm, eval = FALSE}
@@ -253,8 +268,8 @@ Zelf aangepast in dbEls als processed, ook gevraagd aan Peter (OK, gebeurd in dB
 save_results_git(
   results = list(plotinfo = plotinfo)
   , repo_path = path_to_git_forresdat
-  # , strict = TRUE
-  , strict = FALSE
+  , strict = TRUE
+  # , strict = FALSE
 )
 
 ```
@@ -263,7 +278,7 @@ save_results_git(
 # manueel - eigen simpele functie - als save_results_git niet werkt
 save_results_tsv(list(plotinfo = plotinfo), 
                  root = path_to_forresdat_data, 
-                 strict = FALSE)
+                 strict = TRUE)
 
 ```
 
@@ -282,8 +297,24 @@ save_results_csv(
 
 ```
 
+Direct naar gdrive exporteren (csv): 
+naar **/PRJ_BOSECO_ALGEMEEN/PRJ_BR_AanvraagGegevens/!METADATA-ALL_PLOTS/forresdat_data/csv/"**
 
-# Dendro - OK - 8/4/2022
+```{r plotinfo_save_gdrive, eval = FALSE}
+gdrive_path  <- "G:/.shortcut-targets-by-id/0B0xcP-eNvJ9dQ2w5ZFhSZEpCU0E/PRJ_BOSECO_ALGEMEEN/PRJ_BR_AanvraagGegevens/!METADATA-ALL_PLOTS/forresdat_data/csv/"
+
+# test <- read.csv2(paste0(gdrive_path, "dendro_by_diam_plot.csv"))
+
+save_results_csv(
+    results = list(plotinfo = plotinfo),
+    output_dir = gdrive_path
+    )
+
+
+```
+
+
+# Dendro - voorlopig OK - 20/9/2022
 
 ## Load dendro data
 
@@ -310,7 +341,49 @@ data_stems  <- compose_stem_data(data_dendro, data_shoots, extra_variables = TRU
 
 height_model <- load_height_models(path_to_height_models)
 
-data_deadwood <- load_data_deadwood(database = path_to_fieldmap_db)
+data_deadwood <- load_data_deadwood(database = path_to_fieldmap_db, processed = TRUE)
+```
+
+## !! check calc_volume deadwood
+
+### CalcVolume berekenen in FM/access - voorlopig OK 20/9/2022
+De volumeberekening van liggen dood hout baseert zich op het veld `calc_volume_m3`, 
+dat een kopie is van Volume_m3.
+Belangrijk is dat het volume_m3 berekend wordt in FM-DC als "inside plot".
+
+Voor 3de set was calc_volume_m3 niet steeds berekend (in acces).
+Nu (19/9/2022) mbv query (qupdAnja_deadwood_CalcVolume_3eSET) in access bijgewerkt.
+**Idealiter gebeurt dit met een updatequery in R (op termijn te programmeren).**
+
+
+```{r check_dead1}
+check_deadw <- data_deadwood %>% 
+  filter(is.na(calc_volume_m3))
+# nog maar 2 (intact, plot 43.000, nog te programmeren mbv tarieven dagnelie)
+
+summary(check_deadw$period) # enkel periode 3
+unique(check_deadw$plot_id) # enkel plot 43000 
+plotinfo %>% filter(plot_id %in% check_deadw$plot_id) # Rodebos KV
+
+```
+
+
+### Nulwaarde ipv NA - voorlopig OK 20/9/2022
+Logs_by_decay_plot: nemen geen NA-waardes op => OK
+Dendro_by_plot: functie forrescalc zet deadwood = 0, wanneer er een levend volume gemeten is 
+!! FOUT: zou obv survey_deadw_YN moeten gebeuren!!
+**Gevraagd in branch AL_deadw (als commit) op 20/9/2022**
+
+Nu voorlopig opvangen door extra code (als géén deadw survey, dan NA): chunck `correctie_deadwood_NA`
+
+```{r check_dead2}
+no_deadw <- plotinfo %>% 
+  filter(survey_trees == TRUE & survey_deadw == FALSE)
+nrow(no_deadw)
+table(no_deadw$forest_reserve, no_deadw$period)
+# TOCH BEST REKENING MEE HOUDEN!!
+
+
 ```
 
 
@@ -348,15 +421,6 @@ data_stems_calc_check <- data_stems_calc %>%
 ```
 
 
-```{r join_plottype_surveynr_BR}
-dendro_plotinfo <- lapply(dendro, function(x) left_join(x, plotinfo %>% select(plot_id, forest_reserve, plottype, period, survey_number), by = c("plot_id", "period")))
-# lapply: same function over all elements of the list
-```
-
-No deadwood survey wordt nu opgevangen door extra parameter in de `load_data_xxx`-functies, nl. `data_processed = TRUE`.
-Dit wordt in de code van de functie uitgebreid met `xxx_survey = TRUE`.
-
-
 ## Controle plot-level-data
 
 ```{r CreateSeparateDataframesDendro}
@@ -365,6 +429,107 @@ for (tablename in names(dendro)) {
 } 
 
 ```
+
+
+
+## Correctie deadwood 0 ipv NA - voorlopig OK 20/9/2022
+
+!! deadwood bv. plot 11000: period 1 en 0 niet opgemeten => moet NA worden ipv 0
+Gecheckt, en ook als enkel deadwood ingeladen wordt van plots waar deadwood opgemeten is 
+(`deadwoood_survey_YN == TRUE`), dan nog wordt dit op '0' gezet ipv op NA
+
+```{r eval=FALSE}
+data_deadwood %>% filter(plot_id == 11000 & period == 1) %>% nrow() == 0
+# enkel data van opgemeten plots ingeladen 
+# (data_processed = TRUE or FALSE is zelfde resultaat: geen records als er niks opgemeten is)
+
+check11000 <- dendro_by_plot %>% filter(plot_id == 11000 & period == 1)
+
+dendro_by_plot %>% filter(plot_id == 11000 & period == 1) %>% dplyr::pull(vol_log_m3_ha)
+
+logs_by_decay_plot %>% filter(plot_id == 11000 & period == 1) %>% dplyr::pull(vol_log_m3_ha)
+
+# 
+table(no_deadw$forest_reserve, no_deadw$period)
+# 98 plots zonder deadwood-opname, maar wel volume_alive 
+#=> TOCH BEST REKENING MEE HOUDEN!!
+```
+
+```{r correctie_deadwood_NA}
+dendro_by_plot_ <- dendro_by_plot %>% 
+  left_join(plotinfo %>% select(plot_id, period, survey_deadw), by = c("plot_id", "period")) %>% 
+  mutate(vol_log_m3_ha = ifelse(survey_deadw, vol_log_m3_ha, NA),
+         vol_deadw_m3_ha = ifelse(survey_deadw, vol_log_m3_ha, NA))
+
+dendro_by_plot_ %>% filter(plot_id == 11000 & period == 1) %>% dplyr::pull(vol_log_m3_ha)
+dendro_by_plot_ %>% filter(plot_id == 11000 & period == 3) %>% dplyr::pull(vol_log_m3_ha)
+
+dendro_by_plot <- dendro_by_plot_ %>% 
+  select(-survey_deadw)
+
+#
+dendro_by_plot_species_ <- dendro_by_plot_species %>% 
+  left_join(plotinfo %>% select(plot_id, period, survey_deadw), by = c("plot_id", "period")) %>% 
+  mutate(vol_log_m3_ha = ifelse(survey_deadw, vol_log_m3_ha, NA),
+         vol_deadw_m3_ha = ifelse(survey_deadw, vol_log_m3_ha, NA))
+
+dendro_by_plot_species_ %>% filter(plot_id == 11000 & period == 1) %>% dplyr::pull(vol_log_m3_ha)
+dendro_by_plot_species_ %>% filter(plot_id == 11000 & period == 3) %>% dplyr::pull(vol_log_m3_ha)
+
+dendro_by_plot_species <- dendro_by_plot_species_ %>% 
+  select(-survey_deadw)
+
+#
+dendro_by_diam_plot_ <- dendro_by_diam_plot %>% 
+  left_join(plotinfo %>% select(plot_id, period, survey_deadw), by = c("plot_id", "period")) %>% 
+  mutate(vol_log_m3_ha = ifelse(survey_deadw, vol_log_m3_ha, NA),
+         vol_deadw_m3_ha = ifelse(survey_deadw, vol_log_m3_ha, NA))
+
+dendro_by_diam_plot_ %>% filter(plot_id == 11000 & period == 1) %>% dplyr::pull(vol_log_m3_ha)
+dendro_by_diam_plot_ %>% filter(plot_id == 11000 & period == 3) %>% dplyr::pull(vol_log_m3_ha)
+
+dendro_by_diam_plot <- dendro_by_diam_plot_ %>% 
+  select(-survey_deadw)
+
+#
+dendro_by_diam_plot_species_ <- dendro_by_diam_plot_species %>% 
+  left_join(plotinfo %>% select(plot_id, period, survey_deadw), by = c("plot_id", "period")) %>% 
+  mutate(vol_log_m3_ha = ifelse(survey_deadw, vol_log_m3_ha, NA),
+         vol_deadw_m3_ha = ifelse(survey_deadw, vol_log_m3_ha, NA))
+
+dendro_by_diam_plot_species_ %>% filter(plot_id == 11000 & period == 1) %>% dplyr::pull(vol_log_m3_ha)
+dendro_by_diam_plot_species_ %>% filter(plot_id == 11000 & period == 3) %>% dplyr::pull(vol_log_m3_ha)
+
+dendro_by_diam_plot_species <- dendro_by_diam_plot_species_ %>% 
+  select(-survey_deadw)
+
+```
+
+```{r new_list_dendro}
+# opnieuw list van maken om te exporteren en plotinfo aan te koppelen
+dendro <- list(
+      dendro_by_plot = dendro_by_plot,
+      dendro_by_plot_species = dendro_by_plot_species,
+      dendro_by_diam_plot = dendro_by_diam_plot,
+      dendro_by_diam_plot_species = dendro_by_diam_plot_species,
+      logs_by_decay_plot = logs_by_decay_plot,
+      logs_by_decay_plot_species = logs_by_decay_plot_species
+    )
+```
+
+
+## Plotinfo toevoegen (aan csv-files)
+
+```{r join_plottype_surveynr_BR}
+dendro_plotinfo <- lapply(dendro, function(x) left_join(x, plotinfo %>% select(plot_id, forest_reserve, plottype, period, survey_number), by = c("plot_id", "period")))
+# lapply: same function over all elements of the list
+```
+
+No deadwood survey wordt nu opgevangen door extra parameter in de `load_data_xxx`-functies, nl. `data_processed = TRUE`.
+Dit wordt in de code van de functie uitgebreid met `xxx_survey = TRUE`.
+
+> !!FOUT: deadwood wordt weliswaar niet ingeladen, maar er wordt geen NA aan toegekend bij dendro-statistieken waar ook levende bomen opgemeten werden
+(zie hoger: nu nog met code gecorrigeerd)
 
 
 ## Export plot-level-data
@@ -388,9 +553,9 @@ Enkele verduidelijkingen:
 * "vol_bole_alive_m3_ha" en "vol_bole_dead_m3_ha": volume zonder crown, 
 versus "vol_alive_m3_ha" en "vol_dead_standing_m3_ha"
 
-* "vol_log_m3_ha": liggend dood hout
+* "vol_log_m3_ha": liggend dood hout (NA als er geen deadwood survey gebeurd is)
 
-* "vol_deadw_m3_ha": staand en liggend dood hout
+* "vol_deadw_m3_ha": staand en liggend dood hout (NA als er geen deadwood survey gebeurd is)
 
 ```{r save_dendro_git, eval = FALSE}
 # geen plotinfo naar git
@@ -428,6 +593,23 @@ save_results_access (
   )
 
 ```
+
+Direct naar gdrive exporteren (csv): 
+naar **/PRJ_BOSECO_ALGEMEEN/PRJ_BR_AanvraagGegevens/!METADATA-ALL_PLOTS/forresdat_data/csv/"**
+
+```{r save_dendro_gdrive, eval = FALSE}
+gdrive_path  <- "G:/.shortcut-targets-by-id/0B0xcP-eNvJ9dQ2w5ZFhSZEpCU0E/PRJ_BOSECO_ALGEMEEN/PRJ_BR_AanvraagGegevens/!METADATA-ALL_PLOTS/forresdat_data/csv/"
+
+# test <- read.csv2(paste0(gdrive_path, "dendro_by_diam_plot.csv"))
+
+save_results_csv(
+    results = dendro_plotinfo,
+    output_dir = gdrive_path
+    )
+
+
+```
+
 
 
 ## Create unique tree-id

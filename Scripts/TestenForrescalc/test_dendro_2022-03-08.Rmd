@@ -76,6 +76,7 @@ odbcClose(con)
 ```{r load_plotinfo}
 plotinfo <- load_plotinfo(database = path_to_fieldmap_db)
 ```
+
 ```{r plotinfo_1986_nog_niet_ok}
 # gevraagd aan Els op github
 range(plotinfo$period)
@@ -490,5 +491,183 @@ write.csv2(controle_plot_species_diff, paste(here::here("Output"), "/Controle_fo
 
 
 
+
+## Liggend dood hout op plotniveau, per afbraakklasse - kernvlaktes
+
+
+```{r CA}
+data_deadwood_CA <- data_deadwood %>% 
+  filter(plottype == "CA")
+
+summary(data_deadwood_CA$totalplotarea_ha); summary(data_deadwood_CA$plotarea_ha)
+summary(data_deadwood_CA$core_area_ha)
+
+```
+
+```{r}
+# test_deadwood <- 
+
+range(dendro_by_plot$vol_log_m3_ha, na.rm = TRUE)
+str(data_deadwood)  
+  
+dendro_by_plot_CA <- dendro_by_plot %>% 
+  filter(plot_id == 11000)
+
+# ?? waarom 2020 logs = nul..
+# wegens NA - OK? opgelost, calcvolume_m3 was nog niet berekend
+
+?? waarom periode 1 en 0 "0" ipv NA , want geen deadwood!!
+
+translate_input_to_selectionquery <-
+  function(database, plottype, forest_reserve, processed, survey_name) {
+    if (!is.na(plottype)) {
+      check_input(plottype, database, "qPlotType", "Value3")
+      selection <-
+        paste0(" WHERE qPlotType.Value3 in ('", plottype, "')")
+    } else {
+      selection <- ""
+    }
+    if (!is.na(forest_reserve)) {
+      check_input(
+        forest_reserve, database, "PlotDetails_1eSet", "ForestReserve",
+        "PlotDetails_2eSet"
+      )
+      selection <- ifelse(selection == "", "WHERE", paste(selection, "AND"))
+      selection <-
+        paste0(selection, " pd.ForestReserve in ('", forest_reserve, "')")
+    }
+    assert_that(is.logical(processed))
+    if (processed) {
+      selection <- ifelse(selection == "", "WHERE", paste(selection, "AND"))
+      selection <-
+        paste0(selection, " pd.DataProcessed_YN = 10 AND pd.", survey_name,
+               " = 10")
+    }
+    return(selection)
+} 
+  
+
+load_data_deadwood <-
+  function(database, plottype = NA, forest_reserve = NA,
+           extra_variables = FALSE, processed = TRUE) 
+    
+  data_deadwood <- load_data_deadwood(database = path_to_fieldmap_db, processed = FALSE)
+
+
+selection <-
+      translate_input_to_selectionquery(
+        database = path_to_fieldmap_db, plottype = NA,
+        forest_reserve = NA, processed = FALSE,
+        survey_name = "Survey_Deadwood_YN"
+      )  
+  
+  
+  
+  
+  
+  
+
+
+
+
+
+by_plot <- data_dendro_calc %>%
+  filter(plot_id == 11000) %>% 
+    mutate(
+      species_alive = ifelse(.data$alive_dead == 11, .data$species, NA)
+    ) %>%
+    group_by(
+      .data$plot_id, .data$year, .data$period, .data$plottype
+    ) %>%
+    summarise(
+      number_of_tree_species = n_distinct(.data$species_alive, na.rm = TRUE),
+      number_of_trees_ha = sum(.data$number_of_trees_alive_ha),
+      stem_number_ha =
+          sum((.data$alive_dead == 11) * .data$nr_of_stems / .data$plotarea_ha),
+      basal_area_alive_m2_ha = sum(.data$basal_area_alive_m2_ha),
+      basal_area_dead_m2_ha = sum(.data$basal_area_dead_m2_ha),
+      vol_alive_m3_ha = sum(.data$vol_alive_m3_ha),
+      vol_dead_standing_m3_ha = sum(.data$vol_dead_standing_m3_ha),
+      vol_bole_alive_m3_ha = sum(.data$vol_bole_alive_m3_ha),
+      vol_bole_dead_m3_ha = sum(.data$vol_bole_dead_m3_ha)
+    ) %>%
+    ungroup() 
+
+tmp_deadw <- data_deadwood %>%
+        filter(plot_id == 11000) %>% 
+        group_by(.data$plot_id, .data$year, .data$period) %>%
+        summarise(
+          vol_log_m3_ha = sum(.data$calc_volume_m3 / .data$plotarea_ha)
+        ) %>%
+        ungroup(),
+      by = c("plot_id", "year", "period")
+
+
+by_plot_ <- by_plot   %>%
+    left_join(
+      data_deadwood %>%
+        filter()
+        group_by(.data$plot_id, .data$year, .data$period) %>%
+        summarise(
+          vol_log_m3_ha = sum(.data$calc_volume_m3 / .data$plotarea_ha)
+        ) %>%
+        ungroup(),
+      by = c("plot_id", "year", "period")
+    ) %>%
+    mutate(
+      vol_log_m3_ha =
+        ifelse(
+          is.na(.data$vol_log_m3_ha) & .data$plottype %in% c("CP", "CA") &
+            !is.na(.data$vol_alive_m3_ha),
+          0, .data$vol_log_m3_ha
+        ),
+      plottype = NULL,
+      vol_deadw_m3_ha = .data$vol_dead_standing_m3_ha + .data$vol_log_m3_ha,
+      stems_per_tree = .data$stem_number_ha / .data$number_of_trees_ha
+    )
+
+```
+
+Controle van veld calc_volume_m3: indien niet beschikbaar, dan calc_volume nemen
+!! is dat niet gevaarlijk? 
+
+```{r}
+deadwood dat 
+```
+
+
+
+```{r logs_by_decay_plot}
+str(logs_by_decay_plot)
+
+logs_by_decay_plot <- logs_by_decay_plot %>% 
+  left_join(plotinfo) %>% 
+  filter(plottype == "CA")
+
+logs_by_decay_plot %>% filter(plot_id == 11000 & period == 3)
+logs_by_decay_plot %>% filter(plot_id == 11000 & period == 2) 
+```
+
+
+
+```{r logs_by_decay_plot_species}
+str(logs_by_decay_plot_species)
+
+# ev. koppelen aan qSpecies én aan qDecaystage
+logs_by_decay_plot_species <- logs_by_decay_plot_species %>% 
+  left_join(qDecaystage[, c("ID", "Value1")], by = c("decaystage" = "ID")) %>% 
+  rename("DecayNl" = "Value1") %>% 
+  left_join(qSpecies[, c("ID", "Value1")], by = c("species" = "ID")) %>% 
+  rename("NameNl" = "Value1")
+
+# head(logs_by_decay_plot_species, 10) %>% DT::datatable(rownames = NULL, filter = "top", options = list(pageLength = 5))
+
+t1 <- logs_by_decay_plot_species %>% 
+  filter(is.na(decaystage))
+t2 <- logs_by_decay_plot_species %>% 
+  filter(is.na(species))
+# OK, NA's worden ook meegegeven in het resultaat
+
+```
 
 
