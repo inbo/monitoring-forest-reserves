@@ -36,6 +36,7 @@ Brondata:
 <!-- zie gdrive "G:\Mijn Drive\6TeamData\PRJ_BOSECO_ALGEMEEN\PRJ_BR_AanvraagGegevens\!METADATA-ALL_PLOTS' -->
 
 1) strata aangemaakt door Marc Esprit (via overlays in GIS) : `boseco_alleproefvlakken_centraalpunt_lam72_metinfo.shp`  
+(terug te vinden op Q:\Projects\PRJ_BosEco\PRJ_PERS_ME_GIS\00_alle_proefvlakken\def\metinfo)
 
 2) strata samengezet door Kris VdK: `00_referentiefile-meestcompleet-Bosreservaten_allecirkels.gsheet`
 

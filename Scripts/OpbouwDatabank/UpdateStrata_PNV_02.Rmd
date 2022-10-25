@@ -1,0 +1,150 @@
+---
+title: "Update strata PNV"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: TRUE
+      smooth_scroll: FALSE
+---
+
+# Vraagstelling
+
+PNV toevoegen aan strata_bodem
+Op basis van omzetting Luc (**NARA BODEMSERIE PNV VOOR ANJA.xlsx**)
+
+Zie [gdrive](https://drive.google.com/drive/folders/1z3l6VVCa1FIPiL1SkZu9VVQKF6Eeh7BN?usp=sharing) - PRJ_BR_AanvraagGegevens/!METADATA-ALL_PLOTS
+
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = FALSE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+
+```
+
+
+```{r import_strata}
+# path_to_strata_db
+# path_to_strata
+link_pnv_soil <- read_xlsx(paste0(path_to_strata, "NARA BODEMSERIE PNV VOOR ANJA.xlsx")) %>% 
+  filter(ORI == "BR")
+
+con <- odbcConnectAccess2007(path_to_strata_db)
+soil <- sqlFetch(con, "strata_soil")
+management <- sqlFetch(con, "strata_remaining")
+odbcClose(con)
+
+```
+
+
+```{r join_pnv}
+soil_pnv <- soil %>% 
+  left_join(link_pnv_soil, by = c("belgisch_bodemtype" = "BODEMTYPE")) %>% 
+  unique() %>% 
+  select(-ORI)
+
+```
+
+```{r}
+# controle
+check <- soil_pnv %>% 
+  select(Unieknr, plot_id, belgisch_bodemtype, PNV)
+
+check3 <- check %>% 
+  group_by(belgisch_bodemtype, PNV) %>% 
+  summarize(n = n()) %>% 
+  ungroup() %>% 
+  filter(is.na(PNV))
+# OK, aangevuld (grote letter vs kleine letter)
+table(check3$belgisch_bodemtype, check3$n)
+
+# geen dubbels meer
+check %>% group_by(Unieknr, plot_id) %>%  summarize(n = n()) %>% 
+  ungroup() %>% filter(n > 1) %>% nrow() == 0
+```
+
+
+```{r}
+# controle op OT
+
+check_OB <- check %>% 
+  inner_join(check3) %>% 
+  left_join(management %>% select(Unieknr, plot_id, SiteName)) %>% 
+  unique()
+
+table(check_OB$SiteName)
+
+# plotids 1100 OB (Sevendonck), 700 OT (Heirnisse), 1700 ON/OT (Kolmont)
+
+```
+
+
+# Statisch stratum bodem
+
+Onafhankelijk van periode
+
+
+**Bron1**: GIS-data INBO: S:\Vlaanderen\GeoData\Bodemkaart\WRB Soil Units 40k.
+
+WRB Soil Units 40k: Bodemkaart van het Vlaamse Gewest volgens het internationale bodemclassificatiesysteem "World Reference Base for Soil Resources" (WRB) op schaal 1:40.000
+
+Ook te vinden op [geopunt](https://www.geopunt.be/catalogus/datasetfolder/83c46eae-a202-454c-b063-a858be3e4335).
+
+Referentie: Databank Ondergrond Vlaanderen - (vermelding van de beheerder en de specifieke geraadpleegde gegevens) - Geraadpleegd op dd/mm/jjjj, op https://www.dov.vlaanderen.be
+
+
+**Bron2**: GIS-data INBO: S:\Vlaanderen\GeoData\Bodemkaart_2_0.lyr 
+
+Bevat de gegegevens van de Belgische bodemkaart.
+Metadata: zie S:\Vlaanderen\GeoData\_Metadata\Bodemkaart\DOV bodemkaart_2_0.pdf
+
+Referentie: Digitale bodemkaart van het Vlaams Gewest: bodemtypes, substraten, fasen en varianten van het moedermateriaal en de profielontwikkeling, v2.0. Vlaamse overheid, Departement Omgeving, Vlaams Planbureau voor Omgeving (VPO)
+
+<!-- > !! moet nog bijgewerkt worden, want initieel bevatte layerfile nog de ude bodemkaart en had Marc daar de overlay mee gedaan -->
+
+<!-- TOCH NIET NODIG -->
+
+<!-- ! geen verschil voor  -->
+<!-- Heirnisse: nog steeds 39 vergraven -->
+<!-- Sevendonck 76: idem -->
+<!-- Kolmont 15: idem -->
+
+
+```{r }
+strata_bodem <- soil_pnv
+names(strata_bodem)
+head(strata_bodem)
+```
+
+
+# Export
+
+```{r save_strata, eval = FALSE}
+con <- odbcConnectAccess2007(path_to_strata_db)
+
+sqlDrop(con, "strata_soil")
+sqlSave(con, strata_bodem, "strata_soil")
+
+odbcClose(con)
+```
+
