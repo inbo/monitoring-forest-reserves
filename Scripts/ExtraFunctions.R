@@ -450,12 +450,79 @@ load_data_dendrometry_1986 <-
   }
 
 
+###------------------------------------------------
+### Resultaten wegschrijven naar resultatendatabank - oaangepast, zonder bosreservaat
+###-----------------------------------------------
 
+#' Resultaten wegschrijven naar resultatendatabank
+#'
+#' Langere functiebeschrijving
+#' @param results Resultaten van de functie My.WgtParEstimation
+#' @param dbHandle Pad naar databank waarin resultaten worden opgeslagen, default gelijk aan "dbResultaten_path" (RODBC-connectie in functie zelf)
+#' @param tblName Naam van tabel waarin resultaten worden opgeslagen, default gelijk aan "tblResultaten"
+#' @param scriptName Naam van script
+#' @param description Beschrijving van de analyse
+#' @param request_from verwijzing naar project waarbinnen data-aanvraag kadert, standaard leeg (bv. NARA2020)
+#' @param run_by geeft aan door wie analyse gerund is, en of het al dan niet een test-run betreft (bv. "run_AL", "run_LG", "test", "test_AL", "test_LG", ....)
+#' @return
+#' @importFrom
+#' @examples
+
+save_results_statistics <-function (results, 
+                                 dbHandle = resultsdb, 
+                                 tblName ="tblResultaten", 
+                                 forest_reserve = NA,
+                                 strata = NA, 
+                                 stratumName = NA, 
+                                 strata2 = NA, 
+                                 stratumName2 = NA,
+                                 scriptName=NA, 
+                                 description, 
+                                 request_from=NA, 
+                                 run_by=NA)
+{
+  tblResults <-data.frame(variable=results$variable,
+                          scriptName = scriptName,
+                          date = date(),
+                          description = description,
+                          forest_reserve = forest_reserve,
+                          strata=strata,
+                          stratumName = stratumName,
+                          strata2=strata2,
+                          stratumName2 = stratumName2,
+                          period = results$period,
+                          nbObservations = results$n_obs,
+                          gemiddelde = round(results$mean,4),
+                          variantie=round(results$variance,4),
+                          BI_ondergrens=round(results$lci,4),
+                          BI_bovengrens=round(results$uci,4),
+                          request_from = request_from,
+                          run_by = run_by
+  )
+  
+  connectieResultaten <- odbcConnectAccess2007(dbHandle) 
+  
+  listTbl<-sqlTables(connectieResultaten)
+  
+  # als tblResultaten nog niet is aangemaakt --> nieuwe tabel aanmaken
+  if(!tblName %in% listTbl$TABLE_NAME){
+    
+    tblData <- sqlSave(connectieResultaten, tblResults, tblName)
+    
+  }  else { #als tabel bestaat records toevoegen aan tabel
+    
+    tblData <- sqlSave(connectieResultaten,tblResults, tblName,append = TRUE)
+    
+  }
+  
+  odbcClose(connectieResultaten)
+  
+} 
 
 
 
 ###------------------------------------------------
-### Resultaten wegschrijven naar resultatendatabank
+### Resultaten wegschrijven naar resultatendatabank - obv VBI - per bosreservaat
 ###-----------------------------------------------
 
 #' Resultaten wegschrijven naar resultatendatabank
