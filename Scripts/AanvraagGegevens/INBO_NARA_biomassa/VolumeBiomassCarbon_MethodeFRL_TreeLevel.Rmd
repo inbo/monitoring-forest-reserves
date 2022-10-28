@@ -9,7 +9,7 @@ output:
     code_folding: hide
     toc: TRUE
     toc_float:
-      collapsed: FALSE
+      collapsed: TRUE
       smooth_scroll: FALSE
 
 ---
@@ -40,9 +40,21 @@ library(lme4)
 
 source(here::here("scripts/Setup.R"))  # libraries, basic functions & paths
 
-path_to_request <- paste0(path_to_datarequests, "INBO_NARA_biomassa/")
+
+# FACTORS
 dbFactorsWallonia <- "Data/ExterneData/Wallonie_Biomass.accdb"
 dbFactorsWallonia_path <- here::here(dbFactorsWallonia)
+
+
+# REQUEST
+path_to_request <- paste0(path_to_datarequests, "INBO_NARA_biomassa/")
+# wegschrijven naar gdrive (ev. bij knitting, nu tijdelijk overslaan)
+# path_to_request <- paste0(path_to_datarequests_gdrive, "INBO_NARA_biomassa/")
+
+# of rechtstraaks naar map van Luc
+path_to_request_luc <- "G:/.shortcut-targets-by-id/0B0xcP-eNvJ9dQ2w5ZFhSZEpCU0E/PRJ_BOSECO_ALGEMEEN/PRJ_LULUCF_VMM_CARBON/R_output_Anja/"
+
+
 ```
 
 
@@ -1073,7 +1085,7 @@ Resultaat <- Resultaat %>%
 
 ```{r create_results_wide, results='hide'}
 # van long naar wide
-# dan aftrekken en delen door 16
+# dan aftrekken en delen door 10
 names(Resultaat)
 
 Resultaat_wide <- Resultaat %>% 
@@ -1084,36 +1096,138 @@ Resultaat_wide <- Resultaat %>%
          period_1 = round(`period_1`, 2),
          period_2 = round(`period_2`, 2),
          increase = round(increase, 2)) 
+```
+
+### Betrouwbaarheidsinterval van de aangroei
+
+Komt overeen met een betrouwbaarheidsinterval van een verschil
+
+Bij **NIET-GEKOPPELDE plots** wordt dat als volgt berekend:
+
+
+__Confidence interval = (x1–x2) +/- t*√((sp2/n1) + (sp2/n2))__
+
+_gewoon Confidence interval = mean +/- t*√((variance/n_obs)_
+
+where:
+
+- x1, x2: sample 1 mean, sample 2 mean
+- t: the t-critical value based on the confidence level and (n1+n2-2) degrees of freedom
+- sp2: pooled variance (eigenlijk sp^2, sp in het kwadraat)
+- n1, n2: sample 1 size, sample 2 size
+
+where:
+
+- The pooled variance is calculated as: sp2 = ((n1-1)s1^2 + (n2-1)s2^2) / (n1+n2-2)
+- The t-critical value t can be found using the Inverse t Distribution calculator
+(https://www.statology.org/inverse-t-distribution-calculator/)
+
+
+```{r results_wide_met_BI_tmp, results='hide', eval = FALSE}
+# van long naar wide
+# dan aftrekken en delen door 10
+names(Resultaat)
+
+Resultaat_wide <- Resultaat %>% 
+  dplyr::select(n_obs, variable, period, mean, var = variance, lci, uci) %>% 
+  pivot_wider(id_cols = variable, 
+            names_from = period, 
+            values_from = c("mean", "var", "lci", "uci", "n_obs")) %>% 
+  mutate(increase = `mean_2` - `mean_1`,
+         increase_per_yr = round(increase/10, 2), # 10 jaar gemiddeld tss 2 opnames
+         mean_1 = round(`mean_1`, 2),
+         mean_2 = round(`mean_2`, 2),
+         increase = round(increase, 2)) %>% 
+  select(contains("1"), contains("2"), everything()) %>% 
+  mutate(n1 = n_obs_1, n2 = n_obs_2, 
+         s1 = sqrt(var_1), s2 = sqrt(var_2)) %>% 
+  mutate(t = 1.96,  # afh van n1 + n2 - 2, als groot, dan 1.96
+        sp2 = ((n1-1)*s1^2 + (n2-1)*s2^2) / (n1+n2-2),
+        lci_increase = (mean_2-mean_1) - t*sqrt(((sp2/n1) + (sp2/n2))),
+        uci_increase = (mean_2-mean_1) + t*sqrt(((sp2/n1) + (sp2/n2))),
+        lci_increase_per_yr = round(lci_increase/10, 2),
+        uci_increase_per_yr = round(uci_increase/10,2)
+        ) %>% 
+  select(variable, n_obs = n1, mean_1, mean_2, increase_per_yr, , var = sp2, lci = lci_increase_per_yr, uci = uci_increase_per_yr)
 
 ```
 
-
-```{r table_results}
+```{r table_results_tmp, eval = FALSE}
 Resultaat_wide %>% 
-  dplyr::select(-increase) %>% 
+  select(variable, contains(c("Periode", "mean")), 
+         increase_per_yr, lci, uci) %>% 
   dplyr::rename("Jaarlijkse toename" = increase_per_yr,
          # "carbon increase (tC/ha)" = increase,
-         "Periode 1" = period_1,
-         "Periode 2"= period_2) %>% 
+         "Periode 1" = mean_1,
+         "Periode 2"= mean_2) %>% 
   DT::datatable(filter = "none", selection = "none", rownames = FALSE, 
                 options = list(pageLength = 5, dom = 'tip'))
 
 ```
+
+**!! plots zijn echter WEL GEKOPPELD!!**
+
+Bovenstaande BI's zijn bijgevolg veel te ruim.
+
+Correcter is om de aangroei per plot te berekenen en daar het gemiddelde van te berekenen.
+
+```{r calc_increase_C_per_plot}
+colnames(analyseSet)
+
+analyseSet_wide <- analyseSet %>% 
+  select(plot_id, period, Carbon_t_ha, vol_bole_m3_ha) %>% 
+  pivot_wider(id_cols = plot_id, 
+            names_from = period, 
+            values_from = c("Carbon_t_ha", "vol_bole_m3_ha")) %>% 
+  mutate(increase_C = `Carbon_t_ha_2` - `Carbon_t_ha_1`,
+         increase_C_per_yr = round(increase_C/10, 2), # 10 jaar gemiddeld tss 2 opnames
+         increase_vol = `vol_bole_m3_ha_2` - `vol_bole_m3_ha_1`,
+         increase_vol_per_yr = round(increase_vol/10, 2)) %>% 
+  mutate(strata = "all")
+
+
+variables_for_statistics <- c("increase_C_per_yr", "increase_vol_per_yr")
+
+Resultaat_wide <- create_statistics(
+  dataset = analyseSet_wide,
+  # level = c("period", "forest_reserve"),
+  level = c("strata"),
+  variables = variables_for_statistics,
+  include_year_range = FALSE,
+  na_rm = FALSE,
+ 
+    interval_information = suppressMessages(read_csv2(system.file("extdata/class_data.csv",
+    package = "forrescalc")))
+) %>% 
+  select(-logaritmic)
+
+Resultaat_wide
+Resultaat_wide[4:7] <- round(Resultaat_wide[4:7],2)
+```
+
+
+```{r table_results_correcteBI}
+Resultaat_wide %>% 
+  select(-strata) %>% 
+  DT::datatable(filter = "none", selection = "none", rownames = FALSE, 
+                options = list(pageLength = 5, dom = 'tip'))
+
+```
+
+
+
 
 ## Resultaten wegschrijven
 
 De resultaten worden weggeschreven naar 
 
 - de resultatendatabank 
-- een csv-file: resultVolumeBiomassCarbonUptake_MethodeFRL_TreeLevel.csv
-- een csv-file met results-wide
+- een csv-file: resultVolumeBiomassCarbonUptake_MethodeFRL.csv
+- een csv-file met results-wide: resultVolumeBiomassCarbonUptake_MethodeFRL.csv
 
 ```{r resultatendb_periode1vs2_toestand}
 # Toestand
-
-resultsdb <- paste0(path_to_output, "BR_resultaten.accdb")
-
-save_results_statistics(dbHandle = resultsdb
+save_results_statistics(dbHandle = dbResults
                 , tblName = "tblResultaten"
                 , results = Resultaat
                 , forest_reserve = NA
@@ -1133,20 +1247,22 @@ save_results_statistics(dbHandle = resultsdb
 
 
 ```{r resultatendb_evolutie}
+names(Resultaat_wide)
+
 results_toename <- as.data.frame(Resultaat_wide) %>%
-  dplyr::select(-period_1, -period_2, -increase) %>% 
-  mutate(period = NA
-         , stratumNaam = NA
-         , mean = increase_per_yr   #♀ as.numeric(as.character(increase_per_yr))
-         , variance = NA
-         , n_obs = NA
-         , strata = NA
-         , lci = NA #as.numeric(as.character(lci))
-         , uci = NA #as.numeric(as.character(uci))  
-         ) %>%
+  mutate(period = NA) %>% 
+         # , stratumNaam = NA
+         # , mean = increase_per_yr   # as.numeric(as.character(increase_per_yr))
+         # , variance = var
+         # # , n_obs = NA 
+         # , strata = NA
+         # # , lci = NA 
+         # # , uci = NA  
+         # ) %>%
   dplyr::select(variable, period, everything())
 
-save_results_statistics(dbHandle = resultsdb
+
+save_results_statistics(dbHandle = dbResults
                 , tblName = "tblResultaten"
                 , results = results_toename                
                 , forest_reserve = NA
@@ -1164,10 +1280,28 @@ save_results_statistics(dbHandle = resultsdb
 ```
 
 ```{r export_to_csv, include=FALSE}
-write_excel_csv2(Resultaat,paste0(path_to_request, "resultVolumeBiomassCarbon_MethodeFRL.csv"))
+Resultaat <- Resultaat %>% 
+  arrange(variable, period)
+Resultaat_wide <- Resultaat_wide %>% 
+  arrange(variable)
 
+write_excel_csv2(Resultaat,paste0(path_to_request, "resultVolumeBiomassCarbon_MethodeFRL.csv"))
 write_excel_csv2(Resultaat_wide,paste0(path_to_request, "resultVolumeBiomassCarbonUptake_MethodeFRL.csv"))
+
 ```
+
+
+```{r export_to_csv_luc}
+# direct naar gdrive luc - beperkter, enkel carbonuptake en vol_bole
+vars_luc <- c("Carbon_t_ha", "vol_bole_m3_ha")
+
+Resultaat_luc <- Resultaat %>% 
+  filter(variable %in% vars_luc)
+
+write_excel_csv2(Resultaat_luc,paste0(path_to_request_luc, "resultCarbon_MethodeFRL.csv"))
+write_excel_csv2(Resultaat_wide,paste0(path_to_request_luc, "resultCarbonUptake_MethodeFRL.csv"))
+```
+
 
 
 # Resultaat per PNV
@@ -1210,49 +1344,64 @@ Resultaat <- Resultaat %>%
 
 ```
 
+### Increase per yr met BI
 
-```{r create_results_wide_PNV, results='hide'}
-# van long naar wide
-# dan aftrekken en delen door 16
-names(Resultaat)
+**!! GEKOPPELDE plots!!**  
+=> aangroei per plot berekenen en daar het gemiddelde van berekenen
 
-Resultaat_wide <- Resultaat %>% 
-  dplyr::select(variable, period, PNV, PNVtxt, mean) %>% 
-  spread(period, mean, sep = "_") %>% 
-  mutate(increase = `period_2` - `period_1`,
-         increase_per_yr = round(increase/10, 2), # 10 jaar gemiddeld tss 2 opnames
-         period_1 = round(`period_1`, 2),
-         period_2 = round(`period_2`, 2),
-         increase = round(increase, 2)) 
+```{r calc_increase_C_per_plot_PNV}
+colnames(analyseSet_pnv)
 
+analyseSet_wide_pnv <- analyseSet_pnv %>% 
+  select(plot_id, PNV, PNVtxt, period, Carbon_t_ha, vol_bole_m3_ha) %>% 
+  pivot_wider(id_cols = c("plot_id", "PNV", "PNVtxt"),
+            names_from = period, 
+            values_from = c("Carbon_t_ha", "vol_bole_m3_ha")) %>% 
+  mutate(increase_C = `Carbon_t_ha_2` - `Carbon_t_ha_1`,
+         increase_C_per_yr = round(increase_C/10, 2), # 10 jaar gemiddeld tss 2 opnames
+         increase_vol = `vol_bole_m3_ha_2` - `vol_bole_m3_ha_1`,
+         increase_vol_per_yr = round(increase_vol/10, 2))
+
+
+variables_for_statistics <- c("increase_C_per_yr", "increase_vol_per_yr")
+
+Resultaat_wide <- create_statistics(
+  dataset = analyseSet_wide_pnv,
+  # level = c("period", "forest_reserve"),
+  level = c("PNV", "PNVtxt"),
+  variables = variables_for_statistics,
+  include_year_range = FALSE,
+  na_rm = FALSE,
+ 
+    interval_information = suppressMessages(read_csv2(system.file("extdata/class_data.csv",
+    package = "forrescalc")))
+) %>% 
+  select(-logaritmic)
+
+Resultaat_wide
+Resultaat_wide[5:8] <- round(Resultaat_wide[5:8],2)
 ```
 
 
 ```{r table_results_PNV}
 Resultaat_wide %>% 
-  dplyr::select(-increase) %>% 
-  dplyr::rename("Jaarlijkse toename" = increase_per_yr,
-         # "carbon increase (tC/ha)" = increase,
-         "Periode 1" = period_1,
-         "Periode 2"= period_2) %>% 
-  DT::datatable(filter = "top", selection = "none", rownames = FALSE, 
+  DT::datatable(filter = "none", selection = "none", rownames = FALSE, 
                 options = list(pageLength = 5, dom = 'tip'))
 
 ```
+
 
 ## Resultaten wegschrijven
 
 De resultaten worden weggeschreven naar 
 
 - de resultatendatabank 
-- een csv-file: resultVolumeBiomassCarbon_MethodeFRL_TreeLevel.csv
-- een csv-file met results-wide: resultVolumeBiomassCarbonUptake_MethodeFRL_TreeLevel.csv
+- een csv-file: resultVolumeBiomassCarbon_MethodeFRL_PNV.csv
+- een csv-file met results-wide: resultVolumeBiomassCarbonUptake_MethodeFRL_PNV.csv
 
 ```{r resultatendb_PNV_toestand}
 # Toestand
-resultsdb <- paste0(path_to_output, "BR_resultaten.accdb")
-
-save_results_statistics(dbHandle = resultsdb
+save_results_statistics(dbHandle = dbResults
                 , tblName = "tblResultaten"
                 , results = Resultaat
                 , forest_reserve = NA
@@ -1273,19 +1422,19 @@ save_results_statistics(dbHandle = resultsdb
 
 ```{r resultatendb_PNV_evolutie}
 results_toename <- as.data.frame(Resultaat_wide) %>%
-  dplyr::select(-period_1, -period_2, -increase) %>% 
   mutate(period = NA
-         , stratum_name = PNV
-         , mean = increase_per_yr   #♀ as.numeric(as.character(increase_per_yr))
-         , variance = NA
-         , n_obs = NA
-         , strata = NA
-         , lci = NA #as.numeric(as.character(lci))
-         , uci = NA #as.numeric(as.character(uci))  
-         ) %>%
+         , stratum_name = PNV) %>% 
+         # , stratumNaam = NA
+         # , mean = increase_per_yr   # as.numeric(as.character(increase_per_yr))
+         # , variance = var
+         # # , n_obs = NA 
+         # , strata = NA
+         # # , lci = NA 
+         # # , uci = NA  
+         # ) %>%
   dplyr::select(variable, period, everything())
 
-save_results_statistics(dbHandle = resultsdb
+save_results_statistics(dbHandle = dbResults
                 , tblName = "tblResultaten"
                 , results = results_toename                
                 , forest_reserve = NA
@@ -1297,16 +1446,141 @@ save_results_statistics(dbHandle = resultsdb
                 , description = "Toename in volume (m3/ha), biomassa en koolstofgehalte (ton/ha) per PNV - 
                 cfr FRL & INBO-advies A.4103 (meth. 4b)"
                 , request_from = "NARA 2023"
-                , run_by = "AL"
+                , run_by = "ALtest"
 )
 
 ```
 
 
 ```{r export_to_csv_PNV, include=FALSE}
+Resultaat <- Resultaat %>% 
+  arrange(variable, PNV, period)
+Resultaat_wide <- Resultaat_wide %>% 
+  arrange(variable, PNV)
+
+
 write_excel_csv2(Resultaat,paste0(path_to_request, "resultVolumeBiomassCarbon_MethodeFRL_PNV.csv"))
 
 write_excel_csv2(Resultaat_wide,paste0(path_to_request, "resultVolumeBiomassCarbonUptake_MethodeFRL_PNV.csv"))
+```
+
+
+```{r export_to_csv_PNV_luc}
+# direct naar gdrive luc - beperkter, enkel carbonuptake en vol_bole
+# vars_luc <- c("Carbon_t_ha", "vol_bole_m3_ha")
+
+Resultaat_luc <- Resultaat %>% 
+  filter(variable %in% vars_luc)
+
+write_excel_csv2(Resultaat_luc,paste0(path_to_request_luc, "resultCarbon_MethodeFRL_PNV.csv"))
+write_excel_csv2(Resultaat_wide,paste0(path_to_request_luc, "resultCarbonUptake_MethodeFRL_PNV.csv"))
+```
+
+
+## Controle representativiteit
+
+(c) Luc: geef het aantal cirkels en bosreservaten dat het cijfer per PNV levert mee, zodat we eventueel kunnen clusteren
+
+
+```{r}
+# komt gemiddelde van PNV beetje overeen met algemene C-uptake (2.19)? JA
+
+check <- Resultaat_wide %>% 
+  filter(variable == "increase_C_per_yr") %>% 
+  mutate(increase_gewogen = mean*n_obs)
+
+round(sum(check$increase_gewogen)/sum(check$n_obs), 1) == round(2.19,1)
+# [1] 2.186969
+```
+
+```{r}
+forest_reserve <- plotinfo %>% 
+  group_by(plot_id, plottype, forest_reserve) %>% 
+  summarize() %>% 
+  ungroup() %>% 
+  filter(plottype == "CP")
+
+analyseSet_pnv_ <- analyseSet_pnv %>% 
+  left_join(forest_reserve %>% select(plot_id, forest_reserve))
+
+unique(analyseSet_pnv_$forest_reserve)
+
+plots_per_pnv <- analyseSet_pnv_ %>% 
+  filter(period == 2) %>%  # evenveel plots in beide periodes
+  group_by(PNV, PNVtxt, forest_reserve) %>% 
+  summarize(aantal_plots = n()) %>% 
+  ungroup()
+```
+
+```{r export_to_csv_repre, include=FALSE}
+write_excel_csv2(plots_per_pnv,paste0(path_to_request, "forest_reserve_plots_per_pnv.csv"))
+
+write_excel_csv2(plots_per_pnv,paste0(path_to_request_luc, "forest_reserve_plots_per_pnv.csv"))
+
+
+```
+
+
+## Ontbrekende pnv
+
+Heirnisse en Sevendock hebben veel OB/OT/ON, niet bepaald bodemtype, dus ook geen PNV.
+Luc zou eventueel toch PNV toekennen.
+Ook PNV-type 2 komt maar heel sproradisch voor (3).
+
+```{r missing_pnv}
+reserves_no_soil <- pnv %>% 
+  filter(belgisch_bodemtype %in% c("OT", "ON", "OB")) %>% 
+  left_join(plotinfo %>% select(plot_id, plottype, forest_reserve)) %>% 
+  unique() %>% 
+  group_by(forest_reserve, plottype) %>% 
+  summarize(min_plot = min(plot_id),
+            max_plot = max(plot_id), 
+            aantal = n()) %>% 
+  ungroup()
+
+# , SiteName, SubArea
+
+reserves_no_soil_plots <- pnv %>% 
+  select(plot_id, belgisch_bodemtype, PNV, SiteName, SubArea, Unieknr) %>% 
+  left_join(plotinfo %>% select(plot_id, plottype, forest_reserve)) %>% 
+  unique() %>% 
+  inner_join(reserves_no_soil %>% select(plottype, forest_reserve)) %>% 
+  select(forest_reserve, plottype, plot_id, everything())
+
+table(reserves_no_soil_plots$forest_reserve)
+
+
+# Kolmont en Kerss CP geen twee cycli, Kerss CA ook niet nodig voor Luc
+reserves_no_soil_plots <- reserves_no_soil_plots %>% 
+  filter(str_detect(forest_reserve, "Sevendonck") | str_detect(forest_reserve, "Heirnisse") )
+
+```
+
+```{r export_missing_pnv}
+write_excel_csv2(reserves_no_soil_plots,paste0(path_to_request, "forest_reserve_plots_missing_pnv.csv"))
+
+write_excel_csv2(reserves_no_soil_plots,paste0(path_to_request_luc, "forest_reserve_plots_missing_pnv.csv"))
+```
+
+
+## PNV 2
+
+In welk CA's komt pnv-type 2 voor?
+
+```{r}
+pnvtype2 <- pnv %>% 
+  select(plot_id, belgisch_bodemtype, PNV, SiteName, SubArea, Unieknr) %>% 
+  left_join(plotinfo %>% select(plot_id, plottype, forest_reserve)) %>% 
+  unique() %>% 
+  filter(PNV == 2)
+
+```
+
+
+```{r export_pnvtype_2}
+write_excel_csv2(pnvtype2,paste0(path_to_request, "pnvtype2.csv"))
+
+write_excel_csv2(pnvtype2,paste0(path_to_request_luc, "pnvtype2.csv"))
 ```
 
 

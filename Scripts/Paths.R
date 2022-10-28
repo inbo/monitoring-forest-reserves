@@ -33,5 +33,6 @@ path_to_strata_db <- paste0(path_to_strata, dbStrata)
 path_to_height_models <- "C:/03_BR/1_DataverwerkingBR/Data/Hoogtemodellen/"
 
 path_to_datarequests <- "C:/03_BR/1_DataverwerkingBR/Aanvraag_gegevens/"
+path_to_datarequests_gdrive <- "G:/.shortcut-targets-by-id/0B0xcP-eNvJ9dQ2w5ZFhSZEpCU0E/PRJ_BOSECO_ALGEMEEN/PRJ_BR_AanvraagGegevens/"
 
 path_to_reserves <- "C:/03_BR_gebieden/"
