@@ -301,13 +301,13 @@ Direct naar gdrive exporteren (csv):
 naar **/PRJ_BOSECO_ALGEMEEN/PRJ_BR_AanvraagGegevens/!METADATA-ALL_PLOTS/forresdat_data/csv/"**
 
 ```{r plotinfo_save_gdrive, eval = FALSE}
-gdrive_path  <- "G:/.shortcut-targets-by-id/0B0xcP-eNvJ9dQ2w5ZFhSZEpCU0E/PRJ_BOSECO_ALGEMEEN/PRJ_BR_AanvraagGegevens/!METADATA-ALL_PLOTS/forresdat_data/csv/"
+output_gdrive  <- "G:/.shortcut-targets-by-id/0B0xcP-eNvJ9dQ2w5ZFhSZEpCU0E/PRJ_BOSECO_ALGEMEEN/PRJ_BR_AanvraagGegevens/!METADATA-ALL_PLOTS/forresdat_data/csv/"
 
-# test <- read.csv2(paste0(gdrive_path, "dendro_by_diam_plot.csv"))
+# test <- read.csv2(paste0(output_gdrive, "dendro_by_diam_plot.csv"))
 
 save_results_csv(
     results = list(plotinfo = plotinfo),
-    output_dir = gdrive_path
+    output_dir = output_gdrive
     )
 
 
@@ -598,13 +598,13 @@ Direct naar gdrive exporteren (csv):
 naar **/PRJ_BOSECO_ALGEMEEN/PRJ_BR_AanvraagGegevens/!METADATA-ALL_PLOTS/forresdat_data/csv/"**
 
 ```{r save_dendro_gdrive, eval = FALSE}
-gdrive_path  <- "G:/.shortcut-targets-by-id/0B0xcP-eNvJ9dQ2w5ZFhSZEpCU0E/PRJ_BOSECO_ALGEMEEN/PRJ_BR_AanvraagGegevens/!METADATA-ALL_PLOTS/forresdat_data/csv/"
+output_gdrive  <- "G:/.shortcut-targets-by-id/0B0xcP-eNvJ9dQ2w5ZFhSZEpCU0E/PRJ_BOSECO_ALGEMEEN/PRJ_BR_AanvraagGegevens/!METADATA-ALL_PLOTS/forresdat_data/csv/"
 
-# test <- read.csv2(paste0(gdrive_path, "dendro_by_diam_plot.csv"))
+# test <- read.csv2(paste0(output_gdrive, "dendro_by_diam_plot.csv"))
 
 save_results_csv(
     results = dendro_plotinfo,
-    output_dir = gdrive_path
+    output_dir = output_gdrive
     )
 
 
