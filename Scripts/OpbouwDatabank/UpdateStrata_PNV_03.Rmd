@@ -1,0 +1,139 @@
+---
+title: "Update strata PNV (vervolg)"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: TRUE
+      smooth_scroll: FALSE
+---
+
+# Vraagstelling
+
+PNV werd in script `UpdateStrata_PNV_02.Rmd` toegevoegd aan strata_bodem
+Op basis van omzetting Luc (**NARA BODEMSERIE PNV VOOR ANJA.xlsx**)
+
+Bijkomend heeft Luc DK een PNV toegekend aan CP's van Sevendonck en Heirnisse (zonder bodemtype): zie **forest_reserve_plots_missing_pnv_aangevuld.csv**
+
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = FALSE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+
+```
+
+# Import 
+
+```{r import_strata}
+con <- odbcConnectAccess2007(path_to_strata_db)
+soil <- sqlFetch(con, "strata_soil")
+management <- sqlFetch(con, "strata_remaining")
+odbcClose(con)
+
+```
+
+
+```{r}
+# controle
+check <- soil %>% 
+  select(Unieknr, plot_id, belgisch_bodemtype, PNV)
+
+check3 <- check %>% 
+  group_by(belgisch_bodemtype, PNV) %>% 
+  summarize(n = n()) %>% 
+  ungroup() %>% 
+  filter(is.na(PNV))
+# OK, aangevuld (grote letter vs kleine letter)
+table(check3$belgisch_bodemtype, check3$n)
+
+# geen dubbels meer
+check %>% group_by(Unieknr, plot_id) %>%  summarize(n = n()) %>% 
+  ungroup() %>% filter(n > 1) %>% nrow() == 0
+```
+
+
+```{r}
+# controle op OT
+
+check_OB <- check %>% 
+  inner_join(check3) %>% 
+  left_join(management %>% select(Unieknr, plot_id, SiteName)) %>% 
+  unique()
+
+table(check_OB$SiteName)
+
+# plotids 1100 OB (Sevendonck), 700 OT (Heirnisse), 1700 ON/OT (Kolmont)
+
+```
+
+# Toevoegen extra PNV
+
+Luc DK heeft voor Heirnisse en Sevendonck PNV toegevoegd obv eigen inschatting.
+
+```{r}
+# forest_reserve_plots_missing_pnv_aangevuld.csv
+extra_pnv <- read.csv2("C:/03_BR/1_DataVerwerkingBR/Data/Strata/input/forest_reserve_plots_missing_pnv_aangevuld.csv")
+```
+
+
+```{r}
+names(soil)
+names(extra_pnv)
+
+# NA's
+soil %>% filter(is.na(PNV)) %>% group_by(SiteName, SubArea) %>% summarize(n= n()) %>% 
+  ungroup()
+
+# toevoegen PNV Sevendonck en Heirnisse
+soil2 <- soil %>% 
+  left_join(extra_pnv %>% select(plot_id, PNV.aanvul)) %>% 
+  mutate(PNV = ifelse(is.na(PNV), PNV.aanvul, PNV))
+
+# NA's
+soil2 %>% filter(is.na(PNV)) %>% group_by(SiteName, SubArea) %>% summarize(n= n()) %>% 
+  ungroup()
+```
+
+
+
+
+
+```{r }
+strata_bodem <- soil2 %>% 
+  select(-PNV.aanvul)
+names(strata_bodem)
+head(strata_bodem)
+```
+
+
+# Export
+
+```{r save_strata, eval = FALSE}
+con <- odbcConnectAccess2007(path_to_strata_db)
+
+sqlDrop(con, "strata_soil")
+sqlSave(con, strata_bodem, "strata_soil")
+
+odbcClose(con)
+```
+

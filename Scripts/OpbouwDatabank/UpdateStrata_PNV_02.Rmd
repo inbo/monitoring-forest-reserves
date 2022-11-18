@@ -21,6 +21,8 @@ Op basis van omzetting Luc (**NARA BODEMSERIE PNV VOOR ANJA.xlsx**)
 
 Zie [gdrive](https://drive.google.com/drive/folders/1z3l6VVCa1FIPiL1SkZu9VVQKF6Eeh7BN?usp=sharing) - PRJ_BR_AanvraagGegevens/!METADATA-ALL_PLOTS
 
+Bijkomend heeft Luc DK een PNV toegekend aan CP's van Sevendonck en Heirnisse (zonder bodemtype): zie **forest_reserve_plots_missing_pnv_aangevuld.csv**
+
 
 ```{r Rm, eval = FALSE}
 rm(list=ls())
@@ -53,6 +55,11 @@ con <- odbcConnectAccess2007(path_to_strata_db)
 soil <- sqlFetch(con, "strata_soil")
 management <- sqlFetch(con, "strata_remaining")
 odbcClose(con)
+
+
+# forest_reserve_plots_missing_pnv_aangevuld.csv
+extra_pnv <- read.csv2("C:/03_BR/1_DataVerwerkingBR/Data/Strata/input/forest_reserve_plots_missing_pnv_aangevuld.csv")
+
 
 ```
 

@@ -60,11 +60,11 @@ path_to_request_luc <- "G:/.shortcut-targets-by-id/0B0xcP-eNvJ9dQ2w5ZFhSZEpCU0E/
 
 # Vraagstelling
 
-Ikv NARA2023 wordt gevraagd naar een ruw cijfer mbt C-opslag in onbeheerde bossen.
+In het kader van NARA2023 wordt gevraagd naar een ruw cijfer mbt C-opslag in onbeheerde bossen.
 Hiervoor gebruiken we de data uit de bosreservaten.
 Dit in tegenstelling tot C-opslag in beheerde bossen die we uit de VBI halen.
 
-Als methode gebruiken we de merthode uit het advies van INBO (INBO A.3104) ikv LULUCF rapportering.
+Als methode gebruiken we de methode uit het advies van INBO (INBO A.3104) ikv LULUCF rapportering.
 
 **Biomassa** en **koolstofgehalte (C)** berekend volgens methode 4b uit het advies.
 
@@ -72,10 +72,14 @@ Bijkomend worden ook **stamvolume**, **stompvolume** en **totaal volume** (die d
 Deze methode wordt gebruikt door ULG (Sébastien Bauwens) en voor de aanmaak van de FRL (Forest Reference Level).
 Ook de VMM heeft na het INBO-advies beslist om deze methode te hanteren in het kader van de LULUCF-rapporteringen.
 
-Conform het hoger vermeld advies worden **alle plots met verjonging en/of bomen > 7 cm dbh** bij de analyse betrokken. 
-Of met andere woorden, alle plots waar een soort aan gekoppeld kan worden.
-Dus zonder kaalslagen of tijdelijke open ruimtes.
-Het advies INBO A.3104 heeft zich hiervoor dan weer gebaseerd op het INBO-advies A.3844 mbt volume hout in bossen in Vlaanderen. Ook daar worden enkel deze plots bij de analyse betrokken.
+Zoals afgesproken met Luc DK, Leen G en Anja L (9/11/2022) worden voor de beheerde bossen (VBI) enkel de **productieve bosplots** bij de eigenlijke analyse betrokken. 
+Dus mét kaalslagen, maar zonder foa's (op plotniveau: obv `fase2_forest`).
+Dus ook de bosplots zonder bomen/biomassa (bv. kapvlaktes).  
+
+Bij de bosreservaten stelt de vraag zich niet, omdat alle plots uit bos bestaan (geen kapvlaktes of open ruimtes opgenomen in netwerk).
+
+Om voldoende plots van alle bostypes bij de analyse te kunnen betrekken, werd beslist om ook de kernvlaktes van Coolhem en Walenbos mee op te nemen.
+(de elzenbroekbossen zijn omwille van de toegankelijkheid vaak met kernvlaktes geïnventariseerd (Coolhem, Walenbos))
 
 
 # Methodiek
@@ -229,18 +233,24 @@ odbcClose(con)
 
 ```
 
+Naast CP's ook KV's van Walenbos en Coolhem meenemen om beter zicht te krijgen 
+op PNV 2 (elzenbroek).
+((c) Luc: Coolhem Q is een verdroogd broekbos, maar neem het toch maar mee als broekbos (PNV 2))
 
-```{r load_trees_CP}
+```{r load_trees}
 # data_dendro <- load_data_dendrometry(path_to_fieldmap, plottype = "Circular plot", extra_variables = TRUE)
 
 # beter uit folder "C:\03_BR\1_Dataverwerking\Output\raw-data" halen
 trees_calc <- read_csv2(paste0(path_to_treelevel_csv, "trees_calc.csv")) %>% 
-  filter(plottype == "CP") %>% select(-1)
+  filter(plottype == "CP" | forest_reserve %in% c("Coolhem A", "Coolhem Q", "Walenbos KV1")) %>% select(-1)
+unique(trees_calc$forest_reserve)
+
+
 stems_calc<- read_csv2(paste0(path_to_treelevel_csv, "stems_calc.csv")) %>% 
   filter(plottype == "CP") %>% select(-1)
 
-reg <- read_csv2(paste0(path_to_plotlevel_csv, "regeneration_by_plot.csv")) %>% 
-  filter(plottype == "CP") %>% select(-1)
+# reg <- read_csv2(paste0(path_to_plotlevel_csv, "regeneration_by_plot.csv")) %>% 
+#   filter(plottype == "CP") %>% select(-1)
 
 # str(trees_calc)
 # summary(trees_calc)
@@ -270,7 +280,7 @@ plotinfo <- plotinfo %>%
 
 ```
 
-We selectreen de bosreservaten met miniumaal twee surveys.
+We selecteren de bosreservaten met minimaal twee surveys.
 Voor Kersselaerspleyn, maken we gebruik van de 1ste en 2de survey (3de dateert van 2019, maar is verder verwijderd van 1ste en 2de VBI)
 
 
@@ -292,9 +302,9 @@ stems_calc_ <- stems_calc %>%
   inner_join(two_surveys, by = c("plot_id", "forest_reserve")) %>% 
   filter(period != 3) 
 
-reg_ <- reg %>%
-  inner_join(two_surveys, by = c("plot_id", "forest_reserve")) %>% 
-  filter(period != 3) 
+# reg_ <- reg %>%
+#   inner_join(two_surveys, by = c("plot_id", "forest_reserve")) %>% 
+#   filter(period != 3) 
 
 plotinfo_ <- plotinfo %>%
   inner_join(two_surveys, by = c("plot_id", "forest_reserve")) %>% 
@@ -1011,17 +1021,20 @@ Alternatieven zijn:
 
 <br>
 
-```{r bosplots_zonder_volume_obv_reg, results='hide'}
-names(reg_)
+```{r bosplots_zonder_volume, results='hide'}
+names(plotinfo)
+
+!! doen obv dendro_per_plot
+checken of daar alle plots in zitten (mbv plotinfo)
 
 check_zero_volume <- analyseSet %>% 
-  full_join(reg_ %>% select(plot_id, period, number_of_tree_species), by = c("plot_id", "period")) %>% 
+  full_join(plotinfo %>% select(plot_id, period, number_of_tree_species), by = c("plot_id", "period")) %>% 
   filter(is.na(vol_bole_m3_ha))
 
 check_zero_volume
 # plot 475: periode 1: geen bomen, ook geen verjonging (approx_nr_reg = 0) 
 # => om consequent te zijn met VBI:  NIET MEENEMEN
-# TOCH WEL: VBI zal in beide periodes plots verliezene, hier is het maar één plot, één periode 
+# TOCH WEL: VBI zal in beide periodes plots verliezen, hier is het maar één plot, één periode 
 
 check_zero_volume$year <- 2002
 
