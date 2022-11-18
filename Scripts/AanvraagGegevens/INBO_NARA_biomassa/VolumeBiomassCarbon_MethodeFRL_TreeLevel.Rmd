@@ -188,7 +188,7 @@ data_overzicht %>%
 ```
 
 
-```{r load_treecharact}
+```{r load_treecharact, results='hide'}
 TreeCharact <- read.csv2(paste (here::here("Data/ExterneData"), "/tblTreeSpeciesCharacteristics_BR.csv", sep = ""))
 str(TreeCharact)
 
@@ -245,12 +245,8 @@ trees_calc <- read_csv2(paste0(path_to_treelevel_csv, "trees_calc.csv")) %>%
   filter(plottype == "CP" | forest_reserve %in% c("Coolhem A", "Coolhem Q", "Walenbos KV1")) %>% select(-1)
 unique(trees_calc$forest_reserve)
 
-
 stems_calc<- read_csv2(paste0(path_to_treelevel_csv, "stems_calc.csv")) %>% 
-  filter(plottype == "CP") %>% select(-1)
-
-# reg <- read_csv2(paste0(path_to_plotlevel_csv, "regeneration_by_plot.csv")) %>% 
-#   filter(plottype == "CP") %>% select(-1)
+  filter(plottype == "CP" | forest_reserve %in% c("Coolhem A", "Coolhem Q", "Walenbos KV1")) %>% select(-1)
 
 # str(trees_calc)
 # summary(trees_calc)
@@ -271,12 +267,8 @@ trees_calc <- trees_calc %>%
 stems_calc <- stems_calc %>%
   filter(!(plot_id %in% c(701, 707, 709, 727, 728, 738, 739, 740, 759, 760)))
 
-reg <- reg %>%
-  filter(!(plot_id %in% c(701, 707, 709, 727, 728, 738, 739, 740, 759, 760)))
-
 plotinfo <- plotinfo %>%
   filter(!(plot_id %in% c(701, 707, 709, 727, 728, 738, 739, 740, 759, 760)))
-
 
 ```
 
@@ -302,10 +294,6 @@ stems_calc_ <- stems_calc %>%
   inner_join(two_surveys, by = c("plot_id", "forest_reserve")) %>% 
   filter(period != 3) 
 
-# reg_ <- reg %>%
-#   inner_join(two_surveys, by = c("plot_id", "forest_reserve")) %>% 
-#   filter(period != 3) 
-
 plotinfo_ <- plotinfo %>%
   inner_join(two_surveys, by = c("plot_id", "forest_reserve")) %>% 
   filter(period != 3) 
@@ -321,7 +309,8 @@ list_reserves <- trees_calc_ %>%
   ungroup()
 
 list_reserves %>% dplyr::pull(forest_reserve)
-
+```
+```{r results = 'hide'}
 nrow(list_reserves) == 11
 
 list_reserves2 <- plotinfo_ %>% 
@@ -345,7 +334,7 @@ convC130 <- convC130 %>% select(-NameNl_VBI)
 
 ```
 
-```{r ConnectieFactorsWallonia}
+```{r ConnectieFactorsWallonia, results='hide'}
 
 ConnectieFactorsWallonia <- odbcConnectAccess2007(dbFactorsWallonia_path) 
 
@@ -425,7 +414,7 @@ Aangezien de methode van de FRL gebruik maakt van expansiefactoren die afhankeli
 
 We selecteren enkel de levende bomen.
 
-```{r trees_living}
+```{r trees_living, results='hide'}
 names(stems_calc_)
 trees_living <- stems_calc_ %>%
   filter(alive_dead == 11) %>% 
@@ -903,10 +892,10 @@ Om tot totaal koolstofgehalte (C/ha) te komen, worden volgende stappen doorlopen
 
 Van volume naar biomassa met behulp van wood density (WD).
 
-> **vol_bole_m3**: stamvolume cfr Dagnelie/Quataert
-> **Volume_m3**: stamvolume gecorrigeerd voor kleine boompjes zonder volume (obv kegel of cilinder)
-> **TotalVolume_m3**: Volume_m3 * VEF => mét kleine takjes erbij - Zonder stomp!
-> **VolumeStump_m3**: stomp volume (als cilinder)
+- **vol_bole_m3**: stamvolume cfr Dagnelie/Quataert
+- **Volume_m3**: stamvolume gecorrigeerd voor kleine boompjes zonder volume (obv kegel of cilinder)
+- **TotalVolume_m3**: Volume_m3 * VEF => mét kleine takjes erbij - Zonder stomp!
+- **VolumeStump_m3**: stomp volume (als cilinder)
 
 
 ```{r bovengrondse_biomassa, results = 'hide'}
@@ -977,8 +966,6 @@ colnames(trees_living5)
 # TotalVolume_m3: Volume_m3 * VEF => mét kleine takjes erbij - Zonder stomp!
 # VolumeStump_m3: stomp volume (als cilinder): nog extra erbij om biomassa te berekenen
 
-
-
 analyseSet <- trees_living5 %>%
   dplyr::group_by(plot_id, period, year) %>%   
   dplyr::summarise(
@@ -994,6 +981,7 @@ analyseSet <- trees_living5 %>%
   dplyr::ungroup()
 
 # summary(trees_living5)
+names(trees_living5)
 
 trees_living6 <- trees_living5 %>% 
   select(1:20, 44, 46, 52:59)
@@ -1003,57 +991,40 @@ trees_living6 <- trees_living5 %>%
 Aan de lijst van plots mét bomen moeten de plots zonder bomen (volume = 0) toegevoegd  worden, die behoren tot productief bos (geen open ruimtes).
 Dit zijn kapvlaktes of bestanden met enkel verjonging (bomen met diameter < 7 cm).
 
-Deze plots leiden we af van `regeneration_by_plot_height_species.csv`, cfr advies A3844 voor berekening van totaal volume per boomsoort.
-
-Nadeel is dat de plots zonder enige verjonging ontbreken (want geen boomsoort vermeld).
-
-Voordeel is dat dit het nauwste aansluit bij de resultaten van het advies A.3844.
-
-We maken hierbij gebruik van  
-
-- v3_Volume_ha en v2_BasalArea_ha => volume en grondvlak = 0 
-- (Landuse: gecheckt en in tbl10 zitten geen plots waarvan Landuse = "open ruimte" of "geen bos")
-
-Alternatieven zijn:
-
-- enkel werken met plots waar bomen met DBH > 7 cm voorkomen => bij VBI lagere uptake factoren (zie script "GEG_LULUCF_MeanCarbonUptake_Methodes1234TreeLevel_enkel_plots_met_bomen.Rmd")
-- ook plots zonder verjonging toevoegen => bij VBI hogere uptake factoren (zie script "GEG_LULUCF_MeanCarbonUptake_Methodes1234TreeLevel_alle_bosplots.Rmd")
+Deze plots leiden we af van `plotinfo`.
 
 <br>
 
 ```{r bosplots_zonder_volume, results='hide'}
 names(plotinfo)
 
-!! doen obv dendro_per_plot
-checken of daar alle plots in zitten (mbv plotinfo)
+# !! niet obv dendro_per_plot, want daar enkel plots in mét bomen
 
-check_zero_volume <- analyseSet %>% 
-  full_join(plotinfo %>% select(plot_id, period, number_of_tree_species), by = c("plot_id", "period")) %>% 
-  filter(is.na(vol_bole_m3_ha))
+zero_volume <- analyseSet %>% 
+  full_join(plotinfo %>% select(plot_id, period, survey_trees, year_dendro), by = c("plot_id", "period")) %>% 
+  filter(is.na(vol_bole_m3_ha) & survey_trees == TRUE) 
 
-check_zero_volume
-# plot 475: periode 1: geen bomen, ook geen verjonging (approx_nr_reg = 0) 
-# => om consequent te zijn met VBI:  NIET MEENEMEN
-# TOCH WEL: VBI zal in beide periodes plots verliezen, hier is het maar één plot, één periode 
-
-check_zero_volume$year <- 2002
+zero_volume
+# plot 475: periode 1: geen bomen
 
 ```
 
 
 ```{r add_bosplots_without_volume_obv_reg, results='hide'}
 # enkel plot 475, periode 1, zonder reg
-colnames(analyseSet);colnames(check_zero_volume)
+colnames(analyseSet);colnames(zero_volume)
 
-analyseSet_0_biomassa <- check_zero_volume %>%
-  dplyr::select(-number_of_tree_species) %>%
-  mutate(vol_bole_m3_ha = 0,
-         StemVolume_m3_ha = 0,
-         VolumeStump_m3_ha = 0,
-         TotalVolumeVEF_m3_ha = 0,
+analyseSet_0_biomassa <- zero_volume %>%
+  mutate(year = year_dendro,
+         vol_bole_m3_ha = 0,  # zoals berekend in forrescalc, Dagnelie
+         StemVolume_m3_ha = 0,  # cfr methode FRL (met een volume voor dunne boompjes)
+         VolumeStump_m3_ha = 0,  
+         TotalVolumeVEF_m3_ha = 0,  
+         # TotalVolumeVEF_m3_ha = StemVolume * VEF => volledig bovengronds boomvolume zonder stump
          Biomass_t_ha = 0,
          Carbon_t_ha = 0
-          )
+          ) %>% 
+    dplyr::select(-year_dendro, -survey_trees)
 
 analyseSet2 <- rbind(analyseSet, analyseSet_0_biomassa)
 nrow(analyseSet) + nrow(analyseSet_0_biomassa) - nrow(analyseSet2) == 0
@@ -1178,13 +1149,14 @@ Resultaat_wide %>%
 
 ```
 
+
 **!! plots zijn echter WEL GEKOPPELD!!**
 
 Bovenstaande BI's zijn bijgevolg veel te ruim.
 
 Correcter is om de aangroei per plot te berekenen en daar het gemiddelde van te berekenen.
 
-```{r calc_increase_C_per_plot}
+```{r calc_increase_C_per_plot, results='hide'}
 colnames(analyseSet)
 
 analyseSet_wide <- analyseSet %>% 
@@ -1235,7 +1207,7 @@ Resultaat_wide %>%
 De resultaten worden weggeschreven naar 
 
 - de resultatendatabank 
-- een csv-file: resultVolumeBiomassCarbonUptake_MethodeFRL.csv
+- een csv-file: resultVolumeBiomassCarbon_MethodeFRL.csv
 - een csv-file met results-wide: resultVolumeBiomassCarbonUptake_MethodeFRL.csv
 
 ```{r resultatendb_periode1vs2_toestand}
@@ -1362,7 +1334,7 @@ Resultaat <- Resultaat %>%
 **!! GEKOPPELDE plots!!**  
 => aangroei per plot berekenen en daar het gemiddelde van berekenen
 
-```{r calc_increase_C_per_plot_PNV}
+```{r calc_increase_C_per_plot_PNV, results = 'hide'}
 colnames(analyseSet_pnv)
 
 analyseSet_wide_pnv <- analyseSet_pnv %>% 
@@ -1495,7 +1467,7 @@ write_excel_csv2(Resultaat_wide,paste0(path_to_request_luc, "resultCarbonUptake_
 (c) Luc: geef het aantal cirkels en bosreservaten dat het cijfer per PNV levert mee, zodat we eventueel kunnen clusteren
 
 
-```{r}
+```{r include = FALSE}
 # komt gemiddelde van PNV beetje overeen met algemene C-uptake (2.19)? JA
 
 check <- Resultaat_wide %>% 
@@ -1503,7 +1475,7 @@ check <- Resultaat_wide %>%
   mutate(increase_gewogen = mean*n_obs)
 
 round(sum(check$increase_gewogen)/sum(check$n_obs), 1) == round(2.19,1)
-# [1] 2.186969
+# [1] 2.186903
 ```
 
 ```{r}
@@ -1516,29 +1488,43 @@ forest_reserve <- plotinfo %>%
 analyseSet_pnv_ <- analyseSet_pnv %>% 
   left_join(forest_reserve %>% select(plot_id, forest_reserve))
 
-unique(analyseSet_pnv_$forest_reserve)
+# unique(analyseSet_pnv_$forest_reserve)
 
-plots_per_pnv <- analyseSet_pnv_ %>% 
+plots_per_pnv_forest <- analyseSet_pnv_ %>% 
   filter(period == 2) %>%  # evenveel plots in beide periodes
   group_by(PNV, PNVtxt, forest_reserve) %>% 
   summarize(aantal_plots = n()) %>% 
   ungroup()
+
+plots_per_pnv <- analyseSet_pnv_ %>% 
+  filter(period == 2) %>%  # evenveel plots in beide periodes
+  group_by(PNV, PNVtxt) %>% 
+  summarize(aantal_plots = n()) %>% 
+  ungroup()
+
+plots_per_pnv %>% filter(!is.na(PNV)) %>% 
+  DT::datatable(options = list(pageLength = 12, order = list(0, 'asc'), scrollX = TRUE), 
+                                rownames = FALSE, 
+                                filter = "top")
 ```
 
-```{r export_to_csv_repre, include=FALSE}
-write_excel_csv2(plots_per_pnv,paste0(path_to_request, "forest_reserve_plots_per_pnv.csv"))
+```{r export_to_csv_repre}
+write_excel_csv2(plots_per_pnv_forest,paste0(path_to_request, "forest_reserve_plots_per_pnv.csv"))
+write_excel_csv2(plots_per_pnv,paste0(path_to_request, "plots_per_pnv.csv"))
 
-write_excel_csv2(plots_per_pnv,paste0(path_to_request_luc, "forest_reserve_plots_per_pnv.csv"))
-
+write_excel_csv2(plots_per_pnv_forest,paste0(path_to_request_luc, "forest_reserve_plots_per_pnv.csv"))
+write_excel_csv2(plots_per_pnv,paste0(path_to_request_luc, "plots_per_pnv.csv"))
 
 ```
 
 
-## Ontbrekende pnv
+## Ontbrekende pnv - AANGEVULD
 
 Heirnisse en Sevendock hebben veel OB/OT/ON, niet bepaald bodemtype, dus ook geen PNV.
-Luc zou eventueel toch PNV toekennen.
 Ook PNV-type 2 komt maar heel sproradisch voor (3).
+
+Luc heeft daarom toch PNV toegekend aan plots in Heirnisse en Sevendonck: zie script `UpdataStrata_PNV_03.Rmd`.
+
 
 ```{r missing_pnv}
 reserves_no_soil <- pnv %>% 
@@ -1576,7 +1562,7 @@ write_excel_csv2(reserves_no_soil_plots,paste0(path_to_request_luc, "forest_rese
 ```
 
 
-## PNV 2
+### PNV 2
 
 In welk CA's komt pnv-type 2 voor?
 
