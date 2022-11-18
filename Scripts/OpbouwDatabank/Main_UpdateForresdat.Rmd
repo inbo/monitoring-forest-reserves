@@ -459,7 +459,7 @@ table(no_deadw$forest_reserve, no_deadw$period)
 dendro_by_plot_ <- dendro_by_plot %>% 
   left_join(plotinfo %>% select(plot_id, period, survey_deadw), by = c("plot_id", "period")) %>% 
   mutate(vol_log_m3_ha = ifelse(survey_deadw, vol_log_m3_ha, NA),
-         vol_deadw_m3_ha = ifelse(survey_deadw, vol_log_m3_ha, NA))
+         vol_deadw_m3_ha = ifelse(survey_deadw, vol_deadw_m3_ha, NA))
 
 dendro_by_plot_ %>% filter(plot_id == 11000 & period == 1) %>% dplyr::pull(vol_log_m3_ha)
 dendro_by_plot_ %>% filter(plot_id == 11000 & period == 3) %>% dplyr::pull(vol_log_m3_ha)
@@ -471,7 +471,7 @@ dendro_by_plot <- dendro_by_plot_ %>%
 dendro_by_plot_species_ <- dendro_by_plot_species %>% 
   left_join(plotinfo %>% select(plot_id, period, survey_deadw), by = c("plot_id", "period")) %>% 
   mutate(vol_log_m3_ha = ifelse(survey_deadw, vol_log_m3_ha, NA),
-         vol_deadw_m3_ha = ifelse(survey_deadw, vol_log_m3_ha, NA))
+         vol_deadw_m3_ha = ifelse(survey_deadw, vol_deadw_m3_ha, NA))
 
 dendro_by_plot_species_ %>% filter(plot_id == 11000 & period == 1) %>% dplyr::pull(vol_log_m3_ha)
 dendro_by_plot_species_ %>% filter(plot_id == 11000 & period == 3) %>% dplyr::pull(vol_log_m3_ha)
@@ -483,7 +483,7 @@ dendro_by_plot_species <- dendro_by_plot_species_ %>%
 dendro_by_diam_plot_ <- dendro_by_diam_plot %>% 
   left_join(plotinfo %>% select(plot_id, period, survey_deadw), by = c("plot_id", "period")) %>% 
   mutate(vol_log_m3_ha = ifelse(survey_deadw, vol_log_m3_ha, NA),
-         vol_deadw_m3_ha = ifelse(survey_deadw, vol_log_m3_ha, NA))
+         vol_deadw_m3_ha = ifelse(survey_deadw, vol_deadw_m3_ha, NA))
 
 dendro_by_diam_plot_ %>% filter(plot_id == 11000 & period == 1) %>% dplyr::pull(vol_log_m3_ha)
 dendro_by_diam_plot_ %>% filter(plot_id == 11000 & period == 3) %>% dplyr::pull(vol_log_m3_ha)
@@ -495,7 +495,7 @@ dendro_by_diam_plot <- dendro_by_diam_plot_ %>%
 dendro_by_diam_plot_species_ <- dendro_by_diam_plot_species %>% 
   left_join(plotinfo %>% select(plot_id, period, survey_deadw), by = c("plot_id", "period")) %>% 
   mutate(vol_log_m3_ha = ifelse(survey_deadw, vol_log_m3_ha, NA),
-         vol_deadw_m3_ha = ifelse(survey_deadw, vol_log_m3_ha, NA))
+         vol_deadw_m3_ha = ifelse(survey_deadw, vol_deadw_m3_ha, NA))
 
 dendro_by_diam_plot_species_ %>% filter(plot_id == 11000 & period == 1) %>% dplyr::pull(vol_log_m3_ha)
 dendro_by_diam_plot_species_ %>% filter(plot_id == 11000 & period == 3) %>% dplyr::pull(vol_log_m3_ha)

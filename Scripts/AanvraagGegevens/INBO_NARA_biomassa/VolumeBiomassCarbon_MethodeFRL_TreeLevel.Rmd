@@ -237,7 +237,7 @@ Naast CP's ook KV's van Walenbos en Coolhem meenemen om beter zicht te krijgen
 op PNV 2 (elzenbroek).
 ((c) Luc: Coolhem Q is een verdroogd broekbos, maar neem het toch maar mee als broekbos (PNV 2))
 
-```{r load_trees}
+```{r load_trees, results = 'hide'}
 # data_dendro <- load_data_dendrometry(path_to_fieldmap, plottype = "Circular plot", extra_variables = TRUE)
 
 # beter uit folder "C:\03_BR\1_Dataverwerking\Output\raw-data" halen
@@ -247,6 +247,7 @@ unique(trees_calc$forest_reserve)
 
 stems_calc<- read_csv2(paste0(path_to_treelevel_csv, "stems_calc.csv")) %>% 
   filter(plottype == "CP" | forest_reserve %in% c("Coolhem A", "Coolhem Q", "Walenbos KV1")) %>% select(-1)
+unique(stems_calc$forest_reserve)
 
 # str(trees_calc)
 # summary(trees_calc)
@@ -280,11 +281,13 @@ Voor Kersselaerspleyn, maken we gebruik van de 1ste en 2de survey (3de dateert v
 two_surveys <- plotinfo %>% 
   filter(period != 3) %>% 
   select(forest_reserve, plot_id, plottype, period, data_processed) %>% 
-  filter(plottype == "CP" & data_processed == TRUE) %>% 
+  filter(plottype == "CP" | forest_reserve %in% c("Coolhem A", "Coolhem Q", "Walenbos KV1")) %>% 
+  filter(data_processed == TRUE) %>% 
   group_by(forest_reserve, plot_id) %>% 
   summarize(aantal_surveys = n()) %>% 
   ungroup() %>% 
   filter(aantal_surveys > 1)
+# unique(two_surveys$forest_reserve)
 
 trees_calc_ <- trees_calc %>%
   inner_join(two_surveys, by = c("plot_id", "forest_reserve")) %>% 
@@ -310,10 +313,11 @@ list_reserves <- trees_calc_ %>%
 
 list_reserves %>% dplyr::pull(forest_reserve)
 ```
+
 ```{r results = 'hide'}
 nrow(list_reserves) == 11
 
-list_reserves2 <- plotinfo_ %>% 
+list_reserves2 <- plotinfo %>% 
   group_by(forest_reserve) %>% 
   summarize() %>% 
   ungroup()
@@ -1010,7 +1014,7 @@ zero_volume
 ```
 
 
-```{r add_bosplots_without_volume_obv_reg, results='hide'}
+```{r add_bosplots_without_volume, results='hide'}
 # enkel plot 475, periode 1, zonder reg
 colnames(analyseSet);colnames(zero_volume)
 
@@ -1369,8 +1373,8 @@ Resultaat_wide[5:8] <- round(Resultaat_wide[5:8],2)
 
 
 ```{r table_results_PNV}
-Resultaat_wide %>% 
-  DT::datatable(filter = "none", selection = "none", rownames = FALSE, 
+Resultaat_wide %>% arrange(variable) %>% 
+  DT::datatable(filter = "top", selection = "none", rownames = FALSE, 
                 options = list(pageLength = 5, dom = 'tip'))
 
 ```

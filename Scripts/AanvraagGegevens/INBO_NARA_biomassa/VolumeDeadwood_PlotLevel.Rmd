@@ -1,0 +1,837 @@
+---
+title: "Volume dood hout ikv carbon-berekening NARA 2023"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: TRUE
+      smooth_scroll: FALSE
+
+---
+
+```{r Rm}
+rm(list=ls())
+```
+
+
+```{r Setup, include = FALSE}
+
+library(knitr)
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(tidyverse)
+library(RODBC)
+library(here)
+library(DT)
+library(openssl)
+library(kableExtra)
+library(lme4)
+
+
+source(here::here("scripts/Setup.R"))  # libraries, basic functions & paths
+
+# REQUEST
+path_to_request <- paste0(path_to_datarequests, "INBO_NARA_biomassa/")
+# wegschrijven naar gdrive (ev. bij knitting, nu tijdelijk overslaan)
+# path_to_request <- paste0(path_to_datarequests_gdrive, "INBO_NARA_biomassa/")
+
+# of rechtstraaks naar map van Luc
+path_to_request_luc <- "G:/.shortcut-targets-by-id/0B0xcP-eNvJ9dQ2w5ZFhSZEpCU0E/PRJ_BOSECO_ALGEMEEN/PRJ_LULUCF_VMM_CARBON/R_output_Anja/"
+
+
+```
+
+
+# Vraagstelling
+
+In het kader van NARA2023 wordt gevraagd naar een ruw cijfer mbt C-opslag in onbeheerde bossen.
+Hiervoor gebruiken we de data uit de bosreservaten.
+
+Zie script `VolumeBiomassCarbon_MethodeFRL_TreeLevel.Rmd`.
+
+Vooral in de bosreservaten kan de C-voorraad in dood hout aanzienlijk zijn en toenemen naarmate ze langer onbeheerd zijn. Maar ook globaal neemt het volume dood hout toe.
+Luc DK heeft enkele publicaties doorgenomen over dood hout en denkt dat we best een ruwe omrekening hanteren van volume naar C voorraad.
+De densiteit van dood hout is afhankelijk van de boomsoort en verandert met de afbraakklasse. Luc heeft enkele cijfers verzameld over de densiteit van afbraakklasse 2 of 3 van veel voorkomende boomsoorten, om een gemiddelde te bepalen per PNV.
+
+Daarom wordt in onderstaand script het dood hout volume berekend voor dezelfde plots, zodat Luc DK daarmee de C voorraad  aanpast. 
+
+
+# Invoer gegevens
+
+We selecteren enkel de onbeheerde cirkelplots (tabel `strata_remaining` - var `plot_unmanaged_since`)
+
+Jaartal halen we uit   
+
+- tabel `info_survey` (var `year_dendro` afgeleid van data_dendro uit plotdetails.
+OF
+- tabel `strata_location`: var `survey_Y1`, `survey_Y2`, ...
+
+
+Ook info over `PNV` (tabel `strata_soil`) is nodig.
+
+<!-- Onderstaande tabel geeft een overzicht van de gegevens die gebruikt worden voor de analyse.   -->
+
+```{r DataOverview, results="markup"}
+data_overzicht <- data.frame(
+  tabelnaam = c(dbFieldmap, dbStrata),
+  locatie = c(path_to_fieldmap, path_to_strata),
+  md5 = c(md5(path_to_fieldmap), md5(path_to_strata))
+)
+
+data_overzicht %>%
+  kable() %>%
+  kable_styling()
+
+#dbAnalyseDataTxt <- substring(dbAnalyseData, regexpr("/", dbAnalyseData) + 1)  # voor gebruik bij wegschrijven naar resultatendb
+
+```
+
+
+```{r load_lkplists}
+# con <- odbcConnectAccess2007(path_to_fieldmap)
+#   
+#   qIndShootCop <- sqlFetch(con, "qIndShootCop", stringsAsFactors = FALSE)
+#   qAliveDead <- sqlFetch(con, "qAliveDead", stringsAsFactors = FALSE)
+#   qSpecies <- sqlFetch(con, "qAliveDead", stringsAsFactors = FALSE)
+#     
+# odbcClose(con)
+
+# Makkelijker vanuit forresdat
+
+qDecaystage <- read_vc(file = "qdecaystage", root = path_to_forresdat_data)
+
+qPNV <- read_xlsx(paste0(path_to_strata, "legende_PNV.xlsx")) %>% 
+  select(PNVcde = Code, PNVtxt = "Nederlandse naam") %>% 
+  mutate(PNVcde = as.integer(PNVcde))
+
+```
+
+
+```{r load_plotinfo_strata}
+plotinfo <- read_vc(file = "plotinfo", root = path_to_forresdat_data)
+
+con <- odbcConnectAccess2007(path_to_strata_db)
+ strata_tables <- sqlTables(con) %>% filter(!str_detect(TABLE_NAME, "MSys"))
+ management <- sqlFetch(con, "strata_remaining", stringsAsFactors = FALSE)
+ location <- sqlFetch(con, "strata_location", stringsAsFactors = FALSE)
+ pnv <- sqlFetch(con, "strata_soil", stringsAsFactors = FALSE)
+ # plotinfo <- sqlFetch(con, "plotinfo", stringsAsFactors = FALSE) # nog niet geupdate
+odbcClose(con)
+
+```
+
+Naast CP's ook KV's van Walenbos en Coolhem meenemen om beter zicht te krijgen 
+op PNV 2 (elzenbroek).
+((c) Luc: Coolhem Q is een verdroogd broekbos, maar neem het toch maar mee als broekbos (PNV 2))
+
+```{r load_dendro}
+# data_dendro <- load_data_dendrometry(path_to_fieldmap, plottype = "Circular plot", extra_variables = TRUE)
+
+# beter uit folder "C:\03_BR\1_Dataverwerking\Output\plot-level-data" halen
+dendro_by_plot <- read_csv2(paste0(path_to_plotlevel_csv, "dendro_by_plot.csv")) %>% 
+  filter(plottype == "CP" | forest_reserve %in% c("Coolhem A", "Coolhem Q", "Walenbos KV1")) %>% select(-1)
+unique(dendro_by_plot$forest_reserve)
+
+names(dendro_by_plot)
+```
+
+
+```{r OnlyZeroManagementPlots}
+# !! OPGEPAST: 10 plots met “Exotenbeheer na 1e meting”: 701, 707, 709, 727, 728, 738, 739, 740, 759, 760
+# => deze zijn niet representatief => uit algemene verwerking halen
+# 
+dendro_by_plot <- dendro_by_plot %>%
+  filter(!(plot_id %in% c(701, 707, 709, 727, 728, 738, 739, 740, 759, 760)))
+
+plotinfo <- plotinfo %>%
+  filter(!(plot_id %in% c(701, 707, 709, 727, 728, 738, 739, 740, 759, 760)))
+
+```
+
+We selecteren de bosreservaten met minimaal twee surveys.
+Voor Kersselaerspleyn, maken we gebruik van de 1ste en 2de survey (3de dateert van 2019, maar is verder verwijderd van 1ste en 2de VBI)
+
+
+```{r minimal_two_surveys}
+two_surveys <- plotinfo %>% 
+  filter(period != 3) %>% 
+  select(forest_reserve, plot_id, plottype, period, data_processed) %>% 
+  filter(plottype == "CP" | forest_reserve %in% c("Coolhem A", "Coolhem Q", "Walenbos KV1")) %>% 
+  filter(data_processed == TRUE) %>% 
+  group_by(forest_reserve, plot_id) %>% 
+  summarize(aantal_surveys = n()) %>% 
+  ungroup() %>% 
+  filter(aantal_surveys > 1)
+
+dendro_by_plot_ <- dendro_by_plot %>%
+  inner_join(two_surveys, by = c("plot_id", "forest_reserve")) %>% 
+  filter(period != 3) 
+
+plotinfo_ <- plotinfo %>%
+  inner_join(two_surveys, by = c("plot_id", "forest_reserve")) %>% 
+  filter(period != 3) 
+
+plotinfo <- plotinfo_
+
+```
+
+```{r overview}
+list_reserves <- dendro_by_plot_ %>% 
+  group_by(forest_reserve) %>% 
+  summarize() %>% 
+  ungroup()
+
+list_reserves %>% dplyr::pull(forest_reserve)
+```
+
+
+```{r results = 'hide'}
+nrow(list_reserves) == 11
+
+list_reserves2 <- plotinfo_ %>% 
+  group_by(forest_reserve) %>% 
+  summarize() %>% 
+  ungroup()
+
+list_reserves == list_reserves2
+```
+
+
+# Controle: ontbrekende waarden nakijken
+
+<!-- Enkel levende en staande, dode bomen -->
+
+<!-- Ontbrekende waarden controleren -->
+
+```{r CheckMissingValues}
+check_volume_standing <- sum(is.na(dendro_by_plot_$vol_dead_standing_m3_ha)) == 0
+check_volume_log <- sum(is.na(dendro_by_plot_$vol_log_m3_ha)) == 0
+
+check <- dendro_by_plot_ %>% 
+  filter(is.na(vol_log_m3_ha))
+range(check$plot_id)
+# 2001 2065
+
+```
+
+Er zijn geen ontbrekende waarden voor staand dood hout, 
+maar wel voor liggend dood hout, nl. CP's Kersselaerspleyn periode 1. 
+
+Om een analyse te doen voor liggend dood hout moeten deze plots uit de dataset verwijderd worden.
+
+
+
+# Analyse
+
+```{r plotniveau, results = 'hide'}
+analyseSet_staand <- dendro_by_plot_ 
+
+analyseSet_liggend <- dendro_by_plot_ %>% 
+  filter(forest_reserve != "Kersselaerspleyn")
+```
+
+
+Aan de lijst van plots mét bomen moeten de plots zonder bomen (volume = 0) toegevoegd  worden, die behoren tot productief bos (geen open ruimtes).
+Dit zijn kapvlaktes of bestanden met enkel verjonging (bomen met diameter < 7 cm).
+
+Deze plots leiden we af van `plotinfo`.
+
+<br>
+
+```{r bosplots_zonder_volume, results='hide'}
+names(plotinfo)
+
+# !! niet obv dendro_per_plot, want daar enkel plots in mét bomen
+
+zero_volume <- analyseSet_staand %>% 
+  full_join(plotinfo %>% select(plot_id, period, survey_trees, year_dendro), by = c("plot_id", "period")) %>% 
+  filter(is.na(vol_bole_dead_m3_ha) & survey_trees == TRUE) 
+
+zero_volume
+# plot 475: periode 1: geen bomen
+
+```
+
+
+```{r add_bosplots_without_volume, results='hide'}
+# enkel plot 475, periode 1, zonder reg
+colnames(analyseSet_staand);colnames(zero_volume)
+
+analyseSet_0_biomassa <- zero_volume %>%
+  mutate(year = year_dendro,
+         vol_bole_dead_m3_ha = 0,  
+         vol_log_m3_ha = 0,
+         vol_deadw_m3_ha = 0
+          ) %>% 
+    dplyr::select(-year_dendro, -survey_trees)
+
+colnames(analyseSet_staand);names(analyseSet_0_biomassa)
+
+analyseSet_staand2 <- rbind(analyseSet_staand, analyseSet_0_biomassa)
+nrow(analyseSet_staand) + nrow(analyseSet_0_biomassa) - nrow(analyseSet_staand2) == 0
+analyseSet_staand <- analyseSet_staand2
+
+analyseSet_liggend2 <- rbind(analyseSet_liggend, analyseSet_0_biomassa)
+nrow(analyseSet_liggend) + nrow(analyseSet_0_biomassa) - nrow(analyseSet_liggend2) == 0
+analyseSet_liggend <- analyseSet_liggend2
+```
+
+
+# Resultaat
+
+## Standing deadwood
+
+```{r statistics_per_periode_staand, results = 'hide'}
+analyseSet <- analyseSet_staand
+
+colnames(analyseSet)
+variables_for_statistics <- c("vol_bole_dead_m3_ha")
+# , "vol_log_m3_ha", "vol_deadw_m3_ha")
+
+Resultaat <- create_statistics(
+  dataset = analyseSet,
+  # level = c("period", "forest_reserve"),
+  level = c("period"),
+  variables = variables_for_statistics,
+  include_year_range = FALSE,
+  na_rm = FALSE,
+ 
+    interval_information = suppressMessages(read_csv2(system.file("extdata/class_data.csv",
+    package = "forrescalc")))
+) %>% 
+  select(-logaritmic)
+
+Resultaat
+Resultaat[4:7] <- round(Resultaat[4:7],2)
+
+vars <- c("period")
+Resultaat_staand <- Resultaat %>%
+    mutate_at(vars, factor)
+
+```
+
+Om een correct betrouwbaarheidsinterval te kunnen berekenen van de aangroei in gekoppelde plots, 
+is het het makkelijkste om de aangroei per plot te berekenen en vervolgens daarvan het gemiddelde.
+
+
+```{r calc_increase_per_plot_staand, results='hide'}
+colnames(analyseSet)
+
+analyseSet_wide <- analyseSet %>% 
+  select(plot_id, period, vol_bole_dead_m3_ha) %>% 
+  pivot_wider(id_cols = plot_id, 
+            names_from = period, 
+            values_from = c("vol_bole_dead_m3_ha")) %>% 
+  rename(vol_bole_dead_m3_ha_1 = "1",
+         vol_bole_dead_m3_ha_2 = "2") %>% 
+  mutate(# 10 jaar gemiddeld tss 2 opnames
+         increase_vol_bole = `vol_bole_dead_m3_ha_2` - `vol_bole_dead_m3_ha_1`,
+         increase_vol_bole_per_yr = round(increase_vol_bole/10, 2)) %>% 
+  mutate(strata = "all")
+
+
+variables_for_statistics <- c("increase_vol_bole_per_yr")
+
+Resultaat_wide <- create_statistics(
+  dataset = analyseSet_wide,
+  # level = c("period", "forest_reserve"),
+  level = c("strata"),
+  variables = variables_for_statistics,
+  include_year_range = FALSE,
+  na_rm = FALSE,
+ 
+    interval_information = suppressMessages(read_csv2(system.file("extdata/class_data.csv",
+    package = "forrescalc")))
+) %>% 
+  select(-logaritmic)
+
+Resultaat_wide[4:7] <- round(Resultaat_wide[4:7],2)
+
+Resultaat_wide_staand <- Resultaat_wide
+```
+
+
+```{r table_results_wide_staand}
+Resultaat_wide %>% 
+  select(-strata) %>% 
+  DT::datatable(filter = "none", selection = "none", rownames = FALSE, 
+                options = list(pageLength = 5, dom = 'tip'))
+
+```
+
+
+##  Lying deadwood
+
+```{r statistics_per_periode_liggend, results = 'hide'}
+analyseSet <- analyseSet_liggend
+
+colnames(analyseSet)
+variables_for_statistics <- c("vol_log_m3_ha")
+
+Resultaat <- create_statistics(
+  dataset = analyseSet,
+  # level = c("period", "forest_reserve"),
+  level = c("period"),
+  variables = variables_for_statistics,
+  include_year_range = FALSE,
+  na_rm = FALSE,
+ 
+    interval_information = suppressMessages(read_csv2(system.file("extdata/class_data.csv",
+    package = "forrescalc")))
+) %>% 
+  select(-logaritmic)
+
+Resultaat
+Resultaat[4:7] <- round(Resultaat[4:7],2)
+
+vars <- c("period")
+Resultaat_liggend <- Resultaat %>%
+    mutate_at(vars, factor)
+
+```
+
+Om een correct betrouwbaarheidsinterval te kunnen berekenen van de aangroei in gekoppelde plots, 
+is het het makkelijkste om de aangroei per plot te berekenen en vervolgens daarvan het gemiddelde.
+
+
+```{r calc_increase_per_plot_liggend, results='hide'}
+colnames(analyseSet)
+
+analyseSet_wide <- analyseSet %>% 
+  select(plot_id, period, vol_log_m3_ha) %>% 
+  pivot_wider(id_cols = plot_id, 
+            names_from = period, 
+            values_from = c("vol_log_m3_ha")) %>% 
+  rename(vol_log_m3_ha_1 = "1",
+         vol_log_m3_ha_2 = "2") %>% 
+  mutate(# 10 jaar gemiddeld tss 2 opnames
+         increase_vol_log = `vol_log_m3_ha_2` - `vol_log_m3_ha_1`,
+         increase_vol_log_per_yr = round(increase_vol_log/10, 2),
+         ) %>% 
+  mutate(strata = "all")
+
+
+variables_for_statistics <- c("increase_vol_log_per_yr")
+
+Resultaat_wide <- create_statistics(
+  dataset = analyseSet_wide,
+  # level = c("period", "forest_reserve"),
+  level = c("strata"),
+  variables = variables_for_statistics,
+  include_year_range = FALSE,
+  na_rm = FALSE,
+ 
+    interval_information = suppressMessages(read_csv2(system.file("extdata/class_data.csv",
+    package = "forrescalc")))
+) %>% 
+  select(-logaritmic)
+
+Resultaat_wide[4:7] <- round(Resultaat_wide[4:7],2)
+
+Resultaat_wide_liggend <- Resultaat_wide
+```
+
+
+```{r table_results_wide_liggend}
+Resultaat_wide %>% 
+  select(-strata) %>% 
+  DT::datatable(filter = "none", selection = "none", rownames = FALSE, 
+                options = list(pageLength = 5, dom = 'tip'))
+
+```
+
+```{r bind_results}
+Resultaat <- rbind(Resultaat_staand, Resultaat_liggend)
+Resultaat_wide <- rbind(Resultaat_wide_staand, Resultaat_wide_liggend)
+```
+
+
+## Resultaten wegschrijven
+
+De resultaten worden weggeschreven naar 
+
+- de resultatendatabank 
+- een csv-file: resultVolumeBiomassCarbon_MethodeFRL.csv
+- een csv-file met results-wide: resultVolumeBiomassCarbonUptake_MethodeFRL.csv
+
+```{r resultatendb_periode1vs2_toestand}
+# Toestand
+save_results_statistics(dbHandle = dbResults
+                , tblName = "tblResultaten"
+                , results = Resultaat
+                , forest_reserve = NA
+                , strata = NA #   results$strata
+                , stratumName = NA #  results$stratum_name
+                , strata2 = NA #  results$strata2
+                , stratumName2 = NA #  results$stratum_name2
+                , scriptName = "VolumeDeadwood_PlotLevel.Rmd"
+                , description = "Volume (m3/ha) dead wood"
+                , request_from = "NARA 2023"
+                , run_by = "AL"
+)
+
+
+```
+
+
+```{r resultatendb_evolutie}
+names(Resultaat_wide)
+
+results_toename <- as.data.frame(Resultaat_wide) %>%
+  mutate(period = NA) %>% 
+         # , stratumNaam = NA
+         # , mean = increase_per_yr   # as.numeric(as.character(increase_per_yr))
+         # , variance = var
+         # # , n_obs = NA 
+         # , strata = NA
+         # # , lci = NA 
+         # # , uci = NA  
+         # ) %>%
+  dplyr::select(variable, period, everything())
+
+
+save_results_statistics(dbHandle = dbResults
+                , tblName = "tblResultaten"
+                , results = results_toename                
+                , forest_reserve = NA
+                , strata = NA #   results$strata
+                , stratumName = NA #  results$stratum_name
+                , strata2 = NA #  results$strata2
+                , stratumName2 = NA #  results$stratum_name2
+                , scriptName = "VolumeDeadwood_PlotLevel.Rmd"
+                , description = "Volume (m3/ha) dead wood"
+                , request_from = "NARA 2023"
+                , run_by = "AL"
+)
+
+```
+
+```{r export_to_csv, include=FALSE}
+Resultaat <- Resultaat %>% 
+  arrange(variable, period)
+Resultaat_wide <- Resultaat_wide %>% 
+  arrange(variable)
+
+write_excel_csv2(Resultaat,paste0(path_to_request, "resultVolumeDeadwood.csv"))
+write_excel_csv2(Resultaat_wide,paste0(path_to_request, "resultVolumeDeadwood_change.csv"))
+
+```
+
+
+```{r export_to_csv_luc}
+# direct naar gdrive luc - beperkter, enkel carbonuptake en vol_bole
+vars_luc <- c("Carbon_t_ha", "vol_bole_m3_ha")
+
+Resultaat_luc <- Resultaat %>% 
+  filter(variable %in% vars_luc)
+
+write_excel_csv2(Resultaat_luc,paste0(path_to_request_luc, "resultVolumeDeadwood.csv"))
+write_excel_csv2(Resultaat_wide,paste0(path_to_request_luc, "resultVolumeDeadwood_change.csv"))
+```
+
+
+
+# Resultaat per PNV
+
+## Statistics
+
+
+```{r}
+colnames(analyseSet)
+
+analyseSet_pnv <- analyseSet %>% 
+  left_join(pnv %>% select(plot_id, PNV)) %>% 
+  left_join(qPNV, by = c("PNV" = "PNVcde"))
+```
+
+```{r statistics_per_PNV, results = 'hide'}
+variables_for_statistics <- c("vol_bole_m3_ha", "StemVolume_m3_ha", "TotalVolumeVEF_m3_ha", "VolumeStump_m3_ha",  "Biomass_t_ha", "Carbon_t_ha")
+
+
+Resultaat <- create_statistics(
+  dataset = analyseSet_pnv,
+  level = c("period", "PNV"),
+  # level = c("period"),
+  variables = variables_for_statistics,
+  include_year_range = FALSE,
+  na_rm = FALSE,
+ 
+    interval_information = suppressMessages(read_csv2(system.file("extdata/class_data.csv",
+    package = "forrescalc")))
+) %>% 
+  select(-logaritmic)
+
+Resultaat
+Resultaat[5:8] <- round(Resultaat[5:8],2)
+
+vars <- c("period")
+Resultaat <- Resultaat %>%
+  mutate_at(vars, factor) %>% 
+  left_join(qPNV, by = c("PNV" = "PNVcde"))
+
+```
+
+### Increase per yr met BI
+
+**!! GEKOPPELDE plots!!**  
+=> aangroei per plot berekenen en daar het gemiddelde van berekenen
+
+```{r calc_increase_C_per_plot_PNV, results = 'hide'}
+colnames(analyseSet_pnv)
+
+analyseSet_wide_pnv <- analyseSet_pnv %>% 
+  select(plot_id, PNV, PNVtxt, period, Carbon_t_ha, vol_bole_m3_ha) %>% 
+  pivot_wider(id_cols = c("plot_id", "PNV", "PNVtxt"),
+            names_from = period, 
+            values_from = c("Carbon_t_ha", "vol_bole_m3_ha")) %>% 
+  mutate(increase_C = `Carbon_t_ha_2` - `Carbon_t_ha_1`,
+         increase_C_per_yr = round(increase_C/10, 2), # 10 jaar gemiddeld tss 2 opnames
+         increase_vol = `vol_bole_m3_ha_2` - `vol_bole_m3_ha_1`,
+         increase_vol_per_yr = round(increase_vol/10, 2))
+
+
+variables_for_statistics <- c("increase_C_per_yr", "increase_vol_per_yr")
+
+Resultaat_wide <- create_statistics(
+  dataset = analyseSet_wide_pnv,
+  # level = c("period", "forest_reserve"),
+  level = c("PNV", "PNVtxt"),
+  variables = variables_for_statistics,
+  include_year_range = FALSE,
+  na_rm = FALSE,
+ 
+    interval_information = suppressMessages(read_csv2(system.file("extdata/class_data.csv",
+    package = "forrescalc")))
+) %>% 
+  select(-logaritmic)
+
+Resultaat_wide
+Resultaat_wide[5:8] <- round(Resultaat_wide[5:8],2)
+```
+
+
+```{r table_results_PNV}
+Resultaat_wide %>% 
+  DT::datatable(filter = "none", selection = "none", rownames = FALSE, 
+                options = list(pageLength = 5, dom = 'tip'))
+
+```
+
+
+## Resultaten wegschrijven
+
+De resultaten worden weggeschreven naar 
+
+- de resultatendatabank 
+- een csv-file: resultVolumeBiomassCarbon_MethodeFRL_PNV.csv
+- een csv-file met results-wide: resultVolumeBiomassCarbonUptake_MethodeFRL_PNV.csv
+
+```{r resultatendb_PNV_toestand}
+# Toestand
+save_results_statistics(dbHandle = dbResults
+                , tblName = "tblResultaten"
+                , results = Resultaat
+                , forest_reserve = NA
+                , strata = "PNV" #   results$strata
+                , stratumName = Resultaat$PNV
+                , strata2 = NA #  results$strata2
+                , stratumName2 = NA #  results$stratum_name2
+                , scriptName = "VolumeBiomassCarbon_MethodeFRL_TreeLevel.Rmd"
+                , description = "Volume (m3/ha), biomassa en koolstofgehalte (ton/ha) per PNV - 
+                cfr FRL & INBO-advies A.4103 (meth. 4b)"
+                , request_from = "NARA 2023"
+                , run_by = "AL"
+)
+
+
+```
+
+
+```{r resultatendb_PNV_evolutie}
+results_toename <- as.data.frame(Resultaat_wide) %>%
+  mutate(period = NA
+         , stratum_name = PNV) %>% 
+         # , stratumNaam = NA
+         # , mean = increase_per_yr   # as.numeric(as.character(increase_per_yr))
+         # , variance = var
+         # # , n_obs = NA 
+         # , strata = NA
+         # # , lci = NA 
+         # # , uci = NA  
+         # ) %>%
+  dplyr::select(variable, period, everything())
+
+save_results_statistics(dbHandle = dbResults
+                , tblName = "tblResultaten"
+                , results = results_toename                
+                , forest_reserve = NA
+                , strata = "PNV" #   results$strata
+                , stratumName = results_toename$stratum_name
+                , strata2 = NA #  results$strata2
+                , stratumName2 = NA #  results$stratum_name2
+                , scriptName = "VolumeBiomassCarbon_MethodeFRL_TreeLevel.Rmd"
+                , description = "Toename in volume (m3/ha), biomassa en koolstofgehalte (ton/ha) per PNV - 
+                cfr FRL & INBO-advies A.4103 (meth. 4b)"
+                , request_from = "NARA 2023"
+                , run_by = "ALtest"
+)
+
+```
+
+
+```{r export_to_csv_PNV, include=FALSE}
+Resultaat <- Resultaat %>% 
+  arrange(variable, PNV, period)
+Resultaat_wide <- Resultaat_wide %>% 
+  arrange(variable, PNV)
+
+
+write_excel_csv2(Resultaat,paste0(path_to_request, "resultVolumeBiomassCarbon_MethodeFRL_PNV.csv"))
+
+write_excel_csv2(Resultaat_wide,paste0(path_to_request, "resultVolumeBiomassCarbonUptake_MethodeFRL_PNV.csv"))
+```
+
+
+```{r export_to_csv_PNV_luc}
+# direct naar gdrive luc - beperkter, enkel carbonuptake en vol_bole
+# vars_luc <- c("Carbon_t_ha", "vol_bole_m3_ha")
+
+Resultaat_luc <- Resultaat %>% 
+  filter(variable %in% vars_luc)
+
+write_excel_csv2(Resultaat_luc,paste0(path_to_request_luc, "resultCarbon_MethodeFRL_PNV.csv"))
+write_excel_csv2(Resultaat_wide,paste0(path_to_request_luc, "resultCarbonUptake_MethodeFRL_PNV.csv"))
+```
+
+
+## Controle representativiteit
+
+(c) Luc: geef het aantal cirkels en bosreservaten dat het cijfer per PNV levert mee, zodat we eventueel kunnen clusteren
+
+
+```{r include = FALSE}
+# komt gemiddelde van PNV beetje overeen met algemene C-uptake (2.19)? JA
+
+check <- Resultaat_wide %>% 
+  filter(variable == "increase_C_per_yr") %>% 
+  mutate(increase_gewogen = mean*n_obs)
+
+round(sum(check$increase_gewogen)/sum(check$n_obs), 1) == round(2.19,1)
+# [1] 2.186903
+```
+
+```{r}
+forest_reserve <- plotinfo %>% 
+  group_by(plot_id, plottype, forest_reserve) %>% 
+  summarize() %>% 
+  ungroup() %>% 
+  filter(plottype == "CP")
+
+analyseSet_pnv_ <- analyseSet_pnv %>% 
+  left_join(forest_reserve %>% select(plot_id, forest_reserve))
+
+# unique(analyseSet_pnv_$forest_reserve)
+
+plots_per_pnv_forest <- analyseSet_pnv_ %>% 
+  filter(period == 2) %>%  # evenveel plots in beide periodes
+  group_by(PNV, PNVtxt, forest_reserve) %>% 
+  summarize(aantal_plots = n()) %>% 
+  ungroup()
+
+plots_per_pnv <- analyseSet_pnv_ %>% 
+  filter(period == 2) %>%  # evenveel plots in beide periodes
+  group_by(PNV, PNVtxt) %>% 
+  summarize(aantal_plots = n()) %>% 
+  ungroup()
+
+plots_per_pnv %>% filter(!is.na(PNV)) %>% 
+  DT::datatable(options = list(pageLength = 12, order = list(0, 'asc'), scrollX = TRUE), 
+                                rownames = FALSE, 
+                                filter = "top")
+```
+
+```{r export_to_csv_repre}
+write_excel_csv2(plots_per_pnv_forest,paste0(path_to_request, "forest_reserve_plots_per_pnv.csv"))
+write_excel_csv2(plots_per_pnv,paste0(path_to_request, "plots_per_pnv.csv"))
+
+write_excel_csv2(plots_per_pnv_forest,paste0(path_to_request_luc, "forest_reserve_plots_per_pnv.csv"))
+write_excel_csv2(plots_per_pnv,paste0(path_to_request_luc, "plots_per_pnv.csv"))
+
+```
+
+
+## Ontbrekende pnv - AANGEVULD
+
+Heirnisse en Sevendock hebben veel OB/OT/ON, niet bepaald bodemtype, dus ook geen PNV.
+Ook PNV-type 2 komt maar heel sproradisch voor (3).
+
+Luc heeft daarom toch PNV toegekend aan plots in Heirnisse en Sevendonck: zie script `UpdataStrata_PNV_03.Rmd`.
+
+
+```{r missing_pnv}
+reserves_no_soil <- pnv %>% 
+  filter(belgisch_bodemtype %in% c("OT", "ON", "OB")) %>% 
+  left_join(plotinfo %>% select(plot_id, plottype, forest_reserve)) %>% 
+  unique() %>% 
+  group_by(forest_reserve, plottype) %>% 
+  summarize(min_plot = min(plot_id),
+            max_plot = max(plot_id), 
+            aantal = n()) %>% 
+  ungroup()
+
+# , SiteName, SubArea
+
+reserves_no_soil_plots <- pnv %>% 
+  select(plot_id, belgisch_bodemtype, PNV, SiteName, SubArea, Unieknr) %>% 
+  left_join(plotinfo %>% select(plot_id, plottype, forest_reserve)) %>% 
+  unique() %>% 
+  inner_join(reserves_no_soil %>% select(plottype, forest_reserve)) %>% 
+  select(forest_reserve, plottype, plot_id, everything())
+
+table(reserves_no_soil_plots$forest_reserve)
+
+
+# Kolmont en Kerss CP geen twee cycli, Kerss CA ook niet nodig voor Luc
+reserves_no_soil_plots <- reserves_no_soil_plots %>% 
+  filter(str_detect(forest_reserve, "Sevendonck") | str_detect(forest_reserve, "Heirnisse") )
+
+```
+
+```{r export_missing_pnv}
+write_excel_csv2(reserves_no_soil_plots,paste0(path_to_request, "forest_reserve_plots_missing_pnv.csv"))
+
+write_excel_csv2(reserves_no_soil_plots,paste0(path_to_request_luc, "forest_reserve_plots_missing_pnv.csv"))
+```
+
+
+### PNV 2
+
+In welk CA's komt pnv-type 2 voor?
+
+```{r}
+pnvtype2 <- pnv %>% 
+  select(plot_id, belgisch_bodemtype, PNV, SiteName, SubArea, Unieknr) %>% 
+  left_join(plotinfo %>% select(plot_id, plottype, forest_reserve)) %>% 
+  unique() %>% 
+  filter(PNV == 2)
+
+```
+
+
+```{r export_pnvtype_2}
+write_excel_csv2(pnvtype2,paste0(path_to_request, "pnvtype2.csv"))
+
+write_excel_csv2(pnvtype2,paste0(path_to_request_luc, "pnvtype2.csv"))
+```
+
+
