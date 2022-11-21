@@ -431,6 +431,48 @@ for (tablename in names(dendro)) {
 ```
 
 
+## Add zero's
+
+Plot 475, periode 1, bevat geen bomen en is niet opgenomen in dendro_by_plot.
+Hoewel het niet zinvol is om in elke dataset nullen toe te voegen (bv. per_species), 
+leek het me zinvol dit bij dendro_per_plot wel te doen.
+Nadeel is dat er ook gegevens van liggend dood hout opgenomen zijn, en blijkbaar kan er maar één variabele als `add_zero_no_na` opgenomen worden. 
+Idealiter zou dataset in twee moeten opgesplits worden: liggend en staand, 
+en vervolgens elk onafhankelijk van elkaar mbv add_zeros aangevuld.
+
+Maakt alles vrij complex, voor iets heel simpels.
+We weten al dat de nulwaarden voor plots met bomen, maar zonder liggend dood hout,
+al toegevoegd zijn.
+Het gaat dus enkel nog om de staande bomen waarbij we een , dus
+
+In geval van dendro_by_plot zelf de ene plot zonder bomen toevoegen 
+(!! misschien zijn er wel nog, maar kwam deze eruit bij analyse van 2 surveys; 
+ev. nog waar maar één survey is, of bij 3de decade ...).
+
+!!er is wel deadwood opgemeten, waarom staat dat niet in dendro_by_plot?
+Gecheckt en left_join ipv full_join: correctie voorgesteld in forrescalc (21/11/2022).
+
+Als dit opgelost is, is onderstaande code niet meer nodig.
+!! tenzij er toch nog plots zijn waar géén liggend deadwood is en géén bomen staan.
+
+Misschien gewoon heel simpel: obv plotinfo survey_trees en survey_deadw nulwaarden toevoegen.
+
+
+```{r}
+dendro_by_plot_ <- add_zeros(dataset = dendro_by_plot %>% select(-contains(c("reg", "veg")), -survey_deadw, - data_processed)
+                             , comb_vars = c("plot_id", "period")
+                             , grouping_vars = c("plottype", "forest_reserve")
+                             , add_zero_no_na = c("survey_trees")
+                             )
+  
+nrow(dendro_by_plot)  - nrow(dendro_by_plot_)
+# !! daar zitten ook plots bij die niet opgenomen zijn in één van beide cycli ...
+
+dendro_by_plot_ %>% anti_join(dendro_by_plot, 
+                              by = c("plot_id", "period", "plottype", "forest_reserve"))
+```
+
+
 
 ## Correctie deadwood 0 ipv NA - voorlopig OK 20/9/2022
 
