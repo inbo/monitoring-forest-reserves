@@ -16,11 +16,18 @@ path_to_forresdat_data <- "C:/03_BR/2_Forrescalc_Forresdat/2_forresdat/data/" # 
 # OUTPUT
 path_to_output <- "C:/03_BR/1_DataverwerkingBR/Output/"
 
-path_to_analysis_set_csv <- paste0(path_to_output, "plot-level-data/")  # csv
-path_to_plotlevel_csv <- paste0(path_to_output, "plot-level-data/") 
-path_to_treelevel_csv <- paste0(path_to_output, "raw-data/")
+# path_to_analysis_set_csv <- paste0(path_to_output, "_plot-level-data/")  # csv
+path_to_plotlevel_csv <- paste0(path_to_output, "_plot-level-data/") 
+path_to_treelevel_csv <- paste0(path_to_output, "_tree-level-data/")
 
 path_to_analysis_set_db <- paste0(path_to_output, "BR_analysedb.accdb") # accessdb
+
+
+# OUTPUT - GDRIVE
+path_to_output_gdrive <- "G:/.shortcut-targets-by-id/0B0xcP-eNvJ9dQ2w5ZFhSZEpCU0E/PRJ_BOSECO_ALGEMEEN/PRJ_BR_AanvraagGegevens/"
+
+path_to_plotlevel_gdrive <- paste0(path_to_output_gdrive, "!METADATA-ALL_PLOTS/_plot-level-data/") 
+path_to_treelevel_gdrive <- paste0(path_to_output_gdrive, "!METADATA-ALL_PLOTS/_tree-level-data/")
 
 
 # DATABASES
