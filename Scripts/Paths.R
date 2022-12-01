@@ -35,7 +35,8 @@ dbResults <- "C:/03_BR/1_DataverwerkingBR/Output/BR_resultaten.accdb"
 
 dbExterneData <- "C:/03_BR/1_DataverwerkingBR/Data/ExterneData/BR_ExterneData.accdb"
 
-dbStrata <- "BR_Strata_2022-11-07.accdb"
+dbStrata <- "BR_Strata_2022-11-30.accdb"
+# dbStrata <- "BR_Strata_2022-11-07.accdb"
 # dbStrata <- "BR_Strata_2022-02-14.accdb"
 # dbStrata <- "BR_Strata_2022-02-11.accdb"
 path_to_strata <- "C:/03_BR/1_DataverwerkingBR/Data/Strata/"

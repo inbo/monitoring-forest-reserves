@@ -147,7 +147,7 @@ con <- odbcConnectAccess2007(path_to_fieldmap_db)
   qSpecies <- sqlFetch(con, "qSpecies", stringsAsFactors = FALSE)
   qDecaystage <- sqlFetch(con, "qdecaystage", stringsAsFactors = FALSE)
   qIntactSnag <- sqlFetch(con, "qIntactSnag", stringsAsFactors = FALSE)
-  qCondLUVdagnVfm <- sqlFetch(con, "qCondLUVdagnVfm", stringsAsFactors = FALSE)
+  qVdagnVfm <- sqlFetch(con, "qVdagnVfm", stringsAsFactors = FALSE)
     
   qHerbSpecies240810<- sqlFetch(con, "qHerbSpecies240810", stringsAsFactors = FALSE)
   qCoverHerbs <- sqlFetch(con, "qCoverHerbs", stringsAsFactors = FALSE)
@@ -173,7 +173,7 @@ odbcClose(con)
 # list maken van alle lookuplijsten en zo alle lookuplijsten als csv opslaan
 list_lkp <- list(qIndShootCop = qIndShootCop, qAliveDead = qAliveDead, qSpecies = qSpecies, 
                  qDecaystage = qDecaystage, qIntactSnag = qIntactSnag, 
-                 qCondLUVdagnVfm = qCondLUVdagnVfm,
+                 qVdagnVfm = qVdagnVfm,
                  qCrownVolRedu = qCrownVolRedu, qBranchLenghtReduction = qBranchLenghtReduction,
                  qiufroheight = qiufroheight, qiufroheight_shoots = qiufroheight_shoots,
                  qiufrosocialstatus = qiufrosocialstatus, 
