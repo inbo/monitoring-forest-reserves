@@ -1,0 +1,168 @@
+---
+title: "Correction forresdat dendro KV Kersselaerspleyn 2000"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: yes
+      smooth_scroll: yes
+---
+
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = FALSE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+source(here::here("scripts/ExtraFunctions.R"))
+source(here::here("scripts/ExtraFunctions_volume.R"))
+```
+
+
+# Vraagstelling
+DOEL van dit script is een correctie doorvoeren voor de dendro-resultaten voor de 
+kernvlakte van Kersselaerspleyn, dd 2000.
+
+Er werd maar gebiedsdekkend gemeten vanaf 30 cm DBH (net zoals in 1986).
+MAAR er werden wel streeplijsten aangemaakt voor DBH's tss 5 en 30 cm DBH.
+Deze werden meegenomen bij de dataverwerking door Luc DK in 2002 (met resulterend monitoringrapport), maar niet meer bij de dataverwerking in 2012 door Anja L.
+
+In monitoringrapport lees ik wel enkel N, G en V van bomen > 30 cm DBH.
+In grafiek 2.11 wordt wel een stamtal weergegeven van de lagere diameterklasses: visuele inschatting: 
+25 + 90 + 100 = 215 extra
+
+
+```{r results='hold', eval=TRUE}
+path_to_forresdat_data
+path_to_analysis_set_db
+path_to_plotlevel_csv
+path_to_treelevel_csv
+path_to_output_gdrive
+```
+
+# Opbouw streeplijsten
+
+In 750 vegetatie-proefvlakken => over een opp. van 75000 m2 of 7.5 ha.
+
+Opgeslaan in "vegrasteraantal.xls" en via vgl scan veldformulier:
+
+- FagusSy BA : aantal < dbh 5cm (in MDB bij regeneration_1eSet: > 200cm)
+- FagusSy BC : aantal dbh 10 - 20 cm
+- FagusSy BD : aantal dbh 20 - 30 cm
+- FagusSy BB : aantal dbh 5 - 10 cm
+- FagusSy ZA : aantal zaailingen 0 - 50 cm (in MDB bij regeneration_1eSet)
+- FagusSy ZB : aantal zaailingen 50 - 200 cm (in MDB bij regeneration_1eSet)
+- Fagus Y : onbekend voorlopig
+- Fagus Y1 : onbekend voorlopig
+- Fagus Y2 : onbekend voorlopig
+- Fagus Y3 : onbekend voorlopig
+
+Op de scans zien we dat naast beuk en eik, ook berk, esdoorn en lijsterbes kan geturfd worden.
+Volgens het monitoringrapport van 2000 kwam er geen eik voor < 30 cm DBH (enkel zaailingen < 50 cm hoogte).
+
+Wellicht waren er 3 esdoorns (want grens van 30 cm werd net overschreden in 2010).
+De smalste eik had in 2010 een DBH van 490 mm, en werd wellicht in 2000 ook reeds zwaarder dan 30 cm DBH.
+
+
+```{r}
+aantal_5_30_ <- read_excel(paste0(path_to_data, "Meetgegevens/KV_Kerss_2000/vegrasteraantal.xls"))
+names(aantal_5_30)
+aantal_5_30 <- aantal_5_30_ %>% 
+  select(1:3, contains("FAGUS"))
+nrow(aantal_5_30) == 750
+
+totaal_5_30_beuk <- aantal_5_30 %>% 
+  group_by() %>% 
+  summarize(sum_1 = sum(FAGUSYBB),   #5-10
+            sum_2 = sum(FAGUSYBC),   #10-20
+            sum_3 = sum(FAGUSYBD)) %>%    #20-30
+  ungroup() %>% 
+  mutate(tot_beuk = sum_1 + sum_2 + sum_3)
+  
+totaal_5_30_beuk
+# 1595
+
+```
+Eventueel bekijken of het aantal boompjes 5-30 cm DBH obv streeplijsten verschilt van aantal in de  verjongingsgroepen.
+Indien niet, dan kunnen we besluiten dat er geen verjonging was buiten de verjongngsgroepen, en dan zijn de nu reeds berekende waarden correct.
+
+
+```{r}
+trees_calc_ <- read.csv2(paste0(path_to_treelevel_csv, "trees_calc.csv"))
+names(trees_calc_)
+
+trees_calc_5_30 <- trees_calc_ %>% 
+  filter(plot_id == 11000) %>% 
+  select(2:16) %>% 
+  filter(dbh_mm < 300 & period == 1 & alive_dead == 11)
+table(trees_calc_5_30$species)
+
+
+trees_calc_5_30_beuk <- trees_calc_5_30 %>% 
+  filter(species == 7)
+nrow(trees_calc_5_30_beuk) == 823
+
+# 3 metingen die géén beuk zijn, maar haagbeuk
+
+```
+
+Blijkbaar 823 beuken (< 30 cm DBH) in de twee verjongingsgroepen, terwijl er 1595 geturfd werden in 
+de streeplijsten.
+Dit laatste komt overeen met een stamtal van 212.7/ha (1595/7.5 ha) versus 76.6/ha (823/10.7485).
+
+Op dit moment zijn deze lage diameterklasses uit forresdat gehouden, maar in de oude resultatendb 
+vind ik hetzelfde stamtal (76.6).
+
+Dat is dus een duidelijke onderschatting, en bijgevolg was het een goede keuze dit uit forressdat te halen.
+We hadden even gedacht dat er bijna geen verjonging was buiten die 2 verjongingsgroepen, maar dat blijkt niet waar te zijn. Het zijn ook vrij kleine verjongingsgroepen, die max 8% van KV innemen.
+Dus het is niet zo vreemd dat er buiten de verjongingsgroepen nog eens zoveel verjonging voorkomt (op 11x zoveel oppervlakte).
+
+<!-- Oppervlakte van de verjongingsgroepen: ca 6.5% van de totale kernvlakte  -->
+<!-- (benaderend in GIS: 0.2508 + 0.4372 = 0.688; 0.688/10.7485 = +/- 7% ) -->
+
+In grafiek 2.11 wordt een stamtal weergegeven van de lagere diameterklasses: visuele inschatting: 
+25 + 90 + 100 = 215/ha (dbh < 30 cm).
+
+Dit stemt overeen met wat ik net uit streeplijsten gehaald heb.
+
+Probleem is dat we dit niet kunnen vertalen naar de diameterklasses (dendro_by_diam_plot) 
+in forresdat, omdat die per 5 cm rekenen. 
+We kunnen deze wel meenemen naar de totalen (dendro_by_plot_by_species).
+Een optie is om de boompjes gelijk te verdelen over de twee klasses: 
+klasse 10-20 cm gelijk verdelen over 10-15 cm en 15-20 cm.
+
+Tweede probleem is de bepaling van het grondvlak: berekenen we dit obv de midwaarde van de klasse?
+Idem dito voor volume?
+
+
+
+```{r}
+
+```
+
+
+
+
+
+**Na update van forresdat, project "forresdat" openen en alles naar de cloud pushen**
+**Eventueel ook access op gdrive plaatsen**
+
+
