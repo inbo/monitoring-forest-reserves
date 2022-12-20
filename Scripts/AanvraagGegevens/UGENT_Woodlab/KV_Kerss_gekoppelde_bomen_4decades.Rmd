@@ -1,0 +1,253 @@
+---
+title: "Gekoppelde metingen bomen in Zoniën over de vier tijdsspannes"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: FALSE
+      smooth_scroll: FALSE
+---
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+
+
+# REQUEST
+path_to_request <- paste0(path_to_datarequests, "UGENT_Woodlab/")
+path_to_request_gdrive <- paste0(path_to_datarequests_gdrive, "UGENT_Woodlab/")
+
+```
+
+
+```{r SetupSelectieVwdn}
+lijst_BRen <- c("Kersselaerspleyn")
+type_plot <- c("CA")
+
+```
+
+# Vraagstelling
+
+Op vraag van Louis Verschuren, assistent aan UGENT - Woodlab.
+
+Mail 19/12/2022 Kris Vdk:
+tabel met diametermetingen van de oude bomen in de kernvlakte van Zoniën
+(enkel de bomen die in 1986 al opgemeten werden (DBH > 30 cm), geen ingroei)
+
+Boom-id met   
+
+- diameter in 1986, 2000, 2010 en 2020
+- toestand levend/dood/liggend dood (bomen die in de tussenperiodes 'wegvallen' zijn) 
+
+Louis zou de diameteraanwassen over de verschillende intervallen willen bepalen bij de bomen die er nog staan vs. de bomen die gevallen zijn.
+
+
+# Aanmaak analyseset
+
+Op 8/4/2022 werd reeds zo een tabel aangemaakt voor alle plots (trees_wide.csv).
+<!-- Hierna nog eens aanmaken enkel voor KV Kerss, laat ons toe om mogelijke fouten sneller te detecteren. -->
+
+```{r load_data}
+trees_wide_ <- read.csv2(paste0(path_to_treelevel_csv, "trees_wide.csv"))
+trees_wide <- trees_wide_ %>% 
+  filter(plot_id == 11000) %>% 
+  select(-X)
+
+trees_calc_ <- read.csv2(paste0(path_to_treelevel_csv, "trees_calc.csv"))
+names(trees_calc_)
+trees_calc <- trees_calc_ %>% 
+  filter(plot_id == 11000) %>% 
+  select(2:16)
+```
+
+```{r load_LU_lists}
+qAliveDead <- read_vc(file = "qAliveDead", root = path_to_forresdat_data)
+qSpecies <- read_vc(file = "qSpecies", root = path_to_forresdat_data)
+
+```
+
+
+Enkel bomen die in 1986 reeds opgemeten werden (pas vanaf 30 cm DBH gemeten).
+
+```{r select_1986_standing}
+names(trees_wide)
+
+trees_wide_1986 <- trees_wide %>% 
+  filter(!is.na(dbh_mm_1))
+
+# zou zelfde moeten zijn als 
+trees_wide_1986 <- trees_wide %>% 
+  filter(str_sub(tree_id, start = 1, end = 1) == 0)
+
+```
+
+Niet alle variabelen zijn relevant
+
+```{r select_vars}
+trees_wide_1986 <- trees_wide_1986 %>% 
+  select(-contains("vol"), -ind_sht_cop)
+
+```
+
+
+# Overzichten
+
+```{r species}
+table(trees_wide_1986$species)
+#   7  87 
+# 537  34
+```
+
+```{r aangroei}
+trees_wide_1986_ <- trees_wide_1986 %>% 
+  mutate(aangroei1_yr = (dbh_mm_2 - dbh_mm_1)/14,
+         aangroei2_yr = (dbh_mm_3 - dbh_mm_2)/10,
+         aangroei3_yr = (dbh_mm_4 - dbh_mm_3)/10)
+summary(trees_wide_1986_$aangroei1_yr)
+summary(trees_wide_1986_$aangroei2_yr)
+summary(trees_wide_1986_$aangroei3_yr)
+
+# enkel levende tot 2020
+trees_wide_1986_alive <- trees_wide_1986_ %>% 
+  filter(alive_dead_4 == 11)
+summary(trees_wide_1986_alive$aangroei1_yr)
+summary(trees_wide_1986_alive$aangroei2_yr)
+summary(trees_wide_1986_alive$aangroei3_yr)
+
+```
+
+
+# Controle
+
+```{r krimp}
+# klopt diameteraangroei?
+check_diam_1 <- trees_wide_1986 %>% 
+  filter((dbh_mm_1 > dbh_mm_2 + 30) & alive_dead_1 == 11 & alive_dead_2 == 11)
+  
+check_diam_2 <- trees_wide_1986 %>% 
+  filter((dbh_mm_2 > dbh_mm_3 + 30) & alive_dead_2 == 11 & alive_dead_3 == 11)
+
+check_diam_3 <- trees_wide_1986 %>% 
+  filter((dbh_mm_3 > dbh_mm_4 + 30) & alive_dead_3 == 11 & alive_dead_4 == 11)
+
+```
+
+`check_diam_1` bevat 4 onmogelijke records (meer dan 20 cm gekrompen) => verwijderen uit dataset
+
+Andersom: te hoge/onmogelijke aangroei?
+
+```{r extra_groei}
+# stel 10 mm per jaar aangroei (3rd kwantiel ligt op 6.5): 7*2 = 14 
+# enkel de onmogelijkheden eruit halen: vanaf > 2 cm per jaar dikteaangroei
+check_diam_1b <- trees_wide_1986 %>% 
+  filter((dbh_mm_2 > dbh_mm_1 + 280) & alive_dead_1 == 11 & alive_dead_2 == 11)
+  
+check_diam_2b <- trees_wide_1986 %>% 
+  filter((dbh_mm_3 > dbh_mm_2 + 200) & alive_dead_2 == 11 & alive_dead_3 == 11)
+
+check_diam_3b <- trees_wide_1986 %>% 
+  filter((dbh_mm_4 > dbh_mm_3 + 200) & alive_dead_3 == 11 & alive_dead_4 == 11)
+```
+
+`check_diam_1b` bevat 4 onmogelijke records (meer dan 2 cm per jaar aangegroeid, daar waar een groei van 0.5 cm per jaar al als sterke aangroei kan beschouwd worden) => verwijderen uit dataset
+
+
+```{r delete}
+nrow(trees_wide_1986)
+
+trees_wide_1986_ <- trees_wide_1986 %>% 
+  anti_join(check_diam_1, by = c("tree_id")) %>% 
+  anti_join(check_diam_1b, by = c("tree_id"))
+
+nrow(trees_wide_1986_)
+
+trees_wide_1986 <- trees_wide_1986_
+
+```
+
+
+## XY
+
+In trees_calc zijn X-Y-coordinaten opgenomen.
+Gaat het zeker om zelfde boom?
+
+Ja, in onderstaande analyse blijken de XY-coordinaten van de gekoppelde bomen overeen te stemmen. 
+
+
+```{r}
+trees_calc_1986 <- trees_calc %>% 
+  filter(period == 0) %>% 
+  select(tree_id_1 = tree_measure_id, tree_id, x1 = x_local, y1 = y_local, dbh_mm1 = dbh_mm)
+  
+trees_calc_2000 <- trees_calc %>%
+  filter(period == 1) %>% 
+  select(tree_id_2 = tree_measure_id, tree_id, x2 = x_local, y2 = y_local, dbh_mm2 = dbh_mm)
+
+trees_calc_2010 <- trees_calc %>%
+  filter(period == 2) %>% 
+  select(tree_id_3 = tree_measure_id, tree_id, x3 = x_local, y3 = y_local, dbh_mm3 = dbh_mm)
+
+trees_calc_2020 <- trees_calc %>%
+  filter(period == 3) %>% 
+  select(tree_id_4 = tree_measure_id, tree_id, x4 = x_local, y4 = y_local, dbh_mm4 = dbh_mm)
+
+
+trees_calc_1986etc <- trees_calc_1986 %>% 
+  left_join(trees_calc_2000) %>% 
+  left_join(trees_calc_2010) %>%
+  left_join(trees_calc_2020)
+
+vars_XY <- c("x1", "x2", "x3", "x4", "y1", "y2", "y3", "y4")
+check_XY <- trees_calc_1986etc %>% 
+  mutate_at(vars_XY, round, 0) %>% 
+  filter(x1 != x2 | x2 != x3 | x3 != x4)
+# blijken allemaal op één na (waarbij dbh-aangroei OK is) maar 1 m verschil te hebben
+# OK
+
+```
+
+# Export
+
+Lookuplijsten toevoegen/meegeven:
+
+- qSpecies (enkel eik en beuk)
+- qAliveDead
+
+```{r}
+names(trees_wide_1986)
+nrow(trees_wide_1986)
+
+# trees
+write_excel_csv2(trees_wide_1986,paste0(path_to_request, "trees_Kerss_4decades.csv"))
+write_excel_csv2(trees_wide_1986,paste0(path_to_request_gdrive, "trees_Kerss_4decades.csv"))
+
+# LU-lists
+write_excel_csv2(trees_wide_1986,paste0(path_to_request, "qSpecies.csv"))
+write_excel_csv2(trees_wide_1986,paste0(path_to_request_gdrive, "qSpecies.csv"))
+
+write_excel_csv2(trees_wide_1986,paste0(path_to_request, "qAliveDead.csv"))
+write_excel_csv2(trees_wide_1986,paste0(path_to_request_gdrive, "qAliveDead.csv"))
+
+
+```
+
