@@ -1,5 +1,5 @@
 ---
-title: "Correction forresdat dendro KV Kersselaerspleyn 2000"
+title: "Aanvulling forresdat dendro KV Kersselaerspleyn 2000"
 author: "Anja Leyman"
 date: "`r Sys.Date()`"
 output: 
@@ -153,6 +153,77 @@ Tweede probleem is de bepaling van het grondvlak: berekenen we dit obv de midwaa
 Idem dito voor volume?
 
 
+# Output
+
+## Inbreng collega's (geen ;-) )
+
+Via mail (22/12/2023) inbreng van collega's gevraagd: 
+
+
+Hoi,
+
+ik heb eens gekeken naar het 1ste monitoringrapport van de Kersselaerspleyn, meer specifiek de dataverwerking van de streeplijsten voor boompjes met DBH 5-30 cm in de KV.
+Die worden in het rapport enkel gebruikt om een stamtalverdeling op te stellen (Fig. 2.1).
+image.png
+
+De berekening van N, G en V baseert zich enkel op de bomen > 30 cm DBH.
+Misschien ook om de vgl met 1986 duidelijker te maken (daar ook maar gegevens vanaf 30 cm DBH).
+
+Ter info: **ons idee dat er buiten de twee verjongingsgroepen bijna geen verjonging voorkwam, blijkt niet te kloppen.**
+Stamtal van boompjes < 30 cm:
+- obv streeplijsten over 7.5 ha --> 212/ha,
+- obv boompjes uit de verjongingsgroepen uitgespreid over volledige KV --> 76/ha
+
+
+**Mijn vraag is nu: hoe pak ik de verwerking aan?**
+Op dit moment werden enkel de bomen vanaf 30 cm DBH meegenomen bij de (standaard) dataverwerking (forresdat).
+Zie bijlage voor 2 vb-files.
+Dat wordt duidelijk aangegeven in de metadata-files.
+
+Ik zou de diameterverdeling obv stamtal kunnen toevoegen aan "dendro_by_diam_plot(_species).csv" (zie bijlage voor vb-file)
+Nadeel is dat de standaardindeling voor de rest van de bosreservaten met klasses van 5 cm werkt, en niet per 10 cm. 
+Misschien hoeft dat geen probleem te zijn, maar is wel verwarrend.
+Ook grondvlak en volume kan niet berekend worden, tenzij ik als proxy het midden van de diameterklasses gebruik (resp. 7.5, 15 en 25 cm DBH), en 
+voor volume werk met tarief met één ingang.
+Maar ik kan ook gewoon "NA" (not available) zetten bij N en G in de resulterende (sowieso zou dat al NA zijn voor oa basal_area_dead_m2_ha)
+
+Wat betreft de files "dendro_by_plot(_species).csv" (zie bijlage voor vb-file): daar wordt het moeilijker om enkel stamtal mee te nemen vanaf 5 cm, en de rest vanaf 30 cm.
+Dat moet éénduidig zijn.
+Voor N en G van levende kan ik eventueel een proxy berekenen, maar voor de dode bomen heb ik totaal geen info.
+
+Alternatief is om voor KV Kersselaerspleyn - naast de info in de algemene forresdat-files vanaf 30 cm - 4 aparte files aan te maken waar ook info uit de streeplijsten bij betrokken is 
+(dus vanaf 5 cm DBH). Dat lijkt mij de beste oplossing:
+-  dendro_by_plot(_species)_KerssKV.csv
+-  dendro_by_diam_plot(_species)_KerssKV.csv
+
+Enige vraag die dan terug opduikt is of we een benaderend G en V berekenen obv een gemiddelde diameter en tarief met één ingang? 
+Of is dat te benaderend? 
+Want dan tel je een onzeker G en V van < 30 cm op bij een G en V (> 30 cm DBH) dat wel obv metingen bepaald werd.
+
+Alvast bedankt om daar jullie licht eens over te laten schijnen ;-)
+
+Groetjes,
+Anja
+
+
+## Beslissing
+
+Zelf beslist:
+
+- alles > 30 cm: 
+
+  * mee opgenomen in standaard plot-level-resultaten
+  * het volgende werd opgenomen in metadata-files: *! Attention: standing trees (L+D) in plot 11000 (core area Kersselaerspleyn) measured in 1986 and 2000 have a treshold of 30 cm DBH (instead of 5 cm)*
+  
+  
+
+- alles < 30 cm (uit streeplijsten; enkel levende bomen)
+
+  * in afzonderlijke files met net iets andere diameterverdeling (5-10, 10-20, 20-30)
+  * dendro_by_plot(_species)_KerssKV_5_30.csv
+  * dendro_by_diam_plot(_species)_KerssKV_5_30.csv
+  * proxy voor G obv mid-point diam-klasse
+  * proxy voor V obv tarief met één ingang
 
 ```{r}
 

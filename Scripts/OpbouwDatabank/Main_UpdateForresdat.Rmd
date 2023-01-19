@@ -127,6 +127,13 @@ obv branch "statistics_and_other_issues".
 - 9/3/2022: ook tree-id toegevoegd, functie was nog niet in orde, maar licht aangepast  
 
 
+## jan/2023
+
+- 19/1/2023: rubbing en browsing gecorrigeerd (niet gewacht op correctie van package)
+
+
+
+
 # Update lookuplijsten - INDIEN GEWIJZIGD
 
 Enkel indien de q-tabellen gewijzigd zijn.
