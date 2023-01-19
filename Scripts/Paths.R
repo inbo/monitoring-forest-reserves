@@ -12,6 +12,8 @@ path_to_fieldmap_db <- paste0(path_to_fieldmap, dbFieldmap)
 path_to_git_forresdat <- "C:/03_BR/2_Forrescalc_Forresdat/2_forresdat/"
 path_to_forresdat_data <- "C:/03_BR/2_Forrescalc_Forresdat/2_forresdat/data/" # tsv
 
+path_to_data <- "C:/03_BR/1_DataVerwerkingBR/Data/"
+
 
 # OUTPUT
 path_to_output <- "C:/03_BR/1_DataverwerkingBR/Output/"

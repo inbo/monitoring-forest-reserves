@@ -59,13 +59,157 @@ Boom-id met
 - diameter in 1986, 2000, 2010 en 2020
 - toestand levend/dood/liggend dood (bomen die in de tussenperiodes 'wegvallen' zijn) 
 
-Louis zou de diameteraanwassen over de verschillende intervallen willen bepalen bij de bomen die er nog staan vs. de bomen die gevallen zijn.
+Louis zou de diameteraanwassen over de verschillende intervallen willen bepalen bij de bomen die er nog staan vs.de bomen die gevallen zijn.
 
 
-# Aanmaak analyseset
+# Aanmaak wijde tabel vanaf scratch
 
 Op 8/4/2022 werd reeds zo een tabel aangemaakt voor alle plots (trees_wide.csv).
-<!-- Hierna nog eens aanmaken enkel voor KV Kerss, laat ons toe om mogelijke fouten sneller te detecteren. -->
+MAAR die bevat tree_measure_ids niet => ook nog eens opnieuw, nu met inbegrip van de `tree_measure_id`'s per decade. 
+
+```{r load_dendro1_processed}
+data_dendro <- load_data_dendrometry(database = path_to_fieldmap_db, 
+                                     plottype = type_plot,
+                                     forest_reserve = lijst_BRen,
+                                     extra_variables = TRUE, 
+                                     processed = TRUE)
+
+```
+
+
+```{r load_dendro2}
+data_shoots <- load_data_shoots(database = path_to_fieldmap_db, extra_variables = TRUE)
+
+data_stems  <- compose_stem_data(data_dendro, data_shoots, extra_variables = TRUE)
+# enkel stems die ook in data_dendro zitten 
+unique(data_stems$forest_reserve)
+
+
+height_model <- load_height_models(path_to_height_models)
+
+```
+
+```{r calc_dendro}
+data_stems_calc <- calc_variables_stem_level(data_stems, height_model)
+
+data_dendro_calc <- calc_variables_tree_level(data_dendro, data_stems_calc)
+
+```
+
+
+## Check NA's (tree-level)
+
+Niet alle NA's moeten door een 0 vervangen worden.
+Een NA wijst vaak op een missing value in FM => dat eerst oplossen
+
+> OPGEPAST
+> Als in trees layer het veld `ind_sht_cop` = coppice (12)
+én de  shoot zit toch niet in de shoots layer
+dan wordt een fout gecreëerd in forrescalc (met NA voor volume als gevolg)
+DUS BEST MEENEMEN IN DATACONTROLE
+
+> OOK AANDACHT VOOR MISSING DBH OF HEIGHT VAN SNAGS !!!
+
+```{r check_NA1, eval = FALSE}
+col <- c("dbh_mm", "species", "dbh_class_5cm", "calc_height_m", "vol_crown_m3",
+         "vol_bole_m3", "vol_tot_m3", "stem_number_alive_ha", "stem_number_dead_ha",
+         "basal_area_alive_m2_ha", "basal_area_dead_m2_ha", "vol_alive_m3_ha",
+         "vol_dead_standing_m3_ha", "vol_bole_alive_m3_ha", "vol_bole_dead_m3_ha",
+         "intact_snag", "alive_dead", "ind_sht_cop")
+nrow(data_stems_calc  %>%
+       filter_at(col, any_vars(is.na(.)))) == 0
+
+col <- c("dbh_mm", "species", "dbh_class_5cm", "calc_height_m",
+         "basal_area_m2", "vol_bole_m3", "vol_crown_m3", "vol_tot_m3",
+         "basal_area_alive_m2_ha", "basal_area_dead_m2_ha", "vol_alive_m3_ha",
+         "vol_dead_standing_m3_ha", "vol_bole_alive_m3_ha", "vol_bole_dead_m3_ha",
+         "number_of_trees_alive_ha", "number_of_trees_dead_ha")
+
+nrow(data_dendro_calc  %>%
+       filter_at(col, any_vars(is.na(.)))) == 0
+
+```
+
+# Create unique tree-id - 8/4/2022 laatste keer gerund
+
+`Data_dendro_calc` bevat een unieke `tree_id` per boom (die constant blijft doorheen de tijd),
+verschillend van de `tree_measure_id` uit fieldmap, die wel varieert doorheen de tijd.
+
+Deze `tree_id` wordt in het package aangemaakt obv old_id.
+
+**OPGEPAST**
+Bij hakhout kan/kon dit soms tot gemiste linken leiden. 
+(zie ook "TreeMortalityData_DetailHakhout.Rmd")
+
+In deze vraagstelling is er enkel hakhout bij lage diameters => wegfilteren,
+zodat we hier geen tijd mee verliezen.
+
+
+```{r}
+data_dendro_calc %>% filter(ind_sht_cop ==12) %>% select(dbh_mm)
+
+data_dendro_calc <- data_dendro_calc %>% 
+  filter(ind_sht_cop != 12)
+```
+
+
+## Op boomniveau - obv old-id
+
+De branch `statistics_and_other_issues` heeft een manier gevonden om tree-id te berekenen, ook voor 4 decades. 
+
+```{r mbv_oldid_obv_package}
+tree_id <- create_unique_tree_id(data_dendro = data_dendro_calc)
+
+# check
+tree_id %>% filter(is.na(tree_id)) %>% nrow()
+tree_id_missing <- tree_id %>% filter(is.na(tree_id))
+table(tree_id_missing$forest_reserve, tree_id_missing$period)
+
+```
+
+Om één record per boom te verkrijgen met info uit beide periodes, dient functie "make_table_wide" gebruikt te worden.
+Dit werkt enkel bij een unieke tree_id.
+
+!!Opgepast: soms daalt dbh doorheen de tijd: dat is het geval bij dode bomen.
+
+```{r tree_id_wide_check}
+check_dubbele_tree_id <- tree_id %>% 
+  group_by(plot_id, tree_id, period) %>% 
+  summarize(aantal_per_periode = n()) %>% 
+  ungroup() %>% 
+  filter(aantal_per_periode > 1) 
+
+nrow(check_dubbele_tree_id) == 0
+```
+
+```{r tree_id_long}
+
+# selectie om wijde tabel aan te maken
+tree_id_long <- tree_id %>%
+  mutate(survey_number = period + 1) %>% 
+  select(plot_id, species, tree_id, survey_number, year,
+         tree_measure_id, dbh_mm, alive_dead) %>% 
+  arrange(survey_number)
+
+unique(tree_id_long$survey_number)
+```
+
+```{r tree_id_wide}
+tree_id_wide <- make_table_wide(table_long = tree_id_long,
+                                    column_to_repeat = "survey_number",
+                                    columns_for_comparison = 
+                                  c("year", "tree_measure_id", "alive_dead", "dbh_mm"))
+
+names(tree_id_wide)
+```
+
+
+
+
+# Inladen van wijde tabel uit analysedb
+
+Op 8/4/2022 werd reeds zo een tabel aangemaakt voor alle plots (trees_wide.csv).
+Zonder `tree_measure_id`. 
 
 ```{r load_data}
 trees_wide_ <- read.csv2(paste0(path_to_treelevel_csv, "trees_wide.csv"))
@@ -80,32 +224,39 @@ trees_calc <- trees_calc_ %>%
   select(2:16)
 ```
 
-```{r load_LU_lists}
-qAliveDead <- read_vc(file = "qAliveDead", root = path_to_forresdat_data)
-qSpecies <- read_vc(file = "qSpecies", root = path_to_forresdat_data)
 
+
+# vgl
+
+```{r}
+names(tree_id_wide)
+names(trees_wide)
+
+nrow(tree_id_wide) == nrow(trees_wide) - 2  # want 2 shoots al verwijderd
+# 
+# ev. ook jaartal toevoegen?
 ```
 
 
+# Verfijning selectie
 Enkel bomen die in 1986 reeds opgemeten werden (pas vanaf 30 cm DBH gemeten).
 
 ```{r select_1986_standing}
-names(trees_wide)
+names(tree_id_wide)
 
-trees_wide_1986 <- trees_wide %>% 
+trees_wide_1986 <- tree_id_wide %>% 
   filter(!is.na(dbh_mm_1))
 
 # zou zelfde moeten zijn als 
-trees_wide_1986 <- trees_wide %>% 
+trees_wide_1986 <- tree_id_wide %>% 
   filter(str_sub(tree_id, start = 1, end = 1) == 0)
 
 ```
 
-Niet alle variabelen zijn relevant
 
-```{r select_vars}
-trees_wide_1986 <- trees_wide_1986 %>% 
-  select(-contains("vol"), -ind_sht_cop)
+```{r load_LU_lists}
+qAliveDead <- read_vc(file = "qAliveDead", root = path_to_forresdat_data)
+qSpecies <- read_vc(file = "qSpecies", root = path_to_forresdat_data)
 
 ```
 
