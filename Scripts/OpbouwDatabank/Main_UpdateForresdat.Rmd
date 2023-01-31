@@ -130,6 +130,8 @@ obv branch "statistics_and_other_issues".
 ## jan/2023
 
 - 19/1/2023: rubbing en browsing gecorrigeerd (niet gewacht op correctie van package)
+- opp. KV Hannecart en Rodebosfout => correctie
+- deadwood was fout berekend (enkel obv log ipv soms van log en snag)
 
 
 
@@ -384,7 +386,7 @@ save_results_csv(
 
 ```
 
-# Dendro - voorlopig OK - 25/11/2022
+# Dendro - voorlopig OK - 23/1/2023
 
 ## Load dendro data
 
@@ -472,7 +474,7 @@ Maar omdat deze laatste twee velden per ongeluk gewijzigd kunnen worden in FM-DC
 deze waardes vast te klikken in `calc_volume_m3` & `calc_length`.
 
 Voor 3de set was `calc_volume_m3` niet steeds berekend (in acces).
-Dat doen we hier mv een updatequery, nadat we zeker zijn dat de waardes correct 
+Dat doen we hier mbv een updatequery, nadat we zeker zijn dat de waardes correct 
 berekend zijn in FM-DC ("inside plot").
 Dit moet normaliter enkel gebeuren voor periode 3, periode 1 en 2 zijn bijgewerkt 
 in de moederdatabank zelf.
@@ -623,7 +625,7 @@ write_csv2(posssible_fragment, here::here("output/posssible_fragment_Kerss_KV.cs
 
 ```{r calc_deadw_intact1}
 ## TIJDELIK toch nog doen , lijkt nog niet aangepoast in db
-data_deadwood_intact <- data_deadwood %>% 
+data_deadwood_intact_NIET <- data_deadwood %>% 
   filter(intact_fragm == 10 & calc_length_m < total_length_m/2) %>%
   # enkel de weinig vergane met lage_min_diam, rest zijn toch fragmenten
   # afgesproken via mail 24/11/2022 van Peter dat hij dit ook zo gaat aanpassen in moederdb
@@ -857,7 +859,7 @@ Plot 475, periode 1, bevat geen staande bomen, wel liggende.
 ```{r change_NA2}
 dendro_by_plot_ <- dendro_by_plot %>% 
   replace((is.na(.)), 0) %>% 
-  mutate(vol_deadw_m3_ha = vol_log_m3_ha)
+  mutate(vol_deadw_m3_ha = vol_dead_standing_m3_ha + vol_log_m3_ha)
 
 dendro_by_plot_ %>% filter_at(col, any_vars(is.na(.)))
 # OK, geen NA's meer
@@ -888,7 +890,7 @@ check <- dendro_by_plot_species %>% filter_at(col, any_vars(is.na(.)))
 # deze moeten allemaal 0 worden
 dendro_by_plot_species_ <- dendro_by_plot_species %>% 
   replace((is.na(.)), 0) %>% 
-  mutate(vol_deadw_m3_ha = vol_log_m3_ha)
+  mutate(vol_deadw_m3_ha = vol_dead_standing_m3_ha + vol_log_m3_ha)
 
 dendro_by_plot_species_ %>% filter_at(col, any_vars(is.na(.))) %>% nrow()
 # OK, geen NA's meer
@@ -987,7 +989,7 @@ check <- logs_by_decay_plot_species %>% filter_at(col, any_vars(is.na(.)))
 Sommige plots bevatten geen bomen én geen dood hout (Bv. Ename), en zijn dus 
 niet opgenomen in `dendro_by_plot`.
 Hoewel het niet zinvol is om in elke dataset nullen toe te voegen (bv. per_species), 
-is he twel nuttig bij `dendro_per_plot`.
+is het wel nuttig bij `dendro_per_plot`.
 
 Functie `add_zero_no_na`  blijkt niet geschikt voor dit. 
 <!-- Nadeel is dat er ook gegevens van liggend dood hout opgenomen zijn, en blijkbaar kan er maar één variabele als `add_zero_no_na` opgenomen worden.  -->
