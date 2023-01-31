@@ -39,14 +39,14 @@ source(here::here("scripts/Setup.R"))
 # Inladen lookuplijsten
 
 ```{r read_forresdat1, eval=FALSE}
-qIufroheight <- <- read_forresdat(qIufroheight, repo_path = path_to_git_forresdat, join_plotinfo = FALSE)
+qIufroheight <- read_forresdat("qiufroheight", repo_path = path_to_git_forresdat, join_plotinfo = FALSE)
 
-# ...
+# list.files(paste0(path_to_git_forresdat, "data/"))
 
 ```
 
 ```{r fetch_access}
-con <- odbcConnectAccess2007(path_to_fieldmap)
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
 
 qIndShootCop <- sqlFetch(con, "qIndShootCop", stringsAsFactors = FALSE)
 qAliveDead <- sqlFetch(con, "qAliveDead", stringsAsFactors = FALSE)
@@ -66,13 +66,13 @@ qDecaystage <- qDecaystage %>% select(-Value3, -OrderField, -Active, -MasterID)
 
 # Inladen plotinfo
 
-```{r read_forresdat2, eval=FALSE}
-plotinfo <- read_forresdat(plotinfo, repo_path = path_to_git_forresdat, join_plotinfo = FALSE)
+```{r read_forresdat2}
+plotinfo <- read_forresdat("plotinfo", repo_path = path_to_git_forresdat, join_plotinfo = FALSE)
 
 ```
 
 
-```{r read_tsv}
+```{r read_tsv, eval=FALSE}
 plotinfo <- read_vc(file = "plotinfo", root = path_to_forresdat_data)
 
 ```
@@ -80,15 +80,44 @@ plotinfo <- read_vc(file = "plotinfo", root = path_to_forresdat_data)
 
 # Inladen plot data
 
-```{r read_forresdat3, eval=FALSE}
-dendro_by_plot <- read_forresdat("dendro_by_plot", repo_path = path_to_git_forresdat, join_plotinfo = TRUE)
+```{r read_forresdat3}
+dendro_by_plot <- read_forresdat("dendro_by_plot", repo_path = path_to_git_forresdat, join_plotinfo = TRUE) %>% 
+  select(-contains("eg")) # (veg en reg)
+ 
+dendro_by_plot_species <- read_forresdat("dendro_by_plot_species", repo_path = path_to_git_forresdat, join_plotinfo = TRUE) %>% 
+  select(-contains("eg")) %>%  # (veg en reg)
+  left_join(qSpecies, by = c("species" = "ID")) %>% 
+  rename(name_nl = Value1, 
+         name_sc = Value2) 
 
-#....
+dendro_by_diam_plot <- read_forresdat("dendro_by_diam_plot", repo_path = path_to_git_forresdat, join_plotinfo = TRUE) %>% 
+  select(-contains("eg"))  # (veg en reg)
 
+dendro_by_diam_plot_species <- read_forresdat("dendro_by_diam_plot_species", repo_path = path_to_git_forresdat, join_plotinfo = TRUE) %>% 
+  select(-contains("eg")) %>%  # (veg en reg)
+  left_join(qSpecies, by = c("species" = "ID")) %>% 
+  rename(name_nl = Value1, 
+         name_sc = Value2) 
+
+logs_by_decay_plot <- read_forresdat("logs_by_decay_plot", repo_path = path_to_git_forresdat, join_plotinfo = TRUE) %>% 
+  select(-contains("eg")) %>%  # (veg en reg) 
+  left_join(qDecaystage, by = c("decaystage" = "ID")) %>% 
+  rename(decaystage_code = decaystage,
+         afbraak = Value1, 
+         decay_stage = Value2) 
+
+logs_by_decay_plot_species <- read_forresdat("logs_by_decay_plot_species", repo_path = path_to_git_forresdat, join_plotinfo = TRUE) %>% 
+  select(-contains("eg")) %>%  # (veg en reg)
+  left_join(qSpecies, by = c("species" = "ID")) %>% 
+  rename(name_nl = Value1, 
+         name_sc = Value2)  %>% 
+  left_join(qDecaystage, by = c("decaystage" = "ID")) %>% 
+  rename(decaystage_code = decaystage,
+         afbraak = Value1, 
+         decay_stage = Value2) 
 ```
 
-
-```{r read_tsv_join}
+```{r read_tsv_join, eval=FALSE}
 plotinfo_dendro <- plotinfo %>% select(-survey_reg, -survey_veg)
 
 dendro_by_plot <- read_vc(file = "dendro_by_plot", root = path_to_forresdat_data) %>% 
@@ -135,7 +164,7 @@ logs_by_decay_plot_species <- read_vc(file = "logs_by_decay_plot_species", root 
 
 ```{r data}
 dataset <- dendro_by_plot %>%
-  filter(plottype == 20)   # enkel cirkelplots
+  filter(plottype == "CP")   # enkel cirkelplots
 
 table(dataset$forest_reserve, dataset$period)
 ```
@@ -186,7 +215,7 @@ My.ResultsToDatabase(results = stat,
 
 ```{r data}
 dataset <- dendro_by_plot_species %>%
-  filter(plottype == 20)   # enkel cirkelplots
+  filter(plottype == "CP")   # enkel cirkelplots
 
 table(dataset$forest_reserve, dataset$period)
 ```
@@ -229,7 +258,6 @@ My.ResultsToDatabase(results = stat,
                      run_by = "AL")
 ```
 
-!!! truncated: format moet nog wat gewijzigd worden
 
 proberen om één grote functie te maken voor alle dendro_by_plot_xxxx_xxxx data
 
