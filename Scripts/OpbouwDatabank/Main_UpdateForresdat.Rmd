@@ -22,7 +22,7 @@ rm(list=ls())
 ```{r Setup, include = FALSE}
 knitr::opts_chunk$set(
   echo = TRUE,
-  eval = FALSE,
+  eval = FALSE,  # dan kan ik knitten zonder dat er iets gebeurt
   message = FALSE,
   warning = FALSE, 
   fig.width = 9,
@@ -63,6 +63,17 @@ FINAAL:
 bij dendro_by_plot, reg_by_plot en veg_by_plot alle plots opgenomen waar een 
 respectievelijke survey gebeurd is, dus ook de plots zonder bomen, reg of veg
 (logs_by_decay: daar niet, want welke decaystage kies je dan?)
+
+
+## jan/2023
+
+- 19/1/2023: rubbing en browsing gecorrigeerd (niet gewacht op correctie van package)
+- opp. KV Hannecart en Rodebosfout => correctie
+- volume deadwood was fout berekend (enkel obv log ipv als som van log en snag)
+- 14/2/2023: tabellen “dendro_by_diam_plot” en “dendro_by_diam_plot_species”: 
+diam-klasses 10-15cm/15-20cm/20-25cm/25-30cm/…: “vol_log_m3_ha_min40cm” = NA ipv “0” 
+
+
 
 ## 22/11/2022
 
@@ -125,13 +136,6 @@ Dus dan moet bij de datacontrole gezorgd worden dat bij de established enkel een
 obv branch "statistics_and_other_issues".  
 
 - 9/3/2022: ook tree-id toegevoegd, functie was nog niet in orde, maar licht aangepast  
-
-
-## jan/2023
-
-- 19/1/2023: rubbing en browsing gecorrigeerd (niet gewacht op correctie van package)
-- opp. KV Hannecart en Rodebosfout => correctie
-- deadwood was fout berekend (enkel obv log ipv soms van log en snag)
 
 
 
@@ -602,7 +606,7 @@ Peter past ook wel nog aan in databank.
 <!-- en die nu voor Glen zijn werk opnieuw werden bekeken, als ze er nog lagen." -->
 
 
-```{r posssible_fragment_check}
+```{r posssible_fragment_check, eval = FALSE}
 # !! gemerkt dat calc_vol in Kerss KV (plot 11000, 2de en 3de decade) exacte copie 
 # is van volume inside plot, terwijl het om intacte bomen gaat
 # => volume bijwerken
@@ -1158,9 +1162,9 @@ dendro_by_diam_plot_species <- dendro_by_diam_plot_species_ %>%
 
 ```
 
-## Deadwood KV Kersselaerspleyn pas vanaf 40 cm
+## Logs KV Kersselaerspleyn pas vanaf 40 cm
 
-Geen opnames in 1ste decade (reeds op NA gezet hierboven)
+Geen opnames van logs in 1ste decade (reeds op NA gezet hierboven)
 In 2de en 3de decade pas opgemeten vanaf 40 cm diameter.
 
 Om correct te zijn, zouden in de plot-level-resultaten NA's moeten vermeld worden 
@@ -1218,6 +1222,9 @@ dendro_by_plot_species_ %>%
 
 dendro_by_plot_species <- dendro_by_plot_species_
 
+```
+
+```{r}
 # diam
 dendro_by_diam_plot_ <- dendro_by_diam_plot %>% 
   mutate(vol_log_m3_ha_min40cm = 
@@ -1248,6 +1255,44 @@ dendro_by_diam_plot_species_ %>%
 
 dendro_by_diam_plot_species <- dendro_by_diam_plot_species_
 ```
+
+!tabellen “dendro_by_diam_plot” en “dendro_by_diam_plot_species”: 
+diam-klasses 10-15cm/15-20cm/20-25cm/25-30cm/…: “vol_log_m3_ha_min40cm” = NA ipv “0” 
+
+```{r correctie_logs_KV_Kerss2}
+unique(dendro_by_diam_plot$dbh_class_5cm)
+
+check <- dendro_by_diam_plot %>% 
+  filter(plot_id == 11000 & year %in% c(2009, 2020))
+
+table(check$dbh_class_5cm)
+
+to_small <- c("5 - 10 cm", "10 - 15 cm", "15 - 20 cm", "20 - 25 cm", "25 - 30 cm", "30 - 35 cm", "35 - 40 cm")
+
+dendro_by_diam_plot_ <- dendro_by_diam_plot %>% 
+  mutate(vol_log_m3_ha_min40cm = ifelse(plot_id == 11000 & dbh_class_5cm %in% to_small,
+                                        NA,
+                                        vol_log_m3_ha_min40cm))
+
+check2 <- dendro_by_diam_plot_ %>% 
+  filter(plot_id == 11000 & year %in% c(2009, 2020) & dbh_class_5cm %in% to_small)
+
+dendro_by_diam_plot <- dendro_by_diam_plot_
+
+# idem voor xxxxx_species
+dendro_by_diam_plot_species_ <- dendro_by_diam_plot_species %>% 
+  mutate(vol_log_m3_ha_min40cm = ifelse(plot_id == 11000 & dbh_class_5cm %in% to_small,
+                                        NA,
+                                        vol_log_m3_ha_min40cm))
+
+check2 <- dendro_by_diam_plot_species_ %>% 
+  filter(plot_id == 11000 & year %in% c(2009, 2020) & dbh_class_5cm %in% to_small)
+
+dendro_by_diam_plot_species <- dendro_by_diam_plot_species_
+
+
+```
+
 
 > Ook voor decaystage 
 !! als package aangepast is, moet onderstaande code aangepast worden, want

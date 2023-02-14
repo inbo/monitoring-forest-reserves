@@ -1,0 +1,278 @@
+---
+title: "Create plot level results (only circular plots) for publication on zenodo"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: FALSE
+      smooth_scroll: FALSE
+---
+
+# Setup
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+
+```
+
+
+# Vraagstelling
+
+Dit script heeft als doel een dataset te creëren voor publicatie op zenodo:   
+
+- plot level resultaten  
+- plotinfo met o.a. XY-coördinaten  
+
+
+Op termijn kunnen ook tree level resultaten (doorheen de tijd) gepubliceerd worden 
+(cfr Hongary: https://zenodo.org/record/7311384#.Y9kYO3bMKUk : 
+dbh_1st en DBH_2nd, V_1st/2nd, alivedead_1st/2nd, ...)
+
+
+```{r Path}
+# deze worden ook in "Setup.R" gedefinieerd (aanroepen van "Paths.R")
+# hier ev. extra "paths" toevoegen indien nodig 
+
+path_to_datarequest <- "C:/3BR/1_DataVerwerkingBR/Open_data/zenodo_CP_vs1/"
+
+```
+
+
+
+# Inladen plotinfo
+
+Met XY-coordinaten
+
+```{r}
+plotinfo <- read_vc(file = "plotinfo", root = path_to_forresdat_data)
+colnames(plotinfo)
+
+```
+
+XY uit strata
+
+```{r}
+
+```
+
+# Inladen plot data
+
+Zonder plotinfo
+Met species, heightclass en decaystage
+
+
+```{r LoadLookuplists}
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+  
+  qSpecies <- sqlFetch(con, "qspecies", stringsAsFactors = FALSE)
+  qDecaystage <- sqlFetch(con, "qdecaystage", stringsAsFactors = FALSE)
+  qHeightClass <- sqlFetch(con, "qHeightClass_regeneration", stringsAsFactors = FALSE)
+  qHerbSpecies <- sqlFetch(con, "qHerbSpecies240810", stringsAsFactors = FALSE)
+  
+odbcClose(con)
+```
+
+
+
+```{r read_dendro}
+dendro_by_plot <- read_forresdat("dendro_by_plot", repo_path = path_to_git_forresdat, 
+                                 join_plotinfo = FALSE, plottype = "CP")
+ 
+dendro_by_plot_species <- read_forresdat("dendro_by_plot_species", repo_path = path_to_git_forresdat, 
+                                         join_plotinfo = FALSE, plottype = "CP") %>% 
+  left_join(qSpecies, by = c("species" = "ID")) %>% 
+  rename(name_nl = Value1, 
+         name_sc = Value2) 
+
+dendro_by_diam_plot <- read_forresdat("dendro_by_diam_plot", repo_path = path_to_git_forresdat, 
+                                      join_plotinfo = FALSE, plottype = "CP") 
+
+dendro_by_diam_plot_species <- read_forresdat("dendro_by_diam_plot_species", repo_path = path_to_git_forresdat, 
+                                              join_plotinfo = FALSE, plottype = "CP") %>%
+  left_join(qSpecies, by = c("species" = "ID")) %>% 
+  rename(name_nl = Value1, 
+         name_sc = Value2) 
+
+logs_by_decay_plot <- read_forresdat("logs_by_decay_plot", repo_path = path_to_git_forresdat, 
+                                     join_plotinfo = FALSE, plottype = "CP") %>% 
+  left_join(qDecaystage, by = c("decaystage" = "ID")) %>% 
+  rename(decaystage_code = decaystage,
+         afbraak = Value1, 
+         decay_stage = Value2) 
+
+logs_by_decay_plot_species <- read_forresdat("logs_by_decay_plot_species", repo_path = path_to_git_forresdat, join_plotinfo = FALSE, plottype = "CP") %>% 
+  left_join(qSpecies, by = c("species" = "ID")) %>% 
+  rename(name_nl = Value1, 
+         name_sc = Value2)  %>% 
+  left_join(qDecaystage, by = c("decaystage" = "ID")) %>% 
+  rename(decaystage_code = decaystage,
+         afbraak = Value1, 
+         decay_stage = Value2) 
+```
+
+```{r read_tsv_join, eval=FALSE}
+plotinfo_dendro <- plotinfo %>% select(-survey_reg, -survey_veg)
+
+dendro_by_plot <- read_vc(file = "dendro_by_plot", root = path_to_forresdat_data) %>% 
+  left_join(plotinfo_dendro, by = c("plot_id", "period", "year"))
+
+dendro_by_plot_species <- read_vc(file = "dendro_by_plot_species", root = path_to_forresdat_data) %>% 
+  left_join(plotinfo_dendro, by = c("plot_id", "period", "year")) %>% 
+  left_join(qSpecies, by = c("species" = "ID")) %>% 
+  rename(name_nl = Value1, 
+         name_sc = Value2) 
+
+dendro_by_diam_plot <- read_vc(file = "dendro_by_diam_plot", root = path_to_forresdat_data) %>% 
+  left_join(plotinfo_dendro, by = c("plot_id", "period", "year"))
+
+dendro_by_diam_plot_species <- read_vc(file = "dendro_by_diam_plot_species", root = path_to_forresdat_data) %>% 
+  left_join(plotinfo_dendro, by = c("plot_id", "period", "year")) %>% 
+  left_join(qSpecies, by = c("species" = "ID")) %>% 
+  rename(name_nl = Value1, 
+         name_sc = Value2) 
+
+logs_by_decay_plot <- read_vc(file = "logs_by_decay_plot", root = path_to_forresdat_data) %>% 
+  left_join(plotinfo_dendro, by = c("plot_id", "period", "year")) %>% 
+  left_join(qDecaystage, by = c("decaystage" = "ID")) %>% 
+  rename(decaystage_code = decaystage,
+         afbraak = Value1, 
+         decay_stage = Value2) 
+
+logs_by_decay_plot_species <- read_vc(file = "logs_by_decay_plot_species", root = path_to_forresdat_data) %>% 
+  left_join(plotinfo_dendro, by = c("plot_id", "period", "year")) %>% 
+  left_join(qSpecies, by = c("species" = "ID")) %>% 
+  rename(name_nl = Value1, 
+         name_sc = Value2)  %>% 
+  left_join(qDecaystage, by = c("decaystage" = "ID")) %>% 
+  rename(decaystage_code = decaystage,
+         afbraak = Value1, 
+         decay_stage = Value2) 
+
+```
+
+
+# Statistieken
+
+## Dendro_by_plot
+
+```{r data}
+dataset <- dendro_by_plot %>%
+  filter(plottype == "CP")   # enkel cirkelplots
+
+table(dataset$forest_reserve, dataset$period)
+```
+
+```{r variables}
+names_plotinfo <- names(plotinfo)
+
+variables_ <- names(dendro_by_plot) 
+
+variables <- variables_[!variables_ %in% names_plotinfo]
+variables
+
+```
+
+```{r stat}
+stat <- create_statistics(
+  dataset = dataset,
+  level = c("period", "forest_reserve"),
+  variables = variables,
+  include_year_range = FALSE
+  ) %>% 
+  round_df(., 2) %>% 
+  # rename(strata = forest_reserve) %>% 
+  mutate(strata = NA,
+         stratum_name = NA,
+         strata2 = NA,
+         stratum_name2 = NA)
+
+
+str(stat)
+head(stat)
+```
+
+```{r export}
+My.ResultsToDatabase(results = stat, 
+                     dbHandle = dbResults, 
+                     tblName = "tblResultaten", 
+                     scriptName = "dendro_per_BR.Rmd", 
+                     description = "mean dendro per ha per bosreservaat en per periode",
+                     request_from = "Team bosecologie",
+                     run_by = "AL")
+```
+
+
+
+## Dendro_by_plot_species
+
+
+```{r data}
+dataset <- dendro_by_plot_species %>%
+  filter(plottype == "CP")   # enkel cirkelplots
+
+table(dataset$forest_reserve, dataset$period)
+```
+
+```{r variables}
+names_plotinfo <- names(plotinfo)
+
+variables_ <- names(dendro_by_plot_species) 
+
+variables <- variables_[!variables_ %in% names_plotinfo & !variables_ %in% c("name_nl", "name_sc", "species")]
+variables
+
+```
+
+```{r stat}
+stat <- create_statistics(
+  dataset = dataset,
+  level = c("period", "forest_reserve", "name_nl"),
+  variables = variables,
+  include_year_range = FALSE
+  ) %>% 
+  round_df(., 2) %>% 
+  mutate(strata = "species") %>% 
+  rename(stratum_name = name_nl) %>% 
+  mutate(strata2 = NA,
+         stratum_name2 = NA)
+
+
+str(stat)
+head(stat)
+```
+
+```{r export}
+My.ResultsToDatabase(results = stat, 
+                     dbHandle = dbResults, 
+                     tblName = "tblResultaten", 
+                     scriptName = "dendro_per_BR.Rmd", 
+                     description = "mean dendro per species per ha per bosreservaat",
+                     request_from = "Team bosecologie",
+                     run_by = "AL")
+```
+
+
+proberen om één grote functie te maken voor alle dendro_by_plot_xxxx_xxxx data
+
+
