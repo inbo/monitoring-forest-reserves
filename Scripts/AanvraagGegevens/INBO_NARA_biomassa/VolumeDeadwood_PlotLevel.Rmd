@@ -44,6 +44,7 @@ source(here::here("scripts/Setup.R"))  # libraries, basic functions & paths
 path_to_request <- paste0(path_to_datarequests, "INBO_NARA_biomassa/")
 # wegschrijven naar gdrive (ev. bij knitting, nu tijdelijk overslaan)
 # path_to_request <- paste0(path_to_datarequests_gdrive, "INBO_NARA_biomassa/")
+path_to_gdrive <- paste0(path_to_datarequests_gdrive, "INBO_NARA_biomassa/")
 
 # of rechtstraaks naar map van Luc
 path_to_request_luc <- "G:/.shortcut-targets-by-id/0B0xcP-eNvJ9dQ2w5ZFhSZEpCU0E/PRJ_BOSECO_ALGEMEEN/PRJ_LULUCF_VMM_CARBON/R_output_Anja/"
@@ -231,7 +232,7 @@ Om een analyse te doen voor liggend dood hout moeten deze plots uit de dataset v
 
 
 
-# Analyse
+# Analyseset
 
 ```{r plotniveau, results = 'hide'}
 analyseSet <- dendro_by_plot_ 
@@ -286,6 +287,24 @@ analyseSet <- analyseSet2
 analyseSet_liggend <- analyseSet %>% 
   filter(forest_reserve != "Kersselaerspleyn" | is.na(forest_reserve))  
 # zero_biomass plot: geen forest reserve toegekend
+```
+
+```{r write_analyseset_to_csv}
+names(analyseSet)
+# summary(analyseSet)
+
+# enkel NA's bij liggend dood hout
+analyseSet %>% filter(is.na(vol_log_m3_ha)) %>% group_by(forest_reserve) %>% 
+  summarize(min_id = min(plot_id), max_id = max(plot_id)) %>% ungroup()
+
+# wegschrijven
+write_excel_csv2(analyseSet,paste0(path_to_request, "analyseSet_deadw_vol.csv"))
+write_excel_csv2(analyseSet_liggend,paste0(path_to_request, "analyseSet_deadw_vol_lying.csv"))
+
+# direct naar gdrive
+write_excel_csv2(analyseSet,paste0(path_to_gdrive, "analyseSet_deadw_vol.csv"))
+write_excel_csv2(analyseSet_liggend,paste0(path_to_gdrive, "analyseSet_deadw_vol_lying.csv"))
+
 ```
 
 

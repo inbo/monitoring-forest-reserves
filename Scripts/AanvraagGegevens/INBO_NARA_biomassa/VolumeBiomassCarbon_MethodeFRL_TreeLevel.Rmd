@@ -1,5 +1,5 @@
 ---
-title: "Volume, biomassa en koolstofgehalte volgens FRL en INBO-advies A.3104 (methode 4b)"
+title: "Volume, biomassa en koolstofgehalte volgens FRL en INBO-advies A.4103 (methode 4b)"
 author: "Anja Leyman, Leen Govaere"
 date: "`r Sys.Date()`"
 output:
@@ -49,7 +49,7 @@ dbFactorsWallonia_path <- here::here(dbFactorsWallonia)
 # REQUEST
 path_to_request <- paste0(path_to_datarequests, "INBO_NARA_biomassa/")
 # wegschrijven naar gdrive (ev. bij knitting, nu tijdelijk overslaan)
-# path_to_request <- paste0(path_to_datarequests_gdrive, "INBO_NARA_biomassa/")
+path_to_gdrive <- paste0(path_to_datarequests_gdrive, "INBO_NARA_biomassa/")
 
 # of rechtstraaks naar map van Luc
 path_to_request_luc <- "G:/.shortcut-targets-by-id/0B0xcP-eNvJ9dQ2w5ZFhSZEpCU0E/PRJ_BOSECO_ALGEMEEN/PRJ_LULUCF_VMM_CARBON/R_output_Anja/"
@@ -64,7 +64,7 @@ In het kader van NARA2023 wordt gevraagd naar een ruw cijfer mbt C-opslag in onb
 Hiervoor gebruiken we de data uit de bosreservaten.
 Dit in tegenstelling tot C-opslag in beheerde bossen die we uit de VBI halen.
 
-Als methode gebruiken we de methode uit het advies van INBO (INBO A.3104) ikv LULUCF rapportering.
+Als methode gebruiken we de methode uit het advies van INBO (INBO A.4103) ikv LULUCF rapportering.
 
 **Biomassa** en **koolstofgehalte (C)** berekend volgens methode 4b uit het advies.
 
@@ -127,7 +127,7 @@ Daarnaast zijn er ook wijzigingen doorheen de tijd.
 
 De keuze van BEF en WD bepaalt sterk de uiteindelijke carbon uptake factor. 
 
-Nalv het INBO-advies A.3104 wordt de methode conform de FRL gebruikt: 
+Nalv het INBO-advies A.4103 wordt de methode conform de FRL gebruikt: 
 
 - mbv BEF/VEF van Longuetaud (afh. van diameter en hoogte)
 - factoren R en Wd cfr. FRL (R, FC, WD)
@@ -1036,6 +1036,24 @@ nrow(analyseSet) + nrow(analyseSet_0_biomassa) - nrow(analyseSet2) == 0
 analyseSet <- analyseSet2
 
 ```
+
+## Finale analyseset
+
+```{r write_analyseset_to_csv}
+names(analyseSet)
+summary(analyseSet)
+
+# geen NA's 
+
+# wegschrijven
+write_excel_csv2(analyseSet,paste0(path_to_request, "analyseSet_living_C.csv"))
+
+# direct naar gdrive
+write_excel_csv2(analyseSet,paste0(path_to_gdrive, "analyseSet_living_C.csv"))
+
+
+```
+
 
 
 # Resultaat

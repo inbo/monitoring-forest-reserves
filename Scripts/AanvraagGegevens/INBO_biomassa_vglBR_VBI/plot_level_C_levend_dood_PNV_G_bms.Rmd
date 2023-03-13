@@ -1,0 +1,248 @@
+---
+title: "C-voorraad in levende en dode biomassa - bosreservaten"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: FALSE
+      smooth_scroll: FALSE
+---
+
+# Setup
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+
+```
+
+
+# Vraagstelling
+
+Kadert in de opmaak van een artikel in themanummer Frontiers Forests Global Change.
+
+Gevraagd (Luc DK):
+
+- op plotniveau (cirkel of kernvlakte gebruikt voor de NARA gegevens)   
+- C voorraden in levende en dode biomassa
+- voor de twee tijdstippen
+- met PNV type 
+- globaal grondvlak
+- belangrijkste boomsoort voor het grondvlak
+
+Heel interessant lijkt me bvb een plot die C pool (x-as) uitzet tegen C accumulation rate (y-as).
+
+
+
+```{r Path}
+# deze worden ook in "Setup.R" gedefinieerd (aanroepen van "Paths.R")
+# hier ev. extra "paths" toevoegen indien nodig 
+
+path_to_request <- paste0(path_to_datarequests, "INBO_biomassa_vglBR_VBI/")
+path_to_gdrive <- paste0(path_to_datarequests_gdrive, "INBO_biomassa_vglBR_VBI/")
+
+```
+
+
+# Inladen analysesets NARA
+
+Plots die ook bij NARA gebruikt werden => analysesets van NARA-analyse inladen.
+
+```{r results= 'hide'}
+path_to_NARA_request <- paste0(path_to_datarequests_gdrive, "INBO_NARA_biomassa/")
+
+analyseSet <- read.csv2(paste0(path_to_NARA_request, "analyseSet_living_C.csv"))
+analyseSet_deadw <- read.csv2(paste0(path_to_NARA_request, "analyseSet_deadw_vol.csv")) %>% 
+  select(1:16)
+# bevat NA's voor liggend dood hout (Kerss 1eSET)
+
+names(analyseSet_deadw)
+```
+
+
+```{r join, results= 'hide'}
+names(analyseSet)
+
+analyseSet_alive <- analyseSet %>% 
+  rename(Biomass_alive_t_ha = Biomass_t_ha,
+         Carbon_alive_t_ha = Carbon_t_ha) %>% 
+  select(1:3, 8:9)
+
+# deadw + basal area
+names(analyseSet_deadw)
+
+analyseSet_dead <- analyseSet_deadw %>% 
+  select(1:3, 7, 10, 12:13)
+names(analyseSet_dead)
+
+# join
+analyseSet_all <- analyseSet_alive %>% 
+  left_join(analyseSet_dead,
+            by = c("plot_id", "period", "year"))
+```
+
+
+# Strata toevoegen
+
+- PNV 
+- Gemiddeld grondvlak  
+- Hoofdboomsoort obv grondvlak  
+- Beheer  
+
+
+```{r load_plotinfo_strata}
+plotinfo <- read_vc(file = "plotinfo", root = path_to_forresdat_data)
+
+con <- odbcConnectAccess2007(path_to_strata_db)
+ strata_tables <- sqlTables(con) %>% filter(!str_detect(TABLE_NAME, "MSys"))
+ management <- sqlFetch(con, "strata_remaining", stringsAsFactors = FALSE)
+ dominant_tree <- sqlFetch(con, "dominant_tree", stringsAsFactors = FALSE) 
+ location <- sqlFetch(con, "strata_location", stringsAsFactors = FALSE)
+ pnv <- sqlFetch(con, "strata_soil", stringsAsFactors = FALSE)
+ # plotinfo <- sqlFetch(con, "plotinfo", stringsAsFactors = FALSE) # nog niet geupdate
+odbcClose(con)
+
+```
+
+```{r results= 'hide'}
+names(analyseSet_all)
+
+analyseSet_all_ <- analyseSet_all %>% 
+  # select(1:5, 7:9, everything()) %>% 
+  left_join(dominant_tree %>% 
+              select(1:2, MaxBasalAreaSpeciesID, MaxBasalAreaSpeciesName)) %>% 
+  left_join(pnv %>% select(plot_id, PNV)) %>% 
+  left_join(management %>% select(plot_id, contains("unmanaged_since")))  # op plot - en reservaatsniveau
+# er is ook nog "last_commercial_intervention": ook op reservaatsniveau
+
+analyseSet_all <- analyseSet_all_
+```
+
+# Berekenen biomassa dood hout - obv PNV
+
+Inladen conversiefactoren Luc DK, gebruikt bij NARA
+
+Luc heeft een 'gemiddelde afbraakklasse' genomen en een 'gemiddelde boomsoortensamenstelling' voor dood hout, per PNV.
+Dat resulteert in een vaste omrekenfactor: een heel ruwe berekening, maar wel gelijk voor VBI en BR. 
+Het volume dood hout berekend voor elke PNV, is vermenigvuldigd met de waarde voor DxCC die rechts onderaan staat (afhankelijk van PNV type tussen 0,15 en 0,20).
+
+
+```{r}
+conversie_deadw_per_PNV <- read_excel(paste0(path_to_request, "conv_deadw_biomass.xlsx"))
+names(conversie_deadw_per_PNV)
+```
+
+
+```{r results= 'hide'}
+names(analyseSet_all)
+
+analyseSet_all_ <- analyseSet_all %>% 
+  left_join(conversie_deadw_per_PNV, by = c("PNV")) %>% 
+  rename(conv_CC_deadw = conv_CC) %>% 
+  mutate(Carbon_snags_t_ha = vol_dead_standing_m3_ha * conv_CC_deadw,  # ? of vol_bole_dead_m3_ha
+         Carbon_logs_t_ha = vol_log_m3_ha * conv_CC_deadw,
+         Carbon_dead_t_ha = Carbon_snags_t_ha + Carbon_logs_t_ha) 
+
+names(analyseSet_all_)
+
+analyseSet_all <- analyseSet_all_
+```
+
+OPGEPAST: twee plots zonder PNV-type, dus ook geen biomassa deadwood
+
+```{r filter_with_pnv}
+analyseSet_all_ <- analyseSet_all %>% 
+  filter(!is.na(PNV))
+
+analyseSet_all <- analyseSet_all_
+```
+
+
+# Resulterende dataframe
+
+```{r }
+analyseSet_finaal <- analyseSet_all %>% 
+  select(plot_id, period, year, 
+         PNV,
+         Carbon_alive_t_ha, 
+         Carbon_snags_t_ha, Carbon_logs_t_ha,
+         Carbon_dead_t_ha,
+         basal_area_alive_m2_ha,
+         contains("MaxBasalArea"),
+         contains("unmanaged_since")
+         )
+
+names(analyseSet_finaal)
+```
+
+# Wijde tabel
+
+```{r }
+analyseSet_finaal_wide <- analyseSet_finaal %>% 
+  select(-Carbon_snags_t_ha, - Carbon_logs_t_ha) %>% 
+  pivot_wider(
+    names_from = period,
+    names_sep = "_",
+    values_from = c(year, Carbon_alive_t_ha, Carbon_dead_t_ha, 
+                    basal_area_alive_m2_ha, 
+                    MaxBasalAreaSpeciesID, MaxBasalAreaSpeciesName)
+  )
+
+analyseSet_finaal_wide_ <- analyseSet_finaal_wide %>% 
+  mutate(time_interval = year_2 - year_1,
+         increase_C_alive = `Carbon_alive_t_ha_2` - `Carbon_alive_t_ha_1`,
+         increase_C_alive_per_yr = round(increase_C_alive/time_interval, 4),
+         increase_C_dead = `Carbon_dead_t_ha_2` - `Carbon_dead_t_ha_1`,
+         increase_C_dead_per_yr = round(increase_C_dead/time_interval, 4),        
+         )
+
+# summary(analyseSet_finaal_wide_)
+
+analyseSet_finaal_wide <- analyseSet_finaal_wide_
+names(analyseSet_finaal_wide)
+
+```
+
+```{r check, results = 'hide'}
+analyseSet_finaal_wide %>% filter(is.na(Carbon_dead_t_ha_1)) %>% nrow()  # 53
+# Kerss
+analyseSet_finaal_wide %>% filter(is.na(Carbon_dead_t_ha_2)) %>% nrow()  # 0
+analyseSet_finaal_wide %>% filter(is.na(PNV)) %>% nrow()  # 0
+# eerst 2 plots 729 en 730 zonder C_dead => weggefilterd hierboven
+
+```
+
+
+# Export
+
+```{r export_to_csv}
+write_excel_csv2(analyseSet_finaal,paste0(path_to_request, "carbon_plot_level.csv"))
+write_excel_csv2(analyseSet_finaal_wide,paste0(path_to_request, "carbon_plot_level_wide.csv"))
+
+```
+
+```{r export_to_csv_gdrive}
+write_excel_csv2(analyseSet_finaal,paste0(path_to_gdrive, "carbon_plot_level.csv"))
+write_excel_csv2(analyseSet_finaal_wide,paste0(path_to_gdrive, "carbon_plot_level_wide.csv"))
+
+```
