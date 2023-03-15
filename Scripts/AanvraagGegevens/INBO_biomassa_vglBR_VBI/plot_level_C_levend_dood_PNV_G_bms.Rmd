@@ -52,7 +52,9 @@ Gevraagd (Luc DK):
 
 Heel interessant lijkt me bvb een plot die C pool (x-as) uitzet tegen C accumulation rate (y-as).
 
-
+Folder op gdrive:     
+- [artikel](https://drive.google.com/drive/folders/1GY3uYeL5JjG14h_BAkzsQwse31el-yhC)   
+- [artikel - data](https://drive.google.com/drive/folders/1J9ZOC5K6WqjxuV298dd-iNfcKzLvAWjp?usp=share_link)   
 
 ```{r Path}
 # deze worden ook in "Setup.R" gedefinieerd (aanroepen van "Paths.R")
@@ -61,6 +63,9 @@ Heel interessant lijkt me bvb een plot die C pool (x-as) uitzet tegen C accumula
 path_to_request <- paste0(path_to_datarequests, "INBO_biomassa_vglBR_VBI/")
 path_to_gdrive <- paste0(path_to_datarequests_gdrive, "INBO_biomassa_vglBR_VBI/")
 
+# rechtstraaks naar data-folder van artikel
+path_to_article <- "G:/.shortcut-targets-by-id/1GY3uYeL5JjG14h_BAkzsQwse31el-yhC/artikel_FrontiersForestsGlobalChange/data/"
+# !! oppassen van nisk te overschrijven
 ```
 
 
@@ -244,5 +249,13 @@ write_excel_csv2(analyseSet_finaal_wide,paste0(path_to_request, "carbon_plot_lev
 ```{r export_to_csv_gdrive}
 write_excel_csv2(analyseSet_finaal,paste0(path_to_gdrive, "carbon_plot_level.csv"))
 write_excel_csv2(analyseSet_finaal_wide,paste0(path_to_gdrive, "carbon_plot_level_wide.csv"))
+
+```
+
+
+```{r export_to_gdrive_article, eval = FALSE}
+# oppassen om niet te overschrijven
+write_excel_csv2(analyseSet_finaal,paste0(path_to_article, "carbon_plot_level.csv"))
+write_excel_csv2(analyseSet_finaal_wide,paste0(path_to_article, "carbon_plot_level_wide.csv"))
 
 ```
