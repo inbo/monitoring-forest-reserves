@@ -44,7 +44,7 @@ Kadert in de opmaak van een artikel in themanummer Frontiers Forests Global Chan
 Gevraagd (Luc DK):
 
 - op plotniveau (cirkel of kernvlakte gebruikt voor de NARA gegevens)   
-- C voorraden in levende en dode biomassa
+- C voorraden in levende en dode biomassa !! bovengronds
 - voor de twee tijdstippen
 - met PNV type 
 - globaal grondvlak
@@ -88,22 +88,70 @@ names(analyseSet_deadw)
 ```{r join, results= 'hide'}
 names(analyseSet)
 
+# test <- analyseSet %>% 
+#   mutate(verh_abovegr_belowgr = BelowGr_C_t_ha/AboveGr_C_t_ha,
+#          all_vs_abovegr = AboveGr_C_t_ha/TotalCarbon_t_ha,
+#          all_vs_belowgr = BelowGr_C_t_ha/TotalCarbon_t_ha,
+#          delen_dr_1_2 = TotalCarbon_t_ha/1.2,
+#          verschil = delen_dr_1_2 - AboveGr_C_t_ha)
+# range(test$verschil, na.rm = T)
+# range(test$all_vs_abovegr, na.rm = T)
+# range(test$verh_abovegr_belowgr, na.rm = T)
+# 0.16-0.24 - OK
+
 analyseSet_alive <- analyseSet %>% 
-  rename(Biomass_alive_t_ha = Biomass_t_ha,
-         Carbon_alive_t_ha = Carbon_t_ha) %>% 
-  select(1:3, 8:9)
+  rename(Biomass_alive_t_ha = AboveGrBiomass_t_ha,
+         Carbon_alive_t_ha = AboveGr_C_t_ha) %>% 
+  select(plot_id, period, year,
+         Biomass_alive_t_ha, # bovengronds!!
+         Carbon_alive_t_ha)  # bovengronds!!
+names(analyseSet_alive)
+
 
 # deadw + basal area
 names(analyseSet_deadw)
 
-analyseSet_dead <- analyseSet_deadw %>% 
-  select(1:3, 7, 10, 12:13)
+analyseSet_dead <- analyseSet_deadw %>%
+  select(plot_id, period, year,
+         basal_area_alive_m2_ha,
+         vol_dead_standing_m3_ha,  # incl kroonhout
+         vol_bole_dead_m3_ha,
+         vol_log_m3_ha)
+  # select(1:3, 7, 10, 12:13)
 names(analyseSet_dead)
 
 # join
 analyseSet_all <- analyseSet_alive %>% 
   left_join(analyseSet_dead,
             by = c("plot_id", "period", "year"))
+```
+
+# Logs CP's Kersselaerspleyn, periode 1
+
+Zitten niet in fieldmap, maar er zijn wel gegevens uit het monitorinngrapport, zie 
+"CP_Kerss_logs_2000.xlsx".
+
+```{r}
+logs_Kerss_2000 <- read_excel(paste0(path_to_request, "CP_Kerss_logs_2000.xlsx")) %>% 
+  select(plot_id, period, VOLUME_LOG)
+names(logs_Kerss_2000)
+
+names(analyseSet_deadw) 
+# bevat NA's voor liggend dood hout (Kerss 1eSET)
+names(analyseSet_all) 
+analyseSet_all %>% filter(is.na(vol_log_m3_ha))
+
+
+# info toevoegen Kerss CPS 2000
+analyseSet_all_ <- analyseSet_all %>% 
+  left_join(logs_Kerss_2000) %>% 
+  mutate(vol_log_m3_ha = ifelse(is.na(vol_log_m3_ha), VOLUME_LOG, vol_log_m3_ha)) %>% 
+  select(-VOLUME_LOG)
+
+analyseSet_all_ %>% filter(period == 1 & between(plot_id, 2000, 2070))
+# OK
+
+analyseSet_all <- analyseSet_all_
 ```
 
 
@@ -229,13 +277,34 @@ names(analyseSet_finaal_wide)
 ```
 
 ```{r check, results = 'hide'}
-analyseSet_finaal_wide %>% filter(is.na(Carbon_dead_t_ha_1)) %>% nrow()  # 53
-# Kerss
+analyseSet_finaal_wide %>% filter(is.na(Carbon_dead_t_ha_1)) %>% nrow()  # 0
+# Kerss nu aangevuld obv data monitorinngrapport 2000
 analyseSet_finaal_wide %>% filter(is.na(Carbon_dead_t_ha_2)) %>% nrow()  # 0
 analyseSet_finaal_wide %>% filter(is.na(PNV)) %>% nrow()  # 0
 # eerst 2 plots 729 en 730 zonder C_dead => weggefilterd hierboven
 
 ```
+
+CONTROLE
+
+```{r vgl_oude_data, eval = FALSE}
+oude_data <- read_csv2(paste0(path_to_request, "carbon_plot_level.csv"))
+
+oude_data_wide <- read_csv2(paste0(path_to_request, "carbon_plot_level_wide.csv"))
+
+# vgl oude data (x) = all
+
+
+vgl <- oude_data %>% 
+  left_join(analyseSet_finaal, by = c("plot_id", "period", "year")) %>% 
+  mutate(factor_abovegr_belowgr = Carbon_alive_t_ha.x/Carbon_alive_t_ha.y)  # all/enkel bovengr
+range(vgl$factor_abovegr_belowgr, na.rm = TRUE)
+# [1] 1.16 1.24 - OK
+# dwz dat delen door +/- 1.2 je enkel het bovengrondse geeft
+
+```
+
+
 
 
 # Export
@@ -255,7 +324,7 @@ write_excel_csv2(analyseSet_finaal_wide,paste0(path_to_gdrive, "carbon_plot_leve
 
 ```{r export_to_gdrive_article, eval = FALSE}
 # oppassen om niet te overschrijven
-write_excel_csv2(analyseSet_finaal,paste0(path_to_article, "carbon_plot_level.csv"))
-write_excel_csv2(analyseSet_finaal_wide,paste0(path_to_article, "carbon_plot_level_wide.csv"))
+write_excel_csv2(analyseSet_finaal,paste0(path_to_article, "carbon_plot_level_enkel_aboveground.csv"))
+write_excel_csv2(analyseSet_finaal_wide,paste0(path_to_article, "carbon_plot_level_wide_enkel_aboveground.csv"))
 
 ```

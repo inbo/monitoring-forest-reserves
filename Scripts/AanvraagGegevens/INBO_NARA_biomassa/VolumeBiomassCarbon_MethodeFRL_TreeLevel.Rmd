@@ -964,31 +964,38 @@ colnames(trees_living5)
 # volumetotaal = VEF * stemvolume
 # volumestump nog extra erbij om biomassa te berekenen
 
+trees_living6 <- trees_living5 %>% 
+  select(1:20, 36, 44, 46, 52:59)
+colnames(trees_living6)
+
 
 # vol_bole_m3: stamvolume cfr Dagnelie/Quataert
 # Volume_m3: stamvolume gecorrigeerd voor kleine boompjes zonder volume (obv kegel of cilinder)
 # TotalVolume_m3: Volume_m3 * VEF => mét kleine takjes erbij - Zonder stomp!
 # VolumeStump_m3: stomp volume (als cilinder): nog extra erbij om biomassa te berekenen
 
-analyseSet <- trees_living5 %>%
+analyseSet <- trees_living6 %>%
   dplyr::group_by(plot_id, period, year) %>%   
   dplyr::summarise(
             StemVolume_m3_ha = sum(StemVolume_m3/plotarea_ha, na.rm = TRUE), # met correctie voor dunne boompjes met volume Dagnelie = 0 (zie chunck "volume_cilinder_afgeknotte_kegel") 
             vol_bole_m3_ha = sum(vol_bole_m3/plotarea_ha, na.rm = TRUE),  # cfr Dagnelie/Quataert
             VolumeStump_m3_ha = sum(VolumeStump_m3/plotarea_ha, na.rm = TRUE),
             TotalVolumeVEF_m3_ha = sum(TotalVolume_m3/plotarea_ha, na.rm = TRUE),
-            Biomass_t_ha = sum(TotalBiomass_t/plotarea_ha, na.rm = TRUE),
-            Carbon_t_ha = sum(TotalCarbon_t/plotarea_ha, na.rm = TRUE),
+            AboveGrBiomass_t_ha = sum(TotalAboveGrBiomass_t/plotarea_ha, na.rm = TRUE),
+            BelowGrBiomass_t_ha = sum(TotalBelowGrBiomass_t/plotarea_ha, na.rm = TRUE),
+            TotalBiomass_t_ha = sum(TotalBiomass_t/plotarea_ha, na.rm = TRUE),
+            AboveGr_C_t_ha = sum(FC*TotalAboveGrBiomass_t/plotarea_ha, na.rm = TRUE),
+            BelowGr_C_t_ha = sum(FC*TotalBelowGrBiomass_t/plotarea_ha, na.rm = TRUE),
+            TotalCarbon_t_ha = sum(TotalCarbon_t/plotarea_ha, na.rm = TRUE),
             # test = StemVolume_m3_ha - vol_bole_m3_ha,
             # test_proc = 100*test /vol_bole_m3_ha
             ) %>%
-  dplyr::ungroup()
+  dplyr::ungroup() 
+# %>% 
+  # mutate(test = TotalCarbon_t_ha - AboveGr_C_t_ha - BelowGr_C_t_ha)
 
-# summary(trees_living5)
-names(trees_living5)
+names(analyseSet)
 
-trees_living6 <- trees_living5 %>% 
-  select(1:20, 44, 46, 52:59)
 ```
 
 
@@ -1025,8 +1032,12 @@ analyseSet_0_biomassa <- zero_volume %>%
          VolumeStump_m3_ha = 0,  
          TotalVolumeVEF_m3_ha = 0,  
          # TotalVolumeVEF_m3_ha = StemVolume * VEF => volledig bovengronds boomvolume zonder stump
-         Biomass_t_ha = 0,
-         Carbon_t_ha = 0
+         AboveGrBiomass_t_ha = 0,
+         BelowGrBiomass_t_ha = 0,
+         TotalBiomass_t_ha = 0,
+         AboveGr_C_t_ha = 0,
+         BelowGr_C_t_ha = 0,
+         TotalCarbon_t_ha = 0
           ) %>% 
     dplyr::select(-year_dendro, -survey_trees)
 
@@ -1063,7 +1074,7 @@ write_excel_csv2(analyseSet,paste0(path_to_gdrive, "analyseSet_living_C.csv"))
 ```{r statistics_per_periode, results = 'hide'}
 
 colnames(analyseSet)
-variables_for_statistics <- c("vol_bole_m3_ha", "StemVolume_m3_ha", "TotalVolumeVEF_m3_ha", "VolumeStump_m3_ha",  "Biomass_t_ha", "Carbon_t_ha")
+variables_for_statistics <- c("vol_bole_m3_ha", "StemVolume_m3_ha", "TotalVolumeVEF_m3_ha", "VolumeStump_m3_ha",  "TotalBiomass_t_ha", "TotalCarbon_t_ha")
 
 
 Resultaat <- create_statistics(
@@ -1182,11 +1193,11 @@ Correcter is om de aangroei per plot te berekenen en daar het gemiddelde van te 
 colnames(analyseSet)
 
 analyseSet_wide <- analyseSet %>% 
-  select(plot_id, period, Carbon_t_ha, vol_bole_m3_ha) %>% 
+  select(plot_id, period, TotalCarbon_t_ha, vol_bole_m3_ha) %>% 
   pivot_wider(id_cols = plot_id, 
             names_from = period, 
-            values_from = c("Carbon_t_ha", "vol_bole_m3_ha")) %>% 
-  mutate(increase_C = `Carbon_t_ha_2` - `Carbon_t_ha_1`,
+            values_from = c("TotalCarbon_t_ha", "vol_bole_m3_ha")) %>% 
+  mutate(increase_C = `TotalCarbon_t_ha_2` - `TotalCarbon_t_ha_1`,
          increase_C_per_yr = round(increase_C/10, 2), # 10 jaar gemiddeld tss 2 opnames
          increase_vol = `vol_bole_m3_ha_2` - `vol_bole_m3_ha_1`,
          increase_vol_per_yr = round(increase_vol/10, 2)) %>% 
@@ -1300,7 +1311,7 @@ write_excel_csv2(Resultaat_wide,paste0(path_to_request, "resultVolumeBiomassCarb
 
 ```{r export_to_csv_luc}
 # direct naar gdrive luc - beperkter, enkel carbonuptake en vol_bole
-vars_luc <- c("Carbon_t_ha", "vol_bole_m3_ha")
+vars_luc <- c("TotalCarbon_t_ha", "vol_bole_m3_ha")
 
 Resultaat_luc <- Resultaat %>% 
   filter(variable %in% vars_luc)
@@ -1325,7 +1336,7 @@ analyseSet_pnv <- analyseSet %>%
 ```
 
 ```{r statistics_per_PNV, results = 'hide'}
-variables_for_statistics <- c("vol_bole_m3_ha", "StemVolume_m3_ha", "TotalVolumeVEF_m3_ha", "VolumeStump_m3_ha",  "Biomass_t_ha", "Carbon_t_ha")
+variables_for_statistics <- c("vol_bole_m3_ha", "StemVolume_m3_ha", "TotalVolumeVEF_m3_ha", "VolumeStump_m3_ha",  "TotalBiomass_t_ha", "TotalCarbon_t_ha")
 
 
 Resultaat <- create_statistics(
@@ -1360,11 +1371,11 @@ Resultaat <- Resultaat %>%
 colnames(analyseSet_pnv)
 
 analyseSet_wide_pnv <- analyseSet_pnv %>% 
-  select(plot_id, PNV, PNVtxt, period, Carbon_t_ha, vol_bole_m3_ha) %>% 
+  select(plot_id, PNV, PNVtxt, period, TotalCarbon_t_ha, vol_bole_m3_ha) %>% 
   pivot_wider(id_cols = c("plot_id", "PNV", "PNVtxt"),
             names_from = period, 
-            values_from = c("Carbon_t_ha", "vol_bole_m3_ha")) %>% 
-  mutate(increase_C = `Carbon_t_ha_2` - `Carbon_t_ha_1`,
+            values_from = c("TotalCarbon_t_ha", "vol_bole_m3_ha")) %>% 
+  mutate(increase_C = `TotalCarbon_t_ha_2` - `TotalCarbon_t_ha_1`,
          increase_C_per_yr = round(increase_C/10, 2), # 10 jaar gemiddeld tss 2 opnames
          increase_vol = `vol_bole_m3_ha_2` - `vol_bole_m3_ha_1`,
          increase_vol_per_yr = round(increase_vol/10, 2))
@@ -1474,7 +1485,7 @@ write_excel_csv2(Resultaat_wide,paste0(path_to_request, "resultVolumeBiomassCarb
 
 ```{r export_to_csv_PNV_luc}
 # direct naar gdrive luc - beperkter, enkel carbonuptake en vol_bole
-# vars_luc <- c("Carbon_t_ha", "vol_bole_m3_ha")
+# vars_luc <- c("TotalCarbon_t_ha", "vol_bole_m3_ha")
 
 Resultaat_luc <- Resultaat %>% 
   filter(variable %in% vars_luc)

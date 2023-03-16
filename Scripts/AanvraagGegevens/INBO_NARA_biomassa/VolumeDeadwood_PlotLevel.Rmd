@@ -230,6 +230,11 @@ maar wel voor liggend dood hout, nl. CP's Kersselaerspleyn periode 1.
 
 Om een analyse te doen voor liggend dood hout moeten deze plots uit de dataset verwijderd worden.
 
+> TO DO: dendro_by_plot aanvullen met info over dood hout van Kersselaerspleyn (zie C:\03_BR\1_DataVerwerkingBR\Aanvraag_gegevens\INBO_biomassa_vglBR_VBI/CP_Kerss_logs_2000.xlsx)
+
+> !! op dit moment enkel nog maar gedaan op algemeen niveua, nog te doen op soortniveau
+op diameterklasse lukt niet (enkel info 7-30 en > 30)
+
 
 
 # Analyseset
@@ -690,7 +695,7 @@ analyseSet_wide <- analyseSet_pnv_liggend %>%
   mutate(# 10 jaar gemiddeld tss 2 opnames
          increase_vol_log = `vol_log_m3_ha_2` - `vol_log_m3_ha_1`,
          increase_vol_log_per_yr = round(increase_vol_log/10, 2),
-         )
+         )Fexcel
 
 variables_for_statistics <- c("increase_vol_log_per_yr")
 
