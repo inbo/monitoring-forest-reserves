@@ -63,7 +63,7 @@ Folder op gdrive:
 path_to_request <- paste0(path_to_datarequests, "INBO_biomassa_vglBR_VBI/")
 path_to_gdrive <- paste0(path_to_datarequests_gdrive, "INBO_biomassa_vglBR_VBI/")
 
-# rechtstraaks naar data-folder van artikel
+# rechtstreeks naar data-folder van artikel
 path_to_article <- "G:/.shortcut-targets-by-id/1GY3uYeL5JjG14h_BAkzsQwse31el-yhC/artikel_FrontiersForestsGlobalChange/data/"
 # !! oppassen van nisk te overschrijven
 ```
@@ -100,8 +100,8 @@ names(analyseSet)
 # 0.16-0.24 - OK
 
 analyseSet_alive <- analyseSet %>% 
-  rename(Biomass_alive_t_ha = AboveGrBiomass_t_ha,
-         Carbon_alive_t_ha = AboveGr_C_t_ha) %>% 
+  rename(Biomass_alive_t_ha = BiomassAboveGr_t_ha,
+         Carbon_alive_t_ha = CarbonAboveGr_t_ha) %>%
   select(plot_id, period, year,
          Biomass_alive_t_ha, # bovengronds!!
          Carbon_alive_t_ha)  # bovengronds!!
@@ -201,8 +201,12 @@ Het volume dood hout berekend voor elke PNV, is vermenigvuldigd met de waarde vo
 
 
 ```{r}
-conversie_deadw_per_PNV <- read_excel(paste0(path_to_request, "conv_deadw_biomass.xlsx"))
+# conversie_deadw_per_PNV <- read_excel(paste0(path_to_request, "conv_deadw_biomass.xlsx"))
+# names(conversie_deadw_per_PNV)
+
+conversie_deadw_per_PNV <- read.xlsx(paste0(path_to_request, "NARA C gegevens_LucDK.xlsx"), sheetName = "DxCC")
 names(conversie_deadw_per_PNV)
+
 ```
 
 
@@ -211,7 +215,7 @@ names(analyseSet_all)
 
 analyseSet_all_ <- analyseSet_all %>% 
   left_join(conversie_deadw_per_PNV, by = c("PNV")) %>% 
-  rename(conv_CC_deadw = conv_CC) %>% 
+  rename(conv_CC_deadw = DxCC) %>% 
   mutate(Carbon_snags_t_ha = vol_dead_standing_m3_ha * conv_CC_deadw,  # ? of vol_bole_dead_m3_ha
          Carbon_logs_t_ha = vol_log_m3_ha * conv_CC_deadw,
          Carbon_dead_t_ha = Carbon_snags_t_ha + Carbon_logs_t_ha) 
@@ -292,9 +296,7 @@ oude_data <- read_csv2(paste0(path_to_request, "carbon_plot_level.csv"))
 
 oude_data_wide <- read_csv2(paste0(path_to_request, "carbon_plot_level_wide.csv"))
 
-# vgl oude data (x) = all
-
-
+# vgl oude data (x) = all - above vs below ground
 vgl <- oude_data %>% 
   left_join(analyseSet_finaal, by = c("plot_id", "period", "year")) %>% 
   mutate(factor_abovegr_belowgr = Carbon_alive_t_ha.x/Carbon_alive_t_ha.y)  # all/enkel bovengr
@@ -302,9 +304,13 @@ range(vgl$factor_abovegr_belowgr, na.rm = TRUE)
 # [1] 1.16 1.24 - OK
 # dwz dat delen door +/- 1.2 je enkel het bovengrondse geeft
 
+
+# vgl oude data: afronding factor Luc
+vgl <- oude_data %>% 
+  left_join(analyseSet_finaal, by = c("plot_id", "period", "year")) %>% 
+  mutate(logs_verschil= Carbon_logs_t_ha.x - Carbon_logs_t_ha.y,
+         logs_verschil_pr= 100*(Carbon_logs_t_ha.x - Carbon_logs_t_ha.y)/Carbon_logs_t_ha.x)
 ```
-
-
 
 
 # Export
@@ -320,7 +326,6 @@ write_excel_csv2(analyseSet_finaal,paste0(path_to_gdrive, "carbon_plot_level.csv
 write_excel_csv2(analyseSet_finaal_wide,paste0(path_to_gdrive, "carbon_plot_level_wide.csv"))
 
 ```
-
 
 ```{r export_to_gdrive_article, eval = FALSE}
 # oppassen om niet te overschrijven
