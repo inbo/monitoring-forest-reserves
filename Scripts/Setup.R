@@ -32,6 +32,7 @@ library(glue)
 library(forestmangr)
 library(gridExtra)
 library(sf)
+library(xlsx)
 
 library(usethis)
 library(forrescalc)
