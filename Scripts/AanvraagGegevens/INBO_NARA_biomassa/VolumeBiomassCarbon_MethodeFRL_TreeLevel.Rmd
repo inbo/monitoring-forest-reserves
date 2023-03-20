@@ -222,7 +222,6 @@ qPNV <- read_xlsx(paste0(path_to_strata, "legende_PNV.xlsx")) %>%
 ```{r load_plotinfo_strata}
 plotinfo <- read_vc(file = "plotinfo", root = path_to_forresdat_data)
 
-
 con <- odbcConnectAccess2007(path_to_strata_db)
  strata_tables <- sqlTables(con) %>% filter(!str_detect(TABLE_NAME, "MSys"))
  management <- sqlFetch(con, "strata_remaining", stringsAsFactors = FALSE)
@@ -981,18 +980,18 @@ analyseSet <- trees_living6 %>%
             vol_bole_m3_ha = sum(vol_bole_m3/plotarea_ha, na.rm = TRUE),  # cfr Dagnelie/Quataert
             VolumeStump_m3_ha = sum(VolumeStump_m3/plotarea_ha, na.rm = TRUE),
             TotalVolumeVEF_m3_ha = sum(TotalVolume_m3/plotarea_ha, na.rm = TRUE),
-            AboveGrBiomass_t_ha = sum(TotalAboveGrBiomass_t/plotarea_ha, na.rm = TRUE),
-            BelowGrBiomass_t_ha = sum(TotalBelowGrBiomass_t/plotarea_ha, na.rm = TRUE),
-            TotalBiomass_t_ha = sum(TotalBiomass_t/plotarea_ha, na.rm = TRUE),
-            AboveGr_C_t_ha = sum(FC*TotalAboveGrBiomass_t/plotarea_ha, na.rm = TRUE),
-            BelowGr_C_t_ha = sum(FC*TotalBelowGrBiomass_t/plotarea_ha, na.rm = TRUE),
-            TotalCarbon_t_ha = sum(TotalCarbon_t/plotarea_ha, na.rm = TRUE),
+            BiomassAboveGr_t_ha = sum(TotalAboveGrBiomass_t/plotarea_ha, na.rm = TRUE),
+            BiomassBelowGr_t_ha = sum(TotalBelowGrBiomass_t/plotarea_ha, na.rm = TRUE),
+            Biomass_t_ha = sum(TotalBiomass_t/plotarea_ha, na.rm = TRUE),
+            CarbonAboveGr_t_ha = sum(FC*TotalAboveGrBiomass_t/plotarea_ha, na.rm = TRUE),
+            CarbonBelowGr_t_ha = sum(FC*TotalBelowGrBiomass_t/plotarea_ha, na.rm = TRUE),
+            Carbon_t_ha = sum(TotalCarbon_t/plotarea_ha, na.rm = TRUE),
             # test = StemVolume_m3_ha - vol_bole_m3_ha,
             # test_proc = 100*test /vol_bole_m3_ha
             ) %>%
   dplyr::ungroup() 
 # %>% 
-  # mutate(test = TotalCarbon_t_ha - AboveGr_C_t_ha - BelowGr_C_t_ha)
+  # mutate(test = Carbon_t_ha - CarbonAboveGr_t_ha - CarbonBelowGr_t_ha)
 
 names(analyseSet)
 
@@ -1028,16 +1027,16 @@ colnames(analyseSet);colnames(zero_volume)
 analyseSet_0_biomassa <- zero_volume %>%
   mutate(year = year_dendro,
          vol_bole_m3_ha = 0,  # zoals berekend in forrescalc, Dagnelie
-         StemVolume_m3_ha = 0,  # cfr methode FRL (met een volume voor dunne boompjes)
+         StemVolume_m3_ha = 0,  # cfr methode FRL (met een volume voor dunne boompjes > 7 cm, maar volume = 0 cfr Dagnelie)
          VolumeStump_m3_ha = 0,  
          TotalVolumeVEF_m3_ha = 0,  
          # TotalVolumeVEF_m3_ha = StemVolume * VEF => volledig bovengronds boomvolume zonder stump
-         AboveGrBiomass_t_ha = 0,
-         BelowGrBiomass_t_ha = 0,
-         TotalBiomass_t_ha = 0,
-         AboveGr_C_t_ha = 0,
-         BelowGr_C_t_ha = 0,
-         TotalCarbon_t_ha = 0
+         BiomassAboveGr_t_ha = 0,
+         BiomassBelowGr_t_ha = 0,
+         Biomass_t_ha = 0,
+         CarbonAboveGr_t_ha = 0,
+         CarbonBelowGr_t_ha = 0,
+         Carbon_t_ha = 0
           ) %>% 
     dplyr::select(-year_dendro, -survey_trees)
 
@@ -1074,8 +1073,8 @@ write_excel_csv2(analyseSet,paste0(path_to_gdrive, "analyseSet_living_C.csv"))
 ```{r statistics_per_periode, results = 'hide'}
 
 colnames(analyseSet)
-variables_for_statistics <- c("vol_bole_m3_ha", "StemVolume_m3_ha", "TotalVolumeVEF_m3_ha", "VolumeStump_m3_ha",  "TotalBiomass_t_ha", "TotalCarbon_t_ha")
-
+variables_for_statistics <- c("vol_bole_m3_ha", "StemVolume_m3_ha", "TotalVolumeVEF_m3_ha", "VolumeStump_m3_ha",  "Biomass_t_ha", "Carbon_t_ha")
+# "BiomassAboveGr_t_ha", "CarbonAboveGr_t_ha"  : nog niet gedaan
 
 Resultaat <- create_statistics(
   dataset = analyseSet,
@@ -1193,11 +1192,11 @@ Correcter is om de aangroei per plot te berekenen en daar het gemiddelde van te 
 colnames(analyseSet)
 
 analyseSet_wide <- analyseSet %>% 
-  select(plot_id, period, TotalCarbon_t_ha, vol_bole_m3_ha) %>% 
+  select(plot_id, period, Carbon_t_ha, vol_bole_m3_ha) %>% 
   pivot_wider(id_cols = plot_id, 
             names_from = period, 
-            values_from = c("TotalCarbon_t_ha", "vol_bole_m3_ha")) %>% 
-  mutate(increase_C = `TotalCarbon_t_ha_2` - `TotalCarbon_t_ha_1`,
+            values_from = c("Carbon_t_ha", "vol_bole_m3_ha")) %>% 
+  mutate(increase_C = `Carbon_t_ha_2` - `Carbon_t_ha_1`,
          increase_C_per_yr = round(increase_C/10, 2), # 10 jaar gemiddeld tss 2 opnames
          increase_vol = `vol_bole_m3_ha_2` - `vol_bole_m3_ha_1`,
          increase_vol_per_yr = round(increase_vol/10, 2)) %>% 
@@ -1311,7 +1310,7 @@ write_excel_csv2(Resultaat_wide,paste0(path_to_request, "resultVolumeBiomassCarb
 
 ```{r export_to_csv_luc}
 # direct naar gdrive luc - beperkter, enkel carbonuptake en vol_bole
-vars_luc <- c("TotalCarbon_t_ha", "vol_bole_m3_ha")
+vars_luc <- c("Carbon_t_ha", "vol_bole_m3_ha")
 
 Resultaat_luc <- Resultaat %>% 
   filter(variable %in% vars_luc)
@@ -1336,8 +1335,8 @@ analyseSet_pnv <- analyseSet %>%
 ```
 
 ```{r statistics_per_PNV, results = 'hide'}
-variables_for_statistics <- c("vol_bole_m3_ha", "StemVolume_m3_ha", "TotalVolumeVEF_m3_ha", "VolumeStump_m3_ha",  "TotalBiomass_t_ha", "TotalCarbon_t_ha")
-
+variables_for_statistics <- c("vol_bole_m3_ha", "StemVolume_m3_ha", "TotalVolumeVEF_m3_ha", "VolumeStump_m3_ha",  "Biomass_t_ha", "Carbon_t_ha")
+# "BiomassAboveGr_t_ha", "CarbonAboveGr_t_ha"  : nog niet gedaan
 
 Resultaat <- create_statistics(
   dataset = analyseSet_pnv,
@@ -1371,11 +1370,11 @@ Resultaat <- Resultaat %>%
 colnames(analyseSet_pnv)
 
 analyseSet_wide_pnv <- analyseSet_pnv %>% 
-  select(plot_id, PNV, PNVtxt, period, TotalCarbon_t_ha, vol_bole_m3_ha) %>% 
+  select(plot_id, PNV, PNVtxt, period, Carbon_t_ha, vol_bole_m3_ha) %>% 
   pivot_wider(id_cols = c("plot_id", "PNV", "PNVtxt"),
             names_from = period, 
-            values_from = c("TotalCarbon_t_ha", "vol_bole_m3_ha")) %>% 
-  mutate(increase_C = `TotalCarbon_t_ha_2` - `TotalCarbon_t_ha_1`,
+            values_from = c("Carbon_t_ha", "vol_bole_m3_ha")) %>% 
+  mutate(increase_C = `Carbon_t_ha_2` - `Carbon_t_ha_1`,
          increase_C_per_yr = round(increase_C/10, 2), # 10 jaar gemiddeld tss 2 opnames
          increase_vol = `vol_bole_m3_ha_2` - `vol_bole_m3_ha_1`,
          increase_vol_per_yr = round(increase_vol/10, 2))
@@ -1485,7 +1484,7 @@ write_excel_csv2(Resultaat_wide,paste0(path_to_request, "resultVolumeBiomassCarb
 
 ```{r export_to_csv_PNV_luc}
 # direct naar gdrive luc - beperkter, enkel carbonuptake en vol_bole
-# vars_luc <- c("TotalCarbon_t_ha", "vol_bole_m3_ha")
+# vars_luc <- c("Carbon_t_ha", "vol_bole_m3_ha")
 
 Resultaat_luc <- Resultaat %>% 
   filter(variable %in% vars_luc)
