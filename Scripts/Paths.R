@@ -44,6 +44,10 @@ dbStrata <- "BR_Strata_2022-11-30.accdb"
 path_to_strata <- "C:/03_BR/1_DataverwerkingBR/Data/Strata/"
 path_to_strata_db <- paste0(path_to_strata, dbStrata)
 
+
+# EXTRA MEETGEGEVENS
+path_to_meetgegevens <- "C:/03_BR/1_DataverwerkingBR/Data/Meetgegevens/"
+
 # OVERIGE
 path_to_height_models <- "C:/03_BR/1_DataverwerkingBR/Data/Hoogtemodellen/"
 

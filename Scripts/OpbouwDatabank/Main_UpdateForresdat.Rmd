@@ -22,7 +22,7 @@ rm(list=ls())
 ```{r Setup, include = FALSE}
 knitr::opts_chunk$set(
   echo = TRUE,
-  eval = FALSE,  # dan kan ik knitten zonder dat er iets gebeurt
+  eval = TRUE,  # FALSE: dan kan ik knitten zonder dat er iets gebeurt
   message = FALSE,
   warning = FALSE, 
   fig.width = 9,
@@ -349,12 +349,12 @@ Verwerkt door Luc DK ikv eerste monitoringrapport.
 
 Hierna survey_deadw op TRUE zetten
 
-```{r survey_deadw_CP_Kerss}
+```{r CORRECTIE_survey_deadw_CP_Kerss}
 # plotinfo %>% filter(forest_reserve == "Kersselaerspleyn" & plottype == "CP" & period == 1) %>% nrow()
 # 64
 
 # plotinfo %>% filter(forest_reserve == "Kersselaerspleyn" & plottype == "CP" 
-                    & period == 1 & survey_trees) %>% nrow()
+                   # & period == 1 & survey_trees) %>% nrow()
 # 53
 
 plotinfo_ <- plotinfo %>% 
@@ -362,9 +362,8 @@ plotinfo_ <- plotinfo %>%
                     & period == 1 & survey_trees
                     , TRUE
                     , survey_deadw))
-
-# plotinfo_ %>% dplyr::filter(forest_reserve == "Kersselaerspleyn" & plottype == "CP" 
-                    & period == 1 & survey_trees) %>% head()
+plotinfo_ %>% dplyr::filter(forest_reserve == "Kersselaerspleyn" & plottype == "CP" 
+                     & period == 1 & survey_trees) %>% head()
 
 plotinfo <- plotinfo_
 
@@ -466,7 +465,7 @@ height_model %>% group_by(forest_reserve) %>% summarise(n = n()) %>% ungroup() %
 # Walenbos	28	- OK, als algemeen voor beide KV's, niet gelinkt aan een feitelijke KV
 ```
 
-## Deadwood volume bijwerken - OK - 23/11/2022
+## Deadwood (intact/fragment) volume bijwerken - OK - 23/11/2022
 
 De volumeberekening van liggend dood hout baseert zich op het veld `calc_volume_m3`
 uit FM-databank (layer `Deadwood`).
@@ -635,6 +634,17 @@ Peter past ook wel nog aan in databank.
 <!-- en die nu voor Glen zijn werk opnieuw werden bekeken, als ze er nog lagen." -->
 
 
+Afgesproken met Peter:  
+  - sowieso alle met decay 14 of 15 = fragment   
+  - decay 13: enkel deze met min_diameter > 150 (dat zijn 18 bomen van de 42 met decay 13)
+  
+<!-- ofwel allemaal fragment -->
+<!-- ofwel enkel deze met min_diameter > 100? (dat zijn 33 bomen van de 42 met decay 13) -->
+
+Peter ging dit aanpassen in de databank, maar nog niet gebeurd vrees ik.
+<!-- afgesproken via mail 24/11/2022 van Peter dat hij dit ook zo gaat aanpassen in moederdb -->
+
+
 ```{r posssible_fragment_check, eval = FALSE}
 # !! gemerkt dat calc_vol in Kerss KV (plot 11000, 2de en 3de decade) exacte copie 
 # is van volume inside plot, terwijl het om intacte bomen gaat
@@ -656,22 +666,23 @@ write_csv2(posssible_fragment, here::here("output/posssible_fragment_Kerss_KV.cs
 
 ```
 
+
+
 ```{r calc_deadw_intact1}
 ## TIJDELIK toch nog doen , lijkt nog niet aangepoast in db
 data_deadwood_intact_NIET <- data_deadwood %>% 
-  filter(intact_fragm == 10 & calc_length_m < total_length_m/2) %>%
-  # enkel de weinig vergane met lage_min_diam, rest zijn toch fragmenten
+  filter(intact_fragm == 10 & calc_length_m < total_length_m/2) %>%   # korte boompjes/sterk afgesneden
+  # enkel de weinig vergane met lage_min_diam (dus met een topje), rest zijn toch fragmenten
   # afgesproken via mail 24/11/2022 van Peter dat hij dit ook zo gaat aanpassen in moederdb
   filter(decaystage < 13 | (decaystage == 13 & min_diam_mm < 150))
 
 
 data_deadwood_intact <- data_deadwood %>% 
   filter(intact_fragm == 10 & calc_length_m > total_length_m/2) %>%
-  # enkel de weinig vergane met lage_min_diam, rest zijn toch fragmenten
+  # enkel de weinig vergane met lage_min_diam (dus met een topje), rest zijn toch fragmenten
   # afgesproken via mail 24/11/2022 van Peter dat hij dit ook zo gaat aanpassen in moederdb
   filter(decaystage < 13 | (decaystage == 13 & min_diam_mm < 150))
  
-
 # check <- data_deadwood %>% 
 #   filter(intact_fragm == 10) %>% 
 #   anti_join(data_deadwood_intact)
@@ -757,11 +768,11 @@ Daarnaast streeplijsten: samen met veg in 750 subsamples: 30-20, 20-10 en < 10 c
 Ev. op termijn te implementeren (zie trello)
 
 <!-- Nog niet op die manier verwerkt, nu dus zelfs fout!!!!! -->
-**DAAROM in trees en stems deze < 30 cm wegfilteren zdd we resultaten hebben van levend > 30 cm**
+**DAAROM in trees en stems deze < 30 cm wegfilteren (want dat zijn er in 2 kleine verjongingsgroepjes en niet representatief) zdd we resultaten hebben van levend > 30 cm**
 **(cfr dataverwerking in 2012) **
 
 > We gaan ervanuit dat degene die data gebruiken, het methodiekrapport gelezen hebben en dit dus weten.
-
+Staat ook in metadata
 
 ```{r}
 data_stems_<- data_stems %>% 
@@ -802,6 +813,9 @@ In 1986: in FM werden enkel deze die in 2000 nog recht stonden, ingeladen.
 Dus enkel geschikt voor aanwas-berekeningen, niet om staande voorraad te berekenen.
 
 Kan niet (moeilijk) rechtgezet worden.
+
+> We gaan ervanuit dat degene die data gebruiken, het methodiekrapport gelezen hebben en dit dus weten.
+Staat ook in metadata
 
 
 ## Calculate dendro data
@@ -1131,7 +1145,7 @@ logs_by_decay_plot %>% filter(plot_id == 11000 & period == 1) %>% dplyr::pull(vo
 
 # 
 table(no_deadw$forest_reserve, no_deadw$period)
-# 98 plots zonder deadwood-opname, maar wel volume_alive 
+# 45 plots zonder deadwood-opname, maar wel volume_alive 
 #=> TOCH BEST REKENING MEE HOUDEN!!
 ```
 
@@ -1198,27 +1212,139 @@ Zitten niet in fieldmap, maar er zijn wel gegevens uit het monitoringrapport, zi
 
 Deze hier implementeren.
 
-```{r}
-logs_Kerss_2000 <- read_excel(paste0(path_to_meetgegevens, "logs_CPs_Kerss_2000/CP_Kerss_logs_2000.xlsx")) %>% 
-  select(plot_id, period, VOLUME_LOG)
+```{r load_deadw_Kerss_CP_1}
+logs_Kerss_2000 <- read.xlsx(paste0(path_to_meetgegevens, "logs_CPs_Kerss_2000/CP_Kerss_logs_2000.xlsx")
+                             ,sheetName = "logs_per_plot") %>% 
+  select(plot_id, period, VOLUME_LOG_m3_ha)
 names(logs_Kerss_2000)
 
-names(analyseSet_deadw) 
-# bevat NA's voor liggend dood hout (Kerss 1eSET)
-names(analyseSet_all) 
-analyseSet_all %>% filter(is.na(vol_log_m3_ha))
+logs_per_spec_Kerss_2000 <- read.xlsx(paste0(path_to_meetgegevens, "logs_CPs_Kerss_2000/CP_Kerss_logs_2000.xlsx")
+                             ,sheetName = "logs_per_plot_species") %>% 
+  select(plot_id, species, period, VOLUME_LOG_m3_ha)
 
+```
+
+```{r update_dendro_by_plot}
+names(logs_Kerss_2000)
+names(dendro_by_plot)
+# bevat NA's voor liggend dood hout (Kerss 1eSET)
+
+dendro_by_plot_ %>% left_join(plotinfo %>% select(plot_id, forest_reserve, plottype, period)) %>% filter(forest_reserve == "Kersselaerspleyn" & plottype == "CP" & period == 1) %>% nrow() == 53
+# vol_log = 0, want hogerop reeds survey_deadw = TRUE gesteld
 
 # info toevoegen Kerss CPS 2000
-analyseSet_all_ <- analyseSet_all %>% 
+dendro_by_plot_ <- dendro_by_plot %>% 
   left_join(logs_Kerss_2000) %>% 
-  mutate(vol_log_m3_ha = ifelse(is.na(vol_log_m3_ha), VOLUME_LOG, vol_log_m3_ha)) %>% 
-  select(-VOLUME_LOG)
+  mutate(vol_log_m3_ha = ifelse(between(plot_id, 2000, 2070) & period == 1 
+                                #forest_reserve == "Kersselaerspleyn" & plottype == "CP" 
+                                , VOLUME_LOG_m3_ha
+                                , vol_log_m3_ha)
+         , vol_deadw_m3_ha = vol_log_m3_ha + vol_dead_standing_m3_ha) %>% 
+  select(-VOLUME_LOG_m3_ha)
 
-analyseSet_all_ %>% filter(period == 1 & between(plot_id, 2000, 2070))
+dendro_by_plot_ %>% filter(period == 1 & between(plot_id, 2000, 2070))
 # OK
 
-analyseSet_all <- analyseSet_all_
+dendro_by_plot <- dendro_by_plot_
+```
+
+
+```{r update_dendro_by_plot_species}
+names(logs_per_spec_Kerss_2000)
+names(dendro_by_plot_species)
+# bevat NA's voor liggend dood hout (Kerss 1eSET)
+
+dendro_by_plot_species %>% left_join(plotinfo %>% select(plot_id, forest_reserve, plottype, period)) %>% filter(forest_reserve == "Kersselaerspleyn" & plottype == "CP" & period == 1) %>% head()
+# vol_log = 0, want hogerop reeds survey_deadw = TRUE gesteld
+
+# info toevoegen Kerss CPS 2000
+dendro_by_plot_species_ <- dendro_by_plot_species %>% 
+  left_join(logs_per_spec_Kerss_2000) %>% 
+  # mutate(VOLUME_LOG_m3_ha = ifelse(is.na(VOLUME_LOG_m3_ha) & between(plot_id, 2000, 2070) & period == 1
+  #                                  0, 
+  #                                  VOLUME_LOG_m3_ha)) %>% 
+  mutate(vol_log_m3_ha = ifelse(between(plot_id, 2000, 2070) & period == 1 
+                                #forest_reserve == "Kersselaerspleyn" & plottype == "CP" 
+                                , ifelse(is.na(VOLUME_LOG_m3_ha), 0, VOLUME_LOG_m3_ha)
+                                , vol_log_m3_ha)
+         , vol_deadw_m3_ha = vol_log_m3_ha + vol_dead_standing_m3_ha) %>% 
+  select(-VOLUME_LOG_m3_ha)
+
+dendro_by_plot_species_ %>% filter(period == 1 & between(plot_id, 2000, 2070))
+# OK
+
+dendro_by_plot_species <- dendro_by_plot_species_
+```
+
+Niet geweten hoeveel er in welke diameterklasse zit => daar wel NA zetten
+
+```{r update_dendro_by_diam_plot_species}
+names(logs_per_spec_Kerss_2000)
+names(dendro_by_diam_plot_species)
+# bevat nullen voor liggend dood hout (Kerss 1eSET) want hogerop reeds survey_deadw = TRUE gesteld
+
+dendro_by_diam_plot_species %>% left_join(plotinfo %>% select(plot_id, forest_reserve, plottype, period)) %>% filter(forest_reserve == "Kersselaerspleyn" & plottype == "CP" & period == 1) %>% head()
+# vol_log = 0, want hogerop reeds survey_deadw = TRUE gesteld
+
+# NA van maken
+dendro_by_diam_plot_species_ <- dendro_by_diam_plot_species %>% 
+  mutate(vol_log_m3_ha = ifelse(between(plot_id, 2000, 2070) & period == 1 
+                                #forest_reserve == "Kersselaerspleyn" & plottype == "CP" 
+                                , NA
+                                , vol_log_m3_ha)
+         , vol_deadw_m3_ha = vol_log_m3_ha + vol_dead_standing_m3_ha)
+
+dendro_by_diam_plot_species_ %>% filter(period == 1 & between(plot_id, 2000, 2070)) %>% head()
+# OK
+
+dendro_by_diam_plot_species <- dendro_by_diam_plot_species_
+```
+
+```{r update_dendro_by_diam_plot}
+names(dendro_by_diam_plot)
+# bevat nullen voor liggend dood hout (Kerss 1eSET) want hogerop reeds survey_deadw = TRUE gesteld
+
+dendro_by_diam_plot %>% left_join(plotinfo %>% select(plot_id, forest_reserve, plottype, period)) %>% filter(forest_reserve == "Kersselaerspleyn" & plottype == "CP" & period == 1) %>% head()
+# vol_log = 0, want hogerop reeds survey_deadw = TRUE gesteld
+
+# NA van maken
+dendro_by_diam_plot_ <- dendro_by_diam_plot %>% 
+  mutate(vol_log_m3_ha = ifelse(between(plot_id, 2000, 2070) & period == 1 
+                                #forest_reserve == "Kersselaerspleyn" & plottype == "CP" 
+                                , NA
+                                , vol_log_m3_ha)
+         , vol_deadw_m3_ha = vol_log_m3_ha + vol_dead_standing_m3_ha)
+
+dendro_by_diam_plot_ %>% filter(period == 1 & between(plot_id, 2000, 2070)) %>% head()
+# OK
+
+dendro_by_diam_plot <- dendro_by_diam_plot_
+```
+
+
+```{r update_logs_by_decay_NIET_NODIG, eval = FALSE}
+# ook voor de andere plot-level-resultaten
+      # logs_by_decay_plot = logs_by_decay_plot,
+      # logs_by_decay_plot_species = logs_by_decay_plot_species
+names(logs_by_decay_plot)
+
+logs_by_decay_plot %>% left_join(plotinfo %>% select(plot_id, forest_reserve, plottype, period)) %>% filter(forest_reserve == "Kersselaerspleyn" & plottype == "CP" & period == 1) %>% nrow() == 0
+
+# deze zitten niet in de file => OK - NA
+
+      # logs_by_decay_plot_ <- logs_by_decay_plot %>% 
+      #   mutate(vol_log_m3_ha = ifelse(between(plot_id, 2000, 2070) & period == 1 
+      #                                 #forest_reserve == "Kersselaerspleyn" & plottype == "CP" 
+      #                                 , NA
+      #                                 , vol_log_m3_ha)
+      #          )
+      # 
+      # logs_by_decay_plot_ %>% filter(period == 1 & between(plot_id, 2000, 2070)) %>% head()
+      #  
+      # logs_by_decay_plot <- logs_by_decay_plot_
+
+# decay - spec
+# idem
 ```
 
 
@@ -1394,6 +1520,14 @@ logs_by_decay_plot_species <- logs_by_decay_plot_species_
 ## Aanmaak list
 
 ```{r new_list_dendro}
+dendro_by_plot_species <- dendro_by_plot_species %>% 
+  mutate(plot_id = as.integer(plot_id),
+         species = as.integer(species))
+
+dendro_by_diam_plot_species <- dendro_by_plot_species %>% 
+  mutate(plot_id = as.integer(plot_id),
+         species = as.integer(species))
+
 # opnieuw list van maken om te exporteren en plotinfo aan te koppelen
 dendro <- list(
       dendro_by_plot = dendro_by_plot,
@@ -1450,7 +1584,7 @@ versus "vol_alive_m3_ha" en "vol_dead_standing_m3_ha"
 save_results_git(
   results = dendro,
   repo_path = path_to_git_forresdat,
-  strict = TRUE
+  strict = FALSE
 )
 ```
 
