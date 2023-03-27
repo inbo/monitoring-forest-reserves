@@ -12,15 +12,24 @@ path_to_fieldmap_db <- paste0(path_to_fieldmap, dbFieldmap)
 path_to_git_forresdat <- "C:/03_BR/2_Forrescalc_Forresdat/2_forresdat/"
 path_to_forresdat_data <- "C:/03_BR/2_Forrescalc_Forresdat/2_forresdat/data/" # tsv
 
+path_to_data <- "C:/03_BR/1_DataVerwerkingBR/Data/"
+
 
 # OUTPUT
 path_to_output <- "C:/03_BR/1_DataverwerkingBR/Output/"
 
-path_to_analysis_set_csv <- paste0(path_to_output, "plot-level-data/")  # csv
-path_to_plotlevel_csv <- paste0(path_to_output, "plot-level-data/") 
-path_to_treelevel_csv <- paste0(path_to_output, "raw-data/")
+# path_to_analysis_set_csv <- paste0(path_to_output, "_plot-level-data/")  # csv
+path_to_plotlevel_csv <- paste0(path_to_output, "_plot-level-data/") 
+path_to_treelevel_csv <- paste0(path_to_output, "_tree-level-data/")
 
 path_to_analysis_set_db <- paste0(path_to_output, "BR_analysedb.accdb") # accessdb
+
+
+# OUTPUT - GDRIVE
+path_to_output_gdrive <- "G:/.shortcut-targets-by-id/0B0xcP-eNvJ9dQ2w5ZFhSZEpCU0E/PRJ_BOSECO_ALGEMEEN/PRJ_BR_AanvraagGegevens/"
+
+path_to_plotlevel_gdrive <- paste0(path_to_output_gdrive, "!METADATA-ALL_PLOTS/_plot-level-data/") 
+path_to_treelevel_gdrive <- paste0(path_to_output_gdrive, "!METADATA-ALL_PLOTS/_tree-level-data/")
 
 
 # DATABASES
@@ -28,11 +37,16 @@ dbResults <- "C:/03_BR/1_DataverwerkingBR/Output/BR_resultaten.accdb"
 
 dbExterneData <- "C:/03_BR/1_DataverwerkingBR/Data/ExterneData/BR_ExterneData.accdb"
 
-dbStrata <- "BR_Strata_2022-11-07.accdb"
+dbStrata <- "BR_Strata_2022-11-30.accdb"
+# dbStrata <- "BR_Strata_2022-11-07.accdb"
 # dbStrata <- "BR_Strata_2022-02-14.accdb"
 # dbStrata <- "BR_Strata_2022-02-11.accdb"
 path_to_strata <- "C:/03_BR/1_DataverwerkingBR/Data/Strata/"
 path_to_strata_db <- paste0(path_to_strata, dbStrata)
+
+
+# EXTRA MEETGEGEVENS
+path_to_meetgegevens <- "C:/03_BR/1_DataverwerkingBR/Data/Meetgegevens/"
 
 # OVERIGE
 path_to_height_models <- "C:/03_BR/1_DataverwerkingBR/Data/Hoogtemodellen/"

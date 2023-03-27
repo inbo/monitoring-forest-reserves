@@ -1,5 +1,5 @@
 ---
-title: "Volume, biomassa en koolstofgehalte volgens FRL en INBO-advies A.3104 (methode 4b)"
+title: "Volume, biomassa en koolstofgehalte volgens FRL en INBO-advies A.4103 (methode 4b)"
 author: "Anja Leyman, Leen Govaere"
 date: "`r Sys.Date()`"
 output:
@@ -49,7 +49,7 @@ dbFactorsWallonia_path <- here::here(dbFactorsWallonia)
 # REQUEST
 path_to_request <- paste0(path_to_datarequests, "INBO_NARA_biomassa/")
 # wegschrijven naar gdrive (ev. bij knitting, nu tijdelijk overslaan)
-# path_to_request <- paste0(path_to_datarequests_gdrive, "INBO_NARA_biomassa/")
+path_to_gdrive <- paste0(path_to_datarequests_gdrive, "INBO_NARA_biomassa/")
 
 # of rechtstraaks naar map van Luc
 path_to_request_luc <- "G:/.shortcut-targets-by-id/0B0xcP-eNvJ9dQ2w5ZFhSZEpCU0E/PRJ_BOSECO_ALGEMEEN/PRJ_LULUCF_VMM_CARBON/R_output_Anja/"
@@ -64,7 +64,7 @@ In het kader van NARA2023 wordt gevraagd naar een ruw cijfer mbt C-opslag in onb
 Hiervoor gebruiken we de data uit de bosreservaten.
 Dit in tegenstelling tot C-opslag in beheerde bossen die we uit de VBI halen.
 
-Als methode gebruiken we de methode uit het advies van INBO (INBO A.3104) ikv LULUCF rapportering.
+Als methode gebruiken we de methode uit het advies van INBO (INBO A.4103) ikv LULUCF rapportering.
 
 **Biomassa** en **koolstofgehalte (C)** berekend volgens methode 4b uit het advies.
 
@@ -127,7 +127,7 @@ Daarnaast zijn er ook wijzigingen doorheen de tijd.
 
 De keuze van BEF en WD bepaalt sterk de uiteindelijke carbon uptake factor. 
 
-Nalv het INBO-advies A.3104 wordt de methode conform de FRL gebruikt: 
+Nalv het INBO-advies A.4103 wordt de methode conform de FRL gebruikt: 
 
 - mbv BEF/VEF van Longuetaud (afh. van diameter en hoogte)
 - factoren R en Wd cfr. FRL (R, FC, WD)
@@ -221,7 +221,6 @@ qPNV <- read_xlsx(paste0(path_to_strata, "legende_PNV.xlsx")) %>%
 
 ```{r load_plotinfo_strata}
 plotinfo <- read_vc(file = "plotinfo", root = path_to_forresdat_data)
-
 
 con <- odbcConnectAccess2007(path_to_strata_db)
  strata_tables <- sqlTables(con) %>% filter(!str_detect(TABLE_NAME, "MSys"))
@@ -964,31 +963,38 @@ colnames(trees_living5)
 # volumetotaal = VEF * stemvolume
 # volumestump nog extra erbij om biomassa te berekenen
 
+trees_living6 <- trees_living5 %>% 
+  select(1:20, 36, 44, 46, 52:59)
+colnames(trees_living6)
+
 
 # vol_bole_m3: stamvolume cfr Dagnelie/Quataert
 # Volume_m3: stamvolume gecorrigeerd voor kleine boompjes zonder volume (obv kegel of cilinder)
 # TotalVolume_m3: Volume_m3 * VEF => mét kleine takjes erbij - Zonder stomp!
 # VolumeStump_m3: stomp volume (als cilinder): nog extra erbij om biomassa te berekenen
 
-analyseSet <- trees_living5 %>%
+analyseSet <- trees_living6 %>%
   dplyr::group_by(plot_id, period, year) %>%   
   dplyr::summarise(
             StemVolume_m3_ha = sum(StemVolume_m3/plotarea_ha, na.rm = TRUE), # met correctie voor dunne boompjes met volume Dagnelie = 0 (zie chunck "volume_cilinder_afgeknotte_kegel") 
             vol_bole_m3_ha = sum(vol_bole_m3/plotarea_ha, na.rm = TRUE),  # cfr Dagnelie/Quataert
             VolumeStump_m3_ha = sum(VolumeStump_m3/plotarea_ha, na.rm = TRUE),
             TotalVolumeVEF_m3_ha = sum(TotalVolume_m3/plotarea_ha, na.rm = TRUE),
+            BiomassAboveGr_t_ha = sum(TotalAboveGrBiomass_t/plotarea_ha, na.rm = TRUE),
+            BiomassBelowGr_t_ha = sum(TotalBelowGrBiomass_t/plotarea_ha, na.rm = TRUE),
             Biomass_t_ha = sum(TotalBiomass_t/plotarea_ha, na.rm = TRUE),
+            CarbonAboveGr_t_ha = sum(FC*TotalAboveGrBiomass_t/plotarea_ha, na.rm = TRUE),
+            CarbonBelowGr_t_ha = sum(FC*TotalBelowGrBiomass_t/plotarea_ha, na.rm = TRUE),
             Carbon_t_ha = sum(TotalCarbon_t/plotarea_ha, na.rm = TRUE),
             # test = StemVolume_m3_ha - vol_bole_m3_ha,
             # test_proc = 100*test /vol_bole_m3_ha
             ) %>%
-  dplyr::ungroup()
+  dplyr::ungroup() 
+# %>% 
+  # mutate(test = Carbon_t_ha - CarbonAboveGr_t_ha - CarbonBelowGr_t_ha)
 
-# summary(trees_living5)
-names(trees_living5)
+names(analyseSet)
 
-trees_living6 <- trees_living5 %>% 
-  select(1:20, 44, 46, 52:59)
 ```
 
 
@@ -1021,11 +1027,15 @@ colnames(analyseSet);colnames(zero_volume)
 analyseSet_0_biomassa <- zero_volume %>%
   mutate(year = year_dendro,
          vol_bole_m3_ha = 0,  # zoals berekend in forrescalc, Dagnelie
-         StemVolume_m3_ha = 0,  # cfr methode FRL (met een volume voor dunne boompjes)
+         StemVolume_m3_ha = 0,  # cfr methode FRL (met een volume voor dunne boompjes > 7 cm, maar volume = 0 cfr Dagnelie)
          VolumeStump_m3_ha = 0,  
          TotalVolumeVEF_m3_ha = 0,  
          # TotalVolumeVEF_m3_ha = StemVolume * VEF => volledig bovengronds boomvolume zonder stump
+         BiomassAboveGr_t_ha = 0,
+         BiomassBelowGr_t_ha = 0,
          Biomass_t_ha = 0,
+         CarbonAboveGr_t_ha = 0,
+         CarbonBelowGr_t_ha = 0,
          Carbon_t_ha = 0
           ) %>% 
     dplyr::select(-year_dendro, -survey_trees)
@@ -1037,6 +1047,24 @@ analyseSet <- analyseSet2
 
 ```
 
+## Finale analyseset
+
+```{r write_analyseset_to_csv}
+names(analyseSet)
+summary(analyseSet)
+
+# geen NA's 
+
+# wegschrijven
+write_excel_csv2(analyseSet,paste0(path_to_request, "analyseSet_living_C.csv"))
+
+# direct naar gdrive
+write_excel_csv2(analyseSet,paste0(path_to_gdrive, "analyseSet_living_C.csv"))
+
+
+```
+
+
 
 # Resultaat
 
@@ -1046,7 +1074,7 @@ analyseSet <- analyseSet2
 
 colnames(analyseSet)
 variables_for_statistics <- c("vol_bole_m3_ha", "StemVolume_m3_ha", "TotalVolumeVEF_m3_ha", "VolumeStump_m3_ha",  "Biomass_t_ha", "Carbon_t_ha")
-
+# "BiomassAboveGr_t_ha", "CarbonAboveGr_t_ha"  : nog niet gedaan
 
 Resultaat <- create_statistics(
   dataset = analyseSet,
@@ -1308,7 +1336,7 @@ analyseSet_pnv <- analyseSet %>%
 
 ```{r statistics_per_PNV, results = 'hide'}
 variables_for_statistics <- c("vol_bole_m3_ha", "StemVolume_m3_ha", "TotalVolumeVEF_m3_ha", "VolumeStump_m3_ha",  "Biomass_t_ha", "Carbon_t_ha")
-
+# "BiomassAboveGr_t_ha", "CarbonAboveGr_t_ha"  : nog niet gedaan
 
 Resultaat <- create_statistics(
   dataset = analyseSet_pnv,

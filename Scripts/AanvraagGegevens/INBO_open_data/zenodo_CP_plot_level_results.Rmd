@@ -1,5 +1,5 @@
 ---
-title: "Statistieken dendro per bosreservaat"
+title: "Create plot level results (only circular plots) for publication on zenodo"
 author: "Anja Leyman"
 date: "`r Sys.Date()`"
 output: 
@@ -36,78 +36,92 @@ source(here::here("scripts/Setup.R"))
 
 ```
 
-# Inladen lookuplijsten
 
-```{r read_forresdat1, eval=FALSE}
-qIufroheight <- read_forresdat("qiufroheight", repo_path = path_to_git_forresdat, join_plotinfo = FALSE)
+# Vraagstelling
 
-# list.files(paste0(path_to_git_forresdat, "data/"))
+Dit script heeft als doel een dataset te creëren voor publicatie op zenodo:   
+
+- plot level resultaten  
+- plotinfo met o.a. XY-coördinaten  
+
+
+Op termijn kunnen ook tree level resultaten (doorheen de tijd) gepubliceerd worden 
+(cfr Hongary: https://zenodo.org/record/7311384#.Y9kYO3bMKUk : 
+dbh_1st en DBH_2nd, V_1st/2nd, alivedead_1st/2nd, ...)
+
+
+```{r Path}
+# deze worden ook in "Setup.R" gedefinieerd (aanroepen van "Paths.R")
+# hier ev. extra "paths" toevoegen indien nodig 
+
+path_to_datarequest <- "C:/3BR/1_DataVerwerkingBR/Open_data/zenodo_CP_vs1/"
 
 ```
-
-```{r fetch_access}
-con <- odbcConnectAccess2007(path_to_fieldmap_db)
-
-qIndShootCop <- sqlFetch(con, "qIndShootCop", stringsAsFactors = FALSE)
-qAliveDead <- sqlFetch(con, "qAliveDead", stringsAsFactors = FALSE)
-qSpecies <- sqlFetch(con, "qspecies", stringsAsFactors = FALSE)
-qDecaystage <- sqlFetch(con, "qdecaystage", stringsAsFactors = FALSE)
-
-odbcClose(con)
-
-qIndShootCop <- qIndShootCop %>% select(-Value3, -OrderField, -Active)
-qAliveDead <- qAliveDead %>% select(-Value3, -OrderField, -Active)
-qSpecies <- qSpecies %>% select(-Value3, -OrderField, -Active)
-qDecaystage <- qDecaystage %>% select(-Value3, -OrderField, -Active, -MasterID)
-```
-
 
 
 
 # Inladen plotinfo
 
-```{r read_forresdat2}
-plotinfo <- read_forresdat("plotinfo", repo_path = path_to_git_forresdat, join_plotinfo = FALSE)
+Met XY-coordinaten
 
-```
-
-
-```{r read_tsv, eval=FALSE}
+```{r}
 plotinfo <- read_vc(file = "plotinfo", root = path_to_forresdat_data)
+colnames(plotinfo)
 
 ```
 
+XY uit strata
+
+```{r}
+
+```
 
 # Inladen plot data
 
-```{r read_forresdat3}
-dendro_by_plot <- read_forresdat("dendro_by_plot", repo_path = path_to_git_forresdat, join_plotinfo = TRUE) %>% 
-  select(-contains("eg")) # (veg en reg)
+Zonder plotinfo
+Met species, heightclass en decaystage
+
+
+```{r LoadLookuplists}
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+  
+  qSpecies <- sqlFetch(con, "qspecies", stringsAsFactors = FALSE)
+  qDecaystage <- sqlFetch(con, "qdecaystage", stringsAsFactors = FALSE)
+  qHeightClass <- sqlFetch(con, "qHeightClass_regeneration", stringsAsFactors = FALSE)
+  qHerbSpecies <- sqlFetch(con, "qHerbSpecies240810", stringsAsFactors = FALSE)
+  
+odbcClose(con)
+```
+
+
+
+```{r read_dendro}
+dendro_by_plot <- read_forresdat("dendro_by_plot", repo_path = path_to_git_forresdat, 
+                                 join_plotinfo = FALSE, plottype = "CP")
  
-dendro_by_plot_species <- read_forresdat("dendro_by_plot_species", repo_path = path_to_git_forresdat, join_plotinfo = TRUE) %>% 
-  select(-contains("eg")) %>%  # (veg en reg)
+dendro_by_plot_species <- read_forresdat("dendro_by_plot_species", repo_path = path_to_git_forresdat, 
+                                         join_plotinfo = FALSE, plottype = "CP") %>% 
   left_join(qSpecies, by = c("species" = "ID")) %>% 
   rename(name_nl = Value1, 
          name_sc = Value2) 
 
-dendro_by_diam_plot <- read_forresdat("dendro_by_diam_plot", repo_path = path_to_git_forresdat, join_plotinfo = TRUE) %>% 
-  select(-contains("eg"))  # (veg en reg)
+dendro_by_diam_plot <- read_forresdat("dendro_by_diam_plot", repo_path = path_to_git_forresdat, 
+                                      join_plotinfo = FALSE, plottype = "CP") 
 
-dendro_by_diam_plot_species <- read_forresdat("dendro_by_diam_plot_species", repo_path = path_to_git_forresdat, join_plotinfo = TRUE) %>% 
-  select(-contains("eg")) %>%  # (veg en reg)
+dendro_by_diam_plot_species <- read_forresdat("dendro_by_diam_plot_species", repo_path = path_to_git_forresdat, 
+                                              join_plotinfo = FALSE, plottype = "CP") %>%
   left_join(qSpecies, by = c("species" = "ID")) %>% 
   rename(name_nl = Value1, 
          name_sc = Value2) 
 
-logs_by_decay_plot <- read_forresdat("logs_by_decay_plot", repo_path = path_to_git_forresdat, join_plotinfo = TRUE) %>% 
-  select(-contains("eg")) %>%  # (veg en reg) 
+logs_by_decay_plot <- read_forresdat("logs_by_decay_plot", repo_path = path_to_git_forresdat, 
+                                     join_plotinfo = FALSE, plottype = "CP") %>% 
   left_join(qDecaystage, by = c("decaystage" = "ID")) %>% 
   rename(decaystage_code = decaystage,
          afbraak = Value1, 
          decay_stage = Value2) 
 
-logs_by_decay_plot_species <- read_forresdat("logs_by_decay_plot_species", repo_path = path_to_git_forresdat, join_plotinfo = TRUE) %>% 
-  select(-contains("eg")) %>%  # (veg en reg)
+logs_by_decay_plot_species <- read_forresdat("logs_by_decay_plot_species", repo_path = path_to_git_forresdat, join_plotinfo = FALSE, plottype = "CP") %>% 
   left_join(qSpecies, by = c("species" = "ID")) %>% 
   rename(name_nl = Value1, 
          name_sc = Value2)  %>% 

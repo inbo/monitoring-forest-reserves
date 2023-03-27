@@ -1,0 +1,558 @@
+---
+title: "Aanvulling forresdat dendro KV Kersselaerspleyn 2000"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: yes
+      smooth_scroll: yes
+---
+
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = FALSE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+source(here::here("scripts/ExtraFunctions.R"))
+source(here::here("scripts/ExtraFunctions_volume.R"))
+```
+
+
+# Vraagstelling
+DOEL van dit script is een correctie doorvoeren voor de dendro-resultaten voor de 
+kernvlakte van Kersselaerspleyn, dd 2000.
+
+Er werd maar gebiedsdekkend gemeten vanaf 30 cm DBH (net zoals in 1986).
+MAAR er werden wel streeplijsten aangemaakt voor DBH's tss 5 en 30 cm DBH.
+Deze werden meegenomen bij de dataverwerking door Luc DK in 2002 (met resulterend monitoringrapport), maar niet meer bij de dataverwerking in 2012 door Anja L.
+
+In monitoringrapport lees ik wel enkel N, G en V van bomen > 30 cm DBH.
+In grafiek 2.11 wordt wel een stamtal weergegeven van de lagere diameterklasses: visuele inschatting: 
+25 + 90 + 100 = 215 extra
+
+
+```{r results='hold', eval=TRUE}
+path_to_forresdat_data
+path_to_analysis_set_db
+path_to_plotlevel_csv
+path_to_treelevel_csv
+path_to_output_gdrive
+```
+
+# Opbouw streeplijsten
+
+In 750 vegetatie-proefvlakken => over een opp. van 75000 m2 of 7.5 ha.
+
+Opgeslagen in "vegrasteraantal.xls" en via vgl scan veldformulier:
+
+- FagusSy BA : aantal < dbh 5cm (in MDB bij regeneration_1eSet: > 200cm)
+- FagusSy BC : aantal dbh 10 - 20 cm
+- FagusSy BD : aantal dbh 20 - 30 cm
+- FagusSy BB : aantal dbh 5 - 10 cm
+- FagusSy ZA : aantal zaailingen 0 - 50 cm (in MDB bij regeneration_1eSet)
+- FagusSy ZB : aantal zaailingen 50 - 200 cm (in MDB bij regeneration_1eSet)
+- Fagus Y : onbekend voorlopig
+- Fagus Y1 : onbekend voorlopig
+- Fagus Y2 : onbekend voorlopig
+- Fagus Y3 : onbekend voorlopig
+
+Op de scans zien we dat naast beuk en eik, ook berk, esdoorn en lijsterbes kan geturfd worden.
+Volgens het monitoringrapport van 2000 kwam er geen eik voor < 30 cm DBH (enkel zaailingen < 50 cm hoogte).
+
+Wellicht waren er 3 esdoorns (want grens van 30 cm werd net overschreden in 2010).
+De smalste eik had in 2010 een DBH van 490 mm, en werd wellicht in 2000 ook reeds zwaarder dan 30 cm DBH.
+Ook haagbeuk kwam voor.
+
+
+```{r}
+aantal_5_30_ <- read_excel(paste0(path_to_data, "Meetgegevens/KV_Kerss_2000/vegrasteraantal.xls"))
+names(aantal_5_30_)
+
+```
+
+```{r beuk}
+aantal_5_30_beuk <- aantal_5_30_ %>% 
+  select(1:3, contains("FAGUS"))
+nrow(aantal_5_30_beuk) == 750
+
+totaal_5_30_beuk <- aantal_5_30_beuk %>% 
+  group_by() %>% 
+  summarize(sum_1 = sum(FAGUSYBB),   #5-10
+            sum_2 = sum(FAGUSYBC),   #10-20
+            sum_3 = sum(FAGUSYBD)) %>%    #20-30
+  ungroup() %>% 
+  mutate(totaal = sum_1 + sum_2 + sum_3)
+  
+totaal_5_30_beuk
+# 1595
+
+```
+
+```{r haagbeuk}
+aantal_5_30_hb <- aantal_5_30_ %>% 
+  select(1:3, contains("CARP"))  # haagbeuk carpbe
+nrow(aantal_5_30_hb) == 750
+names(aantal_5_30_hb)
+
+totaal_5_30_hb <- aantal_5_30_hb %>% 
+  group_by() %>% 
+  summarize(sum_1 = sum(CARPBEBB),   #5-10
+            sum_2 = sum(CARPBEBC),   #10-20
+            sum_3 = sum(CARPBEBD)   #20-30
+            # sum0 = sum(CARPBEB_)   # is "91" => betekenis onduidelijk, zeker geen reg
+            ) %>%    
+  ungroup() %>% 
+  mutate(totaal = sum_1 + sum_2 + sum_3)
+  
+totaal_5_30_hb
+# 11
+```
+
+```{r esdoorn, eval = FALSE}
+# !! geen verjonging gestreept, enkel zaaailingen
+
+aantal_5_30_esd <- aantal_5_30_ %>% 
+  select(1:3, contains("FRAX"))  # haagbeuk carpbe
+nrow(aantal_5_30_esd) == 750
+names(aantal_5_30_esd)
+
+totaal_5_30_esd <- aantal_5_30_esd %>%
+  group_by() %>%
+  summarize(sum_1 = sum(FRAXEX_),
+            sum_2 = sum(FRAXEXZA))  %>%  #5-30?
+  ungroup() %>%
+  mutate(tot_haagbeuk = sum_1)
+
+totaal_5_30_esd
+
+```
+
+```{r overige_BB, eval = FALSE}
+aantal_5_30_overige <- aantal_5_30_ %>% 
+  select(1:3, contains("BD"))  # haagbeuk carpbe
+nrow(aantal_5_30_overige) == 750
+names(aantal_5_30_overige)
+
+# geen andere dan beuk en haagbeuk geturfd
+
+```
+
+
+Eventueel bekijken of het aantal boompjes 5-30 cm DBH obv streeplijsten verschilt van aantal in de  verjongingsgroepen.
+Indien niet, dan kunnen we besluiten dat er geen verjonging was buiten de verjongingsgroepen, en dan zijn de nu reeds berekende waarden correct.
+
+
+```{r vgl, eval = FALSE}
+trees_calc_ <- read.csv2(paste0(path_to_treelevel_csv, "trees_calc.csv"))
+names(trees_calc_)
+
+trees_calc_5_30 <- trees_calc_ %>% 
+  filter(plot_id == 11000) %>% 
+  select(2:16) %>% 
+  filter(dbh_mm < 300 & period == 1 & alive_dead == 11)
+table(trees_calc_5_30$species)
+
+
+trees_calc_5_30_beuk <- trees_calc_5_30 %>% 
+  filter(species == 7)
+nrow(trees_calc_5_30_beuk) == 823
+
+# 3 metingen die géén beuk zijn, maar haagbeuk
+
+```
+
+Blijkbaar 823 beuken (< 30 cm DBH) in de twee verjongingsgroepen, terwijl er 1595 
+geturfd werden in de streeplijsten.
+Dit laatste komt overeen met een stamtal van 212.7/ha (1595/7.5 ha) versus 76.6/ha
+(823/10.7485) voor boompjes met DBH < 30 cm.
+
+Op dit moment zijn deze lage diameterklasses uit forresdat gehouden, maar in 
+de oude resultatendb vind ik hetzelfde stamtal (76.6).
+
+Dat is dus duidelijk een onderschatting, en bijgevolg was het een goede keuze dit uit forressdat te halen.
+We hadden even gedacht dat er bijna geen verjonging was buiten die 2 verjongingsgroepen, maar dat blijkt niet waar te zijn. Het zijn ook vrij kleine verjongingsgroepen, die max 8% van KV innemen.
+Dus het is niet zo vreemd dat er buiten de verjongingsgroepen nog eens zoveel verjonging voorkomt (op 11x zoveel oppervlakte).
+
+<!-- Oppervlakte van de verjongingsgroepen: ca 6.5% van de totale kernvlakte  -->
+<!-- (benaderend in GIS: 0.2508 + 0.4372 = 0.688; 0.688/10.7485 = +/- 7% ) -->
+
+In grafiek 2.11 wordt een stamtal weergegeven van de lagere diameterklasses: visuele inschatting: 
+25 + 90 + 100 = 215/ha (dbh < 30 cm).
+
+Dit stemt overeen met wat ik net uit streeplijsten gehaald heb.
+
+Probleem is dat we dit niet kunnen vertalen naar de diameterklasses (dendro_by_diam_plot) 
+in forresdat, omdat die per 5 cm rekenen. 
+We kunnen deze wel meenemen naar de totalen (dendro_by_plot_by_species).
+Een optie is om de boompjes gelijk te verdelen over de twee klasses: 
+klasse 10-20 cm gelijk verdelen over 10-15 cm en 15-20 cm.
+
+Tweede probleem is de bepaling van het grondvlak: berekenen we dit obv de midwaarde van de klasse?
+Idem dito voor volume?
+
+
+# Finetuning
+
+## Inbreng collega's (geen ;-) )
+
+Via mail (22/12/2022) inbreng van collega's gevraagd: 
+
+
+Hoi,
+
+ik heb eens gekeken naar het 1ste monitoringrapport van de Kersselaerspleyn, meer specifiek de dataverwerking van de streeplijsten voor boompjes met DBH 5-30 cm in de KV.
+Die worden in het rapport enkel gebruikt om een stamtalverdeling op te stellen (Fig. 2.1).
+image.png
+
+De berekening van N, G en V baseert zich enkel op de bomen > 30 cm DBH.
+Misschien ook om de vgl met 1986 duidelijker te maken (daar ook maar gegevens vanaf 30 cm DBH).
+
+Ter info: **ons idee dat er buiten de twee verjongingsgroepen bijna geen verjonging voorkwam, blijkt niet te kloppen.**
+Stamtal van boompjes < 30 cm:
+- obv streeplijsten over 7.5 ha --> 212/ha,
+- obv boompjes uit de verjongingsgroepen uitgespreid over volledige KV --> 76/ha
+
+
+**Mijn vraag is nu: hoe pak ik de verwerking aan?**
+Op dit moment werden enkel de bomen vanaf 30 cm DBH meegenomen bij de (standaard) dataverwerking (forresdat).
+Zie bijlage voor 2 vb-files.
+Dat wordt duidelijk aangegeven in de metadata-files.
+
+Ik zou de diameterverdeling obv stamtal kunnen toevoegen aan "dendro_by_diam_plot(_species).csv" (zie bijlage voor vb-file)
+Nadeel is dat de standaardindeling voor de rest van de bosreservaten met klasses van 5 cm werkt, en niet per 10 cm. 
+Misschien hoeft dat geen probleem te zijn, maar is wel verwarrend.
+Ook grondvlak en volume kan niet berekend worden, tenzij ik als proxy het midden van de diameterklasses gebruik (resp. 7.5, 15 en 25 cm DBH), en 
+voor volume werk met tarief met één ingang.
+Maar ik kan ook gewoon "NA" (not available) zetten bij N en G in de resulterende (sowieso zou dat al NA zijn voor oa basal_area_dead_m2_ha)
+
+Wat betreft de files "dendro_by_plot(_species).csv" (zie bijlage voor vb-file): daar wordt het moeilijker om enkel stamtal mee te nemen vanaf 5 cm, en de rest vanaf 30 cm.
+Dat moet éénduidig zijn.
+Voor N en G van levende kan ik eventueel een proxy berekenen, maar voor de dode bomen heb ik totaal geen info.
+
+Alternatief is om voor KV Kersselaerspleyn - naast de info in de algemene forresdat-files vanaf 30 cm - 4 aparte files aan te maken waar ook info uit de streeplijsten bij betrokken is 
+(dus vanaf 5 cm DBH). Dat lijkt mij de beste oplossing:
+-  dendro_by_plot(_species)_KerssKV.csv
+-  dendro_by_diam_plot(_species)_KerssKV.csv
+
+Enige vraag die dan terug opduikt is of we een benaderend G en V berekenen obv een gemiddelde diameter en tarief met één ingang? 
+Of is dat te benaderend? 
+Want dan tel je een onzeker G en V van < 30 cm op bij een G en V (> 30 cm DBH) dat wel obv metingen bepaald werd.
+
+Alvast bedankt om daar jullie licht eens over te laten schijnen ;-)
+
+Groetjes,
+Anja
+
+
+## Beslissing
+
+Zelf beslist:
+
+- alles > 30 cm: 
+
+  * mee opgenomen in standaard plot-level-resultaten
+  * het volgende werd opgenomen in metadata-files: *! Attention: standing trees (L+D) in plot 11000 (core area Kersselaerspleyn) measured in 1986 and 2000 have a treshold of 30 cm DBH (instead of 5 cm)*
+     
+<br>  
+
+- alles < 30 cm (uit streeplijsten; enkel levende bomen)
+
+  * in afzonderlijke files met net iets andere diameterverdeling (5-10, 10-20, 20-30)
+  * *dendro_by_plot(_species)_KerssKV_5_30.csv*
+  * *dendro_by_diam_plot(_species)_KerssKV_5_30.csv*
+  * proxy voor G obv mid-point diam-klasse
+  * proxy voor V obv tarief met één ingang
+
+
+# Aanmaak extra dendro-files
+
+Moet volgende bevatten:   
+
+- plot_id = 11000
+- year = 2000
+- period = 1
+- number_of_trees_ha
+- stem_number_ha
+- basal_area_alive_m2_ha
+- vol_alive_m3_ha
+- vol_bole_alive_m3_ha
+- stems_per_tree: NIET
+
+en dan afh. van detailniveau   
+
+- species (7 of 27)  
+en/of  
+- diam: dbh_class_cm (ipv dbh_class_5cm): soms 5 en soms 10 cm  
+! indien per diameterklasse: dan enkel stem_number_ha (en geen number_of_trees_ha meer)   
+  
+(plotinfo: forest_reserve, plottype, survey_number)
+
+```{r load_lkp}
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+
+  qSpecies <- sqlFetch(con, "qSpecies", stringsAsFactors = FALSE)
+  qHeightClass_regeneration <- sqlFetch(con, "qHeightClass_regeneration", stringsAsFactors = FALSE)
+  qnumber_regeneration_classes <- sqlFetch(con, "qnumber_regeneration_classes", stringsAsFactors = FALSE)
+  
+odbcClose(con)
+
+# Beuk: 7
+# Haagbeuk: 27
+
+```
+
+```{r load_tarieven}
+# volumeberekening
+
+source(here::here("Scripts/ExtraFunctions_volume.r"))
+# tarieven zelf ook al direct ingelezen
+
+```
+
+
+```{r combine_beuk_hb}
+aantal_5_30_reg <- aantal_5_30_ %>% 
+  select(1:2, contains(c("BB", "BC", "BD"))) %>% 
+  select(-SBB_CODE...3, -SBB_CODE...25)
+
+names(aantal_5_30_reg)  
+
+# totalen (zie hoger)
+names(totaal_5_30_beuk)  
+names(totaal_5_30_hb)  
+
+# species
+totaal_5_30_beuk <- totaal_5_30_beuk %>% 
+  mutate(species = 7)
+totaal_5_30_hb <- totaal_5_30_hb %>% 
+  mutate(species = 27)
+
+totaal_5_30_reg <- rbind(totaal_5_30_beuk, totaal_5_30_hb)
+```
+
+```{r calc_G_V}
+totaal_5_30_reg_long <- totaal_5_30_reg %>% 
+  mutate(plot_id = 11000,
+         year = 2000, 
+         period = 1,
+         area_ha = 7.5 # area 750 subplots = 7.5 ha
+  ) %>% 
+  rename("5 - 10 cm" = sum_1,
+         "10 - 20 cm" = sum_2,
+         "20 - 30 cm" = sum_3) %>% 
+  pivot_longer(cols = c("5 - 10 cm", "10 - 20 cm", "20 - 30 cm"),
+    names_to = "dbh_class_cm",
+    names_prefix = "wk",
+    values_to = "number",
+    values_drop_na = TRUE
+  ) %>% 
+  select(-totaal) %>% 
+  mutate(dbh_proxy = case_when(dbh_class_cm == "5 - 10 cm" ~ 7.5,
+                               dbh_class_cm == "10 - 20 cm" ~ 15,
+                               dbh_class_cm == "20 - 30 cm" ~ 25),
+         dbh_proxy_mm = dbh_proxy*10,
+         basal_area_m2_all = number * pi * (dbh_proxy / 200) ^ 2,
+         # vol_bole_m3
+         # vol_crown_m3
+         # vol_tot_m3 = vol_bole_m3 + vol_crown_m3,
+         # number_of_trees_ha = number/area_ha,
+         # stem_number_ha = number/area_ha,
+         # basal_area_alive_m2_ha = basal_area_m2/area_ha,
+         # vol_alive_m3_ha = vol_tot_m3/area_ha,
+         # vol_bole_alive_m3_ha = vol_bole_m3/area_ha
+  )
+
+totaal_5_30_reg_long <- my.CalcVolBA(treeMeasurements = totaal_5_30_reg_long,
+                                     tarieven = tarieven1ing, nIngang = 1,
+                                     varNameDiameter = "dbh_proxy_mm")
+
+totaal_5_30_reg_long <- my.CalcVolBranches(treeMeasurements = totaal_5_30_reg_long,
+                                     tarieven = tarieven1ingKroon,
+                                     varNameDiameter = "dbh_proxy_mm")
+
+totaal_5_30_reg_long <- totaal_5_30_reg_long %>% 
+  mutate(vol_bole_m3 = number * vol_stem_m3,
+         vol_crown_m3 = number * vol_crown_m3,
+         vol_tot_m3 = vol_bole_m3 + vol_crown_m3
+         ) %>% 
+  select(-vol_stem_m3)
+
+names(totaal_5_30_reg_long)
+
+```
+
+
+- number_of_trees_ha
+- stem_number_ha
+- basal_area_alive_m2_ha
+- vol_alive_m3_ha
+- vol_bole_alive_m3_ha
+
+
+```{r calc_ha}
+totaal_5_30_reg_long_ <- totaal_5_30_reg_long %>% 
+  mutate(number_of_trees_ha = number/area_ha,
+         stem_number_ha = number/area_ha,
+         basal_area_alive_m2_ha = basal_area_m2_all/area_ha,
+         vol_alive_m3_ha = vol_tot_m3/area_ha,
+         vol_bole_alive_m3_ha = vol_bole_m3/area_ha
+  )
+```
+
+
+
+```{r by_plot}
+names(totaal_5_30_reg_long_)
+
+by_plot <- totaal_5_30_reg_long_ %>% 
+  group_by(plot_id, year, period) %>% 
+  summarize(number_of_trees_ha = sum(number_of_trees_ha),
+            stem_number_ha = sum(stem_number_ha),
+            basal_area_alive_m2_ha = sum(basal_area_alive_m2_ha),
+            vol_alive_m3_ha = sum(vol_alive_m3_ha),
+            vol_bole_alive_m3_ha = sum(vol_bole_alive_m3_ha)) %>% 
+  ungroup()
+  
+```
+
+
+```{r by_plot_species}
+names(totaal_5_30_reg_long_)
+
+by_plot_species <- totaal_5_30_reg_long_ %>% 
+  group_by(plot_id, year, period, species) %>% 
+  summarize(number_of_trees_ha = sum(number_of_trees_ha),
+            stem_number_ha = sum(stem_number_ha),
+            basal_area_alive_m2_ha = sum(basal_area_alive_m2_ha),
+            vol_alive_m3_ha = sum(vol_alive_m3_ha),
+            vol_bole_alive_m3_ha = sum(vol_bole_alive_m3_ha)) %>% 
+  ungroup()
+  
+```
+
+```{r by_diam_plot}
+names(totaal_5_30_reg_long_)
+
+by_diam_plot <- totaal_5_30_reg_long_ %>% 
+  group_by(plot_id, year, period, dbh_class_cm) %>% 
+  summarize(stem_number_ha = sum(stem_number_ha),
+            basal_area_alive_m2_ha = sum(basal_area_alive_m2_ha),
+            vol_alive_m3_ha = sum(vol_alive_m3_ha),
+            vol_bole_alive_m3_ha = sum(vol_bole_alive_m3_ha)) %>% 
+  ungroup()
+  
+```
+
+
+```{r by_diam_plot_species}
+names(totaal_5_30_reg_long_)
+
+by_diam_plot_species <- totaal_5_30_reg_long_ %>% 
+  group_by(plot_id, year, period, species, dbh_class_cm) %>% 
+  summarize(stem_number_ha = sum(stem_number_ha),
+            basal_area_alive_m2_ha = sum(basal_area_alive_m2_ha),
+            vol_alive_m3_ha = sum(vol_alive_m3_ha),
+            vol_bole_alive_m3_ha = sum(vol_bole_alive_m3_ha)) %>% 
+  ungroup()
+  
+```
+
+# Export plot-level-data
+
+```{r list}
+dendro <- list(
+      CA_Kerss_5_30_dendro_by_plot = by_plot,
+      CA_Kerss_5_30_dendro_by_plot_species = by_plot_species,
+      CA_Kerss_5_30_dendro_by_diam_plot = by_diam_plot,
+      CA_Kerss_5_30_dendro_by_diam_plot_species = by_diam_plot_species
+    )
+```
+
+
+Plotinfo toevoegen (aan csv-files en access)
+
+```{r plotinfo_load}
+plotinfo <- load_plotinfo(database = path_to_fieldmap_db)
+names(plotinfo)
+```
+
+```{r join_plottype_surveynr_BR}
+dendro_plotinfo <- lapply(dendro, function(x) left_join(x, plotinfo %>% select(plot_id, forest_reserve, plottype, period, survey_number), by = c("plot_id", "period")))
+# lapply: same function over all elements of the list
+```
+
+
+
+```{r save_dendro_git, eval = FALSE}
+# geen plotinfo naar git
+save_results_git(
+  results = dendro,
+  repo_path = path_to_git_forresdat,
+  strict = TRUE
+)
+```
+
+```{r save_dendro_git_manueel, eval = FALSE}
+# manueel - eigen simpele functie - als save_results_git niet werkt
+save_results_tsv(dendro, 
+                 root = path_to_forresdat_data, 
+                 strict = FALSE)
+```
+
+
+```{r save_dendro_access_csv, eval = FALSE}
+# hier wel plotinfo (plottyupe, BR, surveynr mee wegschrijven)
+
+# volgende functie heb ik zelf geschreven, zit niet in het package!
+save_results_csv (
+    results = dendro_plotinfo,
+    output_dir = path_to_plotlevel_csv
+    )
+
+# afgerond voor export naar access
+dendro_round <- dendro_plotinfo %>% 
+  lapply(., function(x) round_df(x, 2))
+
+save_results_access (
+  results = dendro_round,
+  database = path_to_analysis_set_db,
+  remove_tables = TRUE
+  )
+
+```
+
+
+Direct naar gdrive exporteren (csv): 
+naar **/PRJ_BOSECO_ALGEMEEN/PRJ_BR_AanvraagGegevens/!METADATA-ALL_PLOTS/_plot-level-data/**
+
+```{r save_dendro_gdrive, eval = FALSE}
+save_results_csv(
+    results = dendro_plotinfo,
+    output_dir = path_to_plotlevel_gdrive
+    )
+
+```
+
+**Na update van forresdat, project "forresdat" openen en alles naar de cloud pushen**
+**Eventueel ook access op gdrive plaatsen**
+
+

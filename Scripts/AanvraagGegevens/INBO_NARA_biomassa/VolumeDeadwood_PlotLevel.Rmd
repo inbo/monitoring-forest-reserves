@@ -44,6 +44,7 @@ source(here::here("scripts/Setup.R"))  # libraries, basic functions & paths
 path_to_request <- paste0(path_to_datarequests, "INBO_NARA_biomassa/")
 # wegschrijven naar gdrive (ev. bij knitting, nu tijdelijk overslaan)
 # path_to_request <- paste0(path_to_datarequests_gdrive, "INBO_NARA_biomassa/")
+path_to_gdrive <- paste0(path_to_datarequests_gdrive, "INBO_NARA_biomassa/")
 
 # of rechtstraaks naar map van Luc
 path_to_request_luc <- "G:/.shortcut-targets-by-id/0B0xcP-eNvJ9dQ2w5ZFhSZEpCU0E/PRJ_BOSECO_ALGEMEEN/PRJ_LULUCF_VMM_CARBON/R_output_Anja/"
@@ -229,9 +230,14 @@ maar wel voor liggend dood hout, nl. CP's Kersselaerspleyn periode 1.
 
 Om een analyse te doen voor liggend dood hout moeten deze plots uit de dataset verwijderd worden.
 
+> TO DO: dendro_by_plot aanvullen met info over dood hout van Kersselaerspleyn (zie C:\03_BR\1_DataVerwerkingBR\Aanvraag_gegevens\INBO_biomassa_vglBR_VBI/CP_Kerss_logs_2000.xlsx)
+
+> !! op dit moment enkel nog maar gedaan op algemeen niveua, nog te doen op soortniveau
+op diameterklasse lukt niet (enkel info 7-30 en > 30)
 
 
-# Analyse
+
+# Analyseset
 
 ```{r plotniveau, results = 'hide'}
 analyseSet <- dendro_by_plot_ 
@@ -286,6 +292,24 @@ analyseSet <- analyseSet2
 analyseSet_liggend <- analyseSet %>% 
   filter(forest_reserve != "Kersselaerspleyn" | is.na(forest_reserve))  
 # zero_biomass plot: geen forest reserve toegekend
+```
+
+```{r write_analyseset_to_csv}
+names(analyseSet)
+# summary(analyseSet)
+
+# enkel NA's bij liggend dood hout
+analyseSet %>% filter(is.na(vol_log_m3_ha)) %>% group_by(forest_reserve) %>% 
+  summarize(min_id = min(plot_id), max_id = max(plot_id)) %>% ungroup()
+
+# wegschrijven
+write_excel_csv2(analyseSet,paste0(path_to_request, "analyseSet_deadw_vol.csv"))
+write_excel_csv2(analyseSet_liggend,paste0(path_to_request, "analyseSet_deadw_vol_lying.csv"))
+
+# direct naar gdrive
+write_excel_csv2(analyseSet,paste0(path_to_gdrive, "analyseSet_deadw_vol.csv"))
+write_excel_csv2(analyseSet_liggend,paste0(path_to_gdrive, "analyseSet_deadw_vol_lying.csv"))
+
 ```
 
 
@@ -671,7 +695,7 @@ analyseSet_wide <- analyseSet_pnv_liggend %>%
   mutate(# 10 jaar gemiddeld tss 2 opnames
          increase_vol_log = `vol_log_m3_ha_2` - `vol_log_m3_ha_1`,
          increase_vol_log_per_yr = round(increase_vol_log/10, 2),
-         )
+         )Fexcel
 
 variables_for_statistics <- c("increase_vol_log_per_yr")
 

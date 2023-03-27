@@ -46,7 +46,7 @@ save_results_access (
 
 save_results_csv(
     results = list(plotinfo = plotinfo),
-    output_dir = path_to_analysis_set_csv
+    output_dir = path_to_plotlevel_csv
   )
 
 
@@ -228,7 +228,7 @@ save_results_access (
 # enkel in nood te gebruiken als "save_results_git" niet werkt
 save_results_csv (
     results = dendro,
-    output_dir = path_to_analysis_set_csv
+    output_dir = path_to_plotlevel_csv
     )
 
 
@@ -270,7 +270,7 @@ save_results_access(
 
 save_results_csv (
   results = regeneration,
-  output_dir = path_to_analysis_set_csv
+  output_dir = path_to_plotlevel_csv
 )
 
 
@@ -299,7 +299,7 @@ save_results_access(
 
 save_results_csv (
   results = vegetation,
-  output_dir = path_to_analysis_set_csv
+  output_dir = path_to_plotlevel_csv
 )
 
 
@@ -340,7 +340,7 @@ save_results_access(
 
 save_results_csv (
   results = herblayer_list,
-  output_dir = path_to_analysis_set_csv
+  output_dir = path_to_plotlevel_csv
 )
 
 
