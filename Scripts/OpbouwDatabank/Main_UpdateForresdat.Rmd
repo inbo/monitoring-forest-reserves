@@ -51,6 +51,8 @@ path_to_analysis_set_db
 path_to_plotlevel_csv
 path_to_treelevel_csv
 path_to_output_gdrive
+path_to_meetgegevens
+
 ```
 
 
@@ -342,6 +344,32 @@ Zelf aangepast in dbEls als processed, ook gevraagd aan Peter (OK, gebeurd in dB
 - Rodebos (2 KV's: KV en KV2) - 3e decade
 
 
+Kerss CP's deadwood 1eSET (2000): uitgevoerd, maar niet geïmporteerd in FieldMap.
+Verwerkt door Luc DK ikv eerste monitoringrapport.
+
+Hierna survey_deadw op TRUE zetten
+
+```{r survey_deadw_CP_Kerss}
+# plotinfo %>% filter(forest_reserve == "Kersselaerspleyn" & plottype == "CP" & period == 1) %>% nrow()
+# 64
+
+# plotinfo %>% filter(forest_reserve == "Kersselaerspleyn" & plottype == "CP" 
+                    & period == 1 & survey_trees) %>% nrow()
+# 53
+
+plotinfo_ <- plotinfo %>% 
+  dplyr::mutate(survey_deadw = ifelse(forest_reserve == "Kersselaerspleyn" & plottype == "CP" 
+                    & period == 1 & survey_trees
+                    , TRUE
+                    , survey_deadw))
+
+# plotinfo_ %>% dplyr::filter(forest_reserve == "Kersselaerspleyn" & plottype == "CP" 
+                    & period == 1 & survey_trees) %>% head()
+
+plotinfo <- plotinfo_
+
+```
+
 
 ## Export plotinfo
 
@@ -365,11 +393,12 @@ save_results_tsv(list(plotinfo = plotinfo),
 
 
 ```{r plotinfo_save_access_csv, eval=FALSE}
-save_results_access (
+save_results_access(
   results = list(plotinfo = plotinfo),
   database = path_to_analysis_set_db,
   remove_tables = TRUE
 )
+# !!  als niet lukt, dan staat tabel mogelijks nog open in db
 
 save_results_csv(
     results = list(plotinfo = plotinfo),
@@ -1161,6 +1190,37 @@ dendro_by_diam_plot_species <- dendro_by_diam_plot_species_ %>%
   select(-survey_deadw)
 
 ```
+
+## Logs CP's Kersselaerspleyn, periode 1
+
+Zitten niet in fieldmap, maar er zijn wel gegevens uit het monitoringrapport, zie 
+"CP_Kerss_logs_2000.xlsx" (C:/03_BR/1_DataVerwerkingBR/Data/Meetgegevens/logs_CPs_Kerss_2000)
+
+Deze hier implementeren.
+
+```{r}
+logs_Kerss_2000 <- read_excel(paste0(path_to_meetgegevens, "logs_CPs_Kerss_2000/CP_Kerss_logs_2000.xlsx")) %>% 
+  select(plot_id, period, VOLUME_LOG)
+names(logs_Kerss_2000)
+
+names(analyseSet_deadw) 
+# bevat NA's voor liggend dood hout (Kerss 1eSET)
+names(analyseSet_all) 
+analyseSet_all %>% filter(is.na(vol_log_m3_ha))
+
+
+# info toevoegen Kerss CPS 2000
+analyseSet_all_ <- analyseSet_all %>% 
+  left_join(logs_Kerss_2000) %>% 
+  mutate(vol_log_m3_ha = ifelse(is.na(vol_log_m3_ha), VOLUME_LOG, vol_log_m3_ha)) %>% 
+  select(-VOLUME_LOG)
+
+analyseSet_all_ %>% filter(period == 1 & between(plot_id, 2000, 2070))
+# OK
+
+analyseSet_all <- analyseSet_all_
+```
+
 
 ## Logs KV Kersselaerspleyn pas vanaf 40 cm
 
