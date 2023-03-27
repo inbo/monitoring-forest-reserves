@@ -696,7 +696,7 @@ data_deadwood_intact_ <- data_deadwood_intact_ %>%
 # !! eigenlijk mag dat niet vergeleken worden, want één intacte boom bestaat uit 
 # meerdere fragmenten
 
-# !! soms calc_length veel kleiner dan total_length => dan mag intact zeker niet
+# !! soms calc_length (inside plot) veel kleiner dan total_length (in- and outside plot) => dan mag intact zeker niet
 
 ```
 
