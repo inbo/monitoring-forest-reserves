@@ -782,3 +782,185 @@ my.CalcVolBranches<-function(treeMeasurements,tarieven,varNameDiameter="dbh_mm",
 
 
 
+####-------------------------------------------------------------------------------
+#### Functie om proportie te berekenen van gemiddelde van bepaalde variabele (bv. grondvlak) voor een soort t.o.v. het gemiddelde van die variabele voor alle soorten (komt overeen met proportie tussen totaal per soort en totaal over alle soorten)
+####------------------------------------------------------------------------------
+
+#' Proportie berekenen van totaal per soort en totaal over alle soorten (bv. grondvlak)
+#'
+#' Langere functiebeschrijving
+#' @param data invoer
+#' @param spName soortnaam
+#' @param variableName grondvlak of volume of ....
+#' @param maxReeks
+#' @return
+#' @importFrom
+#' @examples
+
+propMeasure_Species <- function(data, spName, variableName){
+  
+  data$SpeciesCalc <- spName
+  
+  data$Measure <- data[,variableName]
+
+  species_Measure <- data %>% 
+    group_by(plot_id, period, year) %>% 
+    summarise(Measure_species = sum( Measure* (speciesTxt == SpeciesCalc)  ),
+              Measure_allSpecies = sum(Measure)) %>% 
+    ungroup()
+  
+  result.species <- create_statistics(species_Measure,
+                                      level = c("period"),
+                                      variables = c("Measure_species"))
+
+  
+  result.species$strata <- "treeSpecies"
+  result.species$stratumNaam <- spName
+  result.species$variable <- variableName
+  
+  
+  result.allSpecies <- create_statistics(species_Measure,
+                                         level = c("period"),
+                                         variables = c("Measure_allSpecies"))
+  
+  result.prop <- data.frame(variable = paste("Prop_",variableName,sep=""),
+                            strata = "treeSpecies",
+                            stratumNaam = spName,
+                            period = result.species$period,
+                            n_obs = result.species$n_obs
+  )
+  
+  result.prop$mean <- result.species$mean/result.allSpecies$mean
+  
+  # f = x/y   --> (sigma_f/f)^2 =(sigma_x/x)^2  + (sigma_y/y)^2 - 2cov_xy/x/y
+  
+  deel1 <- result.species$variance/(result.species$mean)^2
+  deel2 <- result.allSpecies$variance/(result.allSpecies$mean)^2
+  
+  cov_period1 <- cov(species_Measure[species_Measure$period==1,]$Measure_species,species_Measure[species_Measure$period==1,]$Measure_allSpecies)
+  cov_period2 <- cov(species_Measure[species_Measure$period==2,]$Measure_species,species_Measure[species_Measure$period==2,]$Measure_allSpecies)
+  
+  deel3 <- 2* c(cov_period2,cov_period1)/result.species$mean/result.allSpecies$mean
+  
+  # sigma_f = ((deel1 + deel2)^0.5) * f
+  
+  result.prop$variance <- (deel1 + deel2 - deel3) * (result.prop$mean)^2
+  
+  result.prop$variance <- ifelse(result.prop$variance > 0, result.prop$variance, result.species$variance/((result.allSpecies$mean)^2))
+  
+  #test.variance <- result.species$variance/result.allSpecies$mean^2
+  
+  result.prop$mean <- result.prop$mean*100
+  
+  result.prop$variance <- result.prop$variance*10000
+  
+  n <- c(nrow(species_Measure %>% filter(period==2)),nrow(species_Measure %>% filter(period==1)))
+  
+  result.prop$lci <- round(pmax(result.prop$mean - 1.96*((result.prop$variance)^0.5)/(n^0.5),0),2)
+  result.prop$uci <- round(result.prop$mean + 1.96*((result.prop$variance)^0.5)/(n^0.5),2)
+  
+  result.prop$mean <- round(result.prop$mean,2)
+  
+  # result.species$mean <- round(result.species$mean,2)
+  # result.species$lci <- round(result.species$lci,2)
+  # result.species$uci <- round(result.species$uci,2)
+  # result <- rbind(result.species,result.prop)
+  
+  result <- result.prop
+  # want grondvlak op zich zegt niet veel (bv. zomereik 7 (vs 29 totaal))
+  
+  return(result)
+  
+}
+
+
+
+
+####-------------------------------------------------------------------------------
+#### Functie om proportie te berekenen van gemiddelde van bepaalde variabele (bv. grondvlak) voor een soort t.o.v. het gemiddelde van die variabele voor alle soorten (komt overeen met proportie tussen totaal per soort en totaal over alle soorten)
+####------------------------------------------------------------------------------
+
+#' Proportie berekenen van totaal per soort en totaal over alle soorten (bv. grondvlak)
+#' EN ook het gemiddelde per soort (bv. BA en prop_BA)
+#'
+#' Langere functiebeschrijving
+#' @param data invoer
+#' @param spName soortnaam
+#' @param variableName grondvlak of volume of ....
+#' @param maxReeks
+#' @return
+#' @importFrom
+#' @examples
+
+propMeasure_Species2 <- function(data, spName, variableName){
+  
+  data$SpeciesCalc <- spName
+  
+  data$Measure <- data[,variableName]
+  
+  species_Measure <- data %>% 
+    group_by(plot_id, period, year) %>% 
+    summarise(Measure_species = sum( Measure* (speciesTxt == SpeciesCalc)  ),
+              Measure_allSpecies = sum(Measure)) %>% 
+    ungroup()
+  
+  result.species <- create_statistics(species_Measure,
+                                      level = c("period"),
+                                      variables = c("Measure_species"))
+  
+  
+  result.species$strata <- "treeSpecies"
+  result.species$stratumNaam <- spName
+  result.species$variable <- variableName
+  
+  
+  result.allSpecies <- create_statistics(species_Measure,
+                                         level = c("period"),
+                                         variables = c("Measure_allSpecies"))
+  
+  result.prop <- data.frame(variable = paste("Prop_",variableName,sep=""),
+                            strata = "treeSpecies",
+                            stratumNaam = spName,
+                            period = result.species$period,
+                            n_obs = result.species$n_obs
+  )
+  
+  result.prop$mean <- result.species$mean/result.allSpecies$mean
+  
+  # f = x/y   --> (sigma_f/f)^2 =(sigma_x/x)^2  + (sigma_y/y)^2 - 2cov_xy/x/y
+  
+  deel1 <- result.species$variance/(result.species$mean)^2
+  deel2 <- result.allSpecies$variance/(result.allSpecies$mean)^2
+  
+  cov_period1 <- cov(species_Measure[species_Measure$period==1,]$Measure_species,species_Measure[species_Measure$period==1,]$Measure_allSpecies)
+  cov_period2 <- cov(species_Measure[species_Measure$period==2,]$Measure_species,species_Measure[species_Measure$period==2,]$Measure_allSpecies)
+  
+  deel3 <- 2* c(cov_period2,cov_period1)/result.species$mean/result.allSpecies$mean
+  
+  # sigma_f = ((deel1 + deel2)^0.5) * f
+  
+  result.prop$variance <- (deel1 + deel2 - deel3) * (result.prop$mean)^2
+  
+  result.prop$variance <- ifelse(result.prop$variance > 0, result.prop$variance, result.species$variance/((result.allSpecies$mean)^2))
+  
+  #test.variance <- result.species$variance/result.allSpecies$mean^2
+  
+  result.prop$mean <- result.prop$mean*100
+  
+  result.prop$variance <- result.prop$variance*10000
+  
+  n <- c(nrow(species_Measure %>% filter(period==2)),nrow(species_Measure %>% filter(period==1)))
+  
+  result.prop$lci <- round(pmax(result.prop$mean - 1.96*((result.prop$variance)^0.5)/(n^0.5),0),2)
+  result.prop$uci <- round(result.prop$mean + 1.96*((result.prop$variance)^0.5)/(n^0.5),2)
+  
+  result.prop$mean <- round(result.prop$mean,2)
+  
+  result.species$mean <- round(result.species$mean,2)
+  result.species$lci <- round(result.species$lci,2)
+  result.species$uci <- round(result.species$uci,2)
+  result <- rbind(result.species,result.prop)
+  
+  return(result)
+  
+}
