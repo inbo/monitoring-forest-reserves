@@ -44,7 +44,19 @@ Kadert in de opmaak van een artikel in themanummer Frontiers Forests Global Chan
 Naast biomassa in levende en dode bomen (zie `plot_level_C_levend_dood_PNV_G_bms.Rmd`) 
 op plotniveau, ook de **gemiddelde soortensamenstelling** per PNV:   
 - stamtal, grondvlak, volume van de meest voorkomende soorten
-- onderscheid dood en levend
+- onderscheid dood (L+S samen) en levend
+
+<!-- number_of_trees_ha - enkel levend -->
+<!-- (hakhout: stem_number_ha) -->
+
+<!-- basal_area_alive_m2_ha -->
+<!-- basal_area_dead_m2_ha - NIET NODIG -->
+
+<!-- vol_alive_m3_ha -->
+<!-- vol_dead_standing_m3_ha  - NIET NODIG -->
+<!-- vol_log_m3_ha  - NIET NODIG -->
+<!-- vol_deadw_m3_ha (= S + L) -->
+
 
 "Wat we dan ook nog nodig hebben is een gemiddelde soortensamenstelling per PNV, denk ik (stamtal, grondvlak, volume van de meest voorkomende soorten; onderscheid dood en levend).
 Dat zou je al eens kunnen proberen voor de BR data, dan vragen we Leen om dat op dezelfde manier te doen voor de VBI data"
@@ -66,6 +78,22 @@ path_to_article <- "G:/.shortcut-targets-by-id/1GY3uYeL5JjG14h_BAkzsQwse31el-yhC
 # !! oppassen van nisk te overschrijven
 ```
 
+```{r load_info_lkp}
+plotinfo <- read_vc(file = "plotinfo", root = path_to_forresdat_data)
+
+con <- odbcConnectAccess2007(path_to_strata_db)
+ strata_tables <- sqlTables(con) %>% filter(!str_detect(TABLE_NAME, "MSys"))
+ pnv <- sqlFetch(con, "strata_soil", stringsAsFactors = FALSE)
+odbcClose(con)
+
+qPNV <- read_xlsx(paste0(path_to_strata, "legende_PNV.xlsx")) %>% 
+  select(PNVcde = Code, PNVtxt = "Nederlandse naam") %>% 
+  mutate(PNVcde = as.integer(PNVcde))
+
+qSpecies <- read_vc(file = "qSpecies", root = path_to_forresdat_data)
+```
+
+
 
 # Inladen analysesets NARA
 
@@ -75,234 +103,789 @@ Plots die ook bij NARA gebruikt werden => analysesets van NARA-analyse inladen.
 path_to_NARA_request <- paste0(path_to_datarequests_gdrive, "INBO_NARA_biomassa/")
 
 analyseSet <- read.csv2(paste0(path_to_NARA_request, "analyseSet_living_C.csv"))
-analyseSet_deadw <- read.csv2(paste0(path_to_NARA_request, "analyseSet_deadw_vol.csv")) %>% 
-  select(1:16)
-# bevat NA's voor liggend dood hout (Kerss 1eSET)
-
-names(analyseSet_deadw)
-
-n_distinct(analyseSet$plot_id) == n_distinct(analyseSet_deadw$plot_id)
 n_distinct(analyseSet$plot_id) == nrow(analyseSet)/2
 
 plots <- unique(analyseSet$plot_id)
 ```
 
 
-```{r load_dendro_by_species}
+```{r load_dendro_by_plot}
+# data_dendro <- load_data_dendrometry(path_to_fieldmap, plottype = "Circular plot", extra_variables = TRUE)
+
+# beter uit folder "C:\03_BR\1_Dataverwerking\Output\plot-level-data" halen
+dendro_by_plot <- read_csv2(paste0(path_to_plotlevel_csv, "dendro_by_plot.csv")) %>% 
+  filter(plot_id %in% plots & period %in% c(1,2)) %>% select(-1)
+unique(dendro_by_plot$forest_reserve)
+
+names(dendro_by_plot)
+
+# !! bevat nu wel al deadw kerss 1ste decade (53 plots)
+t <- dendro_by_plot %>% filter(is.na(vol_log_m3_ha)) 
+table(t$plot_id) #nrow()
+
+dendro_by_plot %>% filter(between (plot_id, 2000, 2070) & period == 1) %>% head()
+```
+
+```{r load_dendro_by_plot_species}
 # data_dendro <- load_data_dendrometry(path_to_fieldmap, plottype = "Circular plot", extra_variables = TRUE)
 
 # beter uit folder "C:\03_BR\1_Dataverwerking\Output\plot-level-data" halen
 dendro_by_plot_species <- read_csv2(paste0(path_to_plotlevel_csv, "dendro_by_plot_species.csv")) %>% 
-  filter(plot_id %in% plots) %>% select(-1)
+  filter(plot_id %in% plots & period %in% c(1,2)) %>% select(-1)
 unique(dendro_by_plot_species$forest_reserve)
 
 names(dendro_by_plot_species)
 
-# !! bevat deadw kerss 1ste decade nog niet (53 plots)
+# !! bevat nu wel al deadw kerss 1ste decade (53 plots)
 t <- dendro_by_plot_species %>% filter(is.na(vol_log_m3_ha)) 
 table(t$plot_id) #nrow()
 
+dendro_by_plot_species %>% filter(between (plot_id, 2000, 2070) & period == 1) %>% head()
 ```
 
-number_of_trees_ha - enkel levend
-(hakhout: stem_number_ha)
 
-basal_area_alive_m2_ha
-basal_area_dead_m2_ha
+```{r analysesets}
+names(dendro_by_plot)
+analyseSet <- dendro_by_plot %>% 
+  select(1:3, number_of_trees_ha, contains("alive"), vol_deadw_m3_ha, 17:19) %>% 
+  select(-vol_bole_alive_m3_ha)
 
-vol_alive_m3_ha
-vol_dead_standing_m3_ha
-vol_log_m3_ha
-vol_deadw_m3_ha (= + log)
-
-
-```{r}
-logs_by_decay_plot_species <- read_csv2(paste0(path_to_plotlevel_csv, "logs_by_decay_plot_species.csv")) %>% 
-  filter(plot_id %in% plots) %>% select(-1)
-unique(logs_by_decay_plot_species$forest_reserve)
-names(logs_by_decay_plot_species)
-# !! bevat deadw kerss 1ste decade nog niet (53 plots)
-
+names(dendro_by_plot_species)
+analyseSet_species <- dendro_by_plot_species %>% 
+  select(1:5, contains("alive"), vol_deadw_m3_ha, 17:19) %>% 
+  select(-vol_bole_alive_m3_ha) %>% 
+  left_join(qSpecies %>% select(species = ID, speciesTxt = Value1))
 
 ```
 
 
 
-# Strata toevoegen
+# Statistics per PNV
 
-- PNV 
-- Gemiddeld grondvlak  
-- Hoofdboomsoort obv grondvlak  
-- Beheer  
+```{r add_pnv}
+names(analyseSet)
 
+analyseSet_ <- analyseSet %>% 
+  left_join(pnv %>% select(plot_id, PNV)) 
+# %>% left_join(qPNV, by = c("PNV" = "PNVcde"))
 
-```{r load_plotinfo_strata}
-plotinfo <- read_vc(file = "plotinfo", root = path_to_forresdat_data)
+analyseSet <- analyseSet_
 
-con <- odbcConnectAccess2007(path_to_strata_db)
- strata_tables <- sqlTables(con) %>% filter(!str_detect(TABLE_NAME, "MSys"))
- management <- sqlFetch(con, "strata_remaining", stringsAsFactors = FALSE)
- dominant_tree <- sqlFetch(con, "dominant_tree", stringsAsFactors = FALSE) 
- location <- sqlFetch(con, "strata_location", stringsAsFactors = FALSE)
- pnv <- sqlFetch(con, "strata_soil", stringsAsFactors = FALSE)
- # plotinfo <- sqlFetch(con, "plotinfo", stringsAsFactors = FALSE) # nog niet geupdate
-odbcClose(con)
+analyseSet_species <- analyseSet_species %>% 
+  left_join(pnv %>% select(plot_id, PNV)) 
+# %>% left_join(qPNV, by = c("PNV" = "PNVcde"))
+
 
 ```
 
-```{r results= 'hide'}
-names(analyseSet_all)
+## N, G, V per PNV
 
-analyseSet_all_ <- analyseSet_all %>% 
-  # select(1:5, 7:9, everything()) %>% 
-  left_join(dominant_tree %>% 
-              select(1:2, MaxBasalAreaSpeciesID, MaxBasalAreaSpeciesName)) %>% 
+PNV als stratum => binnen elke PNV gaan zien wat N, G en V is
+
+Vertrekken van analyseset zonder species
+
+
+```{r statistics_per_PNV, results = 'hide'}
+variables_for_statistics <- c("number_of_trees_ha", "basal_area_alive_m2_ha"
+                              , "vol_alive_m3_ha", "vol_deadw_m3_ha")
+
+Resultaat <- create_statistics(
+  dataset = analyseSet %>% dplyr::filter(!is.na(PNV)),
+  level = c("period", "PNV"),
+  # level = c("period"),
+  variables = variables_for_statistics,
+  include_year_range = FALSE,
+  na_rm = FALSE,
+ 
+    interval_information = suppressMessages(read_csv2(system.file("extdata/class_data.csv",
+    package = "forrescalc")))
+) %>% 
+  select(-logaritmic)
+
+Resultaat
+Resultaat[5:8] <- round(Resultaat[5:8],2)
+
+vars <- c("period")
+Result_NGV_per_PNV <- Resultaat %>%
+  mutate_at(vars, factor) %>% 
+  left_join(qPNV, by = c("PNV" = "PNVcde"))
+
+unique(Result_NGV_per_PNV$variable)
+# [1] "basal_area_alive_m2_ha" "number_of_trees_ha"     "vol_alive_m3_ha"       
+# [4] "vol_deadw_m3_ha" 
+
+```
+
+
+## N, G, V per soort en per PNV 
+
+Mag ik soort als level meenemen bij gebruik van `create_statistics`?
+
+PNV als level => alle plots in die bepaalde pnv worden beschouwd => OK
+
+Boomsoort als level: enkel indien ik ook alle nulwaardes mee heb om een gemiddelde over alle plots heen te maken! 
+bv. appel
+=> met functie `add_zeros` nullen toevoegen
+! lukt enkel als ik alle overbodige velden verwijder!!
+
+
+```{r statistics_per_PNV_per_soort, results = 'hide'}
+names(analyseSet_species)
+
+# !!!! EERST alle overbodige velden verwijderen !! 
+# dan terug PNV en speciesTxt koppelen
+analyseSet_species_0 <- add_zeros(dataset = analyseSet_species
+                                  %>% select(plot_id, period, species, contains("_ha")),
+                                  comb_vars = c("plot_id", "species"),
+                                  grouping_vars = c("period")
+                                  ) %>%
+  left_join(qSpecies %>% dplyr::select(species = ID, speciesTxt = Value1)) %>% 
   left_join(pnv %>% select(plot_id, PNV)) %>% 
-  left_join(management %>% select(plot_id, contains("unmanaged_since")))  # op plot - en reservaatsniveau
-# er is ook nog "last_commercial_intervention": ook op reservaatsniveau
+  dplyr::filter(!is.na(PNV))
+  
+# dit klopt! (+/-)
+analyseSet_species_p2 <- analyseSet_species %>% filter(period == 2)
 
-analyseSet_all <- analyseSet_all_
+length(plots) == nrow(analyseSet_species_0 %>% filter(period == 2))/length(unique(analyseSet_species_p2$species))
+# => per periode worden alle combinaties van boomsoorten en plots meegenomen
+
+variables_for_statistics <- c("number_of_trees_ha", "basal_area_alive_m2_ha"
+                              , "vol_alive_m3_ha", "vol_deadw_m3_ha")
+
+Resultaat <- create_statistics(
+  dataset = analyseSet_species_0,
+  level = c("period", "PNV", "speciesTxt"),
+  # level = c("period"),
+  variables = variables_for_statistics,
+  include_year_range = FALSE,
+  na_rm = FALSE,
+ 
+    interval_information = suppressMessages(read_csv2(system.file("extdata/class_data.csv",
+    package = "forrescalc")))
+) %>% 
+  select(-logaritmic)
+
+Resultaat
+Resultaat[5:8] <- round(Resultaat[5:8],2)
+
+vars <- c("period", "speciesTxt")
+Result_NGV_per_PNV_per_species <- Resultaat %>%
+  mutate_at(vars, factor) %>% 
+  left_join(qPNV, by = c("PNV" = "PNVcde"))
+
+unique(Result_NGV_per_PNV_per_species$variable)
+# [1] "basal_area_alive_m2_ha" "number_of_trees_ha"     "vol_alive_m3_ha"       
+# [4] "vol_deadw_m3_ha" 
+
+# controle
+# som moet gelijk zijn aan G per pnv
+names(Result_NGV_per_PNV_per_species)
+names(Result_NGV_per_PNV)
+
+totaal_NGV_per_PNV <- Result_NGV_per_PNV_per_species %>% 
+  filter(variable == "basal_area_alive_m2_ha") %>% 
+  group_by(period, PNV) %>% 
+  summarize(G = sum(mean)) %>% 
+  ungroup()
+
+# vgl met Result_NGV_per_PNV obv analyseset (zonder soorten)
+check_NGV <- totaal_NGV_per_PNV %>% 
+  left_join(Result_NGV_per_PNV %>% filter(variable == "basal_area_alive_m2_ha") 
+            , by = c("period", "PNV")) %>% 
+  mutate(verschil = G - mean)
+
 ```
 
-# Berekenen biomassa dood hout - obv PNV
-
-Inladen conversiefactoren Luc DK, gebruikt bij NARA
-
-Luc heeft een 'gemiddelde afbraakklasse' genomen en een 'gemiddelde boomsoortensamenstelling' voor dood hout, per PNV.
-Dat resulteert in een vaste omrekenfactor: een heel ruwe berekening, maar wel gelijk voor VBI en BR. 
-Het volume dood hout berekend voor elke PNV, is vermenigvuldigd met de waarde voor DxCC die rechts onderaan staat (afhankelijk van PNV type tussen 0,15 en 0,20).
 
 
-```{r}
-# conversie_deadw_per_PNV <- read_excel(paste0(path_to_request, "conv_deadw_biomass.xlsx"))
-# names(conversie_deadw_per_PNV)
+## Aandeel N, G, V per soort en per PNV
 
-conversie_deadw_per_PNV <- read.xlsx(paste0(path_to_request, "NARA C gegevens_LucDK.xlsx"), sheetName = "DxCC")
-names(conversie_deadw_per_PNV)
+Binnen PNV gaan zien wat aandeel van de verschillende soorten is (van N, G, en V)
 
+```{r top20_bms}
+top_bms <- analyseSet_species %>% 
+  group_by(species, speciesTxt) %>% 
+  summarize(basal_area_sum = sum(basal_area_alive_m2_ha)) %>% 
+  # mean niet goed, want plots waarsoort niet voorkomt, worden niet meegenomen als 0)
+  ungroup() %>% 
+  # left_join(qSpecies %>% select(species = ID, speciesTxt = Value1)) %>% 
+  arrange(desc(basal_area_sum)) 
+
+list_top20 <- top_bms %>% top_n(20) %>% dplyr::pull(speciesTxt)
 ```
 
+### Zonder PNV - G - als test
 
-```{r results= 'hide'}
-names(analyseSet_all)
+```{r occurence, eval = FALSE}
+# Obv occurence de zeldzame soorten eruithalen 
+# WANT voor zeldzame soorten kan analyse rare resultaten geven
 
-analyseSet_all_ <- analyseSet_all %>% 
-  left_join(conversie_deadw_per_PNV, by = c("PNV")) %>% 
-  rename(conv_CC_deadw = DxCC) %>% 
-  mutate(Carbon_snags_t_ha = vol_dead_standing_m3_ha * conv_CC_deadw,  # ? of vol_bole_dead_m3_ha
-         Carbon_logs_t_ha = vol_log_m3_ha * conv_CC_deadw,
-         Carbon_dead_t_ha = Carbon_snags_t_ha + Carbon_logs_t_ha) 
+occurenceSpecies <- analyseSet_species %>% 
+  group_by(period, species, speciesTxt) %>% 
+  summarise(nbPlots =  n(), 
+            nbPlotsBasalArea = sum((basal_area_alive_m2_ha > 0 ))
+            ) %>% 
+  ungroup()
 
-names(analyseSet_all_)
+totalPlots <- analyseSet %>% 
+  group_by(period) %>% 
+  summarise(TotPlots =  n()
+            ) %>% 
+  ungroup()
 
-analyseSet_all <- analyseSet_all_
-```
-
-OPGEPAST: twee plots zonder PNV-type, dus ook geen biomassa deadwood
-
-```{r filter_with_pnv}
-analyseSet_all_ <- analyseSet_all %>% 
-  filter(!is.na(PNV))
-
-analyseSet_all <- analyseSet_all_
-```
-
-
-# Resulterende dataframe
-
-```{r }
-analyseSet_finaal <- analyseSet_all %>% 
-  select(plot_id, period, year, 
-         PNV,
-         Carbon_alive_t_ha, 
-         Carbon_snags_t_ha, Carbon_logs_t_ha,
-         Carbon_dead_t_ha,
-         basal_area_alive_m2_ha,
-         contains("MaxBasalArea"),
-         contains("unmanaged_since")
-         )
-
-names(analyseSet_finaal)
-```
-
-# Wijde tabel
-
-```{r }
-analyseSet_finaal_wide <- analyseSet_finaal %>% 
-  select(-Carbon_snags_t_ha, - Carbon_logs_t_ha) %>% 
-  pivot_wider(
-    names_from = period,
-    names_sep = "_",
-    values_from = c(year, Carbon_alive_t_ha, Carbon_dead_t_ha, 
-                    basal_area_alive_m2_ha, 
-                    MaxBasalAreaSpeciesID, MaxBasalAreaSpeciesName)
+occurenceSpecies_ <- occurenceSpecies %>% 
+  left_join(totalPlots, by = "period") %>% 
+  mutate(Occurence = nbPlots/TotPlots,
+         Occurence_BasalArea = nbPlotsBasalArea/TotPlots
   )
 
-analyseSet_finaal_wide_ <- analyseSet_finaal_wide %>% 
-  mutate(time_interval = year_2 - year_1,
-         increase_C_alive = `Carbon_alive_t_ha_2` - `Carbon_alive_t_ha_1`,
-         increase_C_alive_per_yr = round(increase_C_alive/time_interval, 4),
-         increase_C_dead = `Carbon_dead_t_ha_2` - `Carbon_dead_t_ha_1`,
-         increase_C_dead_per_yr = round(increase_C_dead/time_interval, 4),        
-         )
+speciesList <- occurenceSpecies_ %>% 
+  filter(Occurence_BasalArea > 0.01) %>% 
+  dplyr::pull(speciesTxt) %>% 
+  unique()
+```
 
-# summary(analyseSet_finaal_wide_)
 
-analyseSet_finaal_wide <- analyseSet_finaal_wide_
-names(analyseSet_finaal_wide)
+```{r propMeasure_alive_G, eval = FALSE}
+# Analyse enkel voor speciesList (zonder de zeldzame) ------------
+length(speciesList) # 32
+
+speciesList
+
+i<-1
+
+# data <- analyseSet_species
+# spName <- "Zomereik"
+# specName <- "Zomereik"
+# variableName <- "basal_area_alive_m2_ha"
+# 
+# speciesList2 <- c("Amerikaanse eik", "Amerikaanse vogelkers", "Berk") 
+
+for (specName in speciesList){
+
+  temp <- propMeasure_Species(data = analyseSet_species
+                              ,spName = specName  # < loop obv speciesList
+                              ,variableName = "basal_area_alive_m2_ha")
+
+  if (i == 1){
+
+    result_BasalArea_species <- temp
+
+  } else if (i>1){
+
+    result_BasalArea_species <- rbind(result_BasalArea_species,temp)
+
+  }
+
+  i <- i +1
+}
+
+#controle 100%
+result_BasalArea_species %>% group_by(period) %>% 
+  summarize(totaal = sum(mean)) %>% 
+  ungroup()
+
+# selectie van enkel de top 20
+result_BasalArea_species <- result_BasalArea_species %>%
+    filter(stratumNaam %in% list_top20)
+
+    #wegschrijven resultaten
+Resultaat <- result_BasalArea_species
+
+colnames(Resultaat)
+Resultaat[6:9] <- round(Resultaat[6:9],3)
+
+ 
+```
+
+
+### Loop per PNV
+
+```{r list_pnv}
+list_pnv <- c(2,4,5,6,7)  # zonder NA
+unique(analyseSet_species$PNV)
+
+```
+#### G
+
+```{r loop_pnv_G}
+# test
+# pnv <- 7
+
+j <-1
+
+for (pnv in list_pnv){
+
+data_pnv <- analyseSet_species %>% 
+  filter(PNV == pnv)
+
+## occurence => zeldzaamste bms-en niet meenemen
+occurenceSpecies <- data_pnv %>% 
+  group_by(period, species, speciesTxt, PNV) %>% 
+  summarise(
+    # nbPlots =  n(), 
+            nbPlotsOccur = sum((basal_area_alive_m2_ha > 0 ))
+            ) %>% 
+  ungroup()
+
+totalPlots <- analyseSet %>% 
+  filter(PNV == pnv) %>% 
+  group_by(period) %>% 
+  summarise(TotPlots =  n()
+            ) %>% 
+  ungroup()
+
+occurenceSpecies_ <- occurenceSpecies %>% 
+  left_join(totalPlots, by = "period") %>% 
+  mutate(Occurence = nbPlotsOccur/TotPlots
+  )
+
+speciesList <- occurenceSpecies_ %>% 
+  filter(Occurence > 0.01) %>% 
+  dplyr::pull(speciesTxt) %>% 
+  unique()
+
+## analyse enkel voor de minder zeldzame soorten
+length(speciesList) # 29
+speciesList
+
+i<-1
+
+for (specName in speciesList){
+
+  temp <- propMeasure_Species(data = data_pnv
+                              ,spName = specName  # < loop obv speciesList
+                              ,variableName = "basal_area_alive_m2_ha")
+
+  if (i == 1){
+
+    result_Measure_species <- temp
+
+  } else if (i>1){
+
+    result_Measure_species <- rbind(result_Measure_species,temp)
+
+  }
+
+  i <- i +1
+}
+
+
+result_Measure_species$PNV <- pnv
+
+if (j == 1){
+
+    result_Measure_species_pnv <- result_Measure_species
+
+  } else if (j>1){
+
+    result_Measure_species_pnv <- rbind(result_Measure_species_pnv,result_Measure_species)
+
+  }
+
+  j <- j +1
+
+
+}
+
+
+# controle 100%
+t <- result_Measure_species_pnv %>% group_by(period, PNV) %>% 
+  summarize(total = sum(mean)) %>% 
+  ungroup()
+
+# resultaat hernoemen
+result_G_species_pnv <- result_Measure_species_pnv %>% 
+  rename(speciesTxt = stratumNaam)
+ 
+```
+
+```{r select_top20_G, eval = FALSE}
+# selectie van enkel de top 20 - NOG NIET: Luc wil dat achteraf pas doen als we results van VBI hebben
+result_BasalArea_species <- result_BasalArea_species %>%
+    filter(speciesTxt %in% list_top20)
 
 ```
 
-```{r check, results = 'hide'}
-analyseSet_finaal_wide %>% filter(is.na(Carbon_dead_t_ha_1)) %>% nrow()  # 0
-# Kerss nu aangevuld obv data monitorinngrapport 2000
-analyseSet_finaal_wide %>% filter(is.na(Carbon_dead_t_ha_2)) %>% nrow()  # 0
-analyseSet_finaal_wide %>% filter(is.na(PNV)) %>% nrow()  # 0
-# eerst 2 plots 729 en 730 zonder C_dead => weggefilterd hierboven
+
+#### N
+
+```{r loop_pnv_N}
+# test
+# pnv <- 7
+
+j <-1
+
+for (pnv in list_pnv){
+
+data_pnv <- analyseSet_species %>% 
+  filter(PNV == pnv)
+
+## occurence => zeldzaamste bms-en niet meenemen - obv G => dan voor N,G,V steeds zelfde soorten
+occurenceSpecies <- data_pnv %>% 
+  group_by(period, species, speciesTxt, PNV) %>% 
+  summarise(
+    # nbPlots =  n(), 
+            nbPlotsOccur = sum((basal_area_alive_m2_ha > 0 ))
+            ) %>% 
+  ungroup()
+
+totalPlots <- analyseSet %>% 
+  filter(PNV == pnv) %>% 
+  group_by(period) %>% 
+  summarise(TotPlots =  n()
+            ) %>% 
+  ungroup()
+
+occurenceSpecies_ <- occurenceSpecies %>% 
+  left_join(totalPlots, by = "period") %>% 
+  mutate(Occurence = nbPlotsOccur/TotPlots
+  )
+
+speciesList <- occurenceSpecies_ %>% 
+  filter(Occurence > 0.01) %>% 
+  dplyr::pull(speciesTxt) %>% 
+  unique()
+
+## analyse enkel voor de minder zeldzame soorten
+length(speciesList) # 29
+speciesList
+
+i<-1
+
+for (specName in speciesList){
+
+  temp <- propMeasure_Species(data = data_pnv
+                              ,spName = specName  # < loop obv speciesList
+                              ,variableName = "number_of_trees_ha")
+
+  if (i == 1){
+
+    result_Measure_species <- temp
+
+  } else if (i>1){
+
+    result_Measure_species <- rbind(result_Measure_species,temp)
+
+  }
+
+  i <- i +1
+}
+
+
+result_Measure_species$PNV <- pnv
+
+if (j == 1){
+
+    result_Measure_species_pnv <- result_Measure_species
+
+  } else if (j>1){
+
+    result_Measure_species_pnv <- rbind(result_Measure_species_pnv,result_Measure_species)
+
+  }
+
+  j <- j +1
+
+
+}
+
+
+# controle 100%
+t <- result_Measure_species_pnv %>% group_by(period, PNV) %>% 
+  summarize(total = sum(mean)) %>% 
+  ungroup()
+
+# resultaat hernoemen
+result_N_species_pnv <- result_Measure_species_pnv %>% 
+  rename(speciesTxt = stratumNaam)
+
+ 
+```
+
+
+```{r select_top20_N, eval = FALSE}
+# selectie van enkel de top 20 - NOG NIET: Luc wil dat achteraf pas doen als we results van VBI hebben
+result_N_species_pnv <- result_N_species_pnv %>%
+    filter(speciesTxt %in% list_top20)
 
 ```
 
-CONTROLE
-
-```{r vgl_oude_data, eval = FALSE}
-oude_data <- read_csv2(paste0(path_to_request, "carbon_plot_level.csv"))
-
-oude_data_wide <- read_csv2(paste0(path_to_request, "carbon_plot_level_wide.csv"))
-
-# vgl oude data (x) = all - above vs below ground
-vgl <- oude_data %>% 
-  left_join(analyseSet_finaal, by = c("plot_id", "period", "year")) %>% 
-  mutate(factor_abovegr_belowgr = Carbon_alive_t_ha.x/Carbon_alive_t_ha.y)  # all/enkel bovengr
-range(vgl$factor_abovegr_belowgr, na.rm = TRUE)
-# [1] 1.16 1.24 - OK
-# dwz dat delen door +/- 1.2 je enkel het bovengrondse geeft
 
 
-# vgl oude data: afronding factor Luc
-vgl <- oude_data %>% 
-  left_join(analyseSet_finaal, by = c("plot_id", "period", "year")) %>% 
-  mutate(logs_verschil= Carbon_logs_t_ha.x - Carbon_logs_t_ha.y,
-         logs_verschil_pr= 100*(Carbon_logs_t_ha.x - Carbon_logs_t_ha.y)/Carbon_logs_t_ha.x)
+
+#### V
+
+```{r loop_pnv_V}
+j <-1
+
+for (pnv in list_pnv){
+
+data_pnv <- analyseSet_species %>% 
+  filter(PNV == pnv)
+
+## occurence => zeldzaamste bms-en niet meenemen - obv G => dan voor N,G,V steeds zelfde soorten
+occurenceSpecies <- data_pnv %>% 
+  group_by(period, species, speciesTxt, PNV) %>% 
+  summarise(
+    # nbPlots =  n(), 
+            nbPlotsOccur = sum((basal_area_alive_m2_ha > 0 ))
+            ) %>% 
+  ungroup()
+
+totalPlots <- analyseSet %>% 
+  filter(PNV == pnv) %>% 
+  group_by(period) %>% 
+  summarise(TotPlots =  n()
+            ) %>% 
+  ungroup()
+
+occurenceSpecies_ <- occurenceSpecies %>% 
+  left_join(totalPlots, by = "period") %>% 
+  mutate(Occurence = nbPlotsOccur/TotPlots
+  )
+
+speciesList <- occurenceSpecies_ %>% 
+  filter(Occurence > 0.01) %>% 
+  dplyr::pull(speciesTxt) %>% 
+  unique()
+
+## analyse enkel voor de minder zeldzame soorten
+length(speciesList) # 29
+speciesList
+
+i<-1
+
+for (specName in speciesList){
+
+  temp <- propMeasure_Species(data = data_pnv
+                              ,spName = specName  # < loop obv speciesList
+                              ,variableName = "vol_alive_m3_ha")
+
+  if (i == 1){
+
+    result_Measure_species <- temp
+
+  } else if (i>1){
+
+    result_Measure_species <- rbind(result_Measure_species,temp)
+
+  }
+
+  i <- i +1
+}
+
+
+result_Measure_species$PNV <- pnv
+
+if (j == 1){
+
+    result_Measure_species_pnv <- result_Measure_species
+
+  } else if (j>1){
+
+    result_Measure_species_pnv <- rbind(result_Measure_species_pnv,result_Measure_species)
+
+  }
+
+  j <- j +1
+
+
+}
+
+
+# controle 100%
+t <- result_Measure_species_pnv %>% group_by(period, PNV) %>% 
+  summarize(total = sum(mean)) %>% 
+  ungroup()
+
+# resultaat hernoemen
+result_V_species_pnv <- result_Measure_species_pnv %>% 
+  rename(speciesTxt = stratumNaam)
+
+ 
+```
+
+
+```{r select_top20_V, eval = FALSE}
+# selectie van enkel de top 20 - NOG NIET: Luc wil dat achteraf pas doen als we results van VBI hebben
+result_V_species_pnv <- result_N_species_pnv %>%
+    filter(speciesTxt %in% list_top20)
+
+```
+
+
+#### V dead
+
+```{r loop_pnv_V_dead}
+# test
+# pnv <- 7
+
+j <-1
+
+for (pnv in list_pnv){
+
+data_pnv <- analyseSet_species %>% 
+  filter(PNV == pnv)
+
+## occurence => zeldzaamste bms-en niet meenemen - obv G => dan voor N,G,V steeds zelfde soorten
+occurenceSpecies <- data_pnv %>% 
+  group_by(period, species, speciesTxt, PNV) %>% 
+  summarise(
+    # nbPlots =  n(), 
+            nbPlotsOccur = sum((basal_area_alive_m2_ha > 0 ))
+            ) %>% 
+  ungroup()
+
+totalPlots <- analyseSet %>% 
+  filter(PNV == pnv) %>% 
+  group_by(period) %>% 
+  summarise(TotPlots =  n()
+            ) %>% 
+  ungroup()
+
+occurenceSpecies_ <- occurenceSpecies %>% 
+  left_join(totalPlots, by = "period") %>% 
+  mutate(Occurence = nbPlotsOccur/TotPlots
+  )
+
+speciesList <- occurenceSpecies_ %>% 
+  filter(Occurence > 0.01) %>% 
+  dplyr::pull(speciesTxt) %>% 
+  unique()
+
+## analyse enkel voor de minder zeldzame soorten
+length(speciesList) # 29
+speciesList
+
+i<-1
+
+for (specName in speciesList){
+
+  temp <- propMeasure_Species(data = data_pnv
+                              ,spName = specName  # < loop obv speciesList
+                              ,variableName = "vol_deadw_m3_ha")
+
+  if (i == 1){
+
+    result_Measure_species <- temp
+
+  } else if (i>1){
+
+    result_Measure_species <- rbind(result_Measure_species,temp)
+
+  }
+
+  i <- i +1
+}
+
+
+result_Measure_species$PNV <- pnv
+
+if (j == 1){
+
+    result_Measure_species_pnv <- result_Measure_species
+
+  } else if (j>1){
+
+    result_Measure_species_pnv <- rbind(result_Measure_species_pnv,result_Measure_species)
+
+  }
+
+  j <- j +1
+
+
+}
+
+
+# controle 100%
+t <- result_Measure_species_pnv %>% group_by(period, PNV) %>% 
+  summarize(total = sum(mean)) %>% 
+  ungroup()
+
+# resultaat hernoemen
+result_Vdead_species_pnv <- result_Measure_species_pnv %>% 
+  rename(speciesTxt = stratumNaam)
+
+ 
+```
+
+
+```{r select_top20_V_dead, eval = FALSE}
+# selectie van enkel de top 20 - NOG NIET: Luc wil dat achteraf pas doen als we results van VBI hebben
+result_N_species_pnv <- result_N_species_pnv %>%
+    filter(speciesTxt %in% list_top20)
+
 ```
 
 
 # Export
 
-```{r export_to_csv}
-write_excel_csv2(analyseSet_finaal,paste0(path_to_request, "carbon_plot_level.csv"))
-write_excel_csv2(analyseSet_finaal_wide,paste0(path_to_request, "carbon_plot_level_wide.csv"))
+```{r export_to_xlsx}
+# xls met tabbladen - totalen
+write.xlsx(Result_NGV_per_PNV
+           ,paste0(path_to_request, "NGV_per_pnv.xlsx")
+           ,sheetName = "NGV")
+write.xlsx2(x = Result_NGV_per_PNV_per_species,
+           ,file = paste0(path_to_request, "NGV_per_pnv.xlsx")
+           ,sheetName = "NGV_per_species", append = T)
+
+# idem - aandelen
+write.xlsx(result_G_species_pnv
+           ,paste0(path_to_request, "aandeel_NGV_per_pnv.xlsx")
+           ,sheetName = "G")
+write.xlsx(result_N_species_pnv,paste0(path_to_request, "aandeel_NGV_per_pnv.xlsx")
+           ,sheetName = "N", append = T)
+write.xlsx(result_V_species_pnv,paste0(path_to_request, "aandeel_NGV_per_pnv.xlsx")
+           ,sheetName = "V", append = T)
+write.xlsx(result_Vdead_species_pnv,paste0(path_to_request, "aandeel_NGV_per_pnv.xlsx")
+           ,sheetName = "V_dead", append = T)
 
 ```
 
-```{r export_to_csv_gdrive}
-write_excel_csv2(analyseSet_finaal,paste0(path_to_gdrive, "carbon_plot_level.csv"))
-write_excel_csv2(analyseSet_finaal_wide,paste0(path_to_gdrive, "carbon_plot_level_wide.csv"))
+```{r export_to_gdrive}
+# xls met tabbladen - totalen
+write.xlsx(Result_NGV_per_PNV
+           ,paste0(path_to_gdrive, "NGV_per_pnv.xlsx")
+           ,sheetName = "NGV")
+write.xlsx2(x = Result_NGV_per_PNV_per_species,
+           ,file = paste0(path_to_gdrive, "NGV_per_pnv.xlsx")
+           ,sheetName = "NGV_per_species", append = T)
+
+# idem - aandelen
+write.xlsx(result_G_species_pnv
+           ,paste0(path_to_gdrive, "aandeel_NGV_per_pnv.xlsx")
+           ,sheetName = "G")
+write.xlsx(result_N_species_pnv,paste0(path_to_gdrive, "aandeel_NGV_per_pnv.xlsx")
+           ,sheetName = "N", append = T)
+write.xlsx(result_V_species_pnv,paste0(path_to_gdrive, "aandeel_NGV_per_pnv.xlsx")
+           ,sheetName = "V", append = T)
+write.xlsx(result_Vdead_species_pnv,paste0(path_to_gdrive, "aandeel_NGV_per_pnv.xlsx")
+           ,sheetName = "V_dead", append = T)
 
 ```
 
 ```{r export_to_gdrive_article, eval = FALSE}
 # oppassen om niet te overschrijven
-write_excel_csv2(analyseSet_finaal,paste0(path_to_article, "carbon_plot_level_enkel_aboveground.csv"))
-write_excel_csv2(analyseSet_finaal_wide,paste0(path_to_article, "carbon_plot_level_wide_enkel_aboveground.csv"))
+
+
+# xls met tabbladen - totalen
+write.xlsx(Result_NGV_per_PNV
+           ,paste0(path_to_article, "NGV_per_pnv.xlsx")
+           ,sheetName = "NGV")
+write.xlsx2(x = Result_NGV_per_PNV_per_species,
+           ,file = paste0(path_to_article, "NGV_per_pnv.xlsx")
+           ,sheetName = "NGV_per_species", append = T)
+
+# idem - aandelen
+write.xlsx(result_G_species_pnv
+           ,paste0(path_to_article, "aandeel_NGV_per_pnv.xlsx")
+           ,sheetName = "G")
+write.xlsx(result_N_species_pnv,paste0(path_to_article, "aandeel_NGV_per_pnv.xlsx")
+           ,sheetName = "N", append = T)
+write.xlsx(result_V_species_pnv,paste0(path_to_article, "aandeel_NGV_per_pnv.xlsx")
+           ,sheetName = "V", append = T)
+write.xlsx(result_Vdead_species_pnv,paste0(path_to_article, "aandeel_NGV_per_pnv.xlsx")
+           ,sheetName = "V_dead", append = T)
 
 ```
