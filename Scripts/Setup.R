@@ -12,6 +12,7 @@ library(forrescalc)
 source(here::here("Scripts/Paths.r"))
 
 ### Libraries ----
+# library(ddply)
 library(tidyr)
 library (rlang)
 library(dplyr)
@@ -41,6 +42,7 @@ library(forrescalc)
 
     # install.packages("writexl")
     # install.packages("usethis")
+    # install.packages("ddply")
 
 # bovenstaande libraries zitten allemaal vervat in package "forrescalc"
 # !! toch best inladen, want soms nodig voor eigen code (buiten de functies van forrescalc)
