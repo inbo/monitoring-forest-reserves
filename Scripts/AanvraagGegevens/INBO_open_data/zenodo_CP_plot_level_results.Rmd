@@ -41,13 +41,28 @@ source(here::here("scripts/Setup.R"))
 
 Dit script heeft als doel een dataset te creëren voor publicatie op zenodo:   
 
-- plot level resultaten  
+- plot level resultaten (enkel cirkelplots) 
 - plotinfo met o.a. XY-coördinaten  
 
 
 Op termijn kunnen ook tree level resultaten (doorheen de tijd) gepubliceerd worden 
 (cfr Hongary: https://zenodo.org/record/7311384#.Y9kYO3bMKUk : 
 dbh_1st en DBH_2nd, V_1st/2nd, alivedead_1st/2nd, ...)
+
+Op teamoverleg besproken:   
+- vegetatie en dendrometrie als aparte datasets publiceren
+- XY volgens WGS (<strata_location)    
+- geen extra strata zoals bodem, beheer, …
+- species (latijnse naam), heightclass, decaystage en browseindex mee opnemen (niet via LU-lists)
+- plotinfo in afzonderlijke file   
+
+Extra aandachtspunten:   
+- vol_log_min40cm verwijderen uit tabellen   
+- metadata-files aanpassen zdd deze enkel verwijzing naar CP's bevatten   
+
+
+ev. plot-level files export als zip en zo naar zenodo
+
 
 
 ```{r Path}
@@ -60,12 +75,13 @@ path_to_datarequest <- "C:/3BR/1_DataVerwerkingBR/Open_data/zenodo_CP_vs1/"
 
 
 
-# Inladen plotinfo
+# Inladen plotinfo - enkel cirkelplots
 
 Met XY-coordinaten
 
 ```{r}
-plotinfo <- read_vc(file = "plotinfo", root = path_to_forresdat_data)
+plotinfo <- read_vc(file = "plotinfo", root = path_to_forresdat_data) %>% 
+  filter(plottype == "CP")
 colnames(plotinfo)
 
 ```
@@ -73,206 +89,292 @@ colnames(plotinfo)
 XY uit strata
 
 ```{r}
+con <- odbcConnectAccess2007(path_to_strata_db)
+  strata_tables <- sqlTables(con)
+  strata_location <- sqlFetch(con, "strata_location", stringsAsFactors = FALSE)
+  
+odbcClose(con)
+
+names(strata_location)
 
 ```
 
-# Inladen plot data
+```{r}
+plotinfo_ <- plotinfo %>% 
+  left_join(strata_location %>% select(plot_id
+                                       # , XLambert72, YLambert72
+                                       , XLon_wgs84, YLat_wgs84
+                                       , Z_m_TAW))
 
-Zonder plotinfo
-Met species, heightclass en decaystage
+# strata_location bevat dubbels voor kernvlaktes (meerdere unieknr voor zelfde plot_id),
+# maar niet voor CP's => OK
+
+plotinfo <- plotinfo_
+rm(plotinfo_)
+
+list_CP <- plotinfo$plot_id
+length(list_CP) == 2205
+```
 
 
-```{r LoadLookuplists}
+# Inladen plot data - enkel cirkelplots
+
+Zonder plotinfo (afzonderlijke file)
+Met species, heightclass, decaystage en browseindex
+
+
+```{r load_LU_lists}
 con <- odbcConnectAccess2007(path_to_fieldmap_db)
   
   qSpecies <- sqlFetch(con, "qspecies", stringsAsFactors = FALSE)
   qDecaystage <- sqlFetch(con, "qdecaystage", stringsAsFactors = FALSE)
   qHeightClass <- sqlFetch(con, "qHeightClass_regeneration", stringsAsFactors = FALSE)
   qHerbSpecies <- sqlFetch(con, "qHerbSpecies240810", stringsAsFactors = FALSE)
+  qBrowseIndex <- sqlFetch(con, "qBrowsIndex", stringsAsFactors = FALSE)
   
 odbcClose(con)
 ```
 
 
-
 ```{r read_dendro}
-dendro_by_plot <- read_forresdat("dendro_by_plot", repo_path = path_to_git_forresdat, 
-                                 join_plotinfo = FALSE, plottype = "CP")
- 
-dendro_by_plot_species <- read_forresdat("dendro_by_plot_species", repo_path = path_to_git_forresdat, 
-                                         join_plotinfo = FALSE, plottype = "CP") %>% 
-  left_join(qSpecies, by = c("species" = "ID")) %>% 
+# read_forresdat met dadelijk al selectie van enkel CP's werkte niet (18/4/2023)
+# en bovendien dient dan join_plotinfo = TRUE
+names(dendro_by_plot)
+dendro_by_plot <- read_forresdat("dendro_by_plot"
+                                 , repo_path = path_to_git_forresdat
+                                 , join_plotinfo = FALSE) %>% 
+  filter(plot_id %in% list_CP) %>% 
+  select(plot_id, year, period, 
+         number_of_tree_species,
+         number_of_trees_ha, stem_number_ha,
+         basal_area_alive_m2_ha, basal_area_dead_m2_ha, 
+         vol_alive_m3_ha, vol_dead_standing_m3_ha,
+         vol_bole_alive_m3_ha, vol_bole_dead_m3_ha,
+         vol_log_m3_ha, vol_deadw_m3_ha,
+         stems_per_tree)
+# 1680
+
+#--- 
+dendro_by_plot_species <- read_forresdat("dendro_by_plot_species"
+                                         , repo_path = path_to_git_forresdat
+                                         , join_plotinfo = FALSE) %>% 
+  left_join(qSpecies %>% select(1:3), by = c("species" = "ID")) %>% 
   rename(name_nl = Value1, 
-         name_sc = Value2) 
+         name_sc = Value2) %>% 
+  filter(plot_id %in% list_CP) %>% 
+  select(plot_id, year, period, 
+         species_code = species, name_nl, name_sc, 
+         number_of_trees_ha, stem_number_ha,
+         basal_area_alive_m2_ha, basal_area_dead_m2_ha, 
+         vol_alive_m3_ha, vol_dead_standing_m3_ha,
+         vol_bole_alive_m3_ha, vol_bole_dead_m3_ha,
+         vol_log_m3_ha, vol_deadw_m3_ha,
+         stems_per_tree) 
+  
 
-dendro_by_diam_plot <- read_forresdat("dendro_by_diam_plot", repo_path = path_to_git_forresdat, 
-                                      join_plotinfo = FALSE, plottype = "CP") 
+#--- 
+dendro_by_diam_plot <- read_forresdat("dendro_by_diam_plot"
+                                      , repo_path = path_to_git_forresdat
+                                      , join_plotinfo = FALSE) %>% 
+  filter(plot_id %in% list_CP) %>% 
+  select(plot_id, year, period, 
+         dbh_class_5cm, stem_number_alive_ha, stem_number_dead_ha,
+         basal_area_alive_m2_ha, basal_area_dead_m2_ha, 
+         vol_alive_m3_ha, vol_dead_standing_m3_ha,
+         vol_bole_alive_m3_ha, vol_bole_dead_m3_ha,
+         vol_log_m3_ha, vol_deadw_m3_ha)
 
-dendro_by_diam_plot_species <- read_forresdat("dendro_by_diam_plot_species", repo_path = path_to_git_forresdat, 
-                                              join_plotinfo = FALSE, plottype = "CP") %>%
-  left_join(qSpecies, by = c("species" = "ID")) %>% 
+#--- 
+names(dendro_by_diam_plot_species)
+dendro_by_diam_plot_species <- read_forresdat("dendro_by_diam_plot_species"
+                                              , repo_path = path_to_git_forresdat
+                                              , join_plotinfo = FALSE) %>%
+  left_join(qSpecies %>% select(1:3), by = c("species" = "ID")) %>% 
   rename(name_nl = Value1, 
-         name_sc = Value2) 
+         name_sc = Value2) %>% 
+  filter(plot_id %in% list_CP)  %>% 
+  select(plot_id, year, period, 
+         species_code = species, name_nl, name_sc, 
+         dbh_class_5cm, stem_number_alive_ha, stem_number_dead_ha,
+         basal_area_alive_m2_ha, basal_area_dead_m2_ha, 
+         vol_alive_m3_ha, vol_dead_standing_m3_ha,
+         vol_bole_alive_m3_ha, vol_bole_dead_m3_ha,
+         vol_log_m3_ha, vol_deadw_m3_ha)
 
-logs_by_decay_plot <- read_forresdat("logs_by_decay_plot", repo_path = path_to_git_forresdat, 
-                                     join_plotinfo = FALSE, plottype = "CP") %>% 
-  left_join(qDecaystage, by = c("decaystage" = "ID")) %>% 
+
+```
+
+```{r read_logs}
+logs_by_decay_plot <- read_forresdat("logs_by_decay_plot"
+                                     , repo_path = path_to_git_forresdat
+                                     , join_plotinfo = FALSE) %>% 
+  left_join(qDecaystage %>% select(2:4), by = c("decaystage" = "ID")) %>% 
   rename(decaystage_code = decaystage,
          afbraak = Value1, 
-         decay_stage = Value2) 
+         decaystage = Value2) %>% 
+  filter(plot_id %in% list_CP) %>% 
+  select(plot_id, year, period, decaystage_code, decaystage, vol_log_m3_ha)
 
-logs_by_decay_plot_species <- read_forresdat("logs_by_decay_plot_species", repo_path = path_to_git_forresdat, join_plotinfo = FALSE, plottype = "CP") %>% 
-  left_join(qSpecies, by = c("species" = "ID")) %>% 
+#--- 
+names(logs_by_decay_plot_species)
+logs_by_decay_plot_species <- read_forresdat("logs_by_decay_plot_species"
+                                             , repo_path = path_to_git_forresdat
+                                             , join_plotinfo = FALSE) %>% 
+  left_join(qSpecies %>% select(1:3), by = c("species" = "ID")) %>% 
   rename(name_nl = Value1, 
          name_sc = Value2)  %>% 
-  left_join(qDecaystage, by = c("decaystage" = "ID")) %>% 
+  left_join(qDecaystage %>% select(2:4), by = c("decaystage" = "ID")) %>% 
   rename(decaystage_code = decaystage,
          afbraak = Value1, 
-         decay_stage = Value2) 
+         decaystage = Value2) %>% 
+  filter(plot_id %in% list_CP) %>% 
+  select(plot_id, year, period, 
+         species_code = species, name_nl, name_sc, 
+         decaystage_code, decaystage, vol_log_m3_ha)
 ```
 
-```{r read_tsv_join, eval=FALSE}
-plotinfo_dendro <- plotinfo %>% select(-survey_reg, -survey_veg)
+```{r}
+names(dendro_by_plot)
+# "year"                    "vol_log_m3_ha_min40cm" : niet verder meenemen
+names(plotinfo)
 
-dendro_by_plot <- read_vc(file = "dendro_by_plot", root = path_to_forresdat_data) %>% 
-  left_join(plotinfo_dendro, by = c("plot_id", "period", "year"))
+head(dendro_by_diam_plot_species)
 
-dendro_by_plot_species <- read_vc(file = "dendro_by_plot_species", root = path_to_forresdat_data) %>% 
-  left_join(plotinfo_dendro, by = c("plot_id", "period", "year")) %>% 
-  left_join(qSpecies, by = c("species" = "ID")) %>% 
-  rename(name_nl = Value1, 
-         name_sc = Value2) 
+head(logs_by_decay_plot)
+```
 
-dendro_by_diam_plot <- read_vc(file = "dendro_by_diam_plot", root = path_to_forresdat_data) %>% 
-  left_join(plotinfo_dendro, by = c("plot_id", "period", "year"))
+```{r read_reg1}
+names(regeneration_by_plot)
+regeneration_by_plot <- read_forresdat("regeneration_by_plot"
+                                 , repo_path = path_to_git_forresdat
+                                 , join_plotinfo = FALSE) %>% 
+  filter(plot_id %in% list_CP) %>% 
+  select(plot_id, year, period, 
+         number_of_tree_species, rubbing_damage_perc,
+         approx_nr_established_ha, approx_nr_seedlings_ha, 
+         mean_number_established_ha, lci_number_established_ha, uci_number_established_ha, 
+         mean_number_seedlings_ha, lci_number_seedlings_ha, uci_number_seedlings_ha)
+# 1677 vs 1680 dendro - OK (zie hierna)
+```
 
-dendro_by_diam_plot_species <- read_vc(file = "dendro_by_diam_plot_species", root = path_to_forresdat_data) %>% 
-  left_join(plotinfo_dendro, by = c("plot_id", "period", "year")) %>% 
-  left_join(qSpecies, by = c("species" = "ID")) %>% 
-  rename(name_nl = Value1, 
-         name_sc = Value2) 
+```{r check_reg, eval = FALSE}
 
-logs_by_decay_plot <- read_vc(file = "logs_by_decay_plot", root = path_to_forresdat_data) %>% 
-  left_join(plotinfo_dendro, by = c("plot_id", "period", "year")) %>% 
-  left_join(qDecaystage, by = c("decaystage" = "ID")) %>% 
-  rename(decaystage_code = decaystage,
-         afbraak = Value1, 
-         decay_stage = Value2) 
+plotinfo %>% filter(plottype == "CP" & survey_trees == TRUE & data_processed == TRUE) %>% 
+  anti_join(regeneration_by_plot)
+# 3 records met survey_reg == FALSE
 
-logs_by_decay_plot_species <- read_vc(file = "logs_by_decay_plot_species", root = path_to_forresdat_data) %>% 
-  left_join(plotinfo_dendro, by = c("plot_id", "period", "year")) %>% 
-  left_join(qSpecies, by = c("species" = "ID")) %>% 
+dplyr::n_distinct(regeneration_by_plot$plot_id) == dplyr::n_distinct(dendro_by_plot$plot_id)
+# 999
+regeneration_by_plot %>% group_by(period) %>% summarize(n_plots = n_distinct(plot_id))
+regeneration_by_plot %>% group_by() %>% summarize(n_plots = n_distinct(plot_id))
+t <- regeneration_by_plot %>% group_by(period, plot_id) %>% summarize(n_subplots = n_distinct(subplot_id))
+max(t$n_subplots) == 1
+
+```
+
+
+```{r read_reg2}
+names(regeneration_by_plot_height)
+regeneration_by_plot_height <- read_forresdat("regeneration_by_plot_height"
+                                 , repo_path = path_to_git_forresdat
+                                 , join_plotinfo = FALSE) %>% 
+  filter(plot_id %in% list_CP) %>% 
+  left_join(qHeightClass %>% select(1:2), by = c("height_class" = "ID")) %>% 
+  select(plot_id, year, period, 
+         height_class_code = height_class, height_class= Value1,
+         number_of_tree_species, rubbing_damage_perc,
+         approx_nr_regeneration_ha,
+         mean_number_of_regeneration_ha, 
+         lci_number_of_regeneration_ha, uci_number_of_regeneration_ha)
+
+#---
+names(regeneration_by_plot_height_species)
+regeneration_by_plot_height_species <- read_forresdat("regeneration_by_plot_height_species"
+                                 , repo_path = path_to_git_forresdat
+                                 , join_plotinfo = FALSE) %>% 
+  filter(plot_id %in% list_CP) %>% 
+  left_join(qSpecies %>% select(1:3), by = c("species" = "ID")) %>% 
   rename(name_nl = Value1, 
          name_sc = Value2)  %>% 
-  left_join(qDecaystage, by = c("decaystage" = "ID")) %>% 
-  rename(decaystage_code = decaystage,
-         afbraak = Value1, 
-         decay_stage = Value2) 
+  left_join(qHeightClass %>% select(1:2), by = c("height_class" = "ID")) %>% 
+  select(plot_id, year, period, 
+         height_class_code = height_class, height_class= Value1,
+         species_code = species, name_nl, name_sc,
+         rubbing_damage_perc,
+         approx_nr_regeneration_ha,
+         mean_number_of_regeneration_ha, 
+         lci_number_of_regeneration_ha, uci_number_of_regeneration_ha)
+
 
 ```
 
 
-# Statistieken
-
-## Dendro_by_plot
-
-```{r data}
-dataset <- dendro_by_plot %>%
-  filter(plottype == "CP")   # enkel cirkelplots
-
-table(dataset$forest_reserve, dataset$period)
-```
-
-```{r variables}
-names_plotinfo <- names(plotinfo)
-
-variables_ <- names(dendro_by_plot) 
-
-variables <- variables_[!variables_ %in% names_plotinfo]
-variables
-
-```
-
-```{r stat}
-stat <- create_statistics(
-  dataset = dataset,
-  level = c("period", "forest_reserve"),
-  variables = variables,
-  include_year_range = FALSE
-  ) %>% 
-  round_df(., 2) %>% 
-  # rename(strata = forest_reserve) %>% 
-  mutate(strata = NA,
-         stratum_name = NA,
-         strata2 = NA,
-         stratum_name2 = NA)
-
-
-str(stat)
-head(stat)
-```
-
-```{r export}
-My.ResultsToDatabase(results = stat, 
-                     dbHandle = dbResults, 
-                     tblName = "tblResultaten", 
-                     scriptName = "dendro_per_BR.Rmd", 
-                     description = "mean dendro per ha per bosreservaat en per periode",
-                     request_from = "Team bosecologie",
-                     run_by = "AL")
+```{r read_veg}
+names(vegetation_by_plot)
+vegetation_by_plot <- read_forresdat("vegetation_by_plot"
+                                 , repo_path = path_to_git_forresdat
+                                 , join_plotinfo = FALSE) %>% 
+  filter(plot_id %in% list_CP) %>% 
+  select(plot_id, year_main_survey, date_vegetation, period, 
+         number_of_species, cumm_herb_coverage_class_average_perc,
+         moss_cover_min, moss_cover_max, moss_cover_mid, 
+         herb_cover_min, herb_cover_max, herb_cover_mid, 
+         shrub_cover_min, shrub_cover_max, shrub_cover_mid,
+         tree_cover_min, tree_cover_max, tree_cover_mid,
+         waterlayer_cover_min, waterlayer_cover_max, waterlayer_cover_mid,
+         soildisturbance_game_cover_min, soildisturbance_game_cover_max, soildisturbance_game_cover_mid,
+         cumulated_canopy_cover_min, cumulated_canopy_cover_max, cumulated_canopy_cover_mid)
+# 1651 vs 1680 dendro - OK (zie hierna)
 ```
 
 
+```{r check_veg, eval = FALSE}
 
-## Dendro_by_plot_species
+plotinfo %>% filter(plottype == "CP" & survey_trees == TRUE & data_processed == TRUE) %>% 
+  anti_join(vegetation_by_plot)
+# 29 records met survey_veg == FALSE
 
-
-```{r data}
-dataset <- dendro_by_plot_species %>%
-  filter(plottype == "CP")   # enkel cirkelplots
-
-table(dataset$forest_reserve, dataset$period)
-```
-
-```{r variables}
-names_plotinfo <- names(plotinfo)
-
-variables_ <- names(dendro_by_plot_species) 
-
-variables <- variables_[!variables_ %in% names_plotinfo & !variables_ %in% c("name_nl", "name_sc", "species")]
-variables
+dplyr::n_distinct(vegetation_by_plot$plot_id) == dplyr::n_distinct(dendro_by_plot$plot_id)
+# 999
+vegetation_by_plot %>% group_by(period) %>% summarize(n_plots = n_distinct(plot_id))
+vegetation_by_plot %>% group_by() %>% summarize(n_plots = n_distinct(plot_id))
+t <- vegetation_by_plot %>% group_by(period, plot_id) %>% summarize(n_subplots = n_distinct(subplot_id))
+max(t$n_subplots) == 1
 
 ```
 
-```{r stat}
-stat <- create_statistics(
-  dataset = dataset,
-  level = c("period", "forest_reserve", "name_nl"),
-  variables = variables,
-  include_year_range = FALSE
-  ) %>% 
-  round_df(., 2) %>% 
-  mutate(strata = "species") %>% 
-  rename(stratum_name = name_nl) %>% 
-  mutate(strata2 = NA,
-         stratum_name2 = NA)
 
+```{r read_herbs}
+names(herblayer_by_plot)
+herblayer_by_plot <- read_forresdat("herblayer_by_plot"
+                                 , repo_path = path_to_git_forresdat
+                                 , join_plotinfo = FALSE) %>% 
+  filter(plot_id %in% list_CP) %>% 
+  left_join(qHerbSpecies %>% select(1:3), by = c("species" = "ID")) %>% 
+  rename(name_nl = Value1, 
+         name_sc = Value2)  %>% 
+  left_join(qBrowseIndex %>% select(1,3), by = c("browse_index_id" = "ID")) %>% 
+  select(plot_id, period, year, date_vegetation,
+         species_code = species, name_nl, name_sc, 
+         coverage_class_average_perc,
+         browse_index_id, browse_index = Value2)
 
-str(stat)
-head(stat)
-```
-
-```{r export}
-My.ResultsToDatabase(results = stat, 
-                     dbHandle = dbResults, 
-                     tblName = "tblResultaten", 
-                     scriptName = "dendro_per_BR.Rmd", 
-                     description = "mean dendro per species per ha per bosreservaat",
-                     request_from = "Team bosecologie",
-                     run_by = "AL")
 ```
 
 
-proberen om één grote functie te maken voor alle dendro_by_plot_xxxx_xxxx data
+
+```{r check_herbs, eval = FALSE}
+plotinfo %>% filter(plottype == "CP" & survey_trees == TRUE & data_processed == TRUE) %>% 
+  anti_join(herblayer_by_plot)
+# 29 records met survey_veg == FALSE
+
+dplyr::n_distinct(herblayer_by_plot$plot_id) == dplyr::n_distinct(dendro_by_plot$plot_id)
+# 999
+herblayer_by_plot %>% group_by(period) %>% summarize(n_plots = n_distinct(plot_id))
+herblayer_by_plot %>% group_by() %>% summarize(n_plots = n_distinct(plot_id))
+t <- herblayer_by_plot %>% group_by(period, plot_id) %>% summarize(n_subplots = n_distinct(subplot_id))
+max(t$n_subplots) == 1
+
+```
 
 
