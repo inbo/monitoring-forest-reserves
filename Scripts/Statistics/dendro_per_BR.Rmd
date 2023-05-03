@@ -170,20 +170,27 @@ table(dataset$forest_reserve, dataset$period)
 ```
 
 ```{r variables}
-names_plotinfo <- names(plotinfo)
+# names_plotinfo <- names(plotinfo)
+# 
+# variables_ <- names(dendro_by_plot) 
+# 
+# variables_for_statistics <- variables_[!variables_ %in% names_plotinfo & variables_ != "year"]
+# variables_for_statistics
 
-variables_ <- names(dendro_by_plot) 
+# korter
+variables_for_statistics <- dataset %>% 
+  select(contains(c("_ha", "_species"))) %>% 
+  names()
 
-variables <- variables_[!variables_ %in% names_plotinfo]
-variables
+variables_for_statistics
 
 ```
 
 ```{r stat}
-stat <- create_statistics(
+resultaat <- create_statistics(
   dataset = dataset,
   level = c("period", "forest_reserve"),
-  variables = variables,
+  variables = variables_for_statistics,
   include_year_range = FALSE
   ) %>% 
   round_df(., 2) %>% 
@@ -194,12 +201,12 @@ stat <- create_statistics(
          stratum_name2 = NA)
 
 
-str(stat)
-head(stat)
+str(resultaat)
+head(resultaat)
 ```
 
 ```{r export}
-My.ResultsToDatabase(results = stat, 
+My.ResultsToDatabase(results = resultaat, 
                      dbHandle = dbResults, 
                      tblName = "tblResultaten", 
                      scriptName = "dendro_per_BR.Rmd", 
@@ -215,14 +222,188 @@ My.ResultsToDatabase(results = stat,
 !! oppassen met 0 waardes (zitten niet in tabel: zie ook dataverwerking ikv artikel C).
 Moeten eerst toegevoegd worden.
 
+Zie ook script `INBO_biomassa_vglBR_VBI/meanNGV_per_bms_levend_dood_PNV.Rmd`, daar gebruik gemaakt van add_zeros
+
+Boomsoort als level: enkel indien ik ook alle nulwaardes mee heb om een gemiddelde over alle plots heen te maken! 
+bv. appel
+=> met functie `add_zeros` nullen toevoegen
+! lukt enkel als ik alle overbodige velden verwijder!!
+
+OPGEPAST: forest_reserve achteraf terug toevoegen, niet meenemn bij add_zeros,
+anders voor elke plot, alle bosreservaten toegevoegd met 0 voor alle soorten
 
 
 ```{r data}
-dataset <- dendro_by_plot_species %>%
+dataset2 <- dendro_by_plot_species %>%
   filter(plottype == "CP")   # enkel cirkelplots
 
-table(dataset$forest_reserve, dataset$period)
+table(dataset2$forest_reserve, dataset2$period)
 ```
+
+
+```{r add_zeros_all_species}
+dataset2_0 <- add_zeros(dataset = dataset2 %>% 
+                          select(plot_id, period, species, contains("_ha")),
+                        comb_vars = c("plot_id", "species"),
+                        grouping_vars = c("period")
+                        ) %>%
+  left_join(qSpecies %>% dplyr::select(species = ID, speciesTxt = Value1)) %>% 
+  left_join(plotinfo %>% select(plot_id, forest_reserve))
+
+# FOUT: pas achteraf terug bosreservaat toevoegen
+# anders voor elke plot, elk bosreservaar met nummen
+# bv. Wijnendale: plot 101, ... ipv enkel 401
+
+```
+```{r}
+variables_for_statistics2 <- dataset2_0 %>% 
+  select(contains("_ha")) %>% 
+  names()
+
+variables_for_statistics2
+#
+```
+
+
+```{r}
+# !! één resultaat per soort en per BR
+n_BR <- dataset2 %>% distinct(forest_reserve) %>% nrow()
+n_BR <- length(unique(dataset2$forest_reserve))
+n_species <- length(unique(dataset2$species))
+n_period <- length(unique(dataset2$period))
+n <- n_BR * n_species * 2 * length(variables_for_statistics2)
+n # 20768
+# DAAROM: 0 en NA (xxxx_min40cm) verwijderen
+
+resultaat2 <- create_statistics(
+  dataset = dataset2_0,
+  level = c("period", "forest_reserve", "speciesTxt"),
+  # level = c("period", "forest_reserve", "name_nl"),
+  # level = c("period"),
+  variables = variables_for_statistics2,
+  # variables = "basal_area_alive_m2_ha",
+  include_year_range = FALSE,
+  na_rm = FALSE,
+    interval_information = suppressMessages(read_csv2(system.file("extdata/class_data.csv",
+    package = "forrescalc")))
+  ) %>% 
+  select(-logaritmic) %>% 
+  # filter(mean != 0 & !is.na(mean)) %>% 
+  round_df(., 2) %>% 
+  # rename(strata = forest_reserve) %>% 
+  mutate(strata = "species",
+         stratum_name = speciesTxt,
+         strata2 = NA,
+         stratum_name2 = NA)
+summary(dataset2_0)
+```
+
+? waarom n_obs 240 voor stamtal en 120 voor alle rest?? (wijnendale, maar bij alle BR-en!!)
+blijkt steeds de eerste variabele te zijn? 
+Was niet zo bij statistics zonder soort als level
+
+
+```{r}
+
+names(dataset2_0)
+
+resultaat_test <- create_statistics(
+  dataset = dataset2_0,
+  level = c("period", "forest_reserve", "speciesTxt"),
+  # level = c("period", "forest_reserve", "name_nl"),
+  # level = c("period"),
+  # variables = variables_for_statistics2,
+  variables = c("basal_area_alive_m2_ha", "number_of_trees_ha", "vol_alive_m3_ha"),
+  include_year_range = FALSE,
+  na_rm = FALSE,
+    interval_information = suppressMessages(read_csv2(system.file("extdata/class_data.csv",
+    package = "forrescalc")))
+  ) %>% 
+  select(-logaritmic) %>% 
+  # filter(mean != 0 & !is.na(mean)) %>% 
+  round_df(., 2) %>% 
+  # rename(strata = forest_reserve) %>% 
+  mutate(strata = "species",
+         stratum_name = speciesTxt,
+         strata2 = NA,
+         stratum_name2 = NA) %>% 
+  filter(forest_reserve == "Wijnendalebos")
+
+
+table(resultaat_test$variable, resultaat_test$n_obs)
+```
+
+
+```{r check_add_zeros}
+totaal_NGV_per_BR <- resultaat2 %>% 
+  filter(variable == "basal_area_alive_m2_ha") %>% 
+  group_by(period, forest_reserve) %>% 
+  summarize(G = sum(mean)) %>% 
+  ungroup()
+
+# vgl met Result_NGV_per_PNV obv analyseset (zonder soorten)
+check_NGV <- totaal_NGV_per_BR %>% 
+  left_join(resultaat %>% filter(variable == "basal_area_alive_m2_ha") 
+            , by = c("period", "forest_reserve")) %>% 
+  mutate(verschil = G - mean)
+```
+
+
+
+
+```{r export2}
+My.ResultsToDatabase(results = resultaat2, 
+                     dbHandle = dbResults, 
+                     tblName = "tblResultaten", 
+                     scriptName = "dendro_per_BR.Rmd", 
+                     description = "mean dendro per ha per bosreservaat en per periode - per soort",
+                     request_from = "Team bosecologie",
+                     run_by = "AL")
+```
+
+
+```{r tmp}
+  
+  
+stat <- create_statistics(
+  dataset = dataset,
+  level = c("period", "forest_reserve"),
+  variables = variables,
+  include_year_range = FALSE
+  ) %>% 
+  round_df(., 2) %>% 
+  # rename(strata = forest_reserve) %>% 
+  mutate(strata = NA,
+         stratum_name = NA,
+         strata2 = NA,
+         stratum_name2 = NA)
+
+
+
+
+Resultaat
+Resultaat[5:8] <- round(Resultaat[5:8],2)
+
+vars <- c("period", "speciesTxt")
+Result_NGV_per_PNV_per_species <- Resultaat %>%
+  mutate_at(vars, factor) %>% 
+  left_join(qPNV, by = c("PNV" = "PNVcde"))
+
+unique(Result_NGV_per_PNV_per_species$variable)
+# [1] "basal_area_alive_m2_ha" "number_of_trees_ha"     "vol_alive_m3_ha"       
+# [4] "vol_deadw_m3_ha" 
+
+# controle
+# som moet gelijk zijn aan G per pnv
+names(resultaat2)
+names(resultaat)
+```
+
+
+
+
+
+
 
 ```{r variables}
 names_plotinfo <- names(plotinfo)
