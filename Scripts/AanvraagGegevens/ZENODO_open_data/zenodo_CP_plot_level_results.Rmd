@@ -67,7 +67,7 @@ Extra aandachtspunten:
 # deze worden ook in "Setup.R" gedefinieerd (aanroepen van "Paths.R")
 # hier ev. extra "paths" toevoegen indien nodig 
 
-path_to_datarequest <- "C:/03_BR/1_DataVerwerkingBR/Open_data/zenodo_CP_vs1/"
+path_to_datarequest <- "C:/03_BR/1_DataVerwerkingBR/Open_data_zenodo/"
 
 path_to_datarequest_gdrive <- paste0(path_to_output_gdrive, "ZENODO_open_data/")
 ```
@@ -259,6 +259,7 @@ head(dendro_by_diam_plot_species)
 
 head(logs_by_decay_plot)
 ```
+
 ### Overview
 
 Hoeveel plots?
@@ -466,20 +467,20 @@ path_to_datarequest
 for (i in 1:length(list_dendro)){
 	  # selectie <- list_dendro[[i]]
 	  # naam <- paste0(names(list_dendro)[i], ".csv")
-	  write.csv2(list_dendro[[i]], paste0(path_to_datarequest, "dendro/", names(list_dendro)[i], ".csv")) 
+	  write.csv2(list_dendro[[i]], paste0(path_to_datarequest, "CP_dendro/", names(list_dendro)[i], ".csv")) 
 }
 
 for (i in 1:length(list_reg)){
 	  # selectie <- list_dendro[[i]]
 	  # naam <- paste0(names(list_dendro)[i], ".csv")
-	  write.csv2(list_reg[[i]], paste0(path_to_datarequest, "dendro/", names(list_reg)[i], ".csv")) 
+	  write.csv2(list_reg[[i]], paste0(path_to_datarequest, "CP_dendro/", names(list_reg)[i], ".csv")) 
 }
 
 # naar veg-folder
 for (i in 1:length(list_veg)){
 	  # selectie <- list_dendro[[i]]
 	  # naam <- paste0(names(list_dendro)[i], ".csv")
-	  write.csv2(list_veg[[i]], paste0(path_to_datarequest, "veg/", names(list_veg)[i], ".csv")) 
+	  write.csv2(list_veg[[i]], paste0(path_to_datarequest, "CP_veg/", names(list_veg)[i], ".csv")) 
 }
 
 ```
@@ -503,9 +504,9 @@ plotinfo <- plotinfo %>%
          period, year_dendro, survey_number,
          contains(c("survey", "game")), data_processed)
 
-write.csv2(plotinfo, paste0(path_to_datarequest, "dendro/plotinfo.csv")) 
+write.csv2(plotinfo, paste0(path_to_datarequest, "CP_dendro/plotinfo.csv")) 
 
-write.csv2(plotinfo, paste0(path_to_datarequest, "veg/plotinfo.csv")) 
+write.csv2(plotinfo, paste0(path_to_datarequest, "CP_veg/plotinfo.csv")) 
 ```
 
 Ook rechtstreeks naar gdrive
@@ -518,27 +519,27 @@ path_to_datarequest_gdrive
 for (i in 1:length(list_dendro)){
 	  # selectie <- list_dendro[[i]]
 	  # naam <- paste0(names(list_dendro)[i], ".csv")
-	  write.csv2(list_dendro[[i]], paste0(path_to_datarequest_gdrive, "dendro/", names(list_dendro)[i], ".csv")) 
+	  write.csv2(list_dendro[[i]], paste0(path_to_datarequest_gdrive, "CP_dendro/", names(list_dendro)[i], ".csv")) 
 }
 
 for (i in 1:length(list_reg)){
 	  # selectie <- list_dendro[[i]]
 	  # naam <- paste0(names(list_dendro)[i], ".csv")
-	  write.csv2(list_reg[[i]], paste0(path_to_datarequest_gdrive, "dendro/", names(list_reg)[i], ".csv")) 
+	  write.csv2(list_reg[[i]], paste0(path_to_datarequest_gdrive, "CP_dendro/", names(list_reg)[i], ".csv")) 
 }
 
 # naar veg-folder
 for (i in 1:length(list_veg)){
 	  # selectie <- list_dendro[[i]]
 	  # naam <- paste0(names(list_dendro)[i], ".csv")
-	  write.csv2(list_veg[[i]], paste0(path_to_datarequest_gdrive, "veg/", names(list_veg)[i], ".csv")) 
+	  write.csv2(list_veg[[i]], paste0(path_to_datarequest_gdrive, "CP_veg/", names(list_veg)[i], ".csv")) 
 }
 
 ```
 
 
 ```{r plotinfo_gdrive, eval = FALSE}
-write.csv2(plotinfo, paste0(path_to_datarequest_gdrive, "dendro/plotinfo.csv")) 
+write.csv2(plotinfo, paste0(path_to_datarequest_gdrive, "CP_dendro/plotinfo.csv")) 
 
-write.csv2(plotinfo, paste0(path_to_datarequest_gdrive, "veg/plotinfo.csv")) 
+write.csv2(plotinfo, paste0(path_to_datarequest_gdrive, "CP_veg/plotinfo.csv")) 
 ```
