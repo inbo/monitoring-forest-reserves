@@ -1,0 +1,199 @@
+---
+title: "Gemiddeld volume (totaal, levend, dood) per PNV - bosreservaten"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: FALSE
+      smooth_scroll: FALSE
+---
+
+# Setup
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+
+```
+
+
+# Vraagstelling
+
+Kadert in de opmaak van een artikel in themanummer Frontiers Forests Global Change.
+
+Naast biomassa in levende en dode bomen, en NGV per soort,  
+ook het volume (totaal, levend, dood) per PNV:   
+- volume incl kroon
+- dood: liggend en staand samen
+
+Folder op gdrive:     
+- [artikel](https://drive.google.com/drive/folders/1GY3uYeL5JjG14h_BAkzsQwse31el-yhC)   
+- [artikel - data](https://drive.google.com/drive/folders/1J9ZOC5K6WqjxuV298dd-iNfcKzLvAWjp?usp=share_link)   
+
+```{r Path}
+# deze worden ook in "Setup.R" gedefinieerd (aanroepen van "Paths.R")
+# hier ev. extra "paths" toevoegen indien nodig 
+
+path_to_request <- paste0(path_to_datarequests, "INBO_biomassa_vglBR_VBI/")
+path_to_gdrive <- paste0(path_to_datarequests_gdrive, "INBO_biomassa_vglBR_VBI/")
+
+# rechtstreeks naar data-folder van artikel
+path_to_article <- "G:/.shortcut-targets-by-id/1GY3uYeL5JjG14h_BAkzsQwse31el-yhC/artikel_FrontiersForestsGlobalChange/data/"
+# !! oppassen van nisk te overschrijven
+```
+
+```{r load_info_lkp}
+plotinfo <- read_vc(file = "plotinfo", root = path_to_forresdat_data)
+
+con <- odbcConnectAccess2007(path_to_strata_db)
+ strata_tables <- sqlTables(con) %>% filter(!str_detect(TABLE_NAME, "MSys"))
+ pnv <- sqlFetch(con, "strata_soil", stringsAsFactors = FALSE)
+odbcClose(con)
+
+qPNV <- read_xlsx(paste0(path_to_strata, "legende_PNV.xlsx")) %>% 
+  select(PNVcde = Code, PNVtxt = "Nederlandse naam") %>% 
+  mutate(PNVcde = as.integer(PNVcde))
+
+qSpecies <- read_vc(file = "qSpecies", root = path_to_forresdat_data)
+```
+
+
+
+# Inladen analysesets NARA
+
+Plots die ook bij NARA gebruikt werden => analysesets van NARA-analyse inladen.
+
+```{r plots, results= 'hide'}
+path_to_NARA_request <- paste0(path_to_datarequests_gdrive, "INBO_NARA_biomassa/")
+
+analyseSet <- read.csv2(paste0(path_to_NARA_request, "analyseSet_living_C.csv"))
+n_distinct(analyseSet$plot_id) == nrow(analyseSet)/2
+
+plots <- unique(analyseSet$plot_id)
+```
+
+
+```{r load_dendro_by_plot}
+# data_dendro <- load_data_dendrometry(path_to_fieldmap, plottype = "Circular plot", extra_variables = TRUE)
+
+# beter uit folder "C:\03_BR\1_Dataverwerking\Output\plot-level-data" halen
+dendro_by_plot <- read_csv2(paste0(path_to_plotlevel_csv, "dendro_by_plot.csv")) %>% 
+  filter(plot_id %in% plots & period %in% c(1,2)) %>% select(-1)
+unique(dendro_by_plot$forest_reserve)
+
+names(dendro_by_plot)
+
+# !! bevat nu wel al deadw kerss 1ste decade (53 plots)
+t <- dendro_by_plot %>% filter(is.na(vol_log_m3_ha)) 
+table(t$plot_id) #nrow()
+
+dendro_by_plot %>% filter(between (plot_id, 2000, 2070) & period == 1) %>% head()
+```
+
+```{r analysesets}
+names(dendro_by_plot)
+analyseSet <- dendro_by_plot %>% 
+  select(1:3, vol_alive_m3_ha, vol_deadw_m3_ha, 17:19)
+# vol_dead_standing_m3_ha, vol_log_m3_ha: niet verder meenemen, direct totaal volume dood hout
+
+```
+
+
+
+# Statistics per PNV
+
+```{r add_pnv}
+names(analyseSet)
+
+analyseSet_ <- analyseSet %>% 
+  mutate(vol_total__m3_ha = vol_alive_m3_ha + vol_deadw_m3_ha) %>% 
+  left_join(pnv %>% select(plot_id, PNV)) 
+# %>% left_join(qPNV, by = c("PNV" = "PNVcde"))
+
+names(analyseSet_)
+analyseSet <- analyseSet_
+
+```
+
+## Volume (totaal, levend, dood) per PNV
+
+PNV als stratum => binnen elke PNV gaan zien wat volume is
+
+```{r statistics_per_PNV, results = 'hide'}
+variables_for_statistics <- c("vol_total__m3_ha", "vol_alive_m3_ha", "vol_deadw_m3_ha")
+
+Resultaat <- create_statistics(
+  dataset = analyseSet %>% dplyr::filter(!is.na(PNV)),
+  level = c("period", "PNV"),
+  # level = c("period"),
+  variables = variables_for_statistics,
+  include_year_range = FALSE,
+  na_rm = FALSE,
+ 
+    interval_information = suppressMessages(read_csv2(system.file("extdata/class_data.csv",
+    package = "forrescalc")))
+) %>% 
+  select(-logaritmic)
+
+Resultaat
+Resultaat[5:8] <- round(Resultaat[5:8],2)
+
+vars <- c("period")
+Result_V_per_PNV <- Resultaat %>%
+  mutate_at(vars, factor) %>% 
+  left_join(qPNV, by = c("PNV" = "PNVcde"))
+
+unique(Result_V_per_PNV$variable)
+# [1] "basal_area_alive_m2_ha" "number_of_trees_ha"     "vol_alive_m3_ha"       
+# [4] "vol_deadw_m3_ha" 
+
+```
+
+
+# Export
+
+Volgende keer 
+
+```{r export_to_xlsx}
+# xls met tabbladen - totalen
+write.xlsx(Result_V_per_PNV
+           ,paste0(path_to_request, "volume_per_pnv.xlsx")
+           )
+
+```
+
+```{r export_to_gdrive}
+# xls met tabbladen - totalen
+write.xlsx(Result_V_per_PNV
+           ,paste0(path_to_gdrive, "volume_per_pnv.xlsx"))
+
+```
+
+```{r export_to_gdrive_article, eval = FALSE}
+# oppassen om niet te overschrijven
+
+# xls met tabbladen - totalen
+write.xlsx(Result_V_per_PNV
+           ,paste0(path_to_article, "BR_volume_per_pnv.xlsx"))
+
+```

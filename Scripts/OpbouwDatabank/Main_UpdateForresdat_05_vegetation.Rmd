@@ -1,0 +1,457 @@
+---
+title: "Update forresdat - vegetatie"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: yes
+      smooth_scroll: yes
+---
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = FALSE,  # FALSE: dan kan ik knitten zonder dat er iets gebeurt
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+source(here::here("scripts/ExtraFunctions.R"))
+source(here::here("scripts/ExtraFunctions_volume.R"))
+```
+
+
+# Vraagstelling
+DOEL van dit script is een update van forresdat gegevens naar 
+
+- forresdat-folder als tsv (nadien nog te pushen naar github)
+- BR_analysedb.accdb
+- output-folders "_plot-level-data" en "_tree-level-data" als csv
+- gdrive-folders "_plot-level-data" en "_tree-level-data" als csv
+
+Kersselaerspleyn blijkt op meerdere vlakken uitzonderingen te bevatten.
+Deze uitzonderingen worden na het inladen van de data gecorrigeerd. 
+
+
+```{r results='hold', eval=TRUE}
+path_to_forresdat_data
+path_to_analysis_set_db
+path_to_plotlevel_csv
+path_to_treelevel_csv
+path_to_output_gdrive
+path_to_meetgegevens
+
+```
+
+# Load plotinfo
+
+Plotinfo samenstellen, zijnde plottype, naam forest_reserve en info over survey en data al dan niet processed.
+
+```{r }
+plotinfo <- read_vc(file = "plotinfo", root = path_to_forresdat_data)
+names(plotinfo)
+```
+
+# Load vegetation - OK - 19/1/2023
+
+```{r load_veg}
+data_vegetation <-
+  load_data_vegetation(
+    database = path_to_fieldmap_db,
+    processed = TRUE
+  )
+data_herblayer <-
+  load_data_herblayer(
+    database = path_to_fieldmap_db,
+    processed = TRUE
+  )
+
+
+```
+
+# Calculate
+
+```{r}
+vegetation <- calculate_vegetation(data_vegetation, data_herblayer)
+```
+
+
+```{r CreateSeparateDataframesVeg}
+for (tablename in names(vegetation)) {
+     assign(tablename, vegetation[[tablename]])
+} 
+
+```
+
+
+# Controle plot-level-data
+
+```{r}
+# plot 1176, periode 1: niet in veg_by_plot => Els gevraagd om dit te corrigeren (nov 2022)
+data_vegetation %>% filter(plot_id == 1176 & period == 1)
+data_herblayer %>% filter(plot_id == 1176)
+data_herblayer %>% filter(plot_id == 1176 & period == 1)
+
+vegetation_by_plot %>% filter(plot_id == 1176 & period == 1)
+
+```
+
+# Check NA's
+
+```{r}
+names(vegetation_by_plot)
+summary(vegetation_by_plot)
+# veel covers niet ingevuld ...
+```
+
+```{r}
+col <- c("number_of_species", "cumm_herb_coverage_class_average_perc")
+
+vegetation_by_plot %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+
+```
+
+```{r}
+names(vegetation_by_core_area_species)
+
+col <- c("number_of_subplots_with_vegetation", "perc_of_subplots", "mean_coverage_class_average_perc")
+
+vegetation_by_core_area_species %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+
+```
+
+# TEMP: browse_index niet ingevuld: NA ipv 100 (no browsing)
+
+!! browse_index : NA in herblayer_by_plot, terwijl het 100 (= no browsing) zou moeten zijn (game_impact_veg  = TRUE bij plotinfo )
+
+!! heeft te maken met onvolledig aanvullen van FM-DC: NA zou 100 moeten worden bij voorafgaandelijke datacontrole
+
+? bij welke bosreservaten komt dit voor? 
+Enkel 31000 41000 43000 (Hannecart en Rodebos)
+
+> Hierna tijdelijke correctie (gevraagd aan Peter 17/1/2023)
+
+```{r}
+check_brows_0 <- data_herblayer %>% 
+  left_join(plotinfo %>% select(plot_id, period, game_impact_veg)) %>% 
+  filter(is.na(browse_index_id)) %>% 
+  filter(game_impact_veg == TRUE) 
+           
+table(check_brows_0$plot_id, check_brows_0$period)
+#           2    3
+#   21000 1112    0
+#   31000    0  491
+#   41000    0  907
+#   43000    0  687
+```
+
+```{r corr_browseindex_NA}
+data_herblayer_ <- data_herblayer %>% 
+  left_join(plotinfo %>% select(plot_id, period, game_impact_veg),
+            by = c("plot_id", "period")) %>% 
+  mutate(browse_index_id = ifelse(is.na(browse_index_id) & game_impact_veg == TRUE,
+                                  100,
+                                  browse_index_id)) %>% 
+  select(-game_impact_veg)
+
+
+data_herblayer <- data_herblayer_
+```
+
+> Na correctie data_herblayer ook veg_by_core_area_species opnieuw laten berekenen
+(de andere plot-level-resultaten mbt vegetatie zijn OK, daar komt browsing niet in voor)
+
+```{r corr_browseindex_CA}
+check_CA_browsing <- vegetation_by_core_area_species %>% 
+  left_join(plotinfo %>% select(plot_id, period, game_impact_veg),
+            by = c("plot_id", "period")) %>% 
+  filter(is.na(perc_of_subplots_browsed)) %>% 
+  filter(game_impact_veg == TRUE) 
+
+table(check_CA_browsing$plot_id, check_CA_browsing$period)  
+  #       2  3
+  # 21000 29  0
+  # 31000  0 49
+  # 41000  0 29
+  # 43000  0 56
+
+# herberekenen met gecorrigeerde data_herblayer
+data_herblayer_CA <- data_herblayer %>%
+    filter(.data$plottype == "CA")
+
+vegetation_by_core_area_species_ <- calculate_vegetation_core_area_species(data_herblayer_CA)
+
+vegetation_by_core_area_species <- vegetation_by_core_area_species_
+
+```
+
+> Alle vegetatie-resultaten terug in een lijst stoppen
+
+```{r combine_veg}
+vegetation_ <- list(
+      vegetation_by_plot = vegetation_by_plot,
+      vegetation_by_core_area_species = vegetation_by_core_area_species
+    )
+
+vegetation <- vegetation_
+```
+
+
+
+# Controle KV Kerss
+
+n_subplots is fout: 710 ipv 750 (2eset wel OK, 140)
+
+calculate_vegetation_core_area_species <- function(data_herblayer, data_vegetation) {
+  by_core_area_species <- data_herblayer %>%
+    group_by(.data$plot_id, .data$period) %>%
+    mutate(
+      n_subplots = n_distinct(.data$subplot_id)
+
+OPGEPAST: `n_subplots` zou moeten bepaald worden op "data_vegetation", want in herblayer 
+zitten enkel de subplots waar een soort waargenomen werd
+
+> aan els gevraagd om dit aan te passen in PR van reg_AL (29/11/2022)
+Hier niet aangepast, geeft geen immens grote afwijking, tijdelijk zo laten ...
+
+Bij regeneration wordt van regeneration-subplots vertrokken, dus daar is het aantal subplots wel correct.
+
+```{r check_n_subplots_veg}
+# controle n_subplots door runnen van deel van de functie -> OK!!
+table(by_core_area_species$n_subplots)
+#     1    10    34    50    97    98   105   140   710 
+# 26466   174   101   724    34   917   194   111    76 
+
+# ? 97 
+# plot 41000, period 3, subplot 00.60, ID 22 is leeg en wordt daarom niet meegerekend
+
+# ? 710 ipv 750?
+# waarom bij reg geen probleem?
+table(by_plot_species_reg$n_subplots)
+```
+
+```{r check_veg_Kerss_KV}
+check_Kerss <- vegetation_by_core_area_species %>% 
+  filter(plot_id == 11000)
+
+check_Kerss <- vegetation_by_core_area_species %>% 
+  filter(plot_id == 11000 & species == 71)  # beuk
+# period = 2, zelfde resultaat als dataverwerking 2010 - OK
+
+```
+
+Resultaten stemmen overeen met dataverwerking uit 2012, muv percentage subplots, period 1.
+
+
+
+# Export vegetation
+
+```{r join_plotinfo_veg}
+veg_plotinfo <- lapply(vegetation, function(x) left_join(x, plotinfo %>% select(plot_id, forest_reserve, plottype, period, survey_number), by = c("plot_id", "period")))
+# lapply: same function over all elements of the list
+```
+
+
+```{r save_veg_git, eval = FALSE}
+# geen plotinfo naar git
+save_results_git(
+  results = vegetation,
+  repo_path = path_to_git_forresdat,
+  # strict = TRUE, 
+  strict = TRUE
+)
+```
+
+```{r save_veg_git_manueel, eval = FALSE}
+# manueel - eigen simpele functie - als save_results_git niet werkt
+save_results_tsv(vegetation, 
+                 root = path_to_forresdat_data, 
+                 strict = FALSE)
+```
+
+
+```{r save_veg_access_csv, eval = FALSE}
+# volgende functie heb ik zelf geschreven, zit niet in het package!
+save_results_csv (
+    results = veg_plotinfo,
+    output_dir = path_to_plotlevel_csv
+    )
+
+# afgerond voor export naar access
+# de df's van CP mogen op 0 afgerond worden (= 1ste drie dataframes)
+# de KV's op 2 cijfers na de komma
+veg_round <- veg_plotinfo %>% 
+  lapply(., function(x) round_df(x, 2))
+
+# save_results_access (
+#   results = veg_round,
+#   database = path_to_analysis_set_db,
+#   remove_tables = TRUE
+#   )
+
+# Functie "save_results_access" (< package) geeft problemen met dates => hierna manueel
+vegetation_by_plot <- vegetation_by_plot %>% 
+  mutate(date_vegetation = as.Date(gsub(' SAST','',date_vegetation))) 
+  # gsub (SAST) is om tijdzone weg te halen, anders wordt een dag vroeger weergegeven
+
+
+con <- odbcConnectAccess2007(path_to_analysis_set_db)
+
+# vegetation_by_plot
+dbtables <- sqlTables(con)
+if ("vegetation_by_plot" %in% dbtables$TABLE_NAME) {
+        sqlDrop(con, "vegetation_by_plot")
+      }
+sqlSave(con, dat = vegetation_by_plot, tablename = "vegetation_by_plot", varTypes = c(date_vegetation="datetime"))
+
+
+# vegetation_by_core_area_species
+dbtables <- sqlTables(con)
+if ("vegetation_by_core_area_species" %in% dbtables$TABLE_NAME) {
+        sqlDrop(con, "vegetation_by_core_area_species")
+      }
+sqlSave(con, dat = vegetation_by_core_area_species, tablename = "vegetation_by_core_area_species")
+
+odbcClose(con)
+```
+
+
+
+Direct naar gdrive exporteren (csv): 
+naar **/PRJ_BOSECO_ALGEMEEN/PRJ_BR_AanvraagGegevens/!METADATA-ALL_PLOTS/_plot-level-data/**
+
+```{r save_veg_gdrive, eval = FALSE}
+save_results_csv(
+    results = veg_plotinfo,
+    output_dir = path_to_plotlevel_gdrive
+    )
+
+```
+
+
+# Export herblayer - OK - 19/1/2023
+
+Ook herblayer naar forresdat wegschrijven
+
+```{r select_variables}
+names(data_herblayer)
+
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+qBrowsIndex <- sqlFetch(con, "qBrowsIndex")
+# qCoverHerbs <- sqlFetch(con, "qCoverHerbs")
+odbcClose(con)
+
+herblayer <- data_herblayer %>%
+  select(plot_id, subplot_id, period, 
+         date_vegetation, year, 
+         species, coverage_class_average_perc, 
+         browse_index_id) %>%
+  left_join(qBrowsIndex %>% select(ID, Value2), by = c("browse_index_id" = "ID")) %>% 
+  rename(browse_index = Value2) %>% 
+  # mutate(date_vegetation = as.Date(date_vegetation)) 
+  # !! r as.Date returns previous day 
+  mutate(date_vegetation = as.Date(gsub(' SAST','',date_vegetation))) 
+  # Which will remove the timezone from part of the string and then convert to date.
+
+# save_results_xxxx: gemaakt om list weg te schrijven
+# hier maar één dataframe
+herblayer_list <- list(herblayer_by_plot = herblayer)
+herblayer_list_git <- list(herblayer_by_plot = herblayer %>% select(-browse_index))
+# summary(herblayer)
+
+```
+
+
+```{r join_plotinfo_herb}
+herb_plotinfo <- lapply(herblayer_list, function(x) left_join(x, plotinfo %>% select(plot_id, forest_reserve, plottype, period, survey_number), by = c("plot_id", "period")))
+# lapply: same function over all elements of the list
+
+```
+
+
+```{r save_herb_git, eval = FALSE}
+# geen plotinfo naar git
+save_results_git(
+  results = herblayer_list_git,
+  repo_path = path_to_git_forresdat,
+  strict = TRUE
+)
+
+# check: echt niet veranderd??
+# check <- read_vc(file = "herblayer_by_plot", root = path_to_forresdat_data)
+# check %>% filter(plot_id == 41000 & period == 3 & browse_index_id == 100)
+# herblayer %>% filter(plot_id == 41000 & period == 3 & browse_index_id == 100)
+```
+
+```{r save_herb_git_manueel, eval = FALSE}
+# manueel - eigen simpele functie - als save_results_git niet werkt
+save_results_tsv(herblayer_list_git, 
+                 root = path_to_forresdat_data, 
+                 strict = FALSE)
+```
+
+
+```{r save_herb_access_csv, eval = FALSE}
+# volgende functie heb ik zelf geschreven, zit niet in het package!
+save_results_csv (
+    results = herb_plotinfo,
+    output_dir = path_to_plotlevel_csv
+    )
+
+# afgerond voor export naar access
+herb_round <- herb_plotinfo %>% 
+  lapply(., function(x) round_df(x, 2))
+
+# save to access nog steeds niet opgelost, is alsof access date niet herkent
+# => manueel gedaan (csv opgeslagen als xlsx en dan geïmporteerd; csv gaf zelfd eproblemen als access)
+        # save_results_access(
+        #   results = herb_[1],
+        #   database = path_to_analysis_set_db,
+        #   remove_tables = TRUE
+        # )
+
+# probleem met datumvelden => varTypes aanduiden
+con <- odbcConnectAccess2007(path_to_analysis_set_db)
+
+dbtables <- sqlTables(con)
+if ("herblayer_by_plot" %in% dbtables$TABLE_NAME) {
+        sqlDrop(con, "herblayer_by_plot")
+      }
+# sqlSave(con, dat = herblayer, tablename = "herblayer_by_plot", fast = FALSE)
+sqlSave(con, dat = herb_round[[1]], tablename = "herblayer_by_plot", varTypes = c(date_vegetation="datetime"))
+
+odbcClose(con)
+
+```
+
+Direct naar gdrive exporteren (csv): 
+naar **/PRJ_BOSECO_ALGEMEEN/PRJ_BR_AanvraagGegevens/!METADATA-ALL_PLOTS/_plot-level-data/**
+
+```{r save_herb_gdrive, eval = FALSE}
+save_results_csv(
+    results = herb_plotinfo,
+    output_dir = path_to_plotlevel_gdrive
+    )
+
+```
+
+
+**Na update van forresdat, project "forresdat" openen en alles naar de cloud pushen**
+**Eventueel ook access op gdrive plaatsen**
+
+

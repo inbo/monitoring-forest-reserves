@@ -1,0 +1,1352 @@
+---
+title: "Update forresdat - verjonging"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: yes
+      smooth_scroll: yes
+---
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = FALSE,  # FALSE: dan kan ik knitten zonder dat er iets gebeurt
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+source(here::here("scripts/ExtraFunctions.R"))
+source(here::here("scripts/ExtraFunctions_volume.R"))
+```
+
+
+# Vraagstelling
+DOEL van dit script is een update van forresdat gegevens naar 
+
+- forresdat-folder als tsv (nadien nog te pushen naar github)
+- BR_analysedb.accdb
+- output-folders "_plot-level-data" en "_tree-level-data" als csv
+- gdrive-folders "_plot-level-data" en "_tree-level-data" als csv
+
+Kersselaerspleyn blijkt op meerdere vlakken uitzonderingen te bevatten.
+Deze uitzonderingen worden na het inladen van de data gecorrigeerd. 
+
+
+```{r results='hold', eval=TRUE}
+path_to_forresdat_data
+path_to_analysis_set_db
+path_to_plotlevel_csv
+path_to_treelevel_csv
+path_to_output_gdrive
+path_to_meetgegevens
+
+```
+
+# Load plotinfo
+
+Plotinfo samenstellen, zijnde plottype, naam forest_reserve en info over survey en data al dan niet processed.
+
+```{r }
+plotinfo <- read_vc(file = "plotinfo", root = path_to_forresdat_data)
+names(plotinfo)
+```
+
+
+# Load regeneration - OK - 8/4/2022 - 19/1/2023
+
+```{r load_reg}
+data_regeneration <-
+  load_data_regeneration(
+    database = path_to_fieldmap_db,
+    processed = TRUE
+  )
+
+```
+
+
+# Opbouw data_regeneration: aantalsklasse vs exact aantal (A1 vs A2)
+
+Het `aantal` zou steeds een aantalsklasse moeten zijn bij seedlings (subcircle = A1) 
+en een exact aantal bij established(subcircle = A1) 
+=> aanpassen bij datacontrole en voorlopig ook hier in script
+
+Want als allebei ingevuld zijn, dan wordt in package de aantalsklasse genomen
+terwijl dat enkel zou mogen bij de seedlings (A1).
+Package maakt geen onderscheid tss A1 en A2 voor de berekeningen, ervan uitgaande dat 
+alles perfect ingevuld is.
+(gebeurt via min_, max_ en approx_ obv de aantalsklasse, enkel als die niet ingevuld zijn, 
+wordt exact aantal genomen)
+
+-----
+**Aan Els het volgende gevraagd (issue # 106):**
+Bij de standaard methodiek is het inderdaad zo dat bij A1-verjonging gewerkt wordt met aantalsklasses en bij A2-verjonging (de iets grotere) met exacte aantallen.
+Het is goed om het package in die zin op te bouwen.
+MAAR er zijn ook bosreservaten waar de standaard methodiek niet gevolgd werd (bv. Everzwijnbad)
+Dat zijn geen fouten, maar gewoon iets ander afspraken toendertijd.
+
+Daarom lijkt het me het meest practische om bij A1-verjonging steeds te vertrekken van de aantalsklasse (NumberClass), maar als die niet ingevuld staat de info uit het exacte aantal (Number) te halen.
+En vice versa bij de A2-verjonging.
+
+Want nu is dat ook iets dat ik buiten het package om aanpas ...
+
+Idem dito wanneer er een percentage berekend wordt van rubbing damage: erop letten om ook dan het goede "aantal" te nemen.
+
+----
+
+PRAGMATISCH
+soms allebei
+soms één van beide, terwijl het de andere zou moeten zijn
+==> voor A1, steeds correct, want klasse wordt genomen 
+En als klasse NA is, dan wordt exact aantal genomen, wat ook OK is!
+==> A2: klasse wordt genomen, ook wanneer er toch een exact aantal ingevuld staat
+==> CORRECTIE 1: als A2 én nr_of_regeneration is niet NA,
+                dan number_class leegmaken
+==> CORRECTIE 2: wegens aanmaak plot-level rubbing_dammage: als aantal NA, dan midwaarde number_class nemen
+
+
+-----
+
+Velden `data_regeneration`:  
+
+- number_class: 1 tem 1001 (LU-list)
+(1, 2-5, 6-10, 11-20, 21-40, 41-60,61-100, >100, >1000 --> 1,3,8,15,30,50,80,101,1001)
+- nr_of_regeneration: exact aantal
+- rubbing_damage_number
+- rubbing_damage_perc: *moet nog aangevuld worden met percentage obv aantalsklassse,*
+*nu enkel maar berekend voor exacte aantallen (gevraagd in issue #102)*
+**TIJDELIJK: in onderstaande code bijgewerkt**
+- approx_nr_regeneration: mid-waarde cfr Kris van interval
+- min_number_of_regeneration: exacte waarde OF min-waarde interval
+- max_number_of_regeneration: exacte waarde OF max-waarde interval
+
+- subcircle: A1 of A2: seedlings vs established
+- subcirclearea_ha: enkel berekend bij CP's (als r_A12 bestaat); NA bij KV's
+- plotarea_ha: 
+* CP's: steeds gelijk aan subcirclearea_ha
+* KV's: (1) length_core_area_m * width_core_area_m OF 
+(2) core_area_ha < Area_ha uit Plotdetails OF 
+(3) totalplotarea_ha < Area_ha of Area_m2 uit layer Plots
+(als (1) niet kan, dan (2) en dan pas (3))
+
+
+```{r exactnr_vs_class}
+names(data_regeneration)
+
+data_regeneration %>% filter(!is.na(nr_of_regeneration) & !is.na(number_class)) %>% nrow()
+# 1211 van de 33000
+test <- data_regeneration %>% filter(!is.na(nr_of_regeneration) & !is.na(number_class))
+table(test$subcircle)
+# komt meer voor bij seedlings: daar numberclass verwacht
+# niet teveel over nadenken, gewoon corrigeren: als beide voorkomen, dan degene die niet past wegdoen
+
+```
+
+
+```{r }
+# check <- data_regeneration %>% 
+#   filter(subcircle == "A1" & is.na(number_class))
+
+
+check <- data_regeneration %>% 
+  filter(subcircle == "A2" & 
+           !is.na(nr_of_regeneration) &
+           !is.na(number_class))
+# 83
+
+check2 <- data_regeneration %>% 
+  filter(subcircle == "A2" & 
+           is.na(nr_of_regeneration) &
+           !is.na(number_class))
+# 1574 waar enkel klasse vermeld staat, terwijl het een exact nummer zou moeten zijn
+# package zal dan automatisch de klasse gebruiken ==> OK
+```
+
+
+! rubbing_damage bij de plot-level-resultaten (zie verder): er wordt "Inf" gecrëeerd indien bij A2-cirkel geen exact aantal genoteerd werd (wat wel zou moeten volgens methodiek).
+=> om dit op te vangen toch in dataset voor A2 nr_regeneration vervangen door midwaarde van number_class
+
+> nog niet zeker of Els dit opgelost krijgt: alvast gevraagd in issue #102
+
+
+```{r correctie_A2_exactnr}
+data_regeneration_ <- data_regeneration %>% 
+  # number_class leegmaken als niet van toepassing (A2)
+  mutate(number_class = ifelse(subcircle == "A2" & !is.na(nr_of_regeneration), 
+                               NA, number_class )) %>% 
+  # nr_of_reg overnemen van number_class als niet ingevuld (A2)
+  mutate(nr_of_regeneration = ifelse(subcircle == "A2" & is.na(nr_of_regeneration), 
+                               number_class, nr_of_regeneration)) 
+  
+
+data_regeneration_ %>% filter(subcircle == "A2" & !is.na(nr_of_regeneration) &
+           !is.na(number_class)) %>% nrow()
+
+data_regeneration <- data_regeneration_
+
+```
+
+
+```{r correctie_A1_klasse_NIET, eval = FALSE}
+# bij A1 in theorie het tegenovergestelde van A2: obv exact nr de aantalsklasse afleiden
+
+# OPGEPAST: number_class overnemen van nr_of_reg als niet ingevuld (A1): niet zo eenvoudig
+  # mutate(number_class = ifelse(subcircle == "A2" & is.na(nr_of_regeneration), 
+  #                              number_class, nr_of_regeneration))
+    # nr_of_regeneration leegmaken als niet van toepassing (A1)
+  # mutate(nr_of_regeneration = ifelse(subcircle == "A1" & !is.na(number_class), 
+  #                              NA, nr_of_regeneration))  
+
+data_regeneration_ %>% filter(subcircle == "A1" & !is.na(nr_of_regeneration) &
+           is.na(number_class)) %>% nrow()
+# 2988 => zijn er veel!
+check <- data_regeneration_ %>% filter(subcircle == "A1" & !is.na(nr_of_regeneration) &
+           is.na(number_class))
+
+
+
+```
+
+
+```{r check_NA}
+# check NA's
+col <- c("approx_nr_regeneration", "min_number_of_regeneration", "max_number_of_regeneration")
+data_regeneration %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+
+# check <- data_regeneration %>% filter_at(col, any_vars(is.na(.)))
+
+```
+
+
+# Correctie rubbing_damage_perc in data_regeneration
+
+`rubbing_damage_perc` is berekend obv exact aantal, maar soms ook enkel aantalsklasse aanwezig
+=> moet obv `number_class` als exact aantal niet beschikbaar is
+> package zal in die zin aangepast worden (25/11/2022): #102
+
+Op dit moment wordt rubbing_damage enkel voor A2 berekend
+> package zal in die zin aangepast worden (25/11/2022): #102
+
+NA indien bij A2-cirkel geen exact aantal genoteerd werd
+=> om dit op te vangen toch in dataset voor A2 nr_regeneration vervangen door midwaarde van number_class (zie hoger)
+> package zal *MOGELIJKS* in die zin aangepast worden (25/11/2022): #102
+
+Ook steeds NA, omdat aantalsklasse gebruikt werd, en niet exact aantal.
+> package zal in die zin aangepast worden (25/11/2022): #102
+
+Hierna tijdelijke correcie van `rubbing_damage_perc`.
+
+--> EERST `rubbing_damage_number`: soms nog NA ipv 0: KV's Hannecart en Rodebos:
+gevraagd aan Peter in mail van 18/1/2023
+
+
+```{r corr_rubbingnr_NA}
+check_rubbingnr_NA <- data_regeneration %>% 
+  # select(-contains(c("r_", "core_area"))) %>% 
+  left_join(plotinfo %>% select(plot_id, period, game_impact_reg)) %>% 
+  filter(is.na(rubbing_damage_number)) %>% 
+  filter(game_impact_reg == TRUE) 
+
+table(check_rubbingnr_NA$plot_id, check_rubbingnr_NA$period)
+  #          3
+  # 31000  309
+  # 41000 1242
+  # 43000  515
+
+data_regeneration_ <- data_regeneration %>% 
+  # select(-contains(c("r_", "core_area"))) %>% 
+  left_join(plotinfo %>% select(plot_id, period, game_impact_reg),
+            by = c("plot_id", "period")) %>% 
+  mutate(rubbing_damage_number = ifelse(is.na(rubbing_damage_number) & game_impact_reg == TRUE,
+                                  0,
+                                  rubbing_damage_number)) %>% 
+  select(-game_impact_reg)
+
+
+data_regeneration <- data_regeneration_
+```
+
+
+--> VERVOLGENS `rubbing_damage_perc`: 
+- NA wegens number = NA ipv 0
+- !! ook NA wegens `nr_of_regeneration` leeg (enkel `number_class` ingevuld)
+
+
+```{r corr_rubbingnr_perc}
+check_rubbing_perc <- data_regeneration_ %>% 
+  # select(-contains(c("r_", "core_area"))) %>% 
+  left_join(plotinfo %>% select(plot_id, period, game_impact_reg)) %>% 
+  filter(is.na(rubbing_damage_perc)) %>% 
+  filter(game_impact_reg == TRUE) 
+
+# 2de reden voor NA: de verjonging was initieel uitgedrukt als numberclass, en het percentage wordt berekend in load_data_regeneration obv het exacte aantal
+
+head(table(check_rubbing_perc$plot_id, check_rubbing_perc$period))
+unique(check_rubbing_perc$rubbing_damage_number)
+
+data_regeneration_ <- data_regeneration %>% 
+  # select(-contains(c("r_", "core_area"))) %>% 
+  left_join(plotinfo %>% select(plot_id, period, game_impact_reg),
+            by = c("plot_id", "period")) %>% 
+  # correctie voor deze waar rubbing_nr in vorige chunck op 0 gezet is
+  mutate(rubbing_damage_perc = ifelse(is.na(rubbing_damage_perc) & game_impact_reg == TRUE,
+                                 100*rubbing_damage_number/nr_of_regeneration,  
+                                 rubbing_damage_perc)) %>% 
+  # correctie voor deze waar nr_of_reg niet ingevuld staat => daar numberclass gebruiken
+  mutate(rubbing_damage_perc = ifelse(is.na(rubbing_damage_perc) & game_impact_reg == TRUE,
+                                 100*rubbing_damage_number/number_class,  
+                                 rubbing_damage_perc)) %>% 
+  select(-game_impact_reg)
+
+# OK, enkel deze met zowel nr_of_reg als rubbing_nr = 0, blijven NA 
+# (logisch: 0/0: als er geen verjonging is, kan je ook het percentage schade niet begroten)
+data_regeneration <- data_regeneration_
+```
+
+
+
+# Correctie Kersselaerspleyn: plotarea KV 
+
+> niet nodig voor regeneration_by_plot(_height_species).csv : alles wordt berekend op subplotniveau, met opp 0.01 ha 
+    plotarea_ha wordt aangepast bij begin van elke calc_reg-functie:
+      plotarea_ha = ifelse(.data$plottype == "CA", 0.01, .data$plotarea_ha)
+      
+> wél nodig voor de resultaten op niveau van de core area
+  
+----
+Regeneration: counted in standard height classes in subplots: 750 plots of 10x10m in 2001;
+selection of 140 subplots (every 5th row) of 10x10m in 2010/11 and 2020/21 (see transects on
+map)
+Vegetation : standard relevé on 10x10m subplots: 750 plots, only summer survey in 2001; 140
+plots in 2011 and 2021 - spring and summer survey; additional survey in spring 2015 (vernal
+flora).
+
+
+< dataverwerking 2012:
+"AFWIJKENDE METHODIEK in de kernvlakte van Kersselaerspleyn  
+-   Zeer grote kernvlakte (107485 m² = 10.75 ha) + onregelmatige vorm   
+-   verjonging en vegetatie werden uitzonderlijk niet volledig heropgemeten in 2011, aangezien er niet zoveel veranderd was + hoge werkdruk  
+-   Er werd geopteerd om een selectie van bandtransecten opnieuw in te meten:  
+o    Bandtransekten van 10m breed, telkens NZ-gericht (loodrecht op de verdunningsdreef), telkens de eerste strook ten oosten van de 50x50m gridpunten  
+o    Dat zijn dan 3 stroken van 300x10 m, 1 van 250, 1 van 150 en eentje van 100 m lang, oftewel 140 proefvlakjes (ipv 107485 m² / 100 m² = 1074 proefvlakjes //  750 in 2000) 
+30*3+25+15+10 == 140
+
+==>    Bijgevolg werd er voor de verjonging eigenlijk gewerkt met een plot van slechts 140*100m² groot = 14000 m² = 1,4 ha => aanpassen   
+
+
+> Hierna plotarea aanpassen enkel voor berekening van regeneration
+
+
+```{r }
+data_regeneration %>% filter(plot_id == 11000) %>% 
+  group_by(core_area_ha) %>% summarize() %>% ungroup() %>% dplyr::pull(core_area_ha)
+# 10.7485
+
+data_regeneration_ <- data_regeneration %>% 
+  mutate(core_area_ha = ifelse(plot_id == 11000 & period > 1, 
+                               1.4,
+                               ifelse(plot_id == 11000 & period == 1,
+                                      7.5,
+                                      core_area_ha)),
+         plotarea_ha = ifelse(plot_id == 11000 & period > 1, 
+                               1.4,
+                               ifelse(plot_id == 11000 & period == 1,
+                                      7.5,
+                                      plotarea_ha)))
+
+data_regeneration <- data_regeneration_
+
+# reg_CA <- data_regeneration %>% filter(plottype == "CA")
+# table(reg_CA$forest_reserve, reg_CA$plotarea_ha)
+# table(reg_CA$core_area_ha, reg_CA$plotarea_ha)
+```
+
+
+
+# Calculate regeneration 
+
+```{r calc_reg}
+regeneration <- calculate_regeneration(data_regeneration)
+
+```
+
+
+```{r CreateSeparateDataframesReg}
+for (tablename in names(regeneration)) {
+     assign(tablename, regeneration[[tablename]])
+} 
+
+```
+
+
+# Check NA's
+
+```{r}
+names(regeneration_by_plot)
+```
+
+```{r}
+col <- c("number_of_tree_species", "approx_nr_established_ha", "approx_nr_seedlings_ha",
+         "mean_number_established_ha", "lci_number_established_ha", "uci_number_established_ha",
+         "mean_number_seedlings_ha" , "lci_number_seedlings_ha", "uci_number_seedlings_ha")
+
+regeneration_by_plot %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+
+```
+
+```{r}
+col <- c("number_of_tree_species", "approx_nr_regeneration_ha",
+         "mean_number_of_regeneration_ha", 
+         "lci_number_of_regeneration_ha", "uci_number_of_regeneration_ha")
+
+regeneration_by_plot_height %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+
+```
+
+
+```{r}
+col <- c("approx_nr_regeneration_ha",
+         "mean_number_of_regeneration_ha", 
+         "lci_number_of_regeneration_ha", "uci_number_of_regeneration_ha")
+
+regeneration_by_plot_height_species %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+
+```
+
+```{r}
+col <- c("nr_of_subplots_with_regeneration", "perc_subplots_with_regeneration", 
+         "approx_nr_established_ha", "approx_nr_seedlings_ha",
+         "mean_number_established_ha", "lci_number_established_ha", "uci_number_established_ha",
+         "mean_number_seedlings_ha" , "lci_number_seedlings_ha", "uci_number_seedlings_ha")
+
+regeneration_by_core_area_species %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+
+```
+
+
+```{r}
+col <- c("nr_of_subplots_with_regeneration", "perc_subplots_with_regeneration", 
+         "approx_nr_regeneration_ha",
+         "mean_number_of_regeneration_ha", 
+         "lci_number_of_regeneration_ha", "uci_number_of_regeneration_ha")
+
+regeneration_by_core_area_height_species %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+
+```
+
+
+## TEMP: foute nullen vs NA bij mean_reg_ha - NU OK 25/11/2022
+
+> blijkt momenteel opgelost te zijn (25/11/2022)
+
+Bv. plot 130 vs 133: 
+
+- als seedlings ingevuld zijn maar established niet (plot 133), dan NA ipv 0
+- als niks ingevuld staat, maar wel een reg_date: dan 0 (plot 130) !! lci = 0 en uci = NA)
+
+Data_regeneration bevat voor plot 133 enkel de seedlings en voor plot 130 enkel een lijn met 
+heightclass = NA en species = NA (want geen verjonging)
+
+```{r eval=FALSE}
+check0 <- data_regeneration %>% filter(period == 1 & plot_id %in% c(133, 130))
+# OK!
+
+check <- regeneration_by_plot %>% filter(period == 1 & plot_id %in% c(133, 130))
+# uci = NA is fout => aangepast zdd als sum & lci = 0, dan ci ook = 0 (ipv NaN)
+
+check2 <- regeneration_by_plot_height %>% filter(period == 1 & plot_id %in% c(133, 130))
+# uci = NA is fout => aangepast zdd als sum & lci = 0, dan ci ook = 0 (ipv NaN)
+
+check3 <- regeneration_by_plot_height_species %>% filter(period == 1 & plot_id %in% c(133, 130))
+# idem => misschien beter aanpassen in functie sum_interval!!
+```
+
+
+```{r eval=FALSE}
+by_plot1 <- data_regeneration %>%
+    mutate(
+      plotarea_ha = ifelse(.data$plottype == "CA", 0.01, .data$plotarea_ha),
+      min_number_established_ha =
+        ifelse(is.na(.data$subcircle) | .data$subcircle == "A2",  
+               # als subcircle = NA, dan is aantal = 0
+               # MAAR dit geldt enkel als er géén verjonging is
+               # DUS als subcircle A1 is, en er is geen subcircle A2, dan hebben we hier NA!!
+               # en omgekeerd ook
+               # (subcircle wordt ook ingevuld bij core area's)
+               # maar hier kunnen we geen extra lijn aanmaken 
+               .data$min_number_of_regeneration / .data$plotarea_ha, NA),
+      max_number_established_ha =
+        ifelse(is.na(.data$subcircle) | .data$subcircle == "A2",
+               .data$max_number_of_regeneration / .data$plotarea_ha, NA),
+      min_number_seedlings_ha =
+        ifelse(is.na(.data$subcircle) | .data$subcircle == "A1",
+               .data$min_number_of_regeneration / .data$plotarea_ha, NA),
+      max_number_seedlings_ha =
+        ifelse(is.na(.data$subcircle) | .data$subcircle == "A1",
+               .data$max_number_of_regeneration / .data$plotarea_ha, NA),
+      approx_nr_established_ha =
+        ifelse(is.na(.data$subcircle) | .data$subcircle == "A2",
+               .data$approx_nr_regeneration / .data$plotarea_ha, NA),
+      approx_nr_seedlings_ha =
+        ifelse(is.na(.data$subcircle) | .data$subcircle == "A1",
+               .data$approx_nr_regeneration / .data$plotarea_ha, NA)
+    ) 
+
+by_plot2 <- data_regeneration %>%
+    mutate(
+      plotarea_ha = ifelse(.data$plottype == "CA", 0.01, .data$plotarea_ha),
+      min_number_established_ha =
+        ifelse(is.na(.data$subcircle) | .data$subcircle == "A2",
+               .data$min_number_of_regeneration / .data$plotarea_ha, NA),
+      max_number_established_ha =
+        ifelse(is.na(.data$subcircle) | .data$subcircle == "A2",
+               .data$max_number_of_regeneration / .data$plotarea_ha, NA),
+      min_number_seedlings_ha =
+        ifelse(is.na(.data$subcircle) | .data$subcircle == "A1",
+               .data$min_number_of_regeneration / .data$plotarea_ha, NA),
+      max_number_seedlings_ha =
+        ifelse(is.na(.data$subcircle) | .data$subcircle == "A1",
+               .data$max_number_of_regeneration / .data$plotarea_ha, NA),
+      approx_nr_established_ha =
+        ifelse(is.na(.data$subcircle) | .data$subcircle == "A2",
+               .data$approx_nr_regeneration / .data$plotarea_ha, NA),
+      approx_nr_seedlings_ha =
+        ifelse(is.na(.data$subcircle) | .data$subcircle == "A1",
+               .data$approx_nr_regeneration / .data$plotarea_ha, NA)
+    ) %>% 
+    group_by(
+      .data$plot_id, .data$year, .data$period, .data$subplot_id
+    ) %>%
+    summarise(
+      established_interval =
+        sum_intervals(
+          var_min = .data$min_number_established_ha,
+          var_max = .data$max_number_established_ha,
+          transformation = "log", na_rm = TRUE
+        ),
+      seedlings_interval =
+        sum_intervals(
+          var_min = .data$min_number_seedlings_ha,
+          var_max = .data$max_number_seedlings_ha,
+          transformation = "log", na_rm = TRUE
+        )
+    ) %>%
+    ungroup() 
+
+by_plot3 <- data_regeneration %>%
+    mutate(
+      plotarea_ha = ifelse(.data$plottype == "CA", 0.01, .data$plotarea_ha),
+      min_number_established_ha =
+        ifelse(is.na(.data$subcircle) | .data$subcircle == "A2",
+               .data$min_number_of_regeneration / .data$plotarea_ha, NA),
+      max_number_established_ha =
+        ifelse(is.na(.data$subcircle) | .data$subcircle == "A2",
+               .data$max_number_of_regeneration / .data$plotarea_ha, NA),
+      min_number_seedlings_ha =
+        ifelse(is.na(.data$subcircle) | .data$subcircle == "A1",
+               .data$min_number_of_regeneration / .data$plotarea_ha, NA),
+      max_number_seedlings_ha =
+        ifelse(is.na(.data$subcircle) | .data$subcircle == "A1",
+               .data$max_number_of_regeneration / .data$plotarea_ha, NA),
+      approx_nr_established_ha =
+        ifelse(is.na(.data$subcircle) | .data$subcircle == "A2",
+               .data$approx_nr_regeneration / .data$plotarea_ha, NA),
+      approx_nr_seedlings_ha =
+        ifelse(is.na(.data$subcircle) | .data$subcircle == "A1",
+               .data$approx_nr_regeneration / .data$plotarea_ha, NA)
+    ) %>% 
+    group_by(
+      .data$plot_id, .data$year, .data$period, .data$subplot_id
+    ) %>%
+    summarise(
+      established_interval =
+        sum_intervals(
+          var_min = .data$min_number_established_ha,
+          var_max = .data$max_number_established_ha,
+          transformation = "log", na_rm = TRUE
+        ),
+      seedlings_interval =
+        sum_intervals(
+          var_min = .data$min_number_seedlings_ha,
+          var_max = .data$max_number_seedlings_ha,
+          transformation = "log", na_rm = TRUE
+        ),
+      approx_nr_established_ha =
+        sum(.data$approx_nr_established_ha, na.rm = TRUE),
+      approx_nr_seedlings_ha = sum(.data$approx_nr_seedlings_ha, na.rm = TRUE)
+    ) %>%
+    ungroup() %>%
+    mutate(
+      mean_number_established_ha = .data$established_interval$sum,
+      lci_number_established_ha = .data$established_interval$lci,
+      uci_number_established_ha = .data$established_interval$uci,
+      mean_number_seedlings_ha = .data$seedlings_interval$sum,
+      lci_number_seedlings_ha = .data$seedlings_interval$lci,
+      # uci_number_seedlings_ha = 
+      #   ifelse(.data$seedlings_interval$sum == 0 
+      #          & .data$seedlings_interval$lci == 0
+      #          & is.na(.data$seedlings_interval$uci), 
+      #          0, .data$seedlings_interval$uci),
+      uci_number_seedlings_ha = .data$seedlings_interval$uci
+    ) %>% 
+  mutate(mean_number_established_ha = 
+           ifelse(is.na(.data$mean_number_established_ha) 
+                  & .data$mean_number_seedlings_ha > 0
+                  , 0
+                  , .data$mean_number_established_ha),
+         lci_number_established_ha = 
+           ifelse(is.na(.data$lci_number_established_ha) 
+                  & .data$mean_number_seedlings_ha > 0
+                  , 0
+                  , .data$lci_number_established_ha),
+         uci_number_established_ha = 
+           ifelse(is.na(.data$uci_number_established_ha) 
+                  & .data$mean_number_seedlings_ha > 0
+                  , 0
+                  , .data$uci_number_established_ha),
+         mean_number_seedlings_ha = 
+           ifelse(is.na(.data$mean_number_seedlings_ha) 
+                  & .data$mean_number_established_ha > 0
+                  , 0
+                  , .data$mean_number_seedlings_ha),
+         lci_number_seedlings_ha = 
+           ifelse(is.na(.data$lci_number_seedlings_ha) 
+                  & .data$mean_number_established_ha > 0
+                  , 0
+                  , .data$lci_number_seedlings_ha),
+         uci_number_seedlings_ha = 
+           ifelse(is.na(.data$uci_number_seedlings_ha) 
+                  & .data$mean_number_established_ha > 0
+                  , 0
+                  , .data$uci_number_seedlings_ha),
+         approx_nr_established_ha = 
+           ifelse(is.na(.data$approx_nr_established_ha) 
+                  & .data$approx_nr_seedlings_ha > 0
+                  , 0
+                  , .data$approx_nr_established_ha),
+         approx_nr_seedlings_ha = 
+           ifelse(is.na(.data$approx_nr_seedlings_ha) 
+                  & .data$approx_nr_established_ha > 0
+                  , 0
+                  , .data$approx_nr_seedlings_ha)
+  )
+         
+
+by_plot3 <- calculate_regeneration_plot(data_regeneration)
+
+```
+
+```{r eval=FALSE}
+names(by_plot1)
+
+check4 <- by_plot1 %>% filter(period == 1 & plot_id %in% c(133, 130, 138)) %>% 
+  select(plot_id, subcircle, date_regeneration, height_class, contains(c("min_number", "max_number", "approx")))
+
+check5 <- by_plot2 %>% filter(period == 1 & plot_id %in% c(133, 130))
+
+check6 <- by_plot3 %>% filter(period == 1 & plot_id %in% c(133, 130, 138))
+
+str(check6)
+```
+
+
+
+## TEMP: fout percentage rubbing dammage - NOG OP TE LOSSEN IN PACKAGE
+
+`rubbing_damage_perc` is hogerop gecorrigeerd in `data_regeneration`
+!! MAAR: bij berekening van plot-resultaten wordt opnieuw teruggegrepen naar 
+aantal verjonging en aantal rubbing om dat percentage te berekenen
+> package zal aangepast worden (25/11/2022): #102
+
+! er wordt "Inf" gecrëeerd voor A1's, want in code wordt gedeeld door sum(....*A2):
+bijgevolg steeds 0 voor A1
+> package zal MOGELIJKS in die zin aangepast worden (25/11/2022): #102
+
+in de functies wordt gebruik gemaakt van `rubbing_damage_number`, berekend als som van ...
+Maar dat wordt 0 als je enkel NA's optelt 
+            # > sum(c(NA, NA), na.rm = TRUE)
+            # [1] 0
+=> rubbing_damage_perc wordt ook 0 (=> not_na_rubbing wordt TRUE (of 1))
+> aanpassen in package (issue #102): gevraagd 19/1/2023
+(nu tijdelijk alle gecorrigeerde functies hier runnen)
+
+```{r eval=FALSE}
+names(regeneration_by_plot)
+
+check0 <- regeneration_by_plot %>% 
+  left_join(plotinfo %>% select(plot_id, period, game_impact_reg)) %>% 
+  filter(is.na(rubbing_damage_perc) & number_of_tree_species > 0) %>% 
+  filter(game_impact_reg == TRUE) 
+
+# niet gelegen aan data_regeneration, maar perc wordt opnieuw berekend  
+data_regeneration %>% filter(plot_id == 707) %>% 
+  filter(period == 2) %>% 
+  select(plot_id, period, subcircle, date_regeneration, height_class, species, number_class, nr_of_regeneration, contains(c("rubbing", "min_number", "max_number", "approx")))
+
+```
+
+> Tijdelijke correctie van de NA's kan enkel door alle reg-functies lichtjes aangepast 
+hier opnieuw te runnen:
+  by_plot_height <- calculate_regeneration_plot_height(data_regeneration)
+  by_plot <- calculate_regeneration_plot(data_regeneration)
+  by_plot_height_species <-
+    calculate_regeneration_plot_height_species(data_regeneration)
+  data_regeneration_CA <- data_regeneration %>%
+    filter(.data$plottype == "CA")
+  by_ca_species <- calculate_regeneration_core_area_species(data_regeneration_CA)
+  by_ca_height_species <-
+    calculate_regeneration_core_area_height_species(data_regeneration_CA)
+
+```{r tmp_fctie_sum_intervals}
+sum_intervals <-
+  function(var_min, var_max, transformation = NA, na_rm = FALSE) {
+
+  if (na_rm) {
+    var_min <- var_min[!is.na(var_min)]
+    var_max <- var_max[!is.na(var_max)]
+  }
+  if (length(var_min) == 0) {
+    return(data.frame(n_obs = NA, sum = NA, lci = NA, uci = NA))
+  }
+
+  if (!is.na(transformation) & transformation == "log") {
+    value <- exp((log(var_min + 1e-10) + log(var_max)) / 2)
+    variance <- ((log(var_max) - log(var_min + 1e-10)) / (2 * 1.96)) ^ 2
+  } else {
+    value <- (var_min + var_max) / 2
+    variance <- ((var_max - var_min) / (2 * 1.96)) ^ 2
+  }
+
+  result <- data.frame(n_obs = length(value))
+  result$sum <-
+    ifelse(
+      !is.na(transformation) & transformation == "log",
+      log(sum(value)),
+      sum(value)
+    )
+  variance <- sum(variance) / result$n_obs
+  result$lci <- result$sum - 1.96 * sqrt(variance) / sqrt(result$n_obs)
+  result$uci <- result$sum + 1.96 * sqrt(variance) / sqrt(result$n_obs)
+
+  if (!is.na(transformation) & transformation == "log") {
+    result$sum <- exp(result$sum)
+    result$lci <- exp(result$lci)
+    result$uci <- exp(result$uci)
+  }
+
+
+  if (is.na(result$uci) & result$sum == 0 & result$lci == 0) {
+    result$uci <- 0
+  }
+
+  return(result)
+}
+
+```
+
+
+!! rubbing_damage_number wordt 0 als je NA's optelt 
+(`rubbing_damage_nr = sum(.data$rubbing_damage_number, na.rm = TRUE`)
+Obv daarvan wordt dan perc berekend en dan not_na_rubbing!!
+`not_na_rubbing = sum(!is.na(.data$rubbing_damage_perc))`
+
+=> beter obv `game_impact_reg` 
+    
+```{r by_plot}
+  by_plot <- data_regeneration %>%
+   left_join(plotinfo %>% select(plot_id, period, game_impact_reg),
+            by = c("plot_id", "period")) %>% 
+    mutate(
+      plotarea_ha = ifelse(.data$plottype == "CA", 0.01, .data$plotarea_ha),
+      min_number_established_ha =
+        ifelse(is.na(.data$subcircle) | .data$subcircle == "A2",
+               .data$min_number_of_regeneration / .data$plotarea_ha, NA),
+      max_number_established_ha =
+        ifelse(is.na(.data$subcircle) | .data$subcircle == "A2",
+               .data$max_number_of_regeneration / .data$plotarea_ha, NA),
+      min_number_seedlings_ha =
+        ifelse(is.na(.data$subcircle) | .data$subcircle == "A1",
+               .data$min_number_of_regeneration / .data$plotarea_ha, NA),
+      max_number_seedlings_ha =
+        ifelse(is.na(.data$subcircle) | .data$subcircle == "A1",
+               .data$max_number_of_regeneration / .data$plotarea_ha, NA),
+      approx_nr_established_ha =
+        ifelse(is.na(.data$subcircle) | .data$subcircle == "A2",
+               .data$approx_nr_regeneration / .data$plotarea_ha, NA),
+      approx_nr_seedlings_ha =
+        ifelse(is.na(.data$subcircle) | .data$subcircle == "A1",
+               .data$approx_nr_regeneration / .data$plotarea_ha, NA)
+    ) %>%
+    group_by(
+      .data$plot_id, .data$year, .data$period, .data$subplot_id
+      , .data$game_impact_reg  ## toegevoegd
+    ) %>%
+    summarise(
+      number_of_tree_species = n_distinct(.data$species, na.rm = TRUE),
+      established_interval =
+        sum_intervals(
+          var_min = .data$min_number_established_ha,
+          var_max = .data$max_number_established_ha,
+          transformation = "log", na_rm = TRUE
+        ),
+      seedlings_interval =
+        sum_intervals(
+          var_min = .data$min_number_seedlings_ha,
+          var_max = .data$max_number_seedlings_ha,
+          transformation = "log", na_rm = TRUE
+        ),
+      
+      ##### tijdelijk extra toegevoegd ter controle
+        #     rubbing_damage_nr =
+        # sum(.data$rubbing_damage_number, na.rm = TRUE),
+      # !! rubbing_damage_number wordt 0 als je enkel NA's optelt => 
+      # rubbing_damage_perc wordt ook 0 => not_na_rubbing wordt TRUE (of 1)
+            # > sum(c(NA, NA), na.rm = TRUE)
+            # [1] 0
+      #####
+      
+      rubbing_damage_perc =
+        sum(.data$rubbing_damage_number, na.rm = TRUE) * 100 /
+        sum(.data$approx_nr_regeneration, na.rm = TRUE), 
+          #  nr_of_regeneration* (.data$subcircle == "A2"): !! ook in A1 opgemeten
+      not_na_rubbing = sum(!is.na(.data$rubbing_damage_perc)),
+      approx_nr_established_ha =
+        sum(.data$approx_nr_established_ha, na.rm = TRUE),
+      approx_nr_seedlings_ha = sum(.data$approx_nr_seedlings_ha, na.rm = TRUE)
+    ) %>%
+    ungroup() %>%
+    mutate(
+      mean_number_established_ha = .data$established_interval$sum,
+      lci_number_established_ha = .data$established_interval$lci,
+      uci_number_established_ha = .data$established_interval$uci,
+      mean_number_seedlings_ha = .data$seedlings_interval$sum,
+      lci_number_seedlings_ha = .data$seedlings_interval$lci,
+      uci_number_seedlings_ha = .data$seedlings_interval$uci,
+      # rubbing_damage_perc =
+      #   ifelse(
+      #     .data$not_na_rubbing > 0 & .data$rubbing_damage_perc > 0,
+      #     .data$rubbing_damage_perc,
+      #     NA
+        # )
+      rubbing_damage_perc =
+        ifelse(
+          .data$game_impact_reg == FALSE & .data$rubbing_damage_perc == 0,
+          NA, 
+          .data$rubbing_damage_perc
+      )
+    ) %>%
+    mutate(mean_number_established_ha =
+             ifelse(is.na(.data$mean_number_established_ha)
+                    & .data$mean_number_seedlings_ha > 0
+                    , 0
+                    , .data$mean_number_established_ha),
+           lci_number_established_ha =
+             ifelse(is.na(.data$lci_number_established_ha)
+                    & .data$mean_number_seedlings_ha > 0
+                    , 0
+                    , .data$lci_number_established_ha),
+           uci_number_established_ha =
+             ifelse(is.na(.data$uci_number_established_ha)
+                    & .data$mean_number_seedlings_ha > 0
+                    , 0
+                    , .data$uci_number_established_ha),
+           mean_number_seedlings_ha =
+             ifelse(is.na(.data$mean_number_seedlings_ha)
+                    & .data$mean_number_established_ha > 0
+                    , 0
+                    , .data$mean_number_seedlings_ha),
+           lci_number_seedlings_ha =
+             ifelse(is.na(.data$lci_number_seedlings_ha)
+                    & .data$mean_number_established_ha > 0
+                    , 0
+                    , .data$lci_number_seedlings_ha),
+           uci_number_seedlings_ha =
+             ifelse(is.na(.data$uci_number_seedlings_ha)
+                    & .data$mean_number_established_ha > 0
+                    , 0
+                    , .data$uci_number_seedlings_ha),
+           approx_nr_established_ha =
+             ifelse(is.na(.data$approx_nr_established_ha)
+                    & .data$approx_nr_seedlings_ha > 0
+                    , 0
+                    , .data$approx_nr_established_ha),
+           approx_nr_seedlings_ha =
+             ifelse(is.na(.data$approx_nr_seedlings_ha)
+                    & .data$approx_nr_established_ha > 0
+                    , 0
+                    , .data$approx_nr_seedlings_ha)
+    ) %>%
+    select(
+      -.data$established_interval, -.data$seedlings_interval,
+      -.data$not_na_rubbing, -.data$game_impact_reg
+    )
+
+```
+
+
+```{r check_reg_rubbing_plot, eval = FALSE}
+t <- by_plot %>% filter(not_na_rubbing > 0 & game_impact_reg == FALSE)
+# allemaal rubbing_nr = 0 !! is foute som (som van NA's = 1)
+
+by_plot %>% filter(not_na_rubbing == 0 & game_impact_reg == TRUE)                   
+# dat zijn deze zonder enige verjonging => deze mogen NA blijven
+by_plot %>% filter(not_na_rubbing == 0 & game_impact_reg == TRUE 
+                   & approx_nr_established_ha != 0 & approx_nr_seedlings_ha != 0) %>% 
+  nrow() == 0
+
+
+t <- by_plot %>% filter(game_impact_reg == FALSE)
+t <- by_plot %>% filter(game_impact_reg == TRUE)
+```
+
+
+```{r by_plot_height}
+by_plot_height <- data_regeneration %>%
+    left_join(plotinfo %>% select(plot_id, period, game_impact_reg),
+            by = c("plot_id", "period")) %>% 
+    mutate(
+      plotarea_ha = ifelse(.data$plottype == "CA", 0.01, .data$plotarea_ha)
+    ) %>%
+    group_by(
+      .data$plot_id, .data$year, .data$period, .data$height_class,
+      .data$subplot_id, .data$plotarea_ha, .data$game_impact_reg
+    ) %>%
+    summarise(
+      number_of_tree_species = n_distinct(.data$species, na.rm = TRUE),
+      rubbing_damage_perc =
+        sum(.data$rubbing_damage_number, na.rm = TRUE) * 100 /
+        sum(.data$approx_nr_regeneration, na.rm = TRUE), 
+        # sum(.data$nr_of_regeneration * (.data$subcircle == "A2"), na.rm = TRUE),
+      not_na_rubbing = sum(!is.na(.data$rubbing_damage_perc)),
+      interval =
+        sum_intervals(
+          var_min = .data$min_number_of_regeneration,
+          var_max = .data$max_number_of_regeneration,
+          transformation = "log", na_rm = TRUE
+        ),
+      approx_nr_regeneration_ha =
+        sum(.data$approx_nr_regeneration) / unique(.data$plotarea_ha)
+    ) %>%
+    ungroup() %>%
+    mutate(
+      mean_number_of_regeneration_ha = .data$interval$sum / .data$plotarea_ha,
+      lci_number_of_regeneration_ha = .data$interval$lci / .data$plotarea_ha,
+      uci_number_of_regeneration_ha = .data$interval$uci / .data$plotarea_ha,
+      # rubbing_damage_perc =
+      #   ifelse(
+      #     .data$not_na_rubbing > 0 & .data$rubbing_damage_perc > 0,
+      #     .data$rubbing_damage_perc,
+      #     NA
+      #   )
+      rubbing_damage_perc =
+        ifelse(
+          .data$game_impact_reg == FALSE & .data$rubbing_damage_perc == 0,
+          NA, 
+          .data$rubbing_damage_perc
+      )
+    ) %>%
+    select(
+      -.data$interval, -.data$plotarea_ha,
+      -.data$not_na_rubbing, -.data$game_impact_reg
+    )
+  
+```
+
+
+```{r by_plot_height_species}
+by_plot_height_species <- data_regeneration %>%
+  left_join(plotinfo %>% select(plot_id, period, game_impact_reg),
+            by = c("plot_id", "period")) %>%
+    mutate(
+      plotarea_ha = ifelse(.data$plottype == "CA", 0.01, .data$plotarea_ha)
+    ) %>%
+    group_by(
+      .data$plot_id, .data$year, .data$period, .data$height_class,
+      .data$species, .data$subplot_id, .data$plotarea_ha, .data$game_impact_reg
+    ) %>%
+    summarise(
+      rubbing_damage_perc =
+        sum(.data$rubbing_damage_number, na.rm = TRUE) * 100 /
+        sum(.data$approx_nr_regeneration, na.rm = TRUE), 
+        # sum(.data$nr_of_regeneration * (.data$subcircle == "A2"), na.rm = TRUE),
+      not_na_rubbing = sum(!is.na(.data$rubbing_damage_perc)),
+      interval =
+        sum_intervals(
+          var_min = .data$min_number_of_regeneration,
+          var_max = .data$max_number_of_regeneration,
+          transformation = "log", na_rm = TRUE
+        ),
+      approx_nr_regeneration_ha =
+        sum(.data$approx_nr_regeneration) / unique(.data$plotarea_ha)
+    ) %>%
+    ungroup() %>%
+    mutate(
+      mean_number_of_regeneration_ha = .data$interval$sum / .data$plotarea_ha,
+      lci_number_of_regeneration_ha = .data$interval$lci / .data$plotarea_ha,
+      uci_number_of_regeneration_ha = .data$interval$uci / .data$plotarea_ha,
+      # rubbing_damage_perc =
+      #   ifelse(
+      #     .data$not_na_rubbing > 0 & .data$rubbing_damage_perc > 0,
+      #     .data$rubbing_damage_perc,
+      #     NA
+      #   )
+      rubbing_damage_perc =
+        ifelse(
+          .data$game_impact_reg == FALSE & .data$rubbing_damage_perc == 0,
+          NA, 
+          .data$rubbing_damage_perc
+      )
+    ) %>%
+    select(
+      -.data$interval, -.data$plotarea_ha,
+      -.data$not_na_rubbing, -.data$game_impact_reg
+    )
+```
+
+
+```{r by_ca_species}
+data_regeneration_CA <- data_regeneration %>%
+    filter(.data$plottype == "CA")
+
+by_ca_species <- data_regeneration_CA %>%
+  left_join(plotinfo %>% select(plot_id, period, game_impact_reg),
+            by = c("plot_id", "period")) %>%
+    group_by(.data$plot_id, .data$period) %>%
+    mutate(
+      n_subplots = n_distinct(.data$subplot_id),
+      min_number_established_ha =
+        ifelse(is.na(.data$subcircle) | .data$subcircle == "A2",
+               .data$min_number_of_regeneration / .data$plotarea_ha, NA),
+      max_number_established_ha =
+        ifelse(is.na(.data$subcircle) | .data$subcircle == "A2",
+               .data$max_number_of_regeneration / .data$plotarea_ha, NA),
+      min_number_seedlings_ha =
+        ifelse(is.na(.data$subcircle) | .data$subcircle == "A1",
+               .data$min_number_of_regeneration / .data$plotarea_ha, NA),
+      max_number_seedlings_ha =
+        ifelse(is.na(.data$subcircle) | .data$subcircle == "A1",
+               .data$max_number_of_regeneration / .data$plotarea_ha, NA),
+      approx_nr_established_ha =
+        ifelse(is.na(.data$subcircle) | .data$subcircle == "A2",
+               .data$approx_nr_regeneration / .data$plotarea_ha, NA),
+      approx_nr_seedlings_ha =
+        ifelse(is.na(.data$subcircle) | .data$subcircle == "A1",
+               .data$approx_nr_regeneration / .data$plotarea_ha, NA)
+    ) %>%
+    ungroup() %>%
+    group_by(
+      .data$plot_id, .data$year, .data$period, .data$species,
+      .data$game_impact_reg
+    ) %>%
+    summarise(
+      nr_of_subplots_with_regeneration = n_distinct(.data$subplot_id),
+      perc_subplots_with_regeneration =
+        .data$nr_of_subplots_with_regeneration * 100 / unique(.data$n_subplots),
+      established_interval =
+        sum_intervals(
+          var_min = .data$min_number_established_ha,
+          var_max = .data$max_number_established_ha,
+          transformation = "log", na_rm = TRUE
+        ),
+      seedlings_interval =
+        sum_intervals(
+          var_min = .data$min_number_seedlings_ha,
+          var_max = .data$max_number_seedlings_ha,
+          transformation = "log", na_rm = TRUE
+        ),
+      rubbing_damage_perc =
+        sum(.data$rubbing_damage_number, na.rm = TRUE) * 100 /
+        sum(.data$approx_nr_regeneration, na.rm = TRUE), 
+        # sum(.data$nr_of_regeneration * (.data$subcircle == "A2"), na.rm = TRUE),
+      not_na_rubbing = sum(!is.na(.data$rubbing_damage_perc)),
+      approx_nr_established_ha =
+        sum(.data$approx_nr_established_ha, na.rm = TRUE),
+      approx_nr_seedlings_ha = sum(.data$approx_nr_seedlings_ha, na.rm = TRUE)
+    ) %>%
+    ungroup() %>%
+    mutate(
+      mean_number_established_ha = .data$established_interval$sum,
+      lci_number_established_ha = .data$established_interval$lci,
+      uci_number_established_ha = .data$established_interval$uci,
+      mean_number_seedlings_ha = .data$seedlings_interval$sum,
+      lci_number_seedlings_ha = .data$seedlings_interval$lci,
+      uci_number_seedlings_ha = .data$seedlings_interval$uci,
+      # rubbing_damage_perc =
+      #   ifelse(
+      #     .data$not_na_rubbing > 0 & .data$rubbing_damage_perc > 0,
+      #     .data$rubbing_damage_perc,
+      #     NA
+      #   )
+      rubbing_damage_perc =
+        ifelse(
+          .data$game_impact_reg == FALSE & .data$rubbing_damage_perc == 0,
+          NA, 
+          .data$rubbing_damage_perc
+      )
+    ) %>%
+    mutate(mean_number_established_ha =
+             ifelse(is.na(.data$mean_number_established_ha)
+                    & .data$mean_number_seedlings_ha > 0
+                    , 0
+                    , .data$mean_number_established_ha),
+           lci_number_established_ha =
+             ifelse(is.na(.data$lci_number_established_ha)
+                    & .data$mean_number_seedlings_ha > 0
+                    , 0
+                    , .data$lci_number_established_ha),
+           uci_number_established_ha =
+             ifelse(is.na(.data$uci_number_established_ha)
+                    & .data$mean_number_seedlings_ha > 0
+                    , 0
+                    , .data$uci_number_established_ha),
+           mean_number_seedlings_ha =
+             ifelse(is.na(.data$mean_number_seedlings_ha)
+                    & .data$mean_number_established_ha > 0
+                    , 0
+                    , .data$mean_number_seedlings_ha),
+           lci_number_seedlings_ha =
+             ifelse(is.na(.data$lci_number_seedlings_ha)
+                    & .data$mean_number_established_ha > 0
+                    , 0
+                    , .data$lci_number_seedlings_ha),
+           uci_number_seedlings_ha =
+             ifelse(is.na(.data$uci_number_seedlings_ha)
+                    & .data$mean_number_established_ha > 0
+                    , 0
+                    , .data$uci_number_seedlings_ha),
+           approx_nr_established_ha =
+             ifelse(is.na(.data$approx_nr_established_ha)
+                    & .data$approx_nr_seedlings_ha > 0
+                    , 0
+                    , .data$approx_nr_established_ha),
+           approx_nr_seedlings_ha =
+             ifelse(is.na(.data$approx_nr_seedlings_ha)
+                    & .data$approx_nr_established_ha > 0
+                    , 0
+                    , .data$approx_nr_seedlings_ha)
+    ) %>%
+    select(
+      -.data$established_interval, -.data$seedlings_interval,
+      -.data$not_na_rubbing, -.data$game_impact_reg
+    )
+
+```
+
+```{r by_ca_height_species}
+data_regeneration_CA <- data_regeneration %>%
+    filter(.data$plottype == "CA")
+
+by_ca_height_species <- data_regeneration_CA %>%
+  left_join(plotinfo %>% select(plot_id, period, game_impact_reg),
+            by = c("plot_id", "period")) %>%
+    group_by(.data$plot_id, .data$period) %>%
+    mutate(
+      n_subplots = n_distinct(.data$subplot_id)
+    ) %>%
+    ungroup() %>%
+    group_by(
+      .data$plot_id, .data$year, .data$period, .data$height_class,
+      .data$species, .data$plotarea_ha,
+      .data$game_impact_reg
+    ) %>%
+    summarise(
+      nr_of_subplots_with_regeneration = n_distinct(.data$subplot_id),
+      perc_subplots_with_regeneration =
+        .data$nr_of_subplots_with_regeneration * 100 / unique(.data$n_subplots),
+      rubbing_damage_perc =
+        sum(.data$rubbing_damage_number, na.rm = TRUE) * 100 /
+        sum(.data$approx_nr_regeneration, na.rm = TRUE),
+        # sum(.data$nr_of_regeneration * (.data$subcircle == "A2"), na.rm = TRUE),
+      not_na_rubbing = sum(!is.na(.data$rubbing_damage_perc)),
+      interval =
+        sum_intervals(
+          var_min = .data$min_number_of_regeneration,
+          var_max = .data$max_number_of_regeneration,
+          transformation = "log", na_rm = TRUE
+        ),
+      approx_nr_regeneration_ha =
+        sum(.data$approx_nr_regeneration) / unique(.data$plotarea_ha)
+    ) %>%
+    ungroup() %>%
+    mutate(
+      mean_number_of_regeneration_ha = .data$interval$sum / .data$plotarea_ha,
+      lci_number_of_regeneration_ha = .data$interval$lci / .data$plotarea_ha,
+      uci_number_of_regeneration_ha = .data$interval$uci / .data$plotarea_ha,
+      # rubbing_damage_perc =
+      #   ifelse(
+      #     .data$not_na_rubbing > 0 & .data$rubbing_damage_perc > 0,
+      #     .data$rubbing_damage_perc,
+      #     NA
+      #   )
+      rubbing_damage_perc =
+        ifelse(
+          .data$game_impact_reg == FALSE & .data$rubbing_damage_perc == 0,
+          NA, 
+          .data$rubbing_damage_perc
+      )
+    ) %>%
+    select(
+      -.data$interval, -.data$plotarea_ha,
+      -.data$not_na_rubbing, -.data$game_impact_reg
+    )
+
+```
+
+> Alle reg-resultaten terug in een lijst stoppen
+
+```{r combine_reg}
+regeneration_ <- list(
+      regeneration_by_plot_height = by_plot_height,
+      regeneration_by_plot = by_plot,
+      regeneration_by_plot_height_species = by_plot_height_species,
+      regeneration_by_core_area_species = by_ca_species,
+      regeneration_by_core_area_height_species = by_ca_height_species
+    )
+
+regeneration <- regeneration_
+```
+
+
+
+# Check KV Kersselaerspleyn
+
+Kloppen de resultaten nu? (vóór 25/11/2022 een factor 10.75/1.4 verschil)
+JA
+
+
+**Opbouw functie:**  
+- data_regeneration_CA <- data_regeneration %>% filter(.data$plottype == "CA")    
+- by_ca_species <- calculate_regeneration_core_area_species(data_regeneration_CA)  
+
+- n_subplots = n_distinct(.data$subplot_id)  
+
+- approx_nr_established_ha =
+        ```
+        ifelse(is.na(.data$subcircle) | .data$subcircle == "A2"  
+        ,.data$approx_nr_regeneration / .data$plotarea_ha  
+        , NA)  
+        ```
+
+==> hogerop plotarea_ha aangepast aan 1.4 ha en 7.5 ha (ipv 10.75 ha)
+
+
+```{r}
+#   data_regeneration_CA <- data_regeneration %>%
+#     filter(.data$plottype == "CA")
+#   by_ca_species <- calculate_regeneration_core_area_species(data_regeneration_CA)
+
+# is.na(subcircle): komt dat voor?
+# data_regeneration %>% filter(is.na(subcircle) & !is.na(species)) %>% nrow() == 0
+# NEE
+
+```
+
+```{r check_reg_Kerss_KV}
+check_Kerss <- regeneration_by_core_area_species %>% 
+  filter(plot_id == 11000)
+
+check_Kerss <- regeneration_by_core_area_height_species %>% 
+  filter(plot_id == 11000 & species == 7 & height_class == 3000)
+# period = 2, zelfde resultaat als dataverwerking 2010 - OK
+
+check_Kerss <- regeneration_by_core_area_height_species %>% 
+  filter(plot_id == 11000 & species == 7 & height_class == 1000)
+# period = 2, zelfde resultaat als dataverwerking 2010 - OK
+```
+
+Resultaten stemmen overeen met dataverwerking uit 2012.
+
+```{r check_n_subplots_reg}
+# controle n_subplots door runnen van deel van de functie -> OK!!
+# table(by_plot_species_reg$n_subplots)
+#    1   10   34   50   98  105  140  750 
+# 5475   40   36  186  324   56   31   15 
+```
+
+
+
+# Export
+
+```{r join_plottype_surveynr_BR_reg}
+reg_plotinfo <- lapply(regeneration, function(x) left_join(x, plotinfo %>% select(plot_id, forest_reserve, plottype, period, survey_number), by = c("plot_id", "period")))
+# lapply: same function over all elements of the list
+
+```
+
+```{r save_reg_git, eval = FALSE}
+save_results_git(
+  results = regeneration,
+  repo_path = path_to_git_forresdat,
+  strict = TRUE,
+  # strict = FALSE
+)
+```
+
+
+```{r save_reg_git_manueel, eval = FALSE}
+# manueel - eigen simpele functie
+save_results_tsv(regeneration, 
+                 root = path_to_forresdat_data,
+                 strict = FALSE)
+```
+
+
+```{r save_reg_access_csv, eval = FALSE}
+save_results_csv (
+  results = reg_plotinfo,
+  output_dir = path_to_plotlevel_csv
+)
+
+# afgerond voor export naar access
+# de df's van CP mogen op 0 afgerond worden (= 1ste drie dataframes)
+# de KV's op 2 cijfers na de komma
+
+reg_CP <- reg_plotinfo[c(1:3)]
+reg_CP <- reg_CP %>% 
+  lapply(., function(x) round_df(x, 0)) 
+  
+reg_CA  <- reg_plotinfo[c(4:5)]
+reg_CA <- reg_CA %>% 
+  lapply(., function(x) round_df(x, 2))
+
+reg_round <- c(reg_CP, reg_CA)
+
+save_results_access(
+    results = reg_round,
+    database = path_to_analysis_set_db,
+    remove_tables = TRUE
+  )
+
+```
+
+Direct naar gdrive exporteren (csv): 
+naar **/PRJ_BOSECO_ALGEMEEN/PRJ_BR_AanvraagGegevens/!METADATA-ALL_PLOTS/_plot-level-data/**
+
+```{r save_reg_gdrive, eval = FALSE}
+save_results_csv(
+    results = reg_plotinfo,
+    output_dir = path_to_plotlevel_gdrive
+    )
+
+```
+
+
+**Na update van forresdat, project "forresdat" openen en alles naar de cloud pushen**
+**Eventueel ook access op gdrive plaatsen**
+
+

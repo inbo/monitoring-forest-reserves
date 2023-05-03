@@ -1,0 +1,518 @@
+---
+title: "Create plot level results (only circular plots) for publication on zenodo"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: FALSE
+      smooth_scroll: FALSE
+---
+
+# Setup
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+
+```
+
+
+# Vraagstelling
+
+controle regeneration: nog veel zaken op te lossen in package
+
+Ik denk dat ik alles met tijdelijke code gecorrigeerd heb, maar voor 't zekerste hier nog eens een controle.
+Oa verschil approx en mean_nr_regeneration (seedlings vs establlished); 
+rubbing percentage
+
+
+
+```{r Path}
+# deze worden ook in "Setup.R" gedefinieerd (aanroepen van "Paths.R")
+# hier ev. extra "paths" toevoegen indien nodig 
+
+path_to_datarequest <- "C:/03_BR/1_DataVerwerkingBR/Open_data/zenodo_CP_vs1/"
+
+```
+
+
+
+# Inladen plotinfo - enkel cirkelplots
+
+```{r}
+plotinfo <- read_vc(file = "plotinfo", root = path_to_forresdat_data) %>% 
+  filter(plottype == "CP")
+colnames(plotinfo)
+
+```
+
+```{r}
+list_CP <- plotinfo$plot_id
+length(list_CP) == 2205
+```
+
+
+# Inladen plot data - enkel cirkelplots
+
+Zonder plotinfo (afzonderlijke file)    
+Met species, heightclass, decaystage en browseindex
+
+## Lookuplijsten
+
+```{r load_LU_lists}
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+  
+  qSpecies <- sqlFetch(con, "qspecies", stringsAsFactors = FALSE)
+  qDecaystage <- sqlFetch(con, "qdecaystage", stringsAsFactors = FALSE)
+  qHeightClass <- sqlFetch(con, "qHeightClass_regeneration", stringsAsFactors = FALSE)
+  qHerbSpecies <- sqlFetch(con, "qHerbSpecies240810", stringsAsFactors = FALSE)
+  qBrowseIndex <- sqlFetch(con, "qBrowsIndex", stringsAsFactors = FALSE)
+  qnumber_regeneration_classes <- sqlFetch(con, "qnumber_regeneration_classes", stringsAsFactors = FALSE)
+  
+odbcClose(con)
+```
+
+```{r}
+qSpecies <- qSpecies %>% 
+  select(1:3) %>% 
+  rename(name_nl = Value1, 
+         name_sc = Value2)
+
+qHerbSpecies <- qHerbSpecies %>% 
+  select(1:3) %>% 
+  rename(name_nl = Value1, 
+         name_sc = Value2)
+
+
+
+```
+
+## Dendro
+
+```{r read_dendro}
+# read_forresdat met dadelijk al selectie van enkel CP's werkte niet (18/4/2023)
+# en bovendien dient dan join_plotinfo = TRUE
+
+# names(dendro_by_plot)
+dendro_by_plot <- read_forresdat("dendro_by_plot"
+                                 , repo_path = path_to_git_forresdat
+                                 , join_plotinfo = FALSE) %>% 
+  filter(plot_id %in% list_CP) %>% 
+  select(plot_id, year, period, 
+         number_of_tree_species,
+         number_of_trees_ha, stem_number_ha,
+         basal_area_alive_m2_ha, basal_area_dead_m2_ha, 
+         vol_alive_m3_ha, vol_dead_standing_m3_ha,
+         vol_bole_alive_m3_ha, vol_bole_dead_m3_ha,
+         vol_log_m3_ha, vol_deadw_m3_ha,
+         stems_per_tree)
+# 1680
+
+#--- 
+dendro_by_plot_species <- read_forresdat("dendro_by_plot_species"
+                                         , repo_path = path_to_git_forresdat
+                                         , join_plotinfo = FALSE) %>% 
+  left_join(qSpecies, by = c("species" = "ID")) %>% 
+  filter(plot_id %in% list_CP) %>% 
+  select(plot_id, year, period, 
+         species_code = species, name_nl, name_sc, 
+         number_of_trees_ha, stem_number_ha,
+         basal_area_alive_m2_ha, basal_area_dead_m2_ha, 
+         vol_alive_m3_ha, vol_dead_standing_m3_ha,
+         vol_bole_alive_m3_ha, vol_bole_dead_m3_ha,
+         vol_log_m3_ha, vol_deadw_m3_ha,
+         stems_per_tree) 
+
+#--- 
+dendro_by_diam_plot <- read_forresdat("dendro_by_diam_plot"
+                                      , repo_path = path_to_git_forresdat
+                                      , join_plotinfo = FALSE) %>% 
+  filter(plot_id %in% list_CP) %>% 
+  select(plot_id, year, period, 
+         dbh_class_5cm, stem_number_alive_ha, stem_number_dead_ha,
+         basal_area_alive_m2_ha, basal_area_dead_m2_ha, 
+         vol_alive_m3_ha, vol_dead_standing_m3_ha,
+         vol_bole_alive_m3_ha, vol_bole_dead_m3_ha,
+         vol_log_m3_ha, vol_deadw_m3_ha)
+
+#--- 
+# names(dendro_by_diam_plot_species)
+dendro_by_diam_plot_species <- read_forresdat("dendro_by_diam_plot_species"
+                                              , repo_path = path_to_git_forresdat
+                                              , join_plotinfo = FALSE) %>%
+  left_join(qSpecies, by = c("species" = "ID")) %>% 
+  filter(plot_id %in% list_CP)  %>% 
+  select(plot_id, year, period, 
+         species_code = species, name_nl, name_sc, 
+         dbh_class_5cm, stem_number_alive_ha, stem_number_dead_ha,
+         basal_area_alive_m2_ha, basal_area_dead_m2_ha, 
+         vol_alive_m3_ha, vol_dead_standing_m3_ha,
+         vol_bole_alive_m3_ha, vol_bole_dead_m3_ha,
+         vol_log_m3_ha, vol_deadw_m3_ha)
+
+```
+
+```{r read_logs}
+logs_by_decay_plot <- read_forresdat("logs_by_decay_plot"
+                                     , repo_path = path_to_git_forresdat
+                                     , join_plotinfo = FALSE) %>% 
+  left_join(qDecaystage %>% select(2:4), by = c("decaystage" = "ID")) %>% 
+  rename(decaystage_code = decaystage,
+         afbraak = Value1, 
+         decaystage = Value2) %>% 
+  filter(plot_id %in% list_CP) %>% 
+  select(plot_id, year, period, decaystage_code, decaystage, vol_log_m3_ha) 
+
+#--- 
+# names(logs_by_decay_plot_species)
+logs_by_decay_plot_species <- read_forresdat("logs_by_decay_plot_species"
+                                             , repo_path = path_to_git_forresdat
+                                             , join_plotinfo = FALSE) %>% 
+  left_join(qSpecies, by = c("species" = "ID")) %>% 
+  left_join(qDecaystage %>% select(2:4), by = c("decaystage" = "ID")) %>% 
+  rename(decaystage_code = decaystage,
+         afbraak = Value1, 
+         decaystage = Value2) %>% 
+  filter(plot_id %in% list_CP) %>% 
+  select(plot_id, year, period, 
+         species_code = species, name_nl, name_sc, 
+         decaystage_code, decaystage, vol_log_m3_ha)
+
+```
+
+```{r eval = FALSE}
+names(dendro_by_plot)
+# "year"                    "vol_log_m3_ha_min40cm" : niet verder meenemen
+names(plotinfo)
+
+head(dendro_by_diam_plot_species)
+
+head(logs_by_decay_plot)
+```
+## Regeneration
+
+```{r read_reg1}
+# names(regeneration_by_plot)
+regeneration_by_plot <- read_forresdat("regeneration_by_plot"
+                                 , repo_path = path_to_git_forresdat
+                                 , join_plotinfo = FALSE) %>% 
+  filter(plot_id %in% list_CP) %>% 
+  select(plot_id, year, period, 
+         number_of_tree_species, rubbing_damage_perc,
+         approx_nr_established_ha, approx_nr_seedlings_ha, 
+         mean_number_established_ha, lci_number_established_ha, uci_number_established_ha, 
+         mean_number_seedlings_ha, lci_number_seedlings_ha, uci_number_seedlings_ha)
+# 1677 vs 1680 dendro - OK (zie hierna)
+```
+
+```{r check_reg, eval = FALSE}
+
+plotinfo %>% filter(plottype == "CP" & survey_trees == TRUE & data_processed == TRUE) %>% 
+  anti_join(regeneration_by_plot)
+# 3 records met survey_reg == FALSE
+
+dplyr::n_distinct(regeneration_by_plot$plot_id) == dplyr::n_distinct(dendro_by_plot$plot_id)
+# 999
+regeneration_by_plot %>% group_by(period) %>% summarize(n_plots = n_distinct(plot_id))
+regeneration_by_plot %>% group_by() %>% summarize(n_plots = n_distinct(plot_id))
+```
+
+
+```{r read_reg2}
+# names(regeneration_by_plot_height)
+regeneration_by_plot_height <- read_forresdat("regeneration_by_plot_height"
+                                 , repo_path = path_to_git_forresdat
+                                 , join_plotinfo = FALSE) %>% 
+  filter(plot_id %in% list_CP) %>% 
+  left_join(qHeightClass %>% select(1:2), by = c("height_class" = "ID")) %>% 
+  select(plot_id, year, period, 
+         height_class_code = height_class, height_class= Value1,
+         number_of_tree_species, rubbing_damage_perc,
+         approx_nr_regeneration_ha,
+         mean_number_of_regeneration_ha, 
+         lci_number_of_regeneration_ha, uci_number_of_regeneration_ha)
+
+#---
+# names(regeneration_by_plot_height_species)
+regeneration_by_plot_height_species <- read_forresdat("regeneration_by_plot_height_species"
+                                 , repo_path = path_to_git_forresdat
+                                 , join_plotinfo = FALSE) %>% 
+  filter(plot_id %in% list_CP) %>% 
+  left_join(qSpecies, by = c("species" = "ID")) %>% 
+  left_join(qHeightClass %>% select(1:2), by = c("height_class" = "ID")) %>% 
+  select(plot_id, year, period, 
+         height_class_code = height_class, height_class= Value1,
+         species_code = species, name_nl, name_sc,
+         rubbing_damage_perc,
+         approx_nr_regeneration_ha,
+         mean_number_of_regeneration_ha, 
+         lci_number_of_regeneration_ha, uci_number_of_regeneration_ha)
+
+
+```
+
+## Vegetation
+
+```{r read_veg}
+# names(vegetation_by_plot)
+vegetation_by_plot <- read_forresdat("vegetation_by_plot"
+                                 , repo_path = path_to_git_forresdat
+                                 , join_plotinfo = FALSE) %>% 
+  filter(plot_id %in% list_CP) %>% 
+  select(plot_id, year_main_survey, date_vegetation, period, 
+         number_of_species, cumm_herb_coverage_class_average_perc,
+         moss_cover_min, moss_cover_max, moss_cover_mid, 
+         herb_cover_min, herb_cover_max, herb_cover_mid, 
+         shrub_cover_min, shrub_cover_max, shrub_cover_mid,
+         tree_cover_min, tree_cover_max, tree_cover_mid,
+         waterlayer_cover_min, waterlayer_cover_max, waterlayer_cover_mid,
+         soildisturbance_game_cover_min, soildisturbance_game_cover_max, soildisturbance_game_cover_mid,
+         cumulated_canopy_cover_min, cumulated_canopy_cover_max, cumulated_canopy_cover_mid)
+# 1651 vs 1680 dendro - OK (zie hierna)
+```
+
+
+```{r check_veg, eval = FALSE}
+
+plotinfo %>% filter(plottype == "CP" & survey_trees == TRUE & data_processed == TRUE) %>% 
+  anti_join(vegetation_by_plot)
+# 29 records met survey_veg == FALSE
+
+dplyr::n_distinct(vegetation_by_plot$plot_id) == dplyr::n_distinct(dendro_by_plot$plot_id)
+# 999
+vegetation_by_plot %>% group_by(period) %>% summarize(n_plots = n_distinct(plot_id))
+vegetation_by_plot %>% group_by() %>% summarize(n_plots = n_distinct(plot_id))
+t <- vegetation_by_plot %>% group_by(period, plot_id) %>% summarize(n_subplots = n_distinct(subplot_id))
+max(t$n_subplots) == 1
+
+```
+
+
+```{r read_herbs}
+# names(herblayer_by_plot)
+herblayer_by_plot <- read_forresdat("herblayer_by_plot"
+                                 , repo_path = path_to_git_forresdat
+                                 , join_plotinfo = FALSE) %>% 
+  filter(plot_id %in% list_CP) %>% 
+  left_join(qHerbSpecies, by = c("species" = "ID")) %>% 
+  left_join(qBrowseIndex %>% select(1,3), by = c("browse_index_id" = "ID")) %>% 
+  select(plot_id, period, year, date_vegetation,
+         species_code = species, name_nl, name_sc, 
+         coverage_class_average_perc,
+         browse_index_id, browse_index = Value2)
+
+```
+
+
+
+```{r check_herbs, eval = FALSE}
+plotinfo %>% filter(plottype == "CP" & survey_trees == TRUE & data_processed == TRUE) %>% 
+  anti_join(herblayer_by_plot)
+# 29 records met survey_veg == FALSE
+
+dplyr::n_distinct(herblayer_by_plot$plot_id) == dplyr::n_distinct(dendro_by_plot$plot_id)
+# 999
+herblayer_by_plot %>% group_by(period) %>% summarize(n_plots = n_distinct(plot_id))
+herblayer_by_plot %>% group_by() %>% summarize(n_plots = n_distinct(plot_id))
+t <- herblayer_by_plot %>% group_by(period, plot_id) %>% summarize(n_subplots = n_distinct(subplot_id))
+max(t$n_subplots) == 1
+
+```
+
+# Controle
+
+## Regeneration
+
+```{r}
+summary(regeneration_by_plot)
+
+```
+
+Verhouding approx_nr en mean_nr?
+
+### Established: exacte aantallen
+
+```{r}
+ggplot(regeneration_by_plot, aes(x = approx_nr_established_ha, y = mean_number_established_ha)) +
+  geom_point() + geom_abline()
+
+# 3 punten die ver afwijken?
+
+
+```
+```{r}
+
+regeneration_by_plot %>% filter(approx_nr_established_ha < 40000 & mean_number_established_ha > 50000)
+
+```
+
+Dit blijken 3 plots te zjin waar een bepaalde soort > 100 stuks heeft (dus gewerkt met aantalsklasse ipv exact aantal, zie ook verder bij seedlings)
+
+### Seedlings: met klasses
+
+Mean >> approx: komt doordat de uitersten van de hoogste klasses niet realistisch 
+zijn (resp. 1000 en 10000)
+
+```{r}
+
+ggplot(regeneration_by_plot, aes(x = approx_nr_seedlings_ha, y = mean_number_seedlings_ha)) +
+  geom_point() + geom_abline()
+
+```
+
+```{r}
+qnumber_regeneration_classes
+```
+
+
+      number_class =
+        c("1", "2 - 5", "6 - 10", "11 - 20", "21 - 40", "41 - 60", "61 - 100", "> 100", "> 1000")
+      approx_nr_regeneration = c(1, 3, 8, 15, 30, 50, 80, 101, 1001)
+      min_number_of_regeneration = c(1, 2, 6, 11, 21, 41, 61, 101, 1001)
+      max_number_of_regeneration = c(1, 5, 10, 20, 40, 60, 100, 1000, 10000)
+
+
+Hoogste aantalsklasses:   
+
+- Mean number: gemiddelde (?log-transf) van 101 - 1000, 1001 - 10000
+- Approx nr: 101 en 1001
+
+
+### Per hoogteklasse
+
+```{r}
+
+ggplot(regeneration_by_plot_height, 
+       aes(x = approx_nr_regeneration_ha, y = mean_number_of_regeneration_ha)) +
+  geom_point() + geom_abline()
+
+ggplot(regeneration_by_plot_height_species, 
+       aes(x = approx_nr_regeneration_ha, y = mean_number_of_regeneration_ha)) +
+  geom_point() + geom_abline()
+```
+
+
+
+
+### Rubbing: NA vs 0
+
+```{r}
+names(plotinfo)
+regeneration_by_plot_rubbing <- regeneration_by_plot %>% 
+  left_join(plotinfo %>% select(plot_id, period, game_impact_reg)) %>% 
+  filter(game_impact_reg)
+
+summary(regeneration_by_plot_rubbing)
+
+
+regeneration_by_plot_rubbing2 <- regeneration_by_plot_height %>% 
+  left_join(plotinfo %>% select(plot_id, period, game_impact_reg)) %>% 
+  filter(game_impact_reg)
+
+summary(regeneration_by_plot_rubbing2)
+
+
+regeneration_by_plot_rubbing3 <- regeneration_by_plot_height_species %>% 
+  left_join(plotinfo %>% select(plot_id, period, game_impact_reg)) %>% 
+  filter(game_impact_reg)
+
+summary(regeneration_by_plot_rubbing3)
+
+```
+
+Na's zijn allemaal te wijten aan geen verjonging aanwezig - OK
+
+
+
+
+# Export 
+
+Direct naar een zip-file exporteren (sowieso eerst wegschrijvan als csv)
+
+Dendro (dendro, logs en reg) en vegetatie in afzonderlijke folder (ook afz. publiceren op zenodo)
+
+Als list samenvoegen en dan afronden zoals gewenst 
+(nu op 2 cijfers na de komma voor dendro en 0 voor reg)
+
+
+```{r list_round}
+list_dendro <- list(
+      dendro_by_plot = dendro_by_plot,
+      dendro_by_plot_species = dendro_by_plot_species,
+      dendro_by_diam_plot = dendro_by_diam_plot,
+      dendro_by_diam_plot_species = dendro_by_diam_plot_species,
+      logs_by_decay_plot = logs_by_decay_plot,
+      logs_by_decay_plot_species = logs_by_decay_plot_species
+      )
+
+list_reg <- list(
+      regeneration_by_plot = regeneration_by_plot, 
+      regeneration_by_plot_height = regeneration_by_plot_height, 
+      regeneration_by_plot_height_species = regeneration_by_plot_height_species
+      )
+
+list_veg <- list(vegetation_by_plot = vegetation_by_plot,
+              herblayer_by_plot = herblayer_by_plot
+              ) # geen afronding nodig
+
+# ----
+list_dendro <- list_dendro %>% 
+  lapply(., function(x) mutate_at(x, vars(matches("_ha|_tree")), round, 2))
+
+list_reg <- list_reg %>% 
+  lapply(., function(x) mutate_at(x, vars(matches("_ha|_tree")), round, 0))
+
+#uitgebreider kan ook
+    # list_dendro_ <- list_dendro %>% 
+    #   lapply(., function(x) {
+    #     data.frame(x) %>% 
+    #       mutate_at(vars(matches("_ha|_tree")), round, 2)})
+
+```
+
+
+```{r list_export}
+path_to_datarequest
+
+# naar dendro-folder
+for (i in 1:length(list_dendro)){
+	  # selectie <- list_dendro[[i]]
+	  # naam <- paste0(names(list_dendro)[i], ".csv")
+	  write.csv2(list_dendro[[i]], paste0(path_to_datarequest, "dendro/", names(list_dendro)[i], ".csv")) 
+}
+
+for (i in 1:length(list_reg)){
+	  # selectie <- list_dendro[[i]]
+	  # naam <- paste0(names(list_dendro)[i], ".csv")
+	  write.csv2(list_reg[[i]], paste0(path_to_datarequest, "dendro/", names(list_reg)[i], ".csv")) 
+}
+
+# naar veg-folder
+for (i in 1:length(list_veg)){
+	  # selectie <- list_dendro[[i]]
+	  # naam <- paste0(names(list_dendro)[i], ".csv")
+	  write.csv2(list_veg[[i]], paste0(path_to_datarequest, "veg/", names(list_veg)[i], ".csv")) 
+}
+
+
+```

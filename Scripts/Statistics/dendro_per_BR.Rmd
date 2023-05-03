@@ -212,6 +212,10 @@ My.ResultsToDatabase(results = stat,
 
 ## Dendro_by_plot_species
 
+!! oppassen met 0 waardes (zitten niet in tabel: zie ook dataverwerking ikv artikel C).
+Moeten eerst toegevoegd worden.
+
+
 
 ```{r data}
 dataset <- dendro_by_plot_species %>%
