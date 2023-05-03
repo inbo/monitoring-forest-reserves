@@ -244,6 +244,53 @@ plotinfo %>%  filter(data_processed & !survey_trees) %>% nrow() == 0
 
 Enkel nog CP's derde set Withoefse heide (dd 13/7/2022), is gepland voor 2023.
 
+## Correctie year_dendro
+
+Year_dendro = jaar van groeiseizoen
+Grens was gelegd op 1/7, nu naar 1/5.
+Aangevraagd in issue # 114, nog niet geïmplementeerd (28/4/2023)
+
+Hier geen sluitende code, gewoon deze waarvan ik weet dat het niet klopt, die aanpassen: 
+
+- Bos Terrijst CA: OK
+- Heirnisse: 5 plots 9/2014: OK
+- enkel Kerss: alle 16 plots 2009 te wijzigen in 2010: CP's en CA
+
+```{r check}
+names(plotinfo)
+
+year_range <- plotinfo_ %>% 
+  group_by(forest_reserve, period) %>% 
+  summarize(min_year = min(year_dendro), 
+            max_year = max(year_dendro),
+            year_range = paste0(min_year, " - ", max_year)) %>% 
+  ungroup()
+
+t <- year_range %>% 
+  filter(min_year != max_year)
+t_ <- t %>% 
+  left_join(plotinfo)
+
+```
+
+Tijdelijk tot update forrescalc
+
+```{r correcte_year_dendro_TMP}
+plotinfo_ <- plotinfo %>% 
+  mutate(year_dendro = ifelse(year_dendro == 2009 & forest_reserve == "Kersselaerspleyn"
+    , year_dendro + 1
+    , year_dendro)
+  )
+
+plotinfo <- plotinfo_
+
+# t <- plotinfo %>% 
+#   filter(year_dendro == 2009 & forest_reserve == "Kersselaerspleyn")
+
+```
+
+
+
 
 # Correctie Kersselaerspleyn
 

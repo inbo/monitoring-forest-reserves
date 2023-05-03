@@ -101,6 +101,52 @@ height_model %>% group_by(forest_reserve) %>% summarise(n = n()) %>% ungroup() %
 ```
 
 
+## Correctie year van dendrometrie
+
+Year = jaar van groeiseizoen
+Grens was gelegd op 1/7, nu naar 1/5.
+Aangevraagd in issue # 114, nog niet geïmplementeerd (28/4/2023)
+
+Hier geen sluitende code, gewoon deze waarvan ik weet dat het niet klopt, die aanpassen: 
+
+- Bos Terrijst CA: OK
+- Heirnisse: 5 plots 9/2014: OK
+- enkel Kerss: alle 16 plots 2009 te wijzigen in 2010: CP's en CA
+
+
+*Aangezien dit op 28/4/2023 enige aanpassing gwas, heb ik de aanpassingen gedaan in script* 
+*"corr_year_dendro_issue114_tree_level.Rmd"*
+
+```{r check}
+names(data_dendro)
+
+year_range <- data_dendro %>% 
+  group_by(forest_reserve, period) %>% 
+  summarize(min_year = min(year), 
+            max_year = max(year),
+            year_range = paste0(min_year, " - ", max_year)) %>% 
+  ungroup()
+
+t <- year_range %>% 
+  filter(min_year != max_year)
+
+```
+
+Tijdelijk tot update forrescalc
+
+```{r correcte_year_data_dendro_TMP}
+data_dendro_ <- data_dendro %>% 
+  mutate(year = ifelse(year == 2009 & forest_reserve == "Kersselaerspleyn"
+    , year + 1
+    , year)
+  )
+
+data_dendro <- data_dendro_
+
+data_stems  <- compose_stem_data(data_dendro, data_shoots, extra_variables = TRUE)
+```
+
+
 # Correctie Kersselaerspleyn staande bomen
 
 ## Afwijkingen 
@@ -232,7 +278,7 @@ check <- data_dendro_calc %>%
 # Rodebos KV1&2: periode 3: OK, wel nog niet in detail bekeken
 
 stems_git <- read.csv2(file = paste0(path_to_treelevel_csv, "stems_calc.csv"))          
-nrow(stems_git) == nrow(data_stems_calc) + 913
+nrow(stems_git) = nrow(data_stems_calc) + 913
 nrow(stems_git) - nrow(data_stems_calc) == -321
 summary(data_stems_calc)
 summary(stems_git)
@@ -801,7 +847,7 @@ tree_id_less_var <- tree_id_less_var %>%
 # volgende functies heb ik zelf geschreven, zitten niet in het package!!!
 save_results_csv (
     results = list(trees_calc = tree_id_less_var),
-    output_dir = path_to_treelevel_csv)
+    output_dir = path_to_treelevel_csv
     )
 
 # afgerond voor export naar access
@@ -822,7 +868,7 @@ dbtables <- sqlTables(con)
 if ("trees_calc" %in% dbtables$TABLE_NAME) {
         sqlDrop(con, "trees_calc")
       }
-sqlSave(con, dat = tree_id_round, tablename = "trees_calc", varTypes = c(date_dendro="datetime"))
+sqlSave(con, dat = tree_id_round, tablename = "trees_calc", varTypes = c(date_dendro="datetime"), fast = FALSE)
 
 odbcClose(con)
 ```
@@ -832,7 +878,7 @@ odbcClose(con)
 # volgende functies heb ik zelf geschreven, zitten niet in het package!!!
 save_results_csv (
     results = list(trees_wide = tree_id_wide),
-    output_dir = path_to_treelevel_csv)
+    output_dir = path_to_treelevel_csv
     )
 
 # afgerond voor export naar access
@@ -851,6 +897,11 @@ Direct naar gdrive exporteren (csv):
 naar **/PRJ_BOSECO_ALGEMEEN/PRJ_BR_AanvraagGegevens/!METADATA-ALL_PLOTS/_plot-level-data/**
 
 ```{r save_trees_gdrive, eval = FALSE}
+save_results_csv(
+    results = list(trees_calc = tree_id_less_var),
+    output_dir = path_to_treelevel_gdrive
+    )
+
 save_results_csv(
     results = list(trees_wide = tree_id_wide),
     output_dir = path_to_treelevel_gdrive
@@ -905,7 +956,7 @@ stem_id_less_var <- stem_id_less_var %>%
 # volgende functies heb ik zelf geschreven, zitten niet in het package!!!
 save_results_csv (
     results = list(stems_calc = stem_id_less_var),
-    output_dir = path_to_treelevel_csv)
+    output_dir = path_to_treelevel_csv
     )
 
 # afgerond voor export naar access
@@ -926,7 +977,8 @@ dbtables <- sqlTables(con)
 if ("stems_calc" %in% dbtables$TABLE_NAME) {
         sqlDrop(con, "stems_calc")
       }
-sqlSave(con, dat = stem_id_round, tablename = "stems_calc", varTypes = c(date_dendro="datetime"))
+# sqlSave(con, dat = stem_id_round, tablename = "stems_calc", varTypes = c(date_dendro="datetime"))
+sqlSave(con, dat = stem_id_round, tablename = "stems_calc", varTypes = c(date_dendro="datetime"), fast = FALSE)
 
 odbcClose(con)
 ```

@@ -122,6 +122,7 @@ table(t$forest_reserve)
 
 ```
 
+
 ```{r load_dendro2}
 data_shoots <- load_data_shoots(database = path_to_fieldmap_db, extra_variables = TRUE)
 
@@ -141,6 +142,60 @@ height_model %>% group_by(forest_reserve) %>% summarise(n = n()) %>% ungroup() %
 # Rodebos KV	56 - NIET OK!!! - AANGEPAST
 # Walenbos	28	- OK, als algemeen voor beide KV's, niet gelinkt aan een feitelijke KV (= Walenbos KV1 en Walenbos OT)
 ```
+
+## Correctie year van dendrometrie
+
+Year = jaar van groeiseizoen
+Grens was gelegd op 1/7, nu naar 1/5.
+Aangevraagd in issue # 114, nog niet geïmplementeerd (28/4/2023)
+
+Hier geen sluitende code, gewoon deze waarvan ik weet dat het niet klopt, die aanpassen: 
+
+- Bos Terrijst CA: OK
+- Heirnisse: 5 plots 9/2014: OK
+- enkel Kerss: alle 16 plots 2009 te wijzigen in 2010: CP's en CA
+
+```{r check}
+names(data_dendro)
+
+year_range <- data_dendro %>% 
+  group_by(forest_reserve, period) %>% 
+  summarize(min_year = min(year), 
+            max_year = max(year),
+            year_range = paste0(min_year, " - ", max_year)) %>% 
+  ungroup()
+
+t <- year_range %>% 
+  filter(min_year != max_year)
+
+```
+
+Tijdelijk tot update forrescalc
+
+```{r correcte_year_data_dendro_TMP}
+data_dendro_ <- data_dendro %>% 
+  mutate(year = ifelse(year == 2009 & forest_reserve == "Kersselaerspleyn"
+    , year + 1
+    , year)
+  )
+
+data_dendro <- data_dendro_
+
+data_stems  <- compose_stem_data(data_dendro, data_shoots, extra_variables = TRUE)
+```
+
+```{r correcte_year_data_deadw_TMP}
+data_deadwood_ <- data_deadwood %>% 
+  mutate(year = ifelse(year == 2009 & forest_reserve == "Kersselaerspleyn"
+    , year + 1
+    , year)
+  )
+
+data_deadwood <- data_deadwood_
+
+```
+
+
 
 
 # Liggend dood hout (intact/fragment) volume bijwerken - OK - 23/11/2022
@@ -238,7 +293,6 @@ data_deadwood <- load_data_deadwood(database = path_to_fieldmap_db, processed = 
 data_deadwood %>% filter(is.na(calc_volume_m3)) %>% nrow()
 # 2 (intacte)
 ```
-
 
 ## Intacte bomen - correctie mbv R-code (voorlopig)
 

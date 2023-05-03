@@ -1,0 +1,220 @@
+---
+title: "Update forresdat - dendro op stam- en boomniveau - kleine correctie"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: yes
+      smooth_scroll: yes
+---
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = FALSE,  # FALSE: dan kan ik knitten zonder dat er iets gebeurt
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+source(here::here("scripts/ExtraFunctions.R"))
+source(here::here("scripts/ExtraFunctions_volume.R"))
+```
+
+
+# Vraagstelling
+
+data van Kerss, periode 2 moet overal 2010 zijn ipv 2009
+
+Makkelijker om te vertrekken van opgeslagen data, aanpassen en weer wegschrijven.
+
+Eenmalig doen 28/4/2023, issue 114 moet dit corrigeren
+
+Trees_wide is ok
+Enkel naar access en csv , niet op github
+
+
+# Load data
+
+
+```{r}
+tree_id_less_var <- read_csv2("C:/03_BR/1_DataVerwerkingBR/Output/_tree-level-data/trees_calc.csv")
+
+stem_id_less_var <- read_csv2("C:/03_BR/1_DataVerwerkingBR/Output/_tree-level-data/stems_calc.csv")
+
+
+```
+
+
+# Correctie year van dendrometrie
+
+Year = jaar van groeiseizoen
+Grens was gelegd op 1/7, nu naar 1/5.
+Aangevraagd in issue # 114, nog niet geïmplementeerd (28/4/2023)
+
+Hier geen sluitende code, gewoon deze waarvan ik weet dat het niet klopt, die aanpassen: 
+
+- Bos Terrijst CA: OK
+- Heirnisse: 5 plots 9/2014: OK
+- enkel Kerss: alle 16 plots 2009 te wijzigen in 2010: CP's en CA
+
+```{r check}
+names(tree_id_less_var)
+
+year_range <- tree_id_less_var %>% 
+  group_by(forest_reserve, period) %>% 
+  summarize(min_year = min(year), 
+            max_year = max(year),
+            year_range = paste0(min_year, " - ", max_year)) %>% 
+  ungroup()
+
+t <- year_range %>% 
+  filter(min_year != max_year)
+
+```
+
+Tijdelijk tot update forrescalc
+
+```{r correcte_year_data_trees_TMP}
+tree_id_less_var_ <- tree_id_less_var %>% 
+  mutate(year = ifelse(year == 2009 & forest_reserve == "Kersselaerspleyn"
+    , year + 1
+    , year)
+  )
+
+tree_id_less_var <- tree_id_less_var_
+
+```
+
+```{r }
+names(stem_id_less_var)
+
+year_range <- stem_id_less_var %>% 
+  group_by(forest_reserve, period) %>% 
+  summarize(min_year = min(year), 
+            max_year = max(year),
+            year_range = paste0(min_year, " - ", max_year)) %>% 
+  ungroup()
+
+t <- year_range %>% 
+  filter(min_year != max_year)
+
+```
+
+Tijdelijk tot update forrescalc
+
+```{r correcte_year_data_stems_TMP}
+stem_id_less_var_ <- stem_id_less_var %>% 
+  mutate(year = ifelse(year == 2009 & forest_reserve == "Kersselaerspleyn"
+    , year + 1
+    , year)
+  )
+
+stem_id_less_var <- stem_id_less_var_
+
+```
+
+
+
+# Export
+
+```{r save_trees_access_csv, eval = FALSE}
+# volgende functies heb ik zelf geschreven, zitten niet in het package!!!
+save_results_csv (
+    results = list(trees_calc = tree_id_less_var),
+    output_dir = path_to_treelevel_csv
+    )
+
+# afgerond voor export naar access
+tree_id_round <- tree_id_less_var %>% 
+  mutate(round_df(., 4))
+
+# save_results_access (
+#   results = list(trees_calc = data_dendro_calc_round),
+#   database = path_to_analysis_set_db,
+#   remove_tables = TRUE
+#   )
+
+# Functie "save_results_access" (< package) geeft problemen met dates => hierna manueel
+
+con <- odbcConnectAccess2007(path_to_analysis_set_db)
+
+dbtables <- sqlTables(con)
+if ("trees_calc" %in% dbtables$TABLE_NAME) {
+        sqlDrop(con, "trees_calc")
+      }
+sqlSave(con, dat = tree_id_round, tablename = "trees_calc", varTypes = c(date_dendro="datetime"), fast = FALSE)
+
+odbcClose(con)
+```
+
+
+Direct naar gdrive exporteren (csv): 
+naar **/PRJ_BOSECO_ALGEMEEN/PRJ_BR_AanvraagGegevens/!METADATA-ALL_PLOTS/_plot-level-data/**
+
+```{r save_trees_gdrive, eval = FALSE}
+save_results_csv(
+    results = list(trees_calc = tree_id_less_var),
+    output_dir = path_to_treelevel_gdrive
+    )
+
+```
+
+
+```{r save_stems_access_csv, eval = FALSE}
+# volgende functies heb ik zelf geschreven, zitten niet in het package!!!
+save_results_csv (
+    results = list(stems_calc = stem_id_less_var),
+    output_dir = path_to_treelevel_csv
+    )
+
+# afgerond voor export naar access
+stem_id_round <- stem_id_less_var %>% 
+  mutate(round_df(., 4))
+
+# save_results_access (
+#   results = list(trees_calc = data_dendro_calc_round),
+#   database = path_to_analysis_set_db,
+#   remove_tables = TRUE
+#   )
+
+# Functie "save_results_access" (< package) geeft problemen met dates => hierna manueel
+
+con <- odbcConnectAccess2007(path_to_analysis_set_db)
+
+dbtables <- sqlTables(con)
+if ("stems_calc" %in% dbtables$TABLE_NAME) {
+        sqlDrop(con, "stems_calc")
+      }
+sqlSave(con, dat = stem_id_round, tablename = "stems_calc", varTypes = c(date_dendro="datetime"), fast = FALSE)
+
+odbcClose(con)
+```
+
+Direct naar gdrive exporteren (csv): 
+naar **/PRJ_BOSECO_ALGEMEEN/PRJ_BR_AanvraagGegevens/!METADATA-ALL_PLOTS/_tree-level-data/**
+
+```{r save_stems_gdrive, eval = FALSE}
+save_results_csv(
+    results = list(stems_calc = stem_id_less_var),
+    output_dir = path_to_treelevel_gdrive
+    )
+
+```
+
+
+
