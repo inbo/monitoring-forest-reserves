@@ -821,6 +821,8 @@ result_N_species_pnv <- result_N_species_pnv %>%
 
 # Export
 
+Volgende keer 
+
 ```{r export_to_xlsx}
 # xls met tabbladen - totalen
 write.xlsx(Result_NGV_per_PNV
@@ -871,21 +873,21 @@ write.xlsx(result_Vdead_species_pnv,paste0(path_to_gdrive, "aandeel_NGV_per_pnv.
 
 # xls met tabbladen - totalen
 write.xlsx(Result_NGV_per_PNV
-           ,paste0(path_to_article, "NGV_per_pnv.xlsx")
+           ,paste0(path_to_article, "BR_NGV_per_pnv.xlsx")
            ,sheetName = "NGV")
 write.xlsx2(x = Result_NGV_per_PNV_per_species,
-           ,file = paste0(path_to_article, "NGV_per_pnv.xlsx")
+           ,file = paste0(path_to_article, "BR_NGV_per_pnv.xlsx")
            ,sheetName = "NGV_per_species", append = T)
 
 # idem - aandelen
 write.xlsx(result_G_species_pnv
-           ,paste0(path_to_article, "aandeel_NGV_per_pnv.xlsx")
+           ,paste0(path_to_article, "BR_NGV_per_pnv_aandeel_per_soort")
            ,sheetName = "G")
-write.xlsx(result_N_species_pnv,paste0(path_to_article, "aandeel_NGV_per_pnv.xlsx")
+write.xlsx(result_N_species_pnv,paste0(path_to_article, "BR_NGV_per_pnv_aandeel_per_soort")
            ,sheetName = "N", append = T)
-write.xlsx(result_V_species_pnv,paste0(path_to_article, "aandeel_NGV_per_pnv.xlsx")
+write.xlsx(result_V_species_pnv,paste0(path_to_article, "BR_NGV_per_pnv_aandeel_per_soort")
            ,sheetName = "V", append = T)
-write.xlsx(result_Vdead_species_pnv,paste0(path_to_article, "aandeel_NGV_per_pnv.xlsx")
+write.xlsx(result_Vdead_species_pnv,paste0(path_to_article, "BR_NGV_per_pnv_aandeel_per_soort")
            ,sheetName = "V_dead", append = T)
 
 ```
