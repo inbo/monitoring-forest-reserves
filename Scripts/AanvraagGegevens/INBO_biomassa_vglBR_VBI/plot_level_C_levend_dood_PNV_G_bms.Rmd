@@ -37,6 +37,19 @@ source(here::here("scripts/Setup.R"))
 ```
 
 
+```{r Path}
+# deze worden ook in "Setup.R" gedefinieerd (aanroepen van "Paths.R")
+# hier ev. extra "paths" toevoegen indien nodig 
+
+path_to_request <- paste0(path_to_datarequests, "INBO_biomassa_vglBR_VBI/")
+path_to_gdrive <- paste0(path_to_datarequests_gdrive, "INBO_biomassa_vglBR_VBI/")
+
+# rechtstreeks naar data-folder van artikel
+path_to_article <- "G:/.shortcut-targets-by-id/1GY3uYeL5JjG14h_BAkzsQwse31el-yhC/artikel_FrontiersForestsGlobalChange/data/"
+# !! oppassen van nisk te overschrijven
+```
+
+
 # Vraagstelling
 
 Kadert in de opmaak van een artikel in themanummer Frontiers Forests Global Change.
@@ -56,17 +69,15 @@ Folder op gdrive:
 - [artikel](https://drive.google.com/drive/folders/1GY3uYeL5JjG14h_BAkzsQwse31el-yhC)   
 - [artikel - data](https://drive.google.com/drive/folders/1J9ZOC5K6WqjxuV298dd-iNfcKzLvAWjp?usp=share_link)   
 
-```{r Path}
-# deze worden ook in "Setup.R" gedefinieerd (aanroepen van "Paths.R")
-# hier ev. extra "paths" toevoegen indien nodig 
+# Referentie C-berekening levende biomassa
 
-path_to_request <- paste0(path_to_datarequests, "INBO_biomassa_vglBR_VBI/")
-path_to_gdrive <- paste0(path_to_datarequests_gdrive, "INBO_biomassa_vglBR_VBI/")
+< S. Bauwens: 
+Note technique version 20/11/2017. Estimation du volume et biomasse de différents compartiments de l’arbre. 
+Accompagnement scientifique de l’IPRFW. ULiège - Wallonie environnement SPW.
 
-# rechtstreeks naar data-folder van artikel
-path_to_article <- "G:/.shortcut-targets-by-id/1GY3uYeL5JjG14h_BAkzsQwse31el-yhC/artikel_FrontiersForestsGlobalChange/data/"
-# !! oppassen van nisk te overschrijven
-```
+In artikel: 
+Perin, J., Bauwens, S., Pitchugin, M., Lejeune, P., Hébert, J. (2019). National forestry accounting plan of Belgium. Gembloux: University of Liège.
+
 
 
 # Inladen analysesets NARA
@@ -128,7 +139,7 @@ analyseSet_all <- analyseSet_alive %>%
 
 # Logs CP's Kersselaerspleyn, periode 1
 
-Zitten niet in fieldmap, maar er zijn wel gegevens uit het monitorinngrapport, zie 
+Zitten niet in fieldmap, maar er zijn wel gegevens uit het monitoringrapport, zie 
 "CP_Kerss_logs_2000.xlsx".
 
 ```{r}
