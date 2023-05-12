@@ -1,0 +1,342 @@
+---
+title: "Statistieken dendro per bosreservaat"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: FALSE
+      smooth_scroll: FALSE
+---
+
+# Setup
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+
+run <- "test_AL"
+```
+
+
+# Vraagstelling
+
+Statistieken op niveau van bosreservaat, obv de cirkelplots.
+
+Alle basis variabelen van de monitoring:
+- dendro
+- dendro_per_species
+- dendro_by_diam
+- ....
+- decaystage logs (op termijn decaystage ook van staand dood hout)
+
+
+Hierna worden deze één voor één doorlopen en weggeschreven naar de resultatendb
+
+Om gemiddeldes per BR te verkrijgen, beperken we ons tot de CP's. 
+(KV's zijn beter afz. te verwerken)
+
+Dit dient als insteek voor de ontwikkeling van functies die alles integreren:
+zie `functions_overall_statistics.R`.
+
+Eerst afzonderlijke functies per reg_xxxx.csv
+Dan al deze functies in één overkoepelend functie
+
+Elke functie moet volgende stappen bevatten:   
+
+- inlezen data     
+- filteren op CP’s    
+- filteren op afgewerkt      
+- toevoegen nulwaardes waar nodig    
+- al dan niet filteren op enkel bosplots (ev. als variabele; default enkel bosplots): Ename!!
+- Kluisbos opsplitsen obv beheer
+- ev. wegfilteren van bosreservaten zonder de vereiste data
+
+vervolgens al die functies combineren in één superfunctie (cfr Els met dendro calc)
+
+Idem voor reg & veg
+
+Nodig voor:   
+
+- zenodo   
+- bookdown-rapporten   
+- …    
+
+
+# Inladen lookuplijsten
+
+```{r fetch_access}
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+
+qIndShootCop <- sqlFetch(con, "qIndShootCop", stringsAsFactors = FALSE)
+qAliveDead <- sqlFetch(con, "qAliveDead", stringsAsFactors = FALSE)
+qSpecies <- sqlFetch(con, "qspecies", stringsAsFactors = FALSE)
+qDecaystage <- sqlFetch(con, "qdecaystage", stringsAsFactors = FALSE)
+
+odbcClose(con)
+
+qIndShootCop <- qIndShootCop %>% select(-Value3, -OrderField, -Active)
+qAliveDead <- qAliveDead %>% select(-Value3, -OrderField, -Active)
+qSpecies <- qSpecies %>% select(ID, name_nl = Value1, name_sc = Value2)
+qDecaystage <- qDecaystage %>% select(-Value3, -OrderField, -Active, -MasterID)
+```
+
+
+# Inladen plotinfo
+
+```{r read_forresdat2}
+plotinfo <- read_forresdat("plotinfo", repo_path = path_to_git_forresdat, join_plotinfo = FALSE)
+
+```
+
+# Enkel bosplots
+
+Zie functie get_forest_plot
+
+```{r}
+open_area <- get_open_area()
+forest_plot <- get_forest_plot()
+```
+
+
+Reg per BR: enkel obv de bosplots  
+=> eerst de open ruimtes verwijderen (zonder bomen én zonder verjonging)   
+=> link met dendro_by_plot nodig
+
+plot 475 Wijnendale periode 1: bevat dood hout; omdat er in periode 2 wel soorten genoteerd werden zit plot mee in dendro_by_plot_species
+
+
+# Statistieken
+
+## Reg_by_plot
+
+```{r data}
+names(plotinfo)
+
+regeneration_by_plot <- read_forresdat("regeneration_by_plot", repo_path = path_to_git_forresdat, join_plotinfo = TRUE) 
+
+```
+```{r forest}
+dataset <- regeneration_by_plot %>%
+  filter(plottype == "CP") %>%   # enkel cirkelplots
+  filter(!plot_id %in% open_area$plot_id)
+
+dataset2 <- regeneration_by_plot %>%
+  filter(plottype == "CP") %>%   # enkel cirkelplots
+  filter(plot_id %in% open_area$plot_id)
+
+table(dataset$forest_reserve, dataset$period)
+table(dataset2$forest_reserve, dataset2$period)
+```
+
+
+```{r variables}
+names(dataset)
+
+variables_for_statistics <- dataset %>% 
+  select(contains(c("approx", "perc", "number_of_tree_species"))) %>% 
+  names()
+
+variables_for_statistics
+
+```
+
+```{r stat}
+resultaat <- create_statistics(
+  dataset = dataset,
+  level = c("period", "forest_reserve"),
+  variables = variables_for_statistics,
+  include_year_range = FALSE
+  ) %>% 
+  round_df(., 2) %>% 
+  # rename(strata = forest_reserve) %>% 
+  mutate(strata = NA,
+         stratum_name = NA,
+         strata2 = NA,
+         stratum_name2 = NA)
+
+
+str(resultaat)
+head(resultaat)
+```
+
+
+```{r export}
+My.ResultsToDatabase(results = resultaat, 
+                     dbHandle = dbResults, 
+                     tblName = "tblResultaten", 
+                     scriptName = "reg_per_BR.Rmd", 
+                     description = "verjonging per ha per bosreservaat (enkel bosplots)",
+                     request_from = "Team bosecologie",
+                     run_by = run)
+```
+
+
+
+### Obv intervallen - NIET
+Statistics voor intervals cfr Els: variance bijna steeds Inf en mean = 0
+=> geen bruikbare resultaten
+
+Ev. later uit te klaren met ELs ...
+
+```{r}
+variables_for_statistics <- c("number_established_ha", "number_seedlings_ha")
+
+resultaat_intervals <- create_statistics(
+  dataset = dataset,
+  level = c("period", "forest_reserve"),
+  variables = variables_for_statistics,
+  include_year_range = FALSE
+  ) %>% 
+  round_df(., 2) %>% 
+  # rename(strata = forest_reserve) %>% 
+  mutate(strata = NA,
+         stratum_name = NA,
+         strata2 = NA,
+         stratum_name2 = NA)
+```
+
+
+
+## Reg_by_plot_height_species
+
+Nulwaardes staan niet in de output.
+Een species of hoogteklasse die niet voorkomt, staat niet in resulterende tabel
+
+Enkel bosplots bekijken
+
+
+
+<!-- !! oppassen met 0 waardes (zitten niet in tabel: zie ook dataverwerking ikv artikel C). -->
+<!-- Moeten eerst toegevoegd worden. -->
+
+<!-- Zie ook script `INBO_biomassa_vglBR_VBI/meanNGV_per_bms_levend_dood_PNV.Rmd`, daar gebruik gemaakt van add_zeros -->
+
+<!-- Boomsoort als level: enkel indien ik ook alle nulwaardes mee heb om een gemiddelde over alle plots heen te maken!  -->
+<!-- bv. appel -->
+<!-- => met functie `add_zeros` nullen toevoegen -->
+<!-- ! lukt enkel als ik alle overbodige velden verwijder!! -->
+
+<!-- OPGEPAST: forest_reserve achteraf terug toevoegen, niet meenemen bij add_zeros, -->
+<!-- anders voor elke plot, alle bosreservaten toegevoegd met 0 voor alle soorten -->
+
+
+<!-- OPGEPAST met NA's: daar wordt ook 0 van gemaakt!!  -->
+<!-- Bv. vol_log_m3_ha_min40cm: moet NA zijn, maar bij add_zero's wordt daar 0 van gemaakt!! -->
+<!-- !! niet relevant bij CP's -->
+
+<!-- Maar wel bij bv Kluisbos: geen logs opgemeten ... -->
+
+
+```{r data2}
+dataset2 <- dendro_by_plot_species %>%
+  filter(plottype == "CP")   # enkel cirkelplots
+
+table(dataset2$forest_reserve, dataset2$period)
+```
+
+
+```{r add_zeros_all_species}
+dataset2_0 <- add_zeros(dataset = dataset2 %>% 
+                          select(plot_id, period, species, contains("_ha")),
+                        comb_vars = c("plot_id", "species"),
+                        grouping_vars = c("period")
+                        ) %>%
+  # left_join(qSpecies %>% dplyr::select(species = ID, speciesTxt = Value1)) %>% 
+  left_join(plotinfo %>% select(plot_id, period, forest_reserve))
+
+# INITIELE FOUT: pas achteraf terug bosreservaat toevoegen
+# anders voor elk bosreservaar alle plots 
+# bv. Wijnendale: plot 101, 201 ... ipv enkel 401
+
+```
+```{r}
+variables_for_statistics2 <- dataset2_0 %>% 
+  select(contains("_ha")) %>% 
+  names()
+
+variables_for_statistics2
+#
+```
+
+
+```{r}
+# !! één resultaat per soort en per BR
+n_BR <- dataset2 %>% distinct(forest_reserve) %>% nrow()
+n_BR <- length(unique(dataset2$forest_reserve))
+n_species <- length(unique(dataset2$species))
+n_period <- length(unique(dataset2$period))
+n <- n_BR * n_species * 2 * length(variables_for_statistics2)
+n # 20768
+# DAAROM: 0 en NA (xxxx_min40cm) verwijderen
+
+resultaat2 <- create_statistics(
+  dataset = dataset2_0,
+  level = c("period", "forest_reserve", "species"),
+  # level = c("period", "forest_reserve", "name_nl"),
+  # level = c("period"),
+  variables = variables_for_statistics2,
+  # variables = "basal_area_alive_m2_ha",
+  include_year_range = FALSE,
+  na_rm = FALSE,
+    interval_information = suppressMessages(read_csv2(system.file("extdata/class_data.csv",
+    package = "forrescalc")))
+  ) %>% 
+  select(-logaritmic) %>% 
+  filter(mean != 0 & !is.na(mean)) %>% 
+  round_df(., 2) %>% 
+  left_join(qSpecies, by = c("species" = "ID")) %>% 
+  mutate(strata = "species",
+         stratum_name = name_nl,
+         strata2 = NA,
+         stratum_name2 = NA)
+
+# summary(dataset2_0)
+```
+
+
+```{r check_add_zeros}
+totaal_NGV_per_BR <- resultaat2 %>% 
+  filter(variable == "basal_area_alive_m2_ha") %>% 
+  group_by(period, forest_reserve) %>% 
+  summarize(G = sum(mean)) %>% 
+  ungroup()
+
+# vgl met Result_NGV_per_PNV obv analyseset (zonder soorten)
+check_NGV <- totaal_NGV_per_BR %>% 
+  left_join(resultaat %>% filter(variable == "basal_area_alive_m2_ha") 
+            , by = c("period", "forest_reserve")) %>% 
+  mutate(verschil = G - mean)
+
+range(check_NGV$verschil)
+```
+
+```{r export2}
+My.ResultsToDatabase(results = resultaat2, 
+                     dbHandle = dbResults, 
+                     tblName = "tblResultaten", 
+                     scriptName = "dendro_per_BR.Rmd", 
+                     description = "dendro per ha per soort en per bosreservaat",
+                     request_from = "Team bosecologie",
+                     run_by = run)
+```
+

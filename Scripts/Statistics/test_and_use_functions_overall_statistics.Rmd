@@ -1,0 +1,139 @@
+---
+title: "Gebruik van de functies voor statistieken per bosreservaat"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: FALSE
+      smooth_scroll: FALSE
+---
+
+# Setup
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+
+run <- "test_AL"
+```
+
+
+# Vraagstelling
+
+Script `functions_overall_statistics.R` bevat functies die op niveau van bosreservaat (obv cirkelplots) alle statistieken berekenen.
+
+En dit voor alle basis variabelen van de monitoring:
+- dendro
+- dendro_per_species
+- dendro_by_diam
+- ....
+- decaystage logs (op termijn decaystage ook van staand dood hout)
+
+Hierna worden deze één voor één doorlopen en gecontroleerd.
+Vervolgens worden de resultaten weggeschreven naar de resultatendb.
+
+Naast de afzonderlijke functies per dendro_xxxx.csv, reg_xxxx.csv, ..., bestaan er ook overkoepelende functies die een set van functies combineren (dendro, reg en veg) en de resultaten als een lijst wegschrijven.
+
+Elke functie bevat volgende stappen:   
+
+- inlezen data     
+- filteren op CP’s (< forresdat => enkel processed)  
+- toevoegen nulwaardes waar nodig    
+- al dan niet filteren op enkel bosplots (ev. als variabele; default enkel bosplots): Ename!!
+- Kluisbos opsplitsen obv beheer
+- wegfilteren van bosreservaten zonder de vereiste data
+
+
+De functies zijn ook gemaakt met het oog op een vlottere  
+- aanmaak van een dataset voor op zenodo   
+- aanmaak van rapporten met bookdown
+
+
+# Nog nodig
+Wat nog ontbreekt is een verwijzing naar versie dataset
+Dat zou een commit van forresdat moeten zijn
+
+Alsvast enkel processed data (in forresdat wordt enkel processed data opgeslagen)
+Het zou ook handig zijn om ergens aan
+
+
+# Get_open_area / Get_forest_plot
+
+
+```{r }
+open_area <- get_open_area()
+forest_plot <- get_forest_plot()
+```
+
+
+# Differentiate_managed_plots
+
+```{r}
+dendro_by_plot <- read_forresdat("dendro_by_plot", path_to_git_forresdat) %>% 
+  filter(plottype == "CP")
+
+dendro_by_plot_ <- differentiate_managed_plots(dataset = dendro_by_plot)
+
+dendro_by_plot_ %>% group_by(forest_reserve) %>% 
+  summarize(n_plots = n_distinct(plot_id)) %>% 
+  ungroup() %>% 
+  filter(str_detect(forest_reserve, "Kluisbos|managed"))
+
+```
+
+# Statistics_dendrometry
+
+## Test
+
+```{r}
+by_reserve <- statistics_dendro()
+by_species <- statistics_dendro_species()
+by_diam <- statistics_dendro_diam()
+by_decay <- statistics_logs_decay()
+
+dendro_stat <- statistics_dendrometry()
+# is een list
+for (tablename in names(dendro_stat)) {
+  assign(tablename, dendro_stat[[tablename]])
+} 
+
+```
+
+```{r}
+dendro_stat <- statistics_dendrometry()
+# is een list
+for (tablename in names(dendro_stat)) {
+  assign(tablename, dendro_stat[[tablename]])
+} 
+```
+
+## Export 
+```{r export}
+My.ResultsToDatabase(results = resultaat2, 
+                     dbHandle = dbResults, 
+                     tblName = "tblResultaten", 
+                     scriptName = "dendro_per_BR.Rmd", 
+                     description = "dendro per ha per soort en per bosreservaat",
+                     request_from = "Team bosecologie",
+                     run_by = run)
+```
