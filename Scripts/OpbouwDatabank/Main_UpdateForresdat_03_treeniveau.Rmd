@@ -31,8 +31,6 @@ library(here)
 
 # libraries & invoergegevens
 source(here::here("scripts/Setup.R"))
-source(here::here("scripts/ExtraFunctions.R"))
-source(here::here("scripts/ExtraFunctions_volume.R"))
 ```
 
 
@@ -46,6 +44,13 @@ DOEL van dit script is een update van forresdat gegevens naar
 
 Kersselaerspleyn blijkt op meerdere vlakken uitzonderingen te bevatten.
 Deze uitzonderingen worden na het inladen van de data gecorrigeerd. 
+
+> OPGEPAST With heide
+Dendro date van With heide niet correct (1999 ipv 2000)
+Reeds aangepast in onderstaande R-code, maar code nog niet opnieuw gerund
+(in plot-level-data wel reeds aangepast)
+
+
 
 
 ```{r results='hold', eval=TRUE}
@@ -139,7 +144,11 @@ data_dendro_ <- data_dendro %>%
   mutate(year = ifelse(year == 2009 & forest_reserve == "Kersselaerspleyn"
     , year + 1
     , year)
-  )
+  ) %>% 
+  mutate(year = ifelse(year == 1999 & forest_reserve == "Withoefse heide"
+    , year + 1
+    , year)
+  )   
 
 data_dendro <- data_dendro_
 

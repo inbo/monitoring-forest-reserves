@@ -32,8 +32,7 @@ library(here)
 
 # libraries & invoergegevens
 source(here::here("scripts/Setup.R"))
-source(here::here("scripts/ExtraFunctions.R"))
-source(here::here("scripts/ExtraFunctions_volume.R"))
+
 ```
 
 
@@ -256,10 +255,13 @@ Hier geen sluitende code, gewoon deze waarvan ik weet dat het niet klopt, die aa
 - Heirnisse: 5 plots 9/2014: OK
 - enkel Kerss: alle 16 plots 2009 te wijzigen in 2010: CP's en CA
 
+- !! ook Withoefse heide
+(gecheckt in dbEls_deel2 op datum dendro in plotdetails en Kerss en With heide zijn enige reservaten in dit geval)
+
 ```{r check}
 names(plotinfo)
 
-year_range <- plotinfo_ %>% 
+year_range <- plotinfo %>% 
   group_by(forest_reserve, period) %>% 
   summarize(min_year = min(year_dendro), 
             max_year = max(year_dendro),
@@ -275,12 +277,18 @@ t_ <- t %>%
 
 Tijdelijk tot update forrescalc
 
+
+
 ```{r correcte_year_dendro_TMP}
 plotinfo_ <- plotinfo %>% 
   mutate(year_dendro = ifelse(year_dendro == 2009 & forest_reserve == "Kersselaerspleyn"
     , year_dendro + 1
     , year_dendro)
-  )
+  ) %>% 
+  mutate(year_dendro = ifelse(year_dendro == 1999 & forest_reserve == "Withoefse heide"
+    , year_dendro + 1
+    , year_dendro)
+  )   
 
 plotinfo <- plotinfo_
 
@@ -314,6 +322,7 @@ plotinfo_ <- plotinfo %>%
                     & period == 1 & survey_trees
                     , TRUE
                     , survey_deadw))
+
 plotinfo_ %>% dplyr::filter(forest_reserve == "Kersselaerspleyn" & plottype == "CP" 
                      & period == 1 & survey_trees) %>% head()
 
