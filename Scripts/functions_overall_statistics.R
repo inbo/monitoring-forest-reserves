@@ -130,6 +130,48 @@ differentiate_managed_plots <- function(dataset){
 }
 
 
+#' get year range per forest reserve, based on dendro_by_plot - TEMPORARY
+#' 
+#' This is a temporary function that replaces `include_year_range = TRUE`, in 
+#' the function `create_statistics()`.
+#' Input dataset is output from the function `create_statistics()`
+#' 
+#' @inheritParams get_open_area
+#' 
+#' @return statistics with extra info on year_range
+#'
+#' @examples
+#' \dontrun{
+#' dendro_by_plot <- read_forresdat(name_dataset, repo_path) %>% 
+#' filter(plottype == "CP")
+#' resultaat <- create_statistics(
+#'   dataset = dendro_by_plot,
+#'   level = c("forest_reserve", "period"),
+#'   variables = "vol_alive_m3_ha"
+#' )
+#' resultaat <- get_year_range(resultaat)
+#' }
+#'
+#' @importFrom forrescalc read_forresdat create_statistics
+#'
+get_year_range <- function(dataset, repo_path = path_to_git_forresdat){
+  plotinfo <- read_forresdat("plotinfo", repo_path, join_plotinfo = FALSE) %>% 
+    filter(survey_trees == TRUE)
+  plotinfo <- differentiate_managed_plots(plotinfo)
+  year_range <- plotinfo %>% 
+    group_by(forest_reserve, period) %>%
+    summarize(min_year = min(year_dendro), 
+              max_year = max(year_dendro),
+              year_range = paste0(min_year, " - ", max_year)) %>% 
+    ungroup()
+  
+  resultaat <- dataset %>% 
+    left_join(year_range, by = c("forest_reserve", "period"))
+  
+  resultaat
+}
+
+
 #' create statistics per forest reserve, based on dendro_by_plot
 #' 
 #' This function first selects all the circular, forested plots.
@@ -168,14 +210,17 @@ statistics_dendro <- function(repo_path = path_to_git_forresdat){
     dataset = dataset,
     level = c("period", "forest_reserve"),
     variables = variables_for_statistics,
-    include_year_range = FALSE
+    include_year_range = FALSE,   
+    # year_range: nu nog bug in package, op termijn wel interessant
+    na_rm = TRUE # stems_per_tree soms NA
   ) %>% 
     round_df(., 2) %>% 
     # rename(strata = forest_reserve) %>% 
     mutate(strata = NA,
            stratum_name = NA,
            strata2 = NA,
-           stratum_name2 = NA)
+           stratum_name2 = NA) %>% 
+    get_year_range
   
   resultaat
 }
@@ -236,8 +281,7 @@ statistics_dendro_species <- function(repo_path = path_to_git_forresdat){
     level = c("period", "forest_reserve", "species"),
     variables = variables_for_statistics,
     include_year_range = FALSE,
-    na_rm = FALSE,
-    interval_information = suppressMessages(read_csv2(system.file("extdata/class_data.csv", package = "forrescalc")))
+    na_rm = TRUE # stems_per_tree soms NA, als soort niet voorkomt
   ) %>% 
     select(-logaritmic) %>% 
     filter(mean != 0 & !is.na(mean)) %>% 
@@ -246,7 +290,8 @@ statistics_dendro_species <- function(repo_path = path_to_git_forresdat){
     mutate(strata = "species",
            stratum_name = name_nl,
            strata2 = NA,
-           stratum_name2 = NA)
+           stratum_name2 = NA) %>% 
+    get_year_range()
   
   resultaat
 }
@@ -303,8 +348,7 @@ statistics_dendro_diam <- function(repo_path = path_to_git_forresdat){
     level = c("period", "forest_reserve", "dbh_class_5cm"),
     variables = variables_for_statistics,
     include_year_range = FALSE,
-    na_rm = FALSE,
-    interval_information = suppressMessages(read_csv2(system.file("extdata/class_data.csv", package = "forrescalc")))
+    na_rm = FALSE
   ) %>% 
     select(-logaritmic) %>% 
     filter(mean != 0 & !is.na(mean)) %>% 
@@ -312,7 +356,8 @@ statistics_dendro_diam <- function(repo_path = path_to_git_forresdat){
     mutate(strata = "dbh_class",
            stratum_name = dbh_class_5cm,
            strata2 = NA,
-           stratum_name2 = NA)
+           stratum_name2 = NA) %>% 
+    get_year_range()
   
   resultaat
 }
@@ -355,7 +400,7 @@ statistics_logs_decay <- function(repo_path = path_to_git_forresdat){
   # repo_path <- path_to_git_forresdat
   forest_plot <- get_forest_plot()
   
-  dataset_ <- read_forresdat("logs_by_decay_plot", repo_path) %>% 
+  dataset <- read_forresdat("logs_by_decay_plot", repo_path) %>% 
     select(-contains("eg"), -contains("min40cm")) %>% 
     filter(plottype == "CP" & plot_id %in% forest_plot$plot_id) %>% 
     full_join(forest_plot %>% 
@@ -403,8 +448,7 @@ statistics_logs_decay <- function(repo_path = path_to_git_forresdat){
     level = c("period", "forest_reserve", "decaystage"),
     variables = variables_for_statistics,
     include_year_range = FALSE,
-    na_rm = FALSE,
-    interval_information = suppressMessages(read_csv2(system.file("extdata/class_data.csv", package = "forrescalc")))
+    na_rm = FALSE
   ) %>% 
     select(-logaritmic) %>% 
     filter(mean != 0 & !is.na(mean)) %>% 
@@ -416,7 +460,8 @@ statistics_logs_decay <- function(repo_path = path_to_git_forresdat){
            strata = "decaystage",
            stratum_name = decaystageTxt,
            strata2 = NA,
-           stratum_name2 = NA)
+           stratum_name2 = NA) %>% 
+    get_year_range()
 
   resultaat
 }
