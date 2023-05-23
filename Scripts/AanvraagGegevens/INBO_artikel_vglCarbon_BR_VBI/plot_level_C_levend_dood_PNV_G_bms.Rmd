@@ -340,7 +340,7 @@ write_excel_csv2(analyseSet_finaal_wide,paste0(path_to_gdrive, "carbon_ABG_plot_
 
 ```{r export_to_gdrive_article, eval = FALSE}
 # oppassen om niet te overschrijven
-write_excel_csv2(analyseSet_finaal,paste0(path_to_article, "carbon_ABG_plot_level_enkel_aboveground.csv"))
-write_excel_csv2(analyseSet_finaal_wide,paste0(path_to_article, "carbon_ABG_plot_level_wide_enkel_aboveground.csv"))
+write_excel_csv2(analyseSet_finaal,paste0(path_to_article, "carbon_plot_level_enkel_aboveground.csv"))
+write_excel_csv2(analyseSet_finaal_wide,paste0(path_to_article, "carbon_plot_level_wide_enkel_aboveground.csv"))
 
 ```
