@@ -73,8 +73,15 @@ De functies zijn ook gemaakt met het oog op een vlottere
 Wat nog ontbreekt is een verwijzing naar versie dataset
 Dat zou een commit van forresdat moeten zijn
 
-Alsvast enkel processed data (in forresdat wordt enkel processed data opgeslagen)
-Het zou ook handig zijn om ergens aan
+Alvast enkel processed data (in forresdat wordt enkel processed data opgeslagen)
+Het zou ook handig zijn om ergens aan een commit te geraken
+
+---
+(c) Els: Euh, zelf nog niet getest, maar ik vermoed dat het package git2r wel een functie zal hebben om die hash van een commit op te vragen? Of anders eens zoeken in Thierry z'n git2rdata-package? Alternatief is om uit te zoeken hoe je git-commando's kan doorgeven in R-code, maar als er al een R-functie bestaat om dit op te vragen, kan je best die gebruiken.
+
+Als ik binnenkort forrescalc terug opneem, zal ik nakijken hoe ik die hash kan meegeven in de functie read_forresdat(), of misschien meer algemeen eens nakijken wat de meest gebruikte of handigste methode is om de versie van gepubliceerde data te documenteren (hash of doi)?
+
+
 
 
 # Get_open_area / Get_forest_plot
@@ -106,20 +113,22 @@ dendro_by_plot_ %>% group_by(forest_reserve) %>%
 ## Test
 
 ```{r}
+repo_path <- path_to_git_forresdat
+```
+
+```{r per_file}
 by_reserve <- statistics_dendro()
 by_species <- statistics_dendro_species()
 by_diam <- statistics_dendro_diam()
 by_decay <- statistics_logs_decay()
-
-dendro_stat <- statistics_dendrometry()
-# is een list
-for (tablename in names(dendro_stat)) {
-  assign(tablename, dendro_stat[[tablename]])
-} 
-
 ```
 
 ```{r}
+summary(by_reserve)
+# OK, geen NA's bij mean (was eerst wel zo bij variabele stems_per_tree - gecorrigeerd)
+```
+
+```{r overkoepelend_dendro}
 dendro_stat <- statistics_dendrometry()
 # is een list
 for (tablename in names(dendro_stat)) {
@@ -127,8 +136,37 @@ for (tablename in names(dendro_stat)) {
 } 
 ```
 
+
+
 ## Export 
+
+Ev. alle files aan elkaar plakken (zonder species, decaystage, ;; enkel stratum)
+en dan zo naar acces exporteren met datum in de naam van de tabel 
+
+
 ```{r export}
+
+for i in list do select
+
+....
+
+stat_by_reserve_ <- stat_by_reserve %>% 
+  select(period, forest_reserve, variable, n_obs, mean, variance, lci, uci, 
+         contains("strat"))
+
+rbind
+
+
+en dan naar access
+
+stat_by_species = by_species
+stat_by_diam = by_diam
+stat_by_decay = by_decay
+
+
+
+
+
 My.ResultsToDatabase(results = resultaat2, 
                      dbHandle = dbResults, 
                      tblName = "tblResultaten", 
@@ -136,4 +174,8 @@ My.ResultsToDatabase(results = resultaat2,
                      description = "dendro per ha per soort en per bosreservaat",
                      request_from = "Team bosecologie",
                      run_by = run)
+
+
+
+
 ```

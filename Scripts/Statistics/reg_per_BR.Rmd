@@ -165,7 +165,8 @@ resultaat <- create_statistics(
   dataset = dataset,
   level = c("period", "forest_reserve"),
   variables = variables_for_statistics,
-  include_year_range = FALSE
+  include_year_range = FALSE,
+  na_rm = TRUE   ## van belang bij perc_browsing: kan maar als er regeneration aanwezig is
   ) %>% 
   round_df(., 2) %>% 
   # rename(strata = forest_reserve) %>% 
@@ -179,6 +180,41 @@ str(resultaat)
 head(resultaat)
 ```
 
+```{r}
+# check rubbing
+rubbing_BR <- plotinfo %>% 
+  group_by(forest_reserve, period) %>% 
+  summarize(n_game_impact_reg_T = sum(game_impact_reg == TRUE ),
+            n_game_impact_reg_F = sum(game_impact_reg == FALSE )) %>% 
+  ungroup()
+
+resultaat_ <- resultaat %>% left_join(rubbing_BR)
+resultaat2_ <- resultaat2 %>% left_join(rubbing_BR)
+# ? NA entoch opgemeten??
+
+resultaat_ %>% filter(variable == "rubbing_damage_perc" 
+                      & is.na(mean)
+                      & n_game_impact_reg_T > 0)
+resultaat2_ %>% filter(variable == "rubbing_damage_perc" 
+                      # & is.na(mean)
+                      & n_game_impact_reg_T > 0)
+
+# blijkbaar (bv. Liedekerke): veel NA's omdat er geen verjonging genoteerd werd!!!
+# Dat is geen nul en ook geen fout, mag niet meegenomen worden bij statistics
+# => na.rm = TRUE 
+
+regeneration_by_plot %>% filter(forest_reserve == "Liedekerke" & period == 2)
+
+
+# zelfde resultaten??
+t <- resultaat_ %>% 
+  left_join(resultaat2_, by = c("forest_reserve", "period", "variable")) %>% 
+  mutate(verschil = mean.x - mean.y)
+
+# is OK!
+
+```
+
 
 ```{r export}
 My.ResultsToDatabase(results = resultaat, 
@@ -189,6 +225,47 @@ My.ResultsToDatabase(results = resultaat,
                      request_from = "Team bosecologie",
                      run_by = run)
 ```
+
+## Controle
+
+Eens snel gekeken naar oude statistieken Muizenbos en Everzwijnbad, en blijkt +/- te kloppen.
+Seedlings/ha zijn +/- zelfde, established wijkt wat af (misschien wegens verschil exact en range?)
+(2885.09 vs 2911)
+
+Resultaten blijken wel te kloppen met aantal uit reg_by_plot, maar dat aantal wijkt licth af van aantal in oude statistieken.
+Misschien wegens andere voorrangsregel (range tov exact?)
+
+Bv. plot 124, pertiod 2: heightclass 4000: species 28 en 16 net iets ander aantal klasse 3 (2-5) vs exact aantal 4 en klasse 8 (6-10) vs exact aantal 6??
+Is dat door mijn aanpassing om aantalsklasses te veranderen naar exact aantal?
+
+NEE, want ook in oudste databank reeds een verschil => wellicht zo in moederdb (JA)
+Ik dnek dta Peter daar soms aanpassingen gedaan heft, om meer naar aantal over te stappen waar mogelijk => OK, niet verder naar zoeken!
+
+
+```{r}
+everzw_4000 <- data_regeneration %>% 
+  filter(plottype == "CP" 
+         & str_detect(forest_reserve, "Everzw")
+         & height_class == 4000
+         & period == 2) %>% 
+  group_by(forest_reserve, species) %>% 
+  summarize(n_reg = sum(number_class, na.rm = T) + sum(nr_of_regeneration, na.rm = T)) %>% 
+  ungroup()
+
+# 169 vs 167
+
+
+everzw_34000 <- data_regeneration %>% 
+  filter(plottype == "CP" 
+         & str_detect(forest_reserve, "Everzw")
+         & height_class %in% c(4000, 3000)
+         & period == 2) %>% 
+  group_by(forest_reserve) %>% # , species
+  summarize(n_reg = sum(number_class, na.rm = T) + sum(nr_of_regeneration, na.rm = T)) %>% 
+  ungroup()
+
+```
+
 
 
 
@@ -217,6 +294,123 @@ resultaat_intervals <- create_statistics(
 
 
 
+## Reg_by_plot_height
+
+Nulwaardes staan niet in de output.
+Een species of hoogteklasse die niet voorkomt, staat niet in resulterende tabel
+
+Enkel bosplots bekijken
+
+
+```{r data2}
+regeneration_by_plot_height <- read_forresdat("regeneration_by_plot_height", repo_path = path_to_git_forresdat, join_plotinfo = TRUE) 
+
+
+dataset2 <- regeneration_by_plot_height %>%
+  filter(plottype == "CP")   # enkel cirkelplots
+
+table(dataset2$forest_reserve, dataset2$period)
+```
+```{r n_subplots}
+names(dataset2)
+range(dataset2$subplot_id)
+
+# één subplot per plot - JA
+dataset2 %>% group_by(plot_id) %>% summarize(n_subplots = n_distinct(subplot_id)) %>% 
+  ungroup() %>% filter(n_subplots > 1) %>% nrow == 0
+
+```
+
+```{r add_zeros_all_species}
+dataset2_0 <- add_zeros(dataset = dataset2 %>% 
+                          select(plot_id, period, height_class, contains("_ha")),
+                        comb_vars = c("plot_id", "height_class"),
+                        grouping_vars = c("period")
+                        ) %>%
+  left_join(plotinfo %>% select(plot_id, period, forest_reserve))
+
+# INITIELE FOUT: pas achteraf terug bosreservaat toevoegen
+# anders voor elk bosreservaar alle plots 
+# bv. Wijnendale: plot 101, 201 ... ipv enkel 401
+
+```
+```{r var2}
+names(dataset2)
+
+
+variables_for_statistics2 <- dataset2_0 %>% 
+  select(contains("_ha", "number_of_tree_species", )) %>% 
+  names()
+
+variables_for_statistics2
+#
+```
+
+
+```{r}
+# !! één resultaat per soort en per BR
+n_BR <- dataset2 %>% distinct(forest_reserve) %>% nrow()
+n_BR <- length(unique(dataset2$forest_reserve))
+n_species <- length(unique(dataset2$species))
+n_period <- length(unique(dataset2$period))
+n <- n_BR * n_species * 2 * length(variables_for_statistics2)
+n # 20768
+# DAAROM: 0 en NA (xxxx_min40cm) verwijderen
+
+resultaat2 <- create_statistics(
+  dataset = dataset2_0,
+  level = c("period", "forest_reserve", "species"),
+  # level = c("period", "forest_reserve", "name_nl"),
+  # level = c("period"),
+  variables = variables_for_statistics2,
+  # variables = "basal_area_alive_m2_ha",
+  include_year_range = FALSE,
+  na_rm = FALSE,
+    interval_information = suppressMessages(read_csv2(system.file("extdata/class_data.csv",
+    package = "forrescalc")))
+  ) %>% 
+  select(-logaritmic) %>% 
+  filter(mean != 0 & !is.na(mean)) %>% 
+  round_df(., 2) %>% 
+  left_join(qSpecies, by = c("species" = "ID")) %>% 
+  mutate(strata = "species",
+         stratum_name = name_nl,
+         strata2 = NA,
+         stratum_name2 = NA)
+
+# summary(dataset2_0)
+```
+
+
+```{r check_add_zeros}
+totaal_NGV_per_BR <- resultaat2 %>% 
+  filter(variable == "basal_area_alive_m2_ha") %>% 
+  group_by(period, forest_reserve) %>% 
+  summarize(G = sum(mean)) %>% 
+  ungroup()
+
+# vgl met Result_NGV_per_PNV obv analyseset (zonder soorten)
+check_NGV <- totaal_NGV_per_BR %>% 
+  left_join(resultaat %>% filter(variable == "basal_area_alive_m2_ha") 
+            , by = c("period", "forest_reserve")) %>% 
+  mutate(verschil = G - mean)
+
+range(check_NGV$verschil)
+```
+
+```{r export2}
+My.ResultsToDatabase(results = resultaat2, 
+                     dbHandle = dbResults, 
+                     tblName = "tblResultaten", 
+                     scriptName = "dendro_per_BR.Rmd", 
+                     description = "dendro per ha per soort en per bosreservaat",
+                     request_from = "Team bosecologie",
+                     run_by = run)
+```
+
+
+
+
 ## Reg_by_plot_height_species
 
 Nulwaardes staan niet in de output.
@@ -225,30 +419,8 @@ Een species of hoogteklasse die niet voorkomt, staat niet in resulterende tabel
 Enkel bosplots bekijken
 
 
-
-<!-- !! oppassen met 0 waardes (zitten niet in tabel: zie ook dataverwerking ikv artikel C). -->
-<!-- Moeten eerst toegevoegd worden. -->
-
-<!-- Zie ook script `INBO_biomassa_vglBR_VBI/meanNGV_per_bms_levend_dood_PNV.Rmd`, daar gebruik gemaakt van add_zeros -->
-
-<!-- Boomsoort als level: enkel indien ik ook alle nulwaardes mee heb om een gemiddelde over alle plots heen te maken!  -->
-<!-- bv. appel -->
-<!-- => met functie `add_zeros` nullen toevoegen -->
-<!-- ! lukt enkel als ik alle overbodige velden verwijder!! -->
-
-<!-- OPGEPAST: forest_reserve achteraf terug toevoegen, niet meenemen bij add_zeros, -->
-<!-- anders voor elke plot, alle bosreservaten toegevoegd met 0 voor alle soorten -->
-
-
-<!-- OPGEPAST met NA's: daar wordt ook 0 van gemaakt!!  -->
-<!-- Bv. vol_log_m3_ha_min40cm: moet NA zijn, maar bij add_zero's wordt daar 0 van gemaakt!! -->
-<!-- !! niet relevant bij CP's -->
-
-<!-- Maar wel bij bv Kluisbos: geen logs opgemeten ... -->
-
-
-```{r data2}
-dataset2 <- dendro_by_plot_species %>%
+```{r data3}
+dataset3 <- regeneration_by_plot_height_species %>%
   filter(plottype == "CP")   # enkel cirkelplots
 
 table(dataset2$forest_reserve, dataset2$period)
@@ -339,4 +511,18 @@ My.ResultsToDatabase(results = resultaat2,
                      request_from = "Team bosecologie",
                      run_by = run)
 ```
+
+
+## Extra statistieken cfr oude dataverwerking - TO DO
+
+### Aantal plots met verjonging per soort en per hoogteklasse
+53qryAantalPlotsMetVerjongingPerSoortPerHoogte_2eSET
+
+```{r}
+
+```
+
+
+
+
 

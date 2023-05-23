@@ -199,73 +199,6 @@ plotinfo <- read_vc(file = "plotinfo", root = path_to_forresdat_data)
 ```
 
 
-# Inladen plot data
-
-```{r read_forresdat3}
-dendro_by_plot <- read_forresdat("dendro_by_plot", repo_path = path_to_git_forresdat, join_plotinfo = TRUE) %>% 
-  select(-contains("eg"), -contains("min40cm")) # (veg en reg en vol_log_min40cm: enkel kV kerss)
- 
-dendro_by_plot_species <- read_forresdat("dendro_by_plot_species", repo_path = path_to_git_forresdat, join_plotinfo = TRUE) %>% 
-  select(-contains("eg"), -contains("min40cm")) %>%  # (veg en reg)
-  left_join(qSpecies, by = c("species" = "ID"))
-
-dendro_by_diam_plot <- read_forresdat("dendro_by_diam_plot", repo_path = path_to_git_forresdat, join_plotinfo = TRUE) %>% 
-  select(-contains("eg"), -contains("min40cm"))  # (veg en reg)
-
-dendro_by_diam_plot_species <- read_forresdat("dendro_by_diam_plot_species", repo_path = path_to_git_forresdat, join_plotinfo = TRUE) %>% 
-  select(-contains("eg"), -contains("min40cm")) %>%  # (veg en reg)
-  left_join(qSpecies, by = c("species" = "ID")) 
-
-logs_by_decay_plot <- read_forresdat("logs_by_decay_plot", repo_path = path_to_git_forresdat, join_plotinfo = TRUE) %>% 
-  select(-contains("eg"), -contains("min40cm")) %>%  # (veg en reg) 
-  left_join(qDecaystage, by = c("decaystage" = "ID")) %>% 
-  rename(decaystage_code = decaystage,
-         afbraak = Value1, 
-         decay_stage = Value2) 
-
-logs_by_decay_plot_species <- read_forresdat("logs_by_decay_plot_species", repo_path = path_to_git_forresdat, join_plotinfo = TRUE) %>% 
-  select(-contains("eg"), -contains("min40cm")) %>%  # (veg en reg)
-  left_join(qSpecies, by = c("species" = "ID")) %>% 
-  left_join(qDecaystage, by = c("decaystage" = "ID")) %>% 
-  rename(decaystage_code = decaystage,
-         afbraak = Value1, 
-         decay_stage = Value2) 
-```
-
-```{r read_tsv_join, eval=FALSE}
-plotinfo_dendro <- plotinfo %>% select(-survey_reg, -survey_veg)
-
-dendro_by_plot <- read_vc(file = "dendro_by_plot", root = path_to_forresdat_data) %>% 
-  left_join(plotinfo_dendro, by = c("plot_id", "period"))
-
-dendro_by_plot_species <- read_vc(file = "dendro_by_plot_species", root = path_to_forresdat_data) %>% 
-  left_join(plotinfo_dendro, by = c("plot_id", "period")) %>% 
-  left_join(qSpecies, by = c("species" = "ID")) 
-
-dendro_by_diam_plot <- read_vc(file = "dendro_by_diam_plot", root = path_to_forresdat_data) %>% 
-  left_join(plotinfo_dendro, by = c("plot_id", "period"))
-
-dendro_by_diam_plot_species <- read_vc(file = "dendro_by_diam_plot_species", root = path_to_forresdat_data) %>% 
-  left_join(plotinfo_dendro, by = c("plot_id", "period")) %>% 
-  left_join(qSpecies, by = c("species" = "ID"))
-
-logs_by_decay_plot <- read_vc(file = "logs_by_decay_plot", root = path_to_forresdat_data) %>% 
-  left_join(plotinfo_dendro, by = c("plot_id", "period")) %>% 
-  left_join(qDecaystage, by = c("decaystage" = "ID")) %>% 
-  rename(decaystage_code = decaystage,
-         afbraak = Value1, 
-         decay_stage = Value2) 
-
-logs_by_decay_plot_species <- read_vc(file = "logs_by_decay_plot_species", root = path_to_forresdat_data) %>% 
-  left_join(plotinfo_dendro, by = c("plot_id", "period")) %>% 
-  left_join(qSpecies, by = c("species" = "ID")) %>% 
-  left_join(qDecaystage, by = c("decaystage" = "ID")) %>% 
-  rename(decaystage_code = decaystage,
-         afbraak = Value1, 
-         decay_stage = Value2) 
-
-```
-
 # Enkel bosplots
 
 Dendro per BR: enkel obv de bosplots mogen berekend worden   
@@ -417,6 +350,10 @@ Enkel bosplots bekijken
 
 
 ```{r data2}
+dendro_by_plot_species <- read_forresdat("dendro_by_plot_species", repo_path = path_to_git_forresdat, join_plotinfo = TRUE) %>% 
+  select(-contains("eg"), -contains("min40cm")) %>%  # (veg en reg)
+  left_join(qSpecies, by = c("species" = "ID"))
+
 dataset2 <- dendro_by_plot_species %>%
   filter(plottype == "CP")   # enkel cirkelplots
 
@@ -426,7 +363,7 @@ table(dataset2$forest_reserve, dataset2$period)
 
 ```{r add_zeros_all_species}
 dataset2_0 <- add_zeros(dataset = dataset2 %>% 
-                          select(plot_id, period, species, contains("_ha")),
+                          select(plot_id, period, species, contains(c("_ha", "stems"))),
                         comb_vars = c("plot_id", "species"),
                         grouping_vars = c("period")
                         ) %>%
@@ -437,10 +374,11 @@ dataset2_0 <- add_zeros(dataset = dataset2 %>%
 # anders voor elk bosreservaar alle plots 
 # bv. Wijnendale: plot 101, 201 ... ipv enkel 401
 
+
 ```
 ```{r}
 variables_for_statistics2 <- dataset2_0 %>% 
-  select(contains("_ha")) %>% 
+  select(contains(c("_ha", "stems"))) %>% 
   names()
 
 variables_for_statistics2
@@ -515,6 +453,9 @@ My.ResultsToDatabase(results = resultaat2,
 Sowieso enkel bosplots 
 
 ```{r data3}
+dendro_by_diam_plot <- read_forresdat("dendro_by_diam_plot", repo_path = path_to_git_forresdat, join_plotinfo = TRUE) %>% 
+  select(-contains("eg"), -contains("min40cm"))  # (veg en reg)
+
 dataset3 <- dendro_by_diam_plot %>%
   filter(plottype == "CP")   # enkel cirkelplots
 
@@ -602,10 +543,20 @@ My.ResultsToDatabase(results = resultaat3,
 <!-- Bij soort is dat niet, want elke plot bevat wel één of andere soort (of een diameterklasse) -->
 <!-- Maar niet elke plot bevat één of andere dood hout element!!!! -->
 
-
-```{r data4}
+```{r survey_deadw}
 bosplots %>% filter(survey_deadw == TRUE) %>% nrow()
 t <- bosplots %>% filter(survey_deadw == FALSE) # Kluisbos
+```
+
+
+```{r data4}
+
+logs_by_decay_plot <- read_forresdat("logs_by_decay_plot", repo_path = path_to_git_forresdat, join_plotinfo = TRUE) %>% 
+  select(-contains("eg"), -contains("min40cm")) %>%  # (veg en reg) 
+  left_join(qDecaystage, by = c("decaystage" = "ID")) %>% 
+  rename(decaystage_code = decaystage,
+         afbraak = Value1, 
+         decay_stage = Value2) 
 
 dataset4 <- logs_by_decay_plot %>%
   filter(plottype == "CP") %>%   # enkel cirkelplots
@@ -646,7 +597,8 @@ dataset4 <- dataset4 %>%
 
 ```{r add_zeros_all_decaystages_all_plots}
 n_distinct(bosplots$plot_id) #986
-n_distinct(dataset4$plot_id) # 943   (plots Kluisbos geen deadw_survey: 43 plots)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         
+n_distinct(dataset4$plot_id) # 943   (plots Kluisbos geen deadw_survey: 43 plots)
+
 dataset4_0 <- add_zeros(dataset = dataset4 %>% 
                           select(plot_id, period, decay_stage, contains("_ha")),
                         comb_vars = c("plot_id", "decay_stage"),
@@ -721,5 +673,41 @@ My.ResultsToDatabase(results = resultaat4,
 ```
 
 proberen om één grote functie te maken voor alle dendro_by_plot_xxxx_xxxx data
+
+## dendro_by_diam_plot_species
+
+```{r}
+dendro_by_diam_plot_species <- read_forresdat("dendro_by_diam_plot_species", repo_path = path_to_git_forresdat, join_plotinfo = TRUE) %>% 
+  select(-contains("eg"), -contains("min40cm")) %>%  # (veg en reg)
+  left_join(qSpecies, by = c("species" = "ID")) 
+
+
+
+```
+
+
+## logs_by_decay_plot_species
+
+```{r}
+
+logs_by_decay_plot_species <- read_forresdat("logs_by_decay_plot_species", repo_path = path_to_git_forresdat, join_plotinfo = TRUE) %>% 
+  select(-contains("eg"), -contains("min40cm")) %>%  # (veg en reg)
+  left_join(qSpecies, by = c("species" = "ID")) %>% 
+  left_join(qDecaystage, by = c("decaystage" = "ID")) %>% 
+  rename(decaystage_code = decaystage,
+         afbraak = Value1, 
+         decay_stage = Value2) 
+```
+
+
+
+# Overige statistieken
+
+## Meerstammigheid per soort
+Stems per tree: zit in dendro_by_plot(_species) => OK
+
+Initieel was hier ook 0 van gemaakt (main02) indien geen bomen aanwezig, dat is 
+gecorrigeerd.
+Enkel 0 voor de variabelen per ha en number_of_species.
 
 
