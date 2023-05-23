@@ -41,12 +41,12 @@ source(here::here("scripts/Setup.R"))
 # deze worden ook in "Setup.R" gedefinieerd (aanroepen van "Paths.R")
 # hier ev. extra "paths" toevoegen indien nodig 
 
-path_to_request <- paste0(path_to_datarequests, "INBO_biomassa_vglBR_VBI/")
-path_to_gdrive <- paste0(path_to_datarequests_gdrive, "INBO_biomassa_vglBR_VBI/")
+path_to_request <- paste0(path_to_datarequests, "INBO_artikel_vglCarbon_BR_VBI/")
+path_to_gdrive <- paste0(path_to_datarequests_gdrive, "INBO_artikel_vglCarbon_BR_VBI/")
 
 # rechtstreeks naar data-folder van artikel
 path_to_article <- "G:/.shortcut-targets-by-id/1GY3uYeL5JjG14h_BAkzsQwse31el-yhC/artikel_FrontiersForestsGlobalChange/data/"
-# !! oppassen van nisk te overschrijven
+# !! oppassen om niks te overschrijven
 ```
 
 
@@ -57,7 +57,7 @@ Kadert in de opmaak van een artikel in themanummer Frontiers Forests Global Chan
 Gevraagd (Luc DK):
 
 - op plotniveau (cirkel of kernvlakte gebruikt voor de NARA gegevens)   
-- C voorraden in levende en dode biomassa !! bovengronds
+- C voorraden in levende en dode biomassa !! enkel bovengronds (ABG)
 - voor de twee tijdstippen
 - met PNV type 
 - globaal grondvlak
@@ -327,20 +327,20 @@ vgl <- oude_data %>%
 # Export
 
 ```{r export_to_csv}
-write_excel_csv2(analyseSet_finaal,paste0(path_to_request, "carbon_plot_level.csv"))
-write_excel_csv2(analyseSet_finaal_wide,paste0(path_to_request, "carbon_plot_level_wide.csv"))
+write_excel_csv2(analyseSet_finaal,paste0(path_to_request, "carbon_ABG_plot_level.csv"))
+write_excel_csv2(analyseSet_finaal_wide,paste0(path_to_request, "carbon_ABG_plot_level_wide.csv"))
 
 ```
 
 ```{r export_to_csv_gdrive}
-write_excel_csv2(analyseSet_finaal,paste0(path_to_gdrive, "carbon_plot_level.csv"))
-write_excel_csv2(analyseSet_finaal_wide,paste0(path_to_gdrive, "carbon_plot_level_wide.csv"))
+write_excel_csv2(analyseSet_finaal,paste0(path_to_gdrive, "carbon_ABG_plot_level.csv"))
+write_excel_csv2(analyseSet_finaal_wide,paste0(path_to_gdrive, "carbon_ABG_plot_level_wide.csv"))
 
 ```
 
 ```{r export_to_gdrive_article, eval = FALSE}
 # oppassen om niet te overschrijven
-write_excel_csv2(analyseSet_finaal,paste0(path_to_article, "carbon_plot_level_enkel_aboveground.csv"))
-write_excel_csv2(analyseSet_finaal_wide,paste0(path_to_article, "carbon_plot_level_wide_enkel_aboveground.csv"))
+write_excel_csv2(analyseSet_finaal,paste0(path_to_article, "carbon_ABG_plot_level_enkel_aboveground.csv"))
+write_excel_csv2(analyseSet_finaal_wide,paste0(path_to_article, "carbon_ABG_plot_level_wide_enkel_aboveground.csv"))
 
 ```

@@ -70,8 +70,8 @@ Folder op gdrive:
 # deze worden ook in "Setup.R" gedefinieerd (aanroepen van "Paths.R")
 # hier ev. extra "paths" toevoegen indien nodig 
 
-path_to_request <- paste0(path_to_datarequests, "INBO_biomassa_vglBR_VBI/")
-path_to_gdrive <- paste0(path_to_datarequests_gdrive, "INBO_biomassa_vglBR_VBI/")
+path_to_request <- paste0(path_to_datarequests, "INBO_artikel_vglCarbon_BR_VBI/")
+path_to_gdrive <- paste0(path_to_datarequests_gdrive, "INBO_artikel_vglCarbon_BR_VBI/")
 
 # rechtstreeks naar data-folder van artikel
 path_to_article <- "G:/.shortcut-targets-by-id/1GY3uYeL5JjG14h_BAkzsQwse31el-yhC/artikel_FrontiersForestsGlobalChange/data/"
@@ -834,13 +834,13 @@ write.xlsx2(x = Result_NGV_per_PNV_per_species,
 
 # idem - aandelen
 write.xlsx(result_G_species_pnv
-           ,paste0(path_to_request, "aandeel_NGV_per_pnv.xlsx")
+           ,paste0(path_to_request, "NGV_per_pnv_aandeel.xlsx")
            ,sheetName = "G")
-write.xlsx(result_N_species_pnv,paste0(path_to_request, "aandeel_NGV_per_pnv.xlsx")
+write.xlsx(result_N_species_pnv,paste0(path_to_request, "NGV_per_pnv_aandeel.xlsx")
            ,sheetName = "N", append = T)
-write.xlsx(result_V_species_pnv,paste0(path_to_request, "aandeel_NGV_per_pnv.xlsx")
+write.xlsx(result_V_species_pnv,paste0(path_to_request, "NGV_per_pnv_aandeel.xlsx")
            ,sheetName = "V", append = T)
-write.xlsx(result_Vdead_species_pnv,paste0(path_to_request, "aandeel_NGV_per_pnv.xlsx")
+write.xlsx(result_Vdead_species_pnv,paste0(path_to_request, "NGV_per_pnv_aandeel.xlsx")
            ,sheetName = "V_dead", append = T)
 
 ```
@@ -856,13 +856,13 @@ write.xlsx2(x = Result_NGV_per_PNV_per_species,
 
 # idem - aandelen
 write.xlsx(result_G_species_pnv
-           ,paste0(path_to_gdrive, "aandeel_NGV_per_pnv.xlsx")
+           ,paste0(path_to_gdrive, "NGV_per_pnv_aandeel.xlsx")
            ,sheetName = "G")
-write.xlsx(result_N_species_pnv,paste0(path_to_gdrive, "aandeel_NGV_per_pnv.xlsx")
+write.xlsx(result_N_species_pnv,paste0(path_to_gdrive, "NGV_per_pnv_aandeel.xlsx")
            ,sheetName = "N", append = T)
-write.xlsx(result_V_species_pnv,paste0(path_to_gdrive, "aandeel_NGV_per_pnv.xlsx")
+write.xlsx(result_V_species_pnv,paste0(path_to_gdrive, "NGV_per_pnv_aandeel.xlsx")
            ,sheetName = "V", append = T)
-write.xlsx(result_Vdead_species_pnv,paste0(path_to_gdrive, "aandeel_NGV_per_pnv.xlsx")
+write.xlsx(result_Vdead_species_pnv,paste0(path_to_gdrive, "NGV_per_pnv_aandeel.xlsx")
            ,sheetName = "V_dead", append = T)
 
 ```
