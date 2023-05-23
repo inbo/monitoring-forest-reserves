@@ -296,12 +296,15 @@ herblayer_by_plot %>% group_by() %>% summarize(n_plots = n_distinct(plot_id))
 
 # Statistics
 
+Zie functions_overall_statistics.R 
 
 ## Algemeen
 
 Functie create_statistics zou normaliter moeten toelaten om een year-range toe te voegen.
 Lukt niet (issue aangemaakt)
 Daarom hier via plotinfo
+
+Ook mee opgenomen in de dendro-functies
 
 ```{r year_range}
 names(plotinfo)
