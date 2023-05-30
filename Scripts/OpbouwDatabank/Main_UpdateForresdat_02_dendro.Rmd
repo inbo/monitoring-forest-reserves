@@ -62,7 +62,7 @@ path_to_meetgegevens
 
 Verder werken met plotinfo uit Main_01, want correcties mbt date_dendro doorgevoerd.
 
-Plotinfo: plottype, naam forest_reserve en info over survey en data al dan niet processed.
+Plotinfo inladen: plottype, naam forest_reserve en info over survey en data al dan niet processed.
 
 ```{r }
 plotinfo <- read_vc(file = "plotinfo", root = path_to_forresdat_data)
