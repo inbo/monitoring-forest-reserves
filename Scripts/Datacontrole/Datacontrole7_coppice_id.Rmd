@@ -1,0 +1,300 @@
+---
+title: "Controle coppice-id ikv aanmaak unieke tree-id"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: yes
+      smooth_scroll: yes
+---
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  # eval = FALSE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+
+```
+
+
+# Vraagstelling
+
+In Main_UpdateForresdat_03_treeniveau wordt een unieke tree-id aangemaakt.
+Bij coppice moet dat via coppice-id, maar soms is er een coppice-id die 2x gebruikt wordt voor verschillende coppice. 
+
+Ooit al door Peter wat laten checken, die niet meer opnieuw aan hem bezorgen.
+Zie `check_vraag_controle_coppice_id.Rmd`:   
+
+- verschil_XY_coppiceid_detail2.csv
+- meerdere_soorten_zelfde_coppice_id2.csv
+
+!! Peter suggereerde om ook maar vanaf 3 m verschil XY te kijken
+
+
+Het lijkt me 't beste om deze controle (per bosreservaat) te laten uitvoeren, op moment dat de data gevraagd wordt. 
+
+Voor KV Kerss is alles OK
+
+## Aandacht
+Mail Peter: "heb je voor je eerste mail van gisteren betreffende coppice id's rekening gehouden met opmerkingen hieronder, vooral betreffende stoven van KV Muizenbos en KV Rodebos? Als toch nieuwe run dan zou het makkelijk zijn om voorgaande meegegeven records uit te sluiten kwestie van ze niet nog eens te checken!!
+Kan de coördinaten immers voorlopig niet synchroniseren!! "
+
+KV Muizenbos: 151000
+KV Rodebos: 41000 en 43000
+
+# Inladen
+
+```{r reeds_aangeleverd}
+# verschil_XY_coppiceid_detail2.csv & meerdere_soorten_zelfde_coppice_id2.csv: 21/2/2022
+# verschil_XY_coppiceid_detail3.csv & meerdere_soorten_zelfde_coppice_id3.csv: 8/4/2022
+# verschil_XY_coppiceid_detail3.csv & meerdere_soorten_zelfde_coppice_id5.csv: 30/5/2022
+
+verschil_XY_2 <- read_csv2("Data_controle/verschil_XY_coppiceid_detail2.csv") 
+# verschil_XY_3 <- read_csv2("Data_controle/verschil_XY_coppiceid_detail3.csv") 
+verschil_XY_3 <- read_csv2("Data_controle/verschil_XY_coppiceid_detail3.csv") 
+
+meerdere_soorten_2 <-  read_csv2("Data_controle/meerdere_soorten_zelfde_coppice_id2.csv") 
+# meerdere_soorten_3 <-  read_csv2("Data_controle/meerdere_soorten_zelfde_coppice_id3.csv") 
+meerdere_soorten_3 <-  read_csv2("Data_controle/meerdere_soorten_zelfde_coppice_id3.csv") 
+
+
+# zelfde_status_3 <-  read_csv2("Data_controle/hakhout_verschillende_id_zelfde_status_levend_dood3.csv")
+zelfde_status_5 <-  read_csv2("Data_controle/hakhout_verschillende_id_zelfde_status_levend_dood5.csv")
+```
+
+
+```{r Rdata_Main_Update}
+# save(tree_data_OldID, tree_data_CoppID, here::here("RData/controle_CoppID.Rdata"))
+load(here::here("RData/controle_CoppID.Rdata"))
+```
+
+
+# Controle
+
+```{r Controle_TreeData_OldID}
+# str(tree_data_OldID)
+nrow(tree_data_OldID)
+# [1] 36615
+# [1] 75907 - 77402 - 78122
+# summary(tree_data_OldID)
+
+```
+
+
+```{r Controle_TreeData_CoppID}
+# str(tree_data_CoppID)
+nrow(tree_data_CoppID)
+# [1] 2038
+# [1] 3959 - 4892 - 5049
+# summary(tree_data_CoppID)
+
+table(tree_data_CoppID$max_nr_parts_coppice)
+#    2 
+# 5049 
+
+tree_data_CoppID_check <- tree_data_CoppID_ %>% 
+  mutate(tree_id_non_unique = ifelse(max_nr_parts_coppice < 2, tree_id,
+                                 str_sub(tree_id, 1, -3)),
+         test = (tree_id_non_unique == tree_id)) %>% 
+  select(plot_id, 
+         tree_id, tree_measure_id, coppice_id, old_id,
+         tree_id_non_unique, test,
+         max_nr_parts_coppice,
+         x_local, y_local, 
+         period, 
+         species, 
+         alive_dead, intact_snag, ind_sht_cop, decaystage,
+         dbh_mm, height_m, calc_height_m, vol_tot_m3
+         )
+  
+check_dubbele_tree_id0 <- tree_data_CoppID_check %>% 
+  group_by(tree_id) %>% 
+  summarize(n_records = n(),
+            n_period = n_distinct(period),
+            min_period = min(period),
+            max_period = max(period)) %>% 
+  ungroup() %>% 
+  filter(n_records > n_period)
+
+
+# 5 => !! 3 periodes opgemeten  (Hannecart, Rodebos) - ?? Harras?
+
+# !! Kerss en Zwaenepoel en Harras (3 decades): heel weinig coppice => daarom nu nog zo geen probleem
+# maar het kan wel dat er nu hakhout is dat er al 3 decades staat (bv. 3x levend), dat via coppice_id gekoppeld wordt ipv via oldID, maar dat is geen probleem
+# Beter in die richting een afwijking dan andersom
+
+# 30/5/2023: nu ook Rodebos (43000, 41000) erbij met vrij veel coppice
+
+```
+
+Zijn er geen foute linken obv coppice_id? 
+
+```{r check_XY}
+# checken obv XY
+
+verschil_XY_coppiceid <- tree_data_CoppID_check %>% 
+  group_by(plot_id, tree_id_non_unique, coppice_id) %>% 
+  summarize(aantal_records = n(),
+            aantal_soorten = n_distinct(species),
+            aantal_statussen = n_distinct(alive_dead),
+            x1 = first(x_local), 
+            x_mean = mean(x_local),
+            y1 = first(y_local),
+            y_mean = mean(y_local)) %>% 
+  ungroup() %>% 
+  mutate(verschilX = abs(x1 - x_mean),
+         verschily = abs(y1 - y_mean)
+  ) %>% 
+  filter(verschilX > 0.99 | verschily > 0.99)
+  # filter(verschilX > 0.2 | verschily > 0.2)
+  
+nrow(verschil_XY_coppiceid)
+# 25 - 43
+# 20 (1m) 
+# 29: ook 6 in Rodebos, extra verwerkt 
+
+verschil_XY_coppiceid_detail <- tree_data_CoppID_check %>% 
+  select(plot_id, tree_id,
+         tree_id_non_unique, tree_measure_id, 
+         coppice_id, old_id,
+         x_local, y_local, 
+         period, 
+         species, 
+         alive_dead, intact_snag, ind_sht_cop, decaystage,
+         dbh_mm, height_m, calc_height_m, vol_tot_m3
+         ) %>% 
+  inner_join(verschil_XY_coppiceid, by = c("plot_id", "tree_id_non_unique", "coppice_id")) %>% 
+  filter(aantal_soorten < 2) %>%  # deze apart checken zodat er geen overlap is
+  select(-decaystage, -height_m, -tree_id_non_unique, 
+         -vol_tot_m3, -calc_height_m, -contains("aantal"))
+  
+names(verschil_XY_coppiceid_detail)
+#   pivot_wider(names_from = tree_id, values_from = x_local) 
+# 
+# %>% 
+#   rename(individual = "10", coppice = "12") %>% 
+#   mutate(perc_hakhout = round(100*coppice/(individual + coppice), ))
+
+```
+
+```{r check_meerdere_soorten}
+verschillende_soorten_coppiceid <- tree_data_CoppID_check %>% 
+  group_by(plot_id, tree_id_non_unique, coppice_id) %>% 
+  summarize(aantal_records = n(),
+            aantal_soorten = n_distinct(species),
+            aantal_statussen = n_distinct(alive_dead),
+            x1 = first(x_local), 
+            x_mean = mean(x_local),
+            y1 = first(y_local),
+            y_mean = mean(y_local)) %>% 
+  ungroup() %>% 
+  mutate(verschilX = abs(x1 - x_mean),
+         verschily = abs(y1 - y_mean)
+  ) %>% 
+  filter(aantal_soorten > 1)
+
+# verschillende soorten
+meerdere_soorten_zelfde_coppice_id <- tree_data_CoppID_check %>% 
+  # select(-x_local, -y_local) %>% 
+  inner_join(verschillende_soorten_coppiceid,
+             by = c("plot_id", "tree_id_non_unique", "coppice_id")) %>% 
+  select(plot_id, 
+         tree_id, tree_id_non_unique, tree_measure_id, 
+         coppice_id, old_id,
+         x_local, y_local, 
+         period, 
+         species, 
+         alive_dead, intact_snag, ind_sht_cop, decaystage,
+         dbh_mm, height_m, calc_height_m, vol_tot_m3
+         ) %>% 
+  select(-decaystage, -height_m, -tree_id_non_unique, -vol_tot_m3, -calc_height_m)
+
+meerdere_soorten_zelfde_coppice_id %>% distinct(plot_id)
+
+```
+
+
+```{r te_controleren_door_Peter, eval=FALSE}
+# write_csv2(meerdere_soorten_zelfde_coppice_id, "Data_controle/nalv_Euforia_2022-02-15/meerdere_soorten_zelfde_coppice_id.csv")
+# 
+# write_csv2(verschil_XY_coppiceid_detail, "Data_controle/nalv_Euforia_2022-02-15/verschil_XY_coppiceid_detail.csv") 
+# 
+# # OK, verzonden op 15/2/2022 naar Peter !! enkel data voor Euforia, niet van KV's of 2109 of 723 of 
+# # (enkel processed én 2x opgemeten)
+# 
+# 
+# write_csv2(meerdere_soorten_zelfde_coppice_id, "Data_controle/meerdere_soorten_zelfde_coppice_id2.csv")
+# # OK, opgelost!!
+# 
+# write_csv2(verschil_XY_coppiceid_detail, "Data_controle/verschil_XY_coppiceid_detail2.csv") 
+# # OK, verzonden op 21/2/2022 naar Peter !! gezegd dat dat geen haast had
+# # Bevat ook de niet processed data
+# 
+
+# write_csv2(meerdere_soorten_zelfde_coppice_id, "Data_controle/meerdere_soorten_zelfde_coppice_id3.csv")
+# write_csv2(verschil_XY_coppiceid_detail, "Data_controle/verschil_XY_coppiceid_detail3.csv") 
+# OK, verzonden op 18/4/2022 naar Peter !! gezegd dat dat geen haast had
+
+write_csv2(meerdere_soorten_zelfde_coppice_id, here::here("Data_controle/meerdere_soorten_zelfde_coppice_id5.csv"))
+write_csv2(verschil_XY_coppiceid_detail, here::here("Data_controle/verschil_XY_coppiceid_detail5.csv"))
+
+# ! verwijderen van deze die hij al gecontroleerd had: zie verder script bij datacontrole
+# check_vraag_controle_coppice_id.Rmd
+
+# te_checken_coppiceid_soort_status
+```
+
+
+
+```{r tree_id_wide_check}
+check_dubbele_tree_id <- tree_id %>% 
+  group_by(plot_id, tree_id, period) %>% 
+  summarize(aantal_per_periode = n()) %>% 
+  ungroup() %>% 
+  filter(aantal_per_periode > 1) %>% 
+  inner_join(tree_data_CoppID_check)
+
+check_dubbele_tree_id
+# A tibble: 3 x 4
+#   plot_id tree_id       period aantal_per_periode
+#     <int> <chr>          <dbl>              <int>
+# 1   41000 1_41000_164_a      2                  2
+# 2   51000 1_51000_4_a        1                  2
+# 3   53000 1_53000_258_b      1                  2
+
+check_dubbele_tree_id %>% distinct(plot_id)
+
+# anti_join met deze die al gecheckt worden obv andere X en/of Y
+check_dubbele_tree_id_ <- check_dubbele_tree_id %>% 
+  anti_join(verschil_XY_coppiceid_detail %>%  select(plot_id, tree_id)) %>% 
+  anti_join(meerdere_soorten_zelfde_coppice_id %>%  select(plot_id, tree_id))
+
+# twee stoven met verschillend afbraakstadium !! afbraak wordt ingevuld op niveau van stems
+
+```
+
+```{r te_controleren_door_Peter2, eval=FALSE}
+# write_csv2(check_dubbele_tree_id, "Data_controle/nalv_Euforia_2022-02-15/hakhout_verschillende_id_zelfde_status_levend_dood.csv")
+
+# write_csv2(check_dubbele_tree_id_, "Data_controle/hakhout_verschillende_id_zelfde_status_levend_dood3.csv") 
+write_csv2(check_dubbele_tree_id_, here::here("Data_controle/hakhout_verschillende_id_zelfde_status_levend_dood5.csv"))
+```
+
