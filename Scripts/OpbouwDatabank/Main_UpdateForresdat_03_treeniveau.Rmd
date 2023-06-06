@@ -692,8 +692,26 @@ names(tree_id_wide)
 ```
 
 
-
 # Export tree level data
+
+
+```{r FOUTJE_ONTBR_CALC_HOOGTE_, results = 'hide'}
+# finale check - OK 
+
+
+# Rodebos KV1, periode 2: twee bomen zonder hoogte
+t <- stem_id %>% 
+  filter(is.na(calc_height_m) | (plot_id == 41000 & species == 28 & tree_measure_id == 147))
+nrow(t %>% filter(is.na(calc_height_m)))
+
+t1 <- tree_id %>% 
+  filter(is.na(calc_height_m)| (plot_id == 41000 & species == 28 & tree_measure_id == 147))
+nrow(t1 %>% filter(is.na(calc_height_m)))
+
+# NU GEEN ONTBREKENDE HOOGTE MEER?
+# => tree-level output opnieuw berekenen
+```
+
 
 - Met unieke en non-unieke (voor hakhout) tree-id én berekende variabelen    
 - Enkel processed data   
