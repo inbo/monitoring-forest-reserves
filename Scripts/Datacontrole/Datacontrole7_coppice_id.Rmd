@@ -21,7 +21,7 @@ rm(list=ls())
 ```{r Setup, include = FALSE}
 knitr::opts_chunk$set(
   echo = TRUE,
-  # eval = FALSE,
+  eval = FALSE,
   message = FALSE,
   warning = FALSE, 
   fig.width = 9,
@@ -46,39 +46,42 @@ Zie `check_vraag_controle_coppice_id.Rmd`:
 - verschil_XY_coppiceid_detail2.csv
 - meerdere_soorten_zelfde_coppice_id2.csv
 
-!! Peter suggereerde om ook maar vanaf 3 m verschil XY te kijken
-
 
 Het lijkt me 't beste om deze controle (per bosreservaat) te laten uitvoeren, op moment dat de data gevraagd wordt. 
 
 Voor KV Kerss is alles OK
 
-## Aandacht
-Mail Peter: "heb je voor je eerste mail van gisteren betreffende coppice id's rekening gehouden met opmerkingen hieronder, vooral betreffende stoven van KV Muizenbos en KV Rodebos? Als toch nieuwe run dan zou het makkelijk zijn om voorgaande meegegeven records uit te sluiten kwestie van ze niet nog eens te checken!!
-Kan de coördinaten immers voorlopig niet synchroniseren!! "
-
-KV Muizenbos: 151000
-KV Rodebos: 41000 en 43000
 
 # Inladen
+
+Enkel volgende csv's al gecheckt door Peter:
+
+- verschil_XY_coppiceid_detail2.csv
+- meerdere_soorten_zelfde_coppice_id2.csv
 
 ```{r reeds_aangeleverd}
 # verschil_XY_coppiceid_detail2.csv & meerdere_soorten_zelfde_coppice_id2.csv: 21/2/2022
 # verschil_XY_coppiceid_detail3.csv & meerdere_soorten_zelfde_coppice_id3.csv: 8/4/2022
-# verschil_XY_coppiceid_detail3.csv & meerdere_soorten_zelfde_coppice_id5.csv: 30/5/2022
+# verschil_XY_coppiceid_detail5.csv & meerdere_soorten_zelfde_coppice_id5.csv: 30/5/2022
 
-verschil_XY_2 <- read_csv2("Data_controle/verschil_XY_coppiceid_detail2.csv") 
+verschil_XY_2 <- read_csv2(here::here("Data_controle/coppice_id/gecheckt/verschil_XY_coppiceid_detail2.csv"))
 # verschil_XY_3 <- read_csv2("Data_controle/verschil_XY_coppiceid_detail3.csv") 
-verschil_XY_3 <- read_csv2("Data_controle/verschil_XY_coppiceid_detail3.csv") 
+# verschil_XY_5 <- read_csv2("Data_controle/verschil_XY_coppiceid_detail5.csv") 
 
-meerdere_soorten_2 <-  read_csv2("Data_controle/meerdere_soorten_zelfde_coppice_id2.csv") 
+meerdere_soorten_2 <-  read_csv2(here::here("Data_controle/coppice_id/gecheckt/meerdere_soorten_zelfde_coppice_id2.csv")) 
 # meerdere_soorten_3 <-  read_csv2("Data_controle/meerdere_soorten_zelfde_coppice_id3.csv") 
-meerdere_soorten_3 <-  read_csv2("Data_controle/meerdere_soorten_zelfde_coppice_id3.csv") 
+# meerdere_soorten_5 <-  read_csv2("Data_controle/meerdere_soorten_zelfde_coppice_id5.csv") 
 
 
 # zelfde_status_3 <-  read_csv2("Data_controle/hakhout_verschillende_id_zelfde_status_levend_dood3.csv")
-zelfde_status_5 <-  read_csv2("Data_controle/hakhout_verschillende_id_zelfde_status_levend_dood5.csv")
+# zelfde_status_5 <-  read_csv2("Data_controle/hakhout_verschillende_id_zelfde_status_levend_dood5.csv")
 ```
+
+Data uit `Main_UpdateForresdat_03_treeniveau.Rmd`:   
+
+- tree_data_OldID   
+- tree_data_CoppID   
+- tree_id
 
 
 ```{r Rdata_Main_Update}
@@ -89,17 +92,11 @@ load(here::here("RData/controle_CoppID.Rdata"))
 
 # Controle
 
-```{r Controle_TreeData_OldID}
-# str(tree_data_OldID)
-nrow(tree_data_OldID)
-# [1] 36615
-# [1] 75907 - 77402 - 78122
-# summary(tree_data_OldID)
+We focussen ons voor de controle op `tree_data_CoppID` 
 
-```
+```{r results='hide'}
+nrow(tree_data_OldID) # aangemaakt obv old-id, wanneer er max 1 deel per periode is 
 
-
-```{r Controle_TreeData_CoppID}
 # str(tree_data_CoppID)
 nrow(tree_data_CoppID)
 # [1] 2038
@@ -110,7 +107,10 @@ table(tree_data_CoppID$max_nr_parts_coppice)
 #    2 
 # 5049 
 
-tree_data_CoppID_check <- tree_data_CoppID_ %>% 
+```
+
+```{r tree_data_CoppID_check}
+tree_data_CoppID_check <- tree_data_CoppID %>% 
   mutate(tree_id_non_unique = ifelse(max_nr_parts_coppice < 2, tree_id,
                                  str_sub(tree_id, 1, -3)),
          test = (tree_id_non_unique == tree_id)) %>% 
@@ -124,8 +124,14 @@ tree_data_CoppID_check <- tree_data_CoppID_ %>%
          alive_dead, intact_snag, ind_sht_cop, decaystage,
          dbh_mm, height_m, calc_height_m, vol_tot_m3
          )
-  
-check_dubbele_tree_id0 <- tree_data_CoppID_check %>% 
+```
+
+
+## Dubbele tree-id 
+
+
+```{r}
+dubbele_tree_id_overview <- tree_data_CoppID_check %>% 
   group_by(tree_id) %>% 
   summarize(n_records = n(),
             n_period = n_distinct(period),
@@ -133,23 +139,41 @@ check_dubbele_tree_id0 <- tree_data_CoppID_check %>%
             max_period = max(period)) %>% 
   ungroup() %>% 
   filter(n_records > n_period)
+```
 
+```{r }
+dubbele_tree_id <- tree_id %>% 
+  group_by(plot_id, tree_id, period) %>% 
+  summarize(aantal_per_periode = n()) %>% 
+  ungroup() %>% 
+  filter(aantal_per_periode > 1) %>% 
+  inner_join(tree_data_CoppID_check)
 
-# 5 => !! 3 periodes opgemeten  (Hannecart, Rodebos) - ?? Harras?
+dubbele_tree_id
+# A tibble: 3 x 4
+#   plot_id tree_id       period aantal_per_periode
+#     <int> <chr>          <dbl>              <int>
+# 1   41000 1_41000_164_a      2                  2
+# 2   51000 1_51000_4_a        1                  2
+# 3   53000 1_53000_258_b      1                  2
 
-# !! Kerss en Zwaenepoel en Harras (3 decades): heel weinig coppice => daarom nu nog zo geen probleem
-# maar het kan wel dat er nu hakhout is dat er al 3 decades staat (bv. 3x levend), dat via coppice_id gekoppeld wordt ipv via oldID, maar dat is geen probleem
-# Beter in die richting een afwijking dan andersom
-
-# 30/5/2023: nu ook Rodebos (43000, 41000) erbij met vrij veel coppice
+dubbele_tree_id %>% distinct(plot_id)
 
 ```
 
-Zijn er geen foute linken obv coppice_id? 
+## Groot verschil obv XY
 
-```{r check_XY}
+Peter suggereerde om maar vanaf 3 m verschil mogelijke fout te signaleren
+
+Mail Peter: "heb je voor je eerste mail van gisteren betreffende coppice id's rekening gehouden met opmerkingen hieronder, vooral betreffende stoven van KV Muizenbos en KV Rodebos? Als toch nieuwe run dan zou het makkelijk zijn om voorgaande meegegeven records uit te sluiten kwestie van ze niet nog eens te checken!!
+Kan de coördinaten immers voorlopig niet synchroniseren!! "
+
+KV Muizenbos: 151000
+KV Rodebos: 41000 en 43000
+
+
+```{r results='hide'}
 # checken obv XY
-
 verschil_XY_coppiceid <- tree_data_CoppID_check %>% 
   group_by(plot_id, tree_id_non_unique, coppice_id) %>% 
   summarize(aantal_records = n(),
@@ -163,13 +187,14 @@ verschil_XY_coppiceid <- tree_data_CoppID_check %>%
   mutate(verschilX = abs(x1 - x_mean),
          verschily = abs(y1 - y_mean)
   ) %>% 
-  filter(verschilX > 0.99 | verschily > 0.99)
+  filter(verschilX > 2.99 | verschily > 2.99)
   # filter(verschilX > 0.2 | verschily > 0.2)
   
 nrow(verschil_XY_coppiceid)
 # 25 - 43
 # 20 (1m) 
-# 29: ook 6 in Rodebos, extra verwerkt 
+# 29: ook 6 in Rodebos, extra verwerkt
+# 16 (3m)
 
 verschil_XY_coppiceid_detail <- tree_data_CoppID_check %>% 
   select(plot_id, tree_id,
@@ -194,8 +219,31 @@ names(verschil_XY_coppiceid_detail)
 #   mutate(perc_hakhout = round(100*coppice/(individual + coppice), ))
 
 ```
+```{r}
+verschil_XY_coppiceid_detail %>% distinct(plot_id)
+```
 
-```{r check_meerdere_soorten}
+Deze die Peter al gecheckt heeft, niet opnieuw aanleveren aan hem
+
+```{r}
+nrow(verschil_XY_2)
+nrow(verschil_XY_coppiceid_detail)
+
+names(verschil_XY_2)
+names(verschil_XY_coppiceid_detail)
+
+verschil_XY_coppiceid_detail_new <- verschil_XY_coppiceid_detail %>% 
+  anti_join(verschil_XY_2, by = c("plot_id", "tree_measure_id", "period"))
+nrow(verschil_XY_coppiceid_detail_new)
+
+```
+
+
+## Andere soort
+
+Soms zelfde coppice-id, maar andere soort
+
+```{r }
 verschillende_soorten_coppiceid <- tree_data_CoppID_check %>% 
   group_by(plot_id, tree_id_non_unique, coppice_id) %>% 
   summarize(aantal_records = n(),
@@ -231,70 +279,74 @@ meerdere_soorten_zelfde_coppice_id %>% distinct(plot_id)
 
 ```
 
+## Overlap
+
+```{r }
+
+```
+Om het overzichtelijk te houden voor Peter zorgen dat er geen overlap is tussen de drie files
+
+1) deze met meerdere soorten: `meerdere_soorten_zelfde_coppice_id`
+
+2) deze met dubbele coppice-id (en zelfde soort): `dubbele_tree_id_zelfde_soort`
+
+3) deze met XY-verschil > 3m (en nog niet gechekct door Peter): `verschil_XY_coppiceid_detail_new`
+
+```{r}
+# 1) deze met meerdere soorten
+nrow(meerdere_soorten_zelfde_coppice_id)
+meerdere_soorten_zelfde_coppice_id %>% distinct(plot_id) %>% nrow() # 17
+
+# meerdere_soorten_zelfde_coppice_id_new <- meerdere_soorten_zelfde_coppice_id %>% 
+#   anti_join(verschil_XY_2, by = c("plot_id", "tree_measure_id", "period"))
+# nrow(meerdere_soorten_zelfde_coppice_id_new)
+# geen verschil
+
+
+# 2) deze met dubbele coppice-id
+nrow(dubbele_tree_id) #38
+dubbele_tree_id %>% distinct(plot_id) %>% nrow() # 13
+
+dubbele_tree_id_zelfde_soort <- dubbele_tree_id %>% 
+  anti_join(meerdere_soorten_zelfde_coppice_id, by = c("plot_id", "tree_measure_id", "period"))
+nrow(dubbele_tree_id_zelfde_soort)
+#26
+
+
+
+# 3) deze met XY-verschil > 3m
+nrow(verschil_XY_coppiceid_detail_new) # 23
+verschil_XY_coppiceid_detail_new_geen_overlap <- verschil_XY_coppiceid_detail_new %>% 
+  anti_join(meerdere_soorten_zelfde_coppice_id, by = c("plot_id", "tree_measure_id", "period")) %>% 
+  anti_join(dubbele_tree_id_zelfde_soort, by = c("plot_id", "tree_measure_id", "period")) 
+
+nrow(verschil_XY_coppiceid_detail_new_geen_overlap) #9
+
+```
+
+
+# Export ter controle
+
+Eén file, meerdere tabbladen
+
+Er is geen overlap tss de verschillende tabbladen
+
 
 ```{r te_controleren_door_Peter, eval=FALSE}
-# write_csv2(meerdere_soorten_zelfde_coppice_id, "Data_controle/nalv_Euforia_2022-02-15/meerdere_soorten_zelfde_coppice_id.csv")
-# 
-# write_csv2(verschil_XY_coppiceid_detail, "Data_controle/nalv_Euforia_2022-02-15/verschil_XY_coppiceid_detail.csv") 
-# 
-# # OK, verzonden op 15/2/2022 naar Peter !! enkel data voor Euforia, niet van KV's of 2109 of 723 of 
-# # (enkel processed én 2x opgemeten)
-# 
-# 
-# write_csv2(meerdere_soorten_zelfde_coppice_id, "Data_controle/meerdere_soorten_zelfde_coppice_id2.csv")
-# # OK, opgelost!!
-# 
-# write_csv2(verschil_XY_coppiceid_detail, "Data_controle/verschil_XY_coppiceid_detail2.csv") 
-# # OK, verzonden op 21/2/2022 naar Peter !! gezegd dat dat geen haast had
-# # Bevat ook de niet processed data
-# 
+write.xlsx(meerdere_soorten_zelfde_coppice_id, 
+           here::here("Data_controle/coppice_id/coppice_id_te_checken_20230531.xlsx"),
+           , sheetName = "andere_soort")
+write.xlsx(dubbele_tree_id_zelfde_soort, 
+           here::here("Data_controle/coppice_id/coppice_id_te_checken_20230531.xlsx"),
+           , sheetName = "zelfde_soort_dubbele_id",
+           , append = T)
+write.xlsx(verschil_XY_coppiceid_detail_new_geen_overlap,
+           here::here("Data_controle/coppice_id/coppice_id_te_checken_20230531.xlsx"),
+           , sheetName = "verschil_XY_3m",
+           , append = T)
 
-# write_csv2(meerdere_soorten_zelfde_coppice_id, "Data_controle/meerdere_soorten_zelfde_coppice_id3.csv")
-# write_csv2(verschil_XY_coppiceid_detail, "Data_controle/verschil_XY_coppiceid_detail3.csv") 
-# OK, verzonden op 18/4/2022 naar Peter !! gezegd dat dat geen haast had
-
-write_csv2(meerdere_soorten_zelfde_coppice_id, here::here("Data_controle/meerdere_soorten_zelfde_coppice_id5.csv"))
-write_csv2(verschil_XY_coppiceid_detail, here::here("Data_controle/verschil_XY_coppiceid_detail5.csv"))
-
-# ! verwijderen van deze die hij al gecontroleerd had: zie verder script bij datacontrole
-# check_vraag_controle_coppice_id.Rmd
-
-# te_checken_coppiceid_soort_status
-```
-
-
-
-```{r tree_id_wide_check}
-check_dubbele_tree_id <- tree_id %>% 
-  group_by(plot_id, tree_id, period) %>% 
-  summarize(aantal_per_periode = n()) %>% 
-  ungroup() %>% 
-  filter(aantal_per_periode > 1) %>% 
-  inner_join(tree_data_CoppID_check)
-
-check_dubbele_tree_id
-# A tibble: 3 x 4
-#   plot_id tree_id       period aantal_per_periode
-#     <int> <chr>          <dbl>              <int>
-# 1   41000 1_41000_164_a      2                  2
-# 2   51000 1_51000_4_a        1                  2
-# 3   53000 1_53000_258_b      1                  2
-
-check_dubbele_tree_id %>% distinct(plot_id)
-
-# anti_join met deze die al gecheckt worden obv andere X en/of Y
-check_dubbele_tree_id_ <- check_dubbele_tree_id %>% 
-  anti_join(verschil_XY_coppiceid_detail %>%  select(plot_id, tree_id)) %>% 
-  anti_join(meerdere_soorten_zelfde_coppice_id %>%  select(plot_id, tree_id))
-
-# twee stoven met verschillend afbraakstadium !! afbraak wordt ingevuld op niveau van stems
-
-```
-
-```{r te_controleren_door_Peter2, eval=FALSE}
-# write_csv2(check_dubbele_tree_id, "Data_controle/nalv_Euforia_2022-02-15/hakhout_verschillende_id_zelfde_status_levend_dood.csv")
-
-# write_csv2(check_dubbele_tree_id_, "Data_controle/hakhout_verschillende_id_zelfde_status_levend_dood3.csv") 
-write_csv2(check_dubbele_tree_id_, here::here("Data_controle/hakhout_verschillende_id_zelfde_status_levend_dood5.csv"))
+# write.xlsx(meerdere_soorten_zelfde_coppice_id, here::here("Data_controle/coppice_id/meerdere_soorten_zelfde_coppice_id5.csv"))
+# write.xlsx(dubbele_tree_id_zelfde_soort, here::here("Data_controle/coppice_id/dubbele_tree_id_zelfde_soort5.csv"))
+# write.xlsx(verschil_XY_coppiceid_detail_new_geen_overlap, here::here("Data_controle/coppice_id/verschil_XY_coppiceid_detail5.csv"))
 ```
 
