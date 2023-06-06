@@ -80,6 +80,7 @@ Extra aandachtspunten:
 path_to_datarequest <- "C:/03_BR/1_DataVerwerkingBR/Open_data_zenodo/"
 
 path_to_datarequest_gdrive <- paste0(path_to_output_gdrive, "ZENODO_open_data/")
+
 ```
 
 
@@ -163,6 +164,10 @@ qHerbSpecies <- qHerbSpecies %>%
 ## Dendro
 
 ```{r TEMP_test_package}
+# dendro_by_plot <- read_vc(file = "dendro_by_plot", root = path_to_forresdat_data) %>% 
+#   filter(plot_id %in% list_CP)
+#1680
+
 dendro_by_plot <- read_forresdat("dendro_by_plot"
                                  , repo_path = path_to_git_forresdat
                                  , join_plotinfo = TRUE, plottype = "CP") 
@@ -291,8 +296,30 @@ n_plots <- dendro_by_plot %>% left_join(plotinfo) %>%
 
 ```
 
+## Carbon 
 
+```{r read_carbon}
+# carbon_by_plot <- read_vc(file = "carbon_by_plot"
+#                           , root = path_to_forresdat_data) %>% 
+carbon_by_plot <- read_forresdat("carbon_by_plot"
+                                 , repo_path = path_to_git_forresdat
+                                 , join_plotinfo = FALSE) %>%
+  filter(plot_id %in% list_CP) 
 
+# 1667 ?? vs 1680??  - OK (bij carbon zijn de open ruimtes weggelaten)
+nrow(dendro_by_plot)
+nrow(carbon_by_plot)
+
+dendro_by_plot %>% anti_join(carbon_by_plot) %>% distinct(plot_id)
+# open ruimtes Enamebos
+dendro_by_plot %>% anti_join(carbon_by_plot) %>% filter(number_of_trees_ha != 0) %>% nrow() == 0
+
+# t2 <- carbon_by_plot %>% 
+#   anti_join(dendro_by_plot)
+```
+```{r}
+names(carbon_by_plot)
+```
 
 ## Regeneration
 
@@ -427,7 +454,7 @@ herblayer_by_plot %>% group_by() %>% summarize(n_plots = n_distinct(plot_id))
 
 # Export 
 
-Dendro (dendro, logs en reg) en vegetatie in afzonderlijke folder (ook afz. publiceren op zenodo)
+Dendro (dendro, logs, reg en carbon) en vegetatie in afzonderlijke folder (ook afz. publiceren op zenodo)
 
 Als list samenvoegen en dan afronden zoals gewenst 
 (nu op 2 cijfers na de komma voor dendro en 0 voor reg)
@@ -440,7 +467,8 @@ list_dendro <- list(
       dendro_by_diam_plot = dendro_by_diam_plot,
       dendro_by_diam_plot_species = dendro_by_diam_plot_species,
       logs_by_decay_plot = logs_by_decay_plot,
-      logs_by_decay_plot_species = logs_by_decay_plot_species
+      logs_by_decay_plot_species = logs_by_decay_plot_species,
+      carbon_by_plot = carbon_by_plot
       )
 
 list_reg <- list(
@@ -496,7 +524,7 @@ for (i in 1:length(list_veg)){
 
 Plotinfo: enkel processed data
 
-```{r plotinfo_export, results = 'hide'}
+```{r plotinfo_export, results = 'hide', eval = FALSE}
 # plotinfo
 names(plotinfo)
 summary(plotinfo)
