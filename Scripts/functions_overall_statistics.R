@@ -172,6 +172,86 @@ get_year_range <- function(dataset, repo_path = path_to_git_forresdat){
 }
 
 
+get_year_range_reg <- function(dataset, repo_path = path_to_git_forresdat){
+  reg_by_plot <- read_forresdat("regeneration_by_plot", repo_path, join_plotinfo = TRUE) %>% 
+    filter(plottype == "CP")
+  reg_by_plot <- differentiate_managed_plots(reg_by_plot)
+  year_range <- reg_by_plot %>% 
+    group_by(forest_reserve, period) %>%
+    summarize(min_year = min(year), 
+              max_year = max(year),
+              year_range = paste0(min_year, " - ", max_year)) %>% 
+    ungroup()
+  
+  resultaat <- dataset %>% 
+    left_join(year_range, by = c("forest_reserve", "period"))
+  
+  resultaat
+}
+
+
+
+
+#' get the height classes used per forest reserve and per period
+#' 
+#' This function helps to remove the incorrect zeros added by the function `add_zeros()`
+#' 
+#' @inheritParams get_open_area
+#' 
+#' @return dataframe with, per forest reserve and period, the unique heightclasses used
+#'
+#' @examples
+#' \dontrun{
+#' dataset <- read_forresdat("regeneration_by_plot_height", repo_path) %>% 
+#' filter(plottype == "CP")
+#' heightclasses_BR <- get_heights_per_reserve(
+#'   dataset = dataset
+#' }
+#'
+#' @importFrom forrescalc read_forresdat create_statistics
+#'
+get_heights_per_reserve <- function(dataset){
+  resultaat <- dataset %>% 
+    group_by(forest_reserve, period, height_class) %>% 
+    # summarize(n_tree_species = sum(number_of_tree_species)) %>% 
+    summarize() %>% 
+    ungroup() %>% 
+    filter(!is.na(height_class))
+  
+  resultaat
+}
+
+
+#' get a list of all species occurring per forest reserve and per period
+#' 
+#' This function helps to remove unnecessary zeros added by the function `add_zeros()`
+#' 
+#' @inheritParams get_open_area
+#' 
+#' @return dataframe with, per forest reserve and period, a list of species 
+#' found per forest reserve
+#'
+#' @examples
+#' \dontrun{
+#' dataset <- read_forresdat("regeneration_by_plot_height_species", repo_path) %>% 
+#' filter(plottype == "CP")
+#' heightclasses_BR <- get_species_per_reserve(
+#'   dataset = dataset
+#' }
+#'
+#' @importFrom forrescalc read_forresdat create_statistics
+#'
+get_species_per_reserve <- function(dataset){
+  resultaat <- dataset %>% 
+    group_by(forest_reserve, period, species) %>% 
+    summarize(n_heightclasses = n_distinct(height_class)) %>% 
+    ungroup() %>% 
+    filter(!is.na(species)) 
+  
+  resultaat
+}
+
+
 #' create statistics per forest reserve, based on dendro_by_plot
 #' 
 #' This function first selects all the circular, forested plots.
@@ -485,12 +565,12 @@ statistics_dendrometry <- function(repo_path = path_to_git_forresdat){
 
   return(
     list(
-      stat_by_reserve = by_reserve
-      , stat_by_species = by_species
-      , stat_by_diam = by_diam
-      # , stat_by_diam_species = by_diam_species,
-      , stat_by_decay = by_decay
-      # , stat_by_decay_species = by_decay_species
+      stat_dendro_by_reserve = by_reserve
+      , stat_dendro_by_species = by_species
+      , stat_dendro_by_diam = by_diam
+      # , stat_dendro_by_diam_species = by_diam_species,
+      , stat_dendro_by_decay = by_decay
+      # , stat_dendro_by_decay_species = by_decay_species
     )
   )
 }
@@ -498,32 +578,256 @@ statistics_dendrometry <- function(repo_path = path_to_git_forresdat){
 
 
 #' create statistics per forest reserve, based on regeneration_by_plot
+#' 
+#' This function first selects all the circular, forested plots.
+#' Then the managed part of 'Kluisbos' is changed into 'Kluisbos_managed' and 
+#' 'Kluisbos_managed_non_intervention'.
+#' Finally the function `create_statistics()` is used to create statistics on 
+#' all of the variables in `regeneration_by_plot`.
+#' 
+#' @inheritParams get_open_area
+#' 
+#' @return statistics (mean, variance, lci, uci, n_obs) per period, 
+#' forest_reserve and all of the variables included in 'regeneration_by_plot'
+#'
+#' @examples
+#' \dontrun{
+#' resultaat <- statistics_reg()
+#' }
+#'
+#' @importFrom functions get_forest_plot differentiate_managed_plots
+#' @importFrom forrescalc read_forresdat create_statistics
 
-# hier ev. keuzemogelijkheid om Els' haar methode  mee te nemen
+
+# NIET - hier ev. keuzemogelijkheid om Els' haar methode  mee te nemen
 # (om mean, lci en uci weg te halen van number_ha, en obv de drie waardes 
 # een mean en BI per reservaat te berekenen)
 # !! werkt volgens mij niet naar behoren
 
+repo_path <- path_to_git_forresdat
+
 
 statistics_reg <- function(repo_path = path_to_git_forresdat){
   # TO DO
+  forest_plot <- get_forest_plot()
+  # plotinfo <- read_forresdat("plotinfo", repo_path, join_plotinfo = FALSE)
+  dataset <- read_forresdat("regeneration_by_plot", repo_path) %>% 
+    select(-contains(c("lci", "mean", "uci", "subplot"))) %>% 
+    filter(plottype == "CP" & plot_id %in% forest_plot$plot_id)
+  
+  dataset <- differentiate_managed_plots(dataset)
+  
+  variables_for_statistics <- dataset %>% 
+    select(contains(c("_ha", "tree", "perc")), -contains("survey")) %>% 
+    names()
+  # approx_nr (x2), nr_tree_species, rubbing_damage_perc
+  
+  resultaat <- create_statistics(
+    dataset = dataset,
+    level = c("period", "forest_reserve"),
+    variables = variables_for_statistics,
+    include_year_range = FALSE,   
+    # year_range: nu nog bug in package, op termijn wel interessant
+    na_rm = TRUE # stems_per_tree soms NA
+  ) %>% 
+    round_df(., 2) %>% 
+    # rename(strata = forest_reserve) %>% 
+    mutate(strata = NA,
+           stratum_name = NA,
+           strata2 = NA,
+           stratum_name2 = NA) %>% 
+    get_year_range_reg
+  
+  resultaat
+
 }
 
 
 
 #' create statistics per forest reserve, based on regeneration_by_plot_height
-
+#' 
+#' This function first selects all the circular, forested plots.
+#' Then the managed part of 'Kluisbos' is changed into 'Kluisbos_managed' and 
+#' 'Kluisbos_managed_non_intervention'.
+#' Finally the function `create_statistics()` is used to create statistics on 
+#' all of the variables in `regeneration_by_plot_height`.
+#' 
+#' @inheritParams get_open_area
+#' 
+#' @return statistics (mean, variance, lci, uci, n_obs) per period, 
+#' forest_reserve and all of the variables included in 'regeneration_by_plot_height'
+#'
+#' @examples
+#' \dontrun{
+#' resultaat <- statistics_reg_height()
+#' }
+#'
+#' @importFrom functions get_forest_plot differentiate_managed_plots
+#' @importFrom forrescalc read_forresdat create_statistics
+#' 
+#' 
 statistics_reg_height <- function(repo_path = path_to_git_forresdat){
-  # TO DO
+  
+  con <- odbcConnectAccess2007(path_to_fieldmap_db)
+  qHeightClass <- sqlFetch(con, "qHeightClass_regeneration", stringsAsFactors = FALSE) %>% 
+    select(ID, heightclass_txt = Value1)
+  odbcClose(con)
+  
+  forest_plot <- get_forest_plot()
+  
+  dataset <- read_forresdat("regeneration_by_plot_height", repo_path) %>% 
+    select(-contains(c("lci", "mean", "uci", "subplot"))) %>% 
+    filter(plottype == "CP" & plot_id %in% forest_plot$plot_id)
+  
+  heightclasses_BR <- get_heights_per_reserve(dataset)
+  # deze functie maakt een lijst van de heightclasses die voorkomen in elk BR 
+  # (om teveel zero's weer te verwijderen)
+  
+  dataset_0 <- add_zeros(dataset = dataset %>% 
+                            select(plot_id, period, height_class, 
+                                   contains(c("_perc", "number_of_tree_species", "approx"))),
+                          comb_vars = c("plot_id", "height_class"),
+                          grouping_vars = c("period")
+                         ) %>%
+    left_join(plotinfo %>% select(plot_id, period, forest_reserve)) %>% 
+    inner_join(heightclasses_BR) %>% 
+    mutate(rubbing_damage_perc = ifelse(number_of_tree_species == 0 & rubbing_damage_perc == 0,
+                                        NA,
+                                        rubbing_damage_perc)
+    )
+  
+  dataset_0 <- differentiate_managed_plots(dataset_0)
+  
+  variables_for_statistics <- dataset_0 %>% 
+    select(contains(c("_perc", "number_of_tree_species", "approx"))) %>%  
+    names()
+  
+  resultaat <- create_statistics(
+    dataset = dataset_0,
+    level = c("period", "forest_reserve", "height_class"),
+    variables = variables_for_statistics,
+    include_year_range = FALSE,
+    na_rm = TRUE # stems_per_tree soms NA, als soort niet voorkomt
+  ) %>% 
+    select(-logaritmic) %>% 
+    filter(!is.na(mean)) %>% 
+    round_df(., 2) %>% 
+    left_join(qHeightClass, by = c("height_class" = "ID")) %>% 
+    mutate(strata = "height_class",
+           stratum_name = heightclass_txt,
+           strata2 = NA,
+           stratum_name2 = NA) %>% 
+    get_year_range_reg()
+  
+  resultaat
+
+}
+
+
+#' create statistics per forest reserve, based on regeneration_by_plot_height_species
+#' 
+#' This function first selects all the circular, forested plots.
+#' Then the managed part of 'Kluisbos' is changed into 'Kluisbos_managed' and 
+#' 'Kluisbos_managed_non_intervention'.
+#' Finally the function `create_statistics()` is used to create statistics on 
+#' all of the variables in `regeneration_by_plot_height_species`.
+#' 
+#' @inheritParams get_open_area
+#' 
+#' @return statistics (mean, variance, lci, uci, n_obs) per period, 
+#' forest_reserve and all of the variables included in 'regeneration_by_plot_height_species'
+#'
+#' @examples
+#' \dontrun{
+#' resultaat <- statistics_reg_height_species()
+#' }
+#'
+#' @importFrom functions get_forest_plot differentiate_managed_plots
+#' @importFrom forrescalc read_forresdat create_statistics
+#' 
+#' 
+statistics_reg_height_species <- function(repo_path = path_to_git_forresdat){
+
+    con <- odbcConnectAccess2007(path_to_fieldmap_db)
+    qHeightClass <- sqlFetch(con, "qHeightClass_regeneration", stringsAsFactors = FALSE) %>% 
+      select(ID, heightclass_txt = Value1)
+    qSpecies <- sqlFetch(con, "qspecies", stringsAsFactors = FALSE) %>% 
+      select(ID, name_nl = Value1, name_sc = Value2)
+    odbcClose(con)
+    
+    forest_plot <- get_forest_plot()
+    
+    dataset <- read_forresdat("regeneration_by_plot_height_species", repo_path) %>% 
+      select(-contains(c("lci", "mean", "uci", "subplot"))) %>% 
+      filter(plottype == "CP" & plot_id %in% forest_plot$plot_id)
+    
+    heightclasses_BR <- get_heights_per_reserve(dataset)
+    # deze functie maakt een lijst van de heightclasses die voorkomen in elk BR 
+    # (om onjuiste zero's weer te verwijderen)
+    species_BR <- get_species_per_reserve(dataset) 
+    # deze functie maakt een lijst van de soorten die voorkomen in elk BR 
+    # (om onnodige zero's weer te verwijderen)
+    
+    dataset_0 <- add_zeros(dataset = dataset %>% 
+                             select(plot_id, period, species, height_class, 
+                                    contains(c("_perc", "approx"))),
+                           comb_vars = c("plot_id", "species", "height_class"),
+                           grouping_vars = c("period")
+    ) %>%
+      left_join(plotinfo %>% select(plot_id, period, forest_reserve)) %>% 
+      inner_join(heightclasses_BR) %>% 
+      inner_join(species_BR %>% select(-n_heightclasses)) %>% 
+      mutate(rubbing_damage_perc = ifelse(approx_nr_regeneration_ha == 0 & rubbing_damage_perc == 0,
+                                          NA,
+                                          rubbing_damage_perc)
+      )
+    
+    dataset_0 <- differentiate_managed_plots(dataset_0)
+    
+    variables_for_statistics <- dataset_0 %>% 
+      select(contains(c("_perc", "approx"))) %>%  
+      names()
+    
+    resultaat <- create_statistics(
+      dataset = dataset_0,
+      level = c("period", "forest_reserve", "height_class", "species"),
+      variables = variables_for_statistics,
+      include_year_range = FALSE,
+      na_rm = TRUE # stems_per_tree soms NA, als soort niet voorkomt
+    ) %>% 
+      select(-logaritmic) %>% 
+      filter(!is.na(mean)) %>% 
+      round_df(., 2) %>% 
+      left_join(qHeightClass, by = c("height_class" = "ID")) %>% 
+      left_join(qSpecies, by = c("species" = "ID")) %>% 
+      mutate(strata = "height_class",
+             stratum_name = heightclass_txt,
+             strata2 = "species",
+             stratum_name2 = name_nl
+      ) %>% 
+      get_year_range_reg()
+    
+    resultaat
+  
 }
 
 
 
+#' create statistics on regeneration per forest reserve
 
-#' create statistics per forest reserve, based on regeneration_by_plot_height_species
-
-statistics_reg_height_species <- function(repo_path = path_to_git_forresdat){
-  # TO DO
+statistics_regeneration <- function(repo_path = path_to_git_forresdat){
+  
+  reg_by_reserve <- statistics_reg()
+  reg_by_height <- statistics_reg_height()
+  reg_by_height_species <- statistics_reg_height_species()
+  
+  return(
+    list(
+      stat_reg_by_reserve = reg_by_reserve
+      , stat_reg_by_height = reg_by_height
+      , stat_reg_by_height_species = reg_by_height_species
+    )
+  )
 }
 
 
