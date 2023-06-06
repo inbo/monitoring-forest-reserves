@@ -1,5 +1,5 @@
 ---
-title: "Statistieken dendro per bosreservaat"
+title: "Statistieken vegetatie per bosreservaat"
 author: "Anja Leyman"
 date: "`r Sys.Date()`"
 output: 
