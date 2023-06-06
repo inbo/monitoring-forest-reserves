@@ -198,9 +198,7 @@ plotinfo <- read_vc(file = "plotinfo", root = path_to_forresdat_data)
 
 
 ```{r load_trees, results = 'hide'}
-# data_dendro <- load_data_dendrometry(path_to_fieldmap, plottype = "Circular plot", extra_variables = TRUE)
-
-# beter uit folder "C:\03_BR\1_Dataverwerking\Output\raw-data" halen
+# beter uit folder "C:\03_BR\1_Dataverwerking\Output\_tree-level-data" halen
 trees_calc <- read_csv2(paste0(path_to_treelevel_csv, "trees_calc.csv")) %>% select(-1)
 unique(trees_calc$forest_reserve)
 
@@ -214,8 +212,12 @@ unique(stems_calc$forest_reserve)
 # colnames(stems_calc)
 
 ```
+```{r}
+# kleine check
 
-
+trees_calc %>% filter(is.na(calc_height_m)) %>% nrow() == 0
+stems_calc %>% filter(is.na(calc_height_m)) %>% nrow() == 0
+```
 
 ```{r ConnectieExterneData}
 connectieExterneData <- odbcConnectAccess2007(dbExterneData) 
@@ -254,9 +256,6 @@ BiomassFactors4_FRL <- Species_BiomassFactors_FRL %>%
   dplyr::select(-WD, -BEF1)
 
 ```
-
-
-
 
 
 # Controle: ontbrekende waarden nakijken
@@ -308,7 +307,7 @@ Het overzicht met gebruikte factoren wordt weggeschreven naar "Data/ExterneData/
 
 ## Berekeningen op boomniveau - FRL (cfr Wallonië LULUCF)
 
-Aangezien de methode van de FRL gebruik maakt van expansiefactoren die afhankelijk zijn van diameter en boomhoogte, vertrekken we van *stems_calc* (boomniveau).
+Aangezien de methode van de FRL gebruik maakt van expansiefactoren die afhankelijk zijn van diameter en boomhoogte, vertrekken we van *stems_calc* (spilniveau).
 
 We selecteren enkel de levende bomen.
 
@@ -617,9 +616,6 @@ max(trees_living5$htot)
 max(trees_living5$calc_height_m, na.rm = T)
 min(trees_living5$htot, na.rm = T)
 
-# bomen zonder hoogte?? 2
-trees_living5 %>% filter(is.na(htot))
-
 ```
  
 
@@ -698,6 +694,13 @@ check
 # 1	2.155877			
 # 2	1.999453
 # gemiddeld factor 2 om van stamvolume naar totaal volume te gaan
+
+
+# period test
+# 0	1.231291			
+# 1	2.226701			
+# 2	2.130835			
+# 3	1.657285	
 
 ```
 
@@ -891,7 +894,7 @@ analyseSet <- trees_living5 %>%
             BiomassTotalLiving_t_ha = sum(TotalBiomass_t/plotarea_ha, na.rm = TRUE),
             CarbonAboveGr_t_ha = sum(FC*TotalAboveGrBiomass_t/plotarea_ha, na.rm = TRUE),
             CarbonBelowGr_t_ha = sum(FC*TotalBelowGrBiomass_t/plotarea_ha, na.rm = TRUE),
-            CarbonTotalLiving_t_ha = sum(TotalCarbon_t/plotarea_ha, na.rm = TRUE),
+            CarbonTotalLiving_t_ha = sum(TotalCarbon_t/plotarea_ha, na.rm = TRUE)
             # test = StemVolume_m3_ha - vol_bole_m3_ha,
             # test_proc = 100*test /vol_bole_m3_ha
             ) %>%
@@ -921,44 +924,55 @@ zero_volume <- analyseSet %>%
   filter(is.na(BiomassAboveGr_t_ha) & survey_trees == TRUE & data_processed == TRUE) 
 
 zero_volume
-# plot 475: periode 1: geen bomen
+# plot 475 periode 1: geen bomen
+# 13 plots Ename (13xx)
 
-repo_path <- path_to_git_forresdat
-open_area <- get_open_area()
+# OPGEPAST: ENKEL DE BOSPLOTS, NIET DE OPEN RUIMTES! --------------
 
+# repo_path <- path_to_git_forresdat
+# open_area <- get_open_area()
 
-dendro_by_plot <- read_forresdat("dendro_by_plot", path_to_git_forresdat)
-  regeneration_by_plot <- read_forresdat("regeneration_by_plot", repo_path)
-  open_area <- dendro_by_plot %>% 
+# read_forresdat werkt niet momenteel
+# dendro_by_plot <- read_forresdat("dendro_by_plot", path_to_git_forresdat)
+# regeneration_by_plot <- read_forresdat("regeneration_by_plot", repo_path)
+
+dendro_by_plot <- read_vc(file = "dendro_by_plot", root = path_to_forresdat_data)
+regeneration_by_plot <- read_vc(file = "regeneration_by_plot", root = path_to_forresdat_data)
+
+open_area <- dendro_by_plot %>% 
     filter(number_of_tree_species == 0) %>% # 14 plots (13 plots ename & plot 475)
     filter(vol_deadw_m3_ha == 0) %>%  # dan valt plot 475 weg => is bosplot, maar op dat moment zonder bomen/verjonging
     left_join(regeneration_by_plot) %>% 
     filter((approx_nr_established_ha == 0 & approx_nr_seedlings_ha == 0) 
            | (is.na(approx_nr_established_ha) & is.na(approx_nr_seedlings_ha))
     ) %>% 
-    select(forest_reserve, plot_id, period, number_of_tree_species)
+    select(plot_id, period, number_of_tree_species)
+
+nrow(open_area) #13
+
+zero_volume_bosplots <- zero_volume %>% 
+  anti_join(open_area)
+nrow(zero_volume_bosplots) == 1
+zero_volume_bosplots
 ```
 
 
 ```{r add_bosplots_without_volume, results='hide'}
 # enkel plot 475, periode 1, zonder reg
-colnames(analyseSet);colnames(zero_volume)
+colnames(analyseSet);colnames(zero_volume_bosplots)
 
-analyseSet_0_biomassa <- zero_volume %>%
+analyseSet_0_biomassa <- zero_volume_bosplots %>%
   mutate(year = year_dendro,
-         vol_bole_m3_ha = 0,  # zoals berekend in forrescalc, Dagnelie
-         StemVolume_m3_ha = 0,  # cfr methode FRL (met een volume voor dunne boompjes > 7 cm, maar volume = 0 cfr Dagnelie)
-         VolumeStump_m3_ha = 0,  
-         TotalVolumeVEF_m3_ha = 0,  
-         # TotalVolumeVEF_m3_ha = StemVolume * VEF => volledig bovengronds boomvolume zonder stump
          BiomassAboveGr_t_ha = 0,
          BiomassBelowGr_t_ha = 0,
-         Biomass_t_ha = 0,
+         BiomassTotalLiving_t_ha = 0,
          CarbonAboveGr_t_ha = 0,
          CarbonBelowGr_t_ha = 0,
-         Carbon_t_ha = 0
+         CarbonTotalLiving_t_ha = 0
           ) %>% 
-    dplyr::select(-year_dendro, -survey_trees)
+    dplyr::select(-year_dendro, -survey_trees, -data_processed)
+
+names(analyseSet_0_biomassa) == names(analyseSet)
 
 analyseSet2 <- rbind(analyseSet, analyseSet_0_biomassa)
 nrow(analyseSet) + nrow(analyseSet_0_biomassa) - nrow(analyseSet2) == 0
@@ -970,92 +984,47 @@ analyseSet <- analyseSet2
 
 
 
-## Finale analyseset
+# Finale analyseset
 
-> hier nog extra cfr artikel:
-opsplitsing van enkel ABG 
-en ook DW cfr Luc en Total (als ABG + DWi
+(in artikel mbt vgl C in BR vs VBI werd enkel verder gewerkt met BiomassAboveGr_t_ha, aangevuld met 
+carbon van dood hout (staand + liggend) obv omrekeningsfactoren per PNV bepaald door Luc DK)
 
-```{r write_analyseset_to_csv}
-names(analyseSet)
-summary(analyseSet)
+Hier enkel - zoals voor LULUCF gevraagd - biomassa van levende bomen (boven- en ondergronds)
 
-# geen NA's 
-
-# wegschrijven
-write_excel_csv2(analyseSet,paste0(path_to_request, "analyseSet_living_C.csv"))
-
-# direct naar gdrive
-write_excel_csv2(analyseSet,paste0(path_to_gdrive, "analyseSet_living_C.csv"))
-
-
+```{r}
+carbon_by_plot <- analyseSet
 ```
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-# Vergelijking met oude data
+## Vergelijking met oude data
 
 ```{r eval = FALSE}
-dendro_by_plot_git <- read_vc(file = "dendro_by_plot", root = path_to_forresdat_data)
+carbon_by_plot_git <- read_vc(file = "carbon_by_plot", root = path_to_forresdat_data)
 
-dendro_by_plot_git <- dendro_by_plot_git %>% 
+carbon_by_plot_git <- carbon_by_plot_git %>% 
   select(plot_id, year, everything()) %>% 
   select(names(dendro_by_plot))
-nrow(dendro_by_plot) == nrow(dendro_by_plot_git)
-summary(dendro_by_plot)
-names(dendro_by_plot) == names(dendro_by_plot_git)
-summary(dendro_by_plot_git)
+nrow(carbon_by_plot) == nrow(carbon_by_plot_git)
+summary(carbon_by_plot)
+names(carbon_by_plot) == names(carbon_by_plot_git)
+summary(carbon_by_plot_git)
 
 
-dendro_by_plot %>% select(-year) %>% arrange(plot_id, period) == dendro_by_plot_git %>% select(-year) %>% arrange(plot_id, period)
+carbon_by_plot %>% select(-year) %>% arrange(plot_id, period) == carbon_by_plot_git %>% select(-year) %>% arrange(plot_id, period)
 # OK denk ik andere ordening van variabelen
-dendro_by_plot == dendro_by_plot_git
+carbon_by_plot == carbon_by_plot_git
 
-head(dendro_by_plot %>% arrange(plot_id, period)); head(dendro_by_plot_git %>% arrange(plot_id, period))
-
-
-dendro_by_plot_species_git <- read_vc(file = "dendro_by_plot_species", root = path_to_forresdat_data)
-nrow(dendro_by_plot_species) == nrow(dendro_by_plot_species_git)
-
-dendro_by_diam_plot_git <- read_vc(file = "dendro_by_diam_plot", root = path_to_forresdat_data)
-nrow(dendro_by_diam_plot) == nrow(dendro_by_diam_plot_git)
-
-logs_by_decay_plot_git <- read_vc(file = "logs_by_decay_plot", root = path_to_forresdat_data)
-nrow(logs_by_decay_plot) == nrow(logs_by_decay_plot_git)
+head(carbon_by_plot %>% arrange(plot_id, period)); head(carbon_by_plot_git %>% arrange(plot_id, period))
 
 ```
 
-# Aanmaak list
 
-```{r new_list_dendro}
-# dendro_by_plot_species <- dendro_by_plot_species %>% 
-#   mutate(plot_id = as.integer(plot_id),
-#          species = as.integer(species))
-# 
-# dendro_by_diam_plot_species <- dendro_by_plot_species %>% 
-#   mutate(plot_id = as.integer(plot_id),
-#          species = as.integer(species))
+## Aanmaak list
 
+```{r new_list_carbon}
 # opnieuw list van maken om te exporteren en plotinfo aan te koppelen
-dendro <- list(
-      dendro_by_plot = dendro_by_plot,
-      dendro_by_plot_species = dendro_by_plot_species,
-      dendro_by_diam_plot = dendro_by_diam_plot,
-      dendro_by_diam_plot_species = dendro_by_diam_plot_species,
-      logs_by_decay_plot = logs_by_decay_plot,
-      logs_by_decay_plot_species = logs_by_decay_plot_species
+carbon <- list(
+      carbon_by_plot = carbon_by_plot
     )
 ```
 
@@ -1063,7 +1032,7 @@ dendro <- list(
 # Plotinfo toevoegen (aan csv-files)
 
 ```{r join_plottype_surveynr_BR}
-dendro_plotinfo <- lapply(dendro, function(x) left_join(x, plotinfo %>% select(plot_id, forest_reserve, plottype, period, survey_number), by = c("plot_id", "period")))
+carbon_plotinfo <- lapply(carbon, function(x) left_join(x, plotinfo %>% select(plot_id, forest_reserve, plottype, period, survey_number), by = c("plot_id", "period")))
 # lapply: same function over all elements of the list
 ```
 
@@ -1075,53 +1044,38 @@ Is standaard parameter bij inladen dendro-data
 
 **DUS: zorgen dat dit veld in Fieldmap up-to-date is, zie chunck "plotinfo_processed"**
 
-
-Enkele verduidelijkingen:
-
-* "number_of_tree_species" = aantal soorten obv de levende bomen
-
-* "stems_per_tree" = meerstammigheid (stem_number_ha / number_of_trees_ha): heeft hier geen zin, maar dient als insteek voor berekeningen per soort
-
-* "vol_bole_alive_m3_ha" en "vol_bole_dead_m3_ha": volume zonder crown, 
-versus "vol_alive_m3_ha" en "vol_dead_standing_m3_ha"
-
-* "vol_log_m3_ha": liggend dood hout (NA als er geen deadwood survey gebeurd is)
-
-* "vol_deadw_m3_ha": staand en liggend dood hout (NA als er geen deadwood survey gebeurd is)
-
-
-```{r save_dendro_git, eval = FALSE}
+```{r save_carbon_git, eval = FALSE}
 # geen plotinfo naar git
 save_results_git(
-  results = dendro,
+  results = carbon,
   repo_path = path_to_git_forresdat,
   strict = TRUE
 )
 ```
 
-```{r save_dendro_git_manueel, eval = FALSE}
+```{r save_carbon_git_manueel, eval = FALSE}
 # manueel - eigen simpele functie - als save_results_git niet werkt
-save_results_tsv(dendro, 
+save_results_tsv(carbon, 
                  root = path_to_forresdat_data, 
                  strict = FALSE)
 ```
 
 
-```{r save_dendro_access_csv, eval = FALSE}
-# hier wel plotinfo (plottyupe, BR, surveynr mee wegschrijven)
+```{r save_carbono_access_csv, eval = FALSE}
+# hier wel plotinfo (plottype, BR, surveynr mee wegschrijven)
 
 # volgende functie heb ik zelf geschreven, zit niet in het package!
 save_results_csv (
-    results = dendro_plotinfo,
+    results = carbon_plotinfo,
     output_dir = path_to_plotlevel_csv
     )
 
 # afgerond voor export naar access
-dendro_round <- dendro_plotinfo %>% 
+carbon_round <- carbon_plotinfo %>% 
   lapply(., function(x) round_df(x, 2))
 
 save_results_access (
-  results = dendro_round,
+  results = carbon_round,
   database = path_to_analysis_set_db,
   remove_tables = TRUE
   )
@@ -1133,7 +1087,7 @@ naar **/PRJ_BOSECO_ALGEMEEN/PRJ_BR_AanvraagGegevens/00_METADATA-ALL_PLOTS/_plot-
 
 ```{r save_dendro_gdrive, eval = FALSE}
 save_results_csv(
-    results = dendro_plotinfo,
+    results = carbon_plotinfo,
     output_dir = path_to_plotlevel_gdrive
     )
 
