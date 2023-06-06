@@ -170,7 +170,7 @@ data_herblayer <-
 ```
 
 
-```{r data}
+```{r data, results='hide'}
 names(plotinfo)
 
 vegetation_by_plot <- read_forresdat("vegetation_by_plot", repo_path = path_to_git_forresdat, join_plotinfo = TRUE) 
@@ -204,7 +204,7 @@ dataset %>% group_by(plot_id, period) %>% summarize(n_subplots = n_distinct(subp
   ungroup() %>% filter(n_subplots > 1) %>% nrow == 0
 ```
 
-```{r}
+```{r, results='hide'}
 dataset %>% filter(is.na(waterlayer_cover_mid)) %>% nrow()
 dataset %>% filter(is.na(moss_cover_mid)) %>% nrow()
 dataset %>% filter(is.na(shrub_cover_mid)) %>% nrow()
@@ -221,7 +221,7 @@ dataset %>% filter(is.na(cumulated_canopy_cover_mid)) %>% nrow()
 # [1] 111
 ```
 
-```{r variables}
+```{r variables, results='hide'}
 names(dataset)
 
 variables_for_statistics <- dataset %>% 
@@ -232,7 +232,7 @@ variables_for_statistics
 
 ```
 
-```{r stat}
+```{r stat, results='hide'}
 resultaat <- create_statistics(
   dataset = dataset,
   level = c("period", "forest_reserve"),
@@ -341,8 +341,8 @@ dataset2 %>% group_by(plot_id, period) %>% summarize(n_subplots = n_distinct(sub
 
 ### Aantal/percentage plots waar soort voorkomt
 
-```{r species_n_plots}
-names(dataset2)
+```{r species_n_plots, results='hide'}
+names(dataset2)  # herblayer_by_plot, reeds gefilterd op CPs en open area
 
 species_n_plots <- dataset2 %>% 
   filter(!is.na(coverage_class_average_perc)) %>% 
@@ -388,7 +388,7 @@ range(check$verschil)
 ```
 
 
-```{r resultaat2}
+```{r resultaat2, results='hide'}
 names(resultaat)
 names(species_perc_plots)
 
@@ -424,7 +424,7 @@ Obv aantal plots waar soort voorkomt
 som van bedekkingen in de plots waar soort voorkomt en dat delen door aantal plots
 
 
-```{r}
+```{r, results='hide'}
 dataset2 %>% filter(is.na(coverage_class_average_perc)) %>% nrow() == 0
 
 karakt_bedekking <- dataset2 %>% 
@@ -438,7 +438,7 @@ karakt_bedekking <- dataset2 %>%
 
 
 
-```{r resultaat3}
+```{r resultaat3, results='hide'}
 names(karakt_bedekking)
 resultaat3 <- karakt_bedekking %>% 
   left_join(qHerbSpecies, by = c("species" = "ID")) %>% 
@@ -452,7 +452,7 @@ resultaat3 <- karakt_bedekking %>%
          , strata2 = NA
          , stratum_name2 = NA) 
   
-  
+#? hoe lci en uci berekenen op een 
   
 ```
 
