@@ -1,5 +1,5 @@
 ---
-title: "Statistieken dendro per bosreservaat"
+title: "Statistieken verjonging per bosreservaat"
 author: "Anja Leyman"
 date: "`r Sys.Date()`"
 output: 
@@ -124,7 +124,7 @@ plot 475 Wijnendale periode 1: bevat dood hout; omdat er in periode 2 wel soorte
 ## Reg_by_plot
 
 
-```{r load_reg, eval = FALSE}
+```{r load_reg}
 data_regeneration <-
   load_data_regeneration(
     database = path_to_fieldmap_db,
@@ -134,7 +134,7 @@ data_regeneration <-
 ```
 
 
-```{r data}
+```{r data, results='hide'}
 names(plotinfo)
 
 regeneration_by_plot <- read_forresdat("regeneration_by_plot", repo_path = path_to_git_forresdat, join_plotinfo = TRUE) 
@@ -156,14 +156,14 @@ table(dataset_open$forest_reserve, dataset_open$period)
 ```
 Hier geen add_zeros nodig want al inbegrepen
 
-```{r zeros_included}
+```{r zeros_included, results='hide'}
 dataset %>% filter(approx_nr_established_ha == 0 & approx_nr_seedlings_ha == 0) %>% nrow() > 0
 
 t <- dataset %>% filter(approx_nr_established_ha == 0 & approx_nr_seedlings_ha == 0)
 ```
 
 
-```{r variables}
+```{r variables, results='hide'}
 names(dataset)
 
 variables_for_statistics <- dataset %>% 
@@ -174,7 +174,7 @@ variables_for_statistics
 
 ```
 
-```{r stat}
+```{r stat, results='hide'}
 resultaat <- create_statistics(
   dataset = dataset,
   level = c("period", "forest_reserve"),
@@ -231,7 +231,7 @@ t <- resultaat_ %>%
 
 
 ```{r export}
-names(resultaat)
+resultaat %>% distinct(variable)
 
 My.ResultsToDatabase(results = resultaat, 
                      dbHandle = dbResults, 
@@ -258,7 +258,7 @@ NEE, want ook in oudste databank reeds een verschil => wellicht zo in moederdb (
 Ik denk dat Peter daar soms aanpassingen gedaan heeft, om meer naar aantal over te stappen waar mogelijk => OK, niet verder naar zoeken!
 
 
-```{r}
+```{r eval = FALSE}
 everzw_4000 <- data_regeneration %>% 
   filter(plottype == "CP" 
          & str_detect(forest_reserve, "Everzw")
@@ -289,7 +289,7 @@ Statistics voor intervals cfr Els: variance bijna steeds Inf en mean = 0
 
 Ev. later uit te klaren met ELs ...
 
-```{r}
+```{r eval = FALSE}
 variables_for_statistics <- c("number_established_ha", "number_seedlings_ha")
 
 resultaat_intervals <- create_statistics(
@@ -327,7 +327,7 @@ dataset2 <- regeneration_by_plot_height %>%
 table(dataset2$forest_reserve, dataset2$period)
 ```
 
-```{r n_subplots}
+```{r n_subplots, results='hide'}
 names(dataset2)
 range(dataset2$subplot_id)
 
@@ -359,7 +359,7 @@ Afwijkingen tov standaard 1000, 2000, 3000 en 4000:
 - With heide, alle periodes: 5000, 6000, 7000 (0-50, 50-130, > 130)
 - 8000 komt niet voor
 
-```{r welke_hoogteklasses_gebruikt_in_welk_BR}
+```{r welke_hoogteklasses_gebruikt_in_welk_BR, results='hide'}
 names(dataset2)
 
 heightclasses_BR <- dataset2 %>% 
@@ -387,7 +387,7 @@ OPGEPAST met perc_rubbing: door "add_zeros" worden bij alle hoogteklasses die NI
 => nullen omzetten naar NA na add_zeros
 
 
-```{r}
+```{r eval = FALSE}
 t <- dataset2_0 %>% filter(rubbing_damage_perc == 0)
 ```
 
@@ -443,7 +443,7 @@ t <- heightclasses_plot %>% group_by(forest_reserve, period, n_heightclass) %>%
 ```
 
 ```{r var2}
-names(dataset2_0)
+# names(dataset2_0)
 
 variables_for_statistics2 <- dataset2_0 %>% 
   select(contains(c("_perc", "number_of_tree_species", "approx"))) %>% 
@@ -453,7 +453,7 @@ variables_for_statistics2
 ```
 
 
-```{r stat2}
+```{r stat2, results='hide'}
 # !! één resultaat per soort en per BR
 n_BR <- dataset2 %>% distinct(forest_reserve) %>% nrow()
 n_BR <- length(unique(dataset2$forest_reserve))
@@ -600,7 +600,7 @@ variables_for_statistics3
 #
 ```
 
-```{r stat3}
+```{r stat3, results='hide'}
 # !! één resultaat per soort en per BR
 n_BR <- dataset3 %>% distinct(forest_reserve) %>% nrow()
 n_BR <- length(unique(dataset3$forest_reserve))
@@ -688,15 +688,61 @@ My.ResultsToDatabase(results = resultaat3,
 
 
 
-## Extra statistieken cfr oude dataverwerking - TO DO
+## Extra statistieken cfr oude dataverwerking
 
-### Aantal plots met verjonging per soort en per hoogteklasse
+### Aantal/percentage plots met verjonging per soort en per hoogteklasse
 53qryAantalPlotsMetVerjongingPerSoortPerHoogte_2eSET
 
-```{r}
+```{r species_height_n_plots, results='hide'}
+names(dataset3) #regeneration_by_plot_height_species
+
+n_plots <- dataset3 %>% 
+  filter(!is.na(approx_nr_regeneration_ha)) %>% 
+  group_by(forest_reserve, period, species, height_class) %>% 
+  summarize(n_plots = n()) %>% 
+  ungroup()
+
+names(n_plots)
+
+n_plots_per_BR <- dataset %>%   # reg_by_plot - reeds gefilterd op CP en ...
+  group_by(forest_reserve, period) %>%
+  summarize(n_max_plots = n()) %>% 
+  ungroup()
+
+perc_plots <- n_plots %>% 
+  left_join(n_plots_per_BR) %>% 
+  mutate(perc_plots = 100*n_plots/n_max_plots)
 
 ```
 
+
+```{r resultaat4}
+resultaat4 <- perc_plots %>% 
+  left_join(qSpecies, by = c("species" = "ID")) %>% 
+  left_join(qHeightClass, by = c("height_class" = "ID")) %>%
+  round_df(., 2) %>% 
+  mutate(variable = "perc_plots_met_soort"
+         , n_obs = n_max_plots
+         , mean = perc_plots
+         , variance = NA, lci = NA, uci = NA
+         , strata = "height_class"
+         , stratum_name = heightclass_txt
+         , strata2 = "species"
+         , stratum_name2 = name_nl) 
+
+range(resultaat4$mean)
+# [1]  0.78 96.00
+```
+
+```{r export4}
+My.ResultsToDatabase(results = resultaat4, 
+                     dbHandle = dbResults, 
+                     tblName = "tblResultaten", 
+                     scriptName = "reg_per_BR.Rmd", 
+                     description = "percentage plots met verjonging per soort en per hoogteklasse, per bosreservaat (enkel bosplots)",
+                     request_from = "Team bosecologie",
+                     run_by = run)
+```
 
 
 
