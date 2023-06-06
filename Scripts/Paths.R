@@ -30,7 +30,9 @@ dbResults <- path_to_dbResults
 
 
 # Output - gdrive (PRJ_BR_AanvraagGegevens)
-path_to_output_gdrive <- "G:/.shortcut-targets-by-id/0B0xcP-eNvJ9dQ2w5ZFhSZEpCU0E/PRJ_BOSECO_ALGEMEEN/PRJ_BR_AanvraagGegevens/"
+# path_to_output_gdrive <- "G:/.shortcut-targets-by-id/0B0xcP-eNvJ9dQ2w5ZFhSZEpCU0E/PRJ_BOSECO_ALGEMEEN/PRJ_BR_AanvraagGegevens/"   # oude drive
+
+path_to_output_gdrive <- "G:/Gedeelde drives/Team_Boseco/00_projecten/PRJ_BR_AanvraagGegevens/"
 
 path_to_plotlevel_gdrive <- paste0(path_to_output_gdrive, "00_METADATA-ALL_PLOTS/_plot-level-data/") 
 path_to_treelevel_gdrive <- paste0(path_to_output_gdrive, "00_METADATA-ALL_PLOTS/_tree-level-data/")
