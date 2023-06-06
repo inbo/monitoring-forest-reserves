@@ -69,6 +69,18 @@ De functies zijn ook gemaakt met het oog op een vlottere
 - aanmaak van rapporten met bookdown
 
 
+**Een eerste analyse gebeurde in **    
+
+- dendro_per_BR - OK, ook functies al afgerond   
+- reg_per_BR - OK, gechekt en afgerond muv speciale analyses - functies nog te doen 
+- veg_per_BR - TO DO    
+
+Deze scripts worden als intseek gebruikt bij de aanmaak van de functies
+
+
+
+
+
 # Nog nodig
 Wat nog ontbreekt is een verwijzing naar versie dataset
 Dat zou een commit van forresdat moeten zijn
@@ -137,6 +149,91 @@ for (tablename in names(dendro_stat)) {
 ```
 
 
+# Statistics_regeneration
+
+## Test
+
+```{r}
+repo_path <- path_to_git_forresdat
+```
+
+```{r}
+library(waldo)
+
+nrow(resultaat) - nrow(reg_by_reserve)  # -8
+compare(resultaat, reg_by_reserve) # => Kluisbos opgesplitst
+
+```
+
+
+```{r per_file}
+reg_by_reserve <- statistics_reg()
+reg_by_height <- statistics_reg_height()
+reg_by_height_species <- statistics_reg_height_species()
+
+nrow(reg_by_reserve); nrow(reg_by_height); nrow(reg_by_height_species)
+```
+
+```{r}
+summary(reg_by_reserve)
+summary(reg_by_height)
+```
+
+```{r overkoepelend_reh}
+reg_stat <- statistics_regeneration()
+# is een list
+for (tablename in names(reg_stat)) {
+  assign(tablename, reg_stat[[tablename]])
+} 
+```
+
+
+
+# Statistics_vegetation
+
+TO DO E, nu nog copy van reg
+
+
+
+## Test
+
+```{r}
+repo_path <- path_to_git_forresdat
+```
+
+```{r}
+library(waldo)
+
+nrow(resultaat) - nrow(reg_by_reserve)  # -8
+compare(resultaat, reg_by_reserve) # => Kluisbos opgesplitst
+
+```
+
+
+```{r per_file}
+reg_by_reserve <- statistics_reg()
+reg_by_height <- statistics_reg_height()
+reg_by_height_species <- statistics_reg_height_species()
+
+nrow(reg_by_reserve); nrow(reg_by_height); nrow(reg_by_height_species)
+```
+
+```{r}
+summary(reg_by_reserve)
+summary(reg_by_height)
+```
+
+```{r overkoepelend_reh}
+reg_stat <- statistics_regeneration()
+# is een list
+for (tablename in names(reg_stat)) {
+  assign(tablename, reg_stat[[tablename]])
+} 
+```
+
+
+
+## Export 
 
 ## Export 
 
