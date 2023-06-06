@@ -128,7 +128,7 @@ dendro_by_plot_ %>% group_by(forest_reserve) %>%
 repo_path <- path_to_git_forresdat
 ```
 
-```{r per_file}
+```{r per_file1}
 by_reserve <- statistics_dendro()
 by_species <- statistics_dendro_species()
 by_diam <- statistics_dendro_diam()
@@ -157,7 +157,7 @@ for (tablename in names(dendro_stat)) {
 repo_path <- path_to_git_forresdat
 ```
 
-```{r}
+```{r eval = FALSE}
 library(waldo)
 
 nrow(resultaat) - nrow(reg_by_reserve)  # -8
@@ -166,10 +166,14 @@ compare(resultaat, reg_by_reserve) # => Kluisbos opgesplitst
 ```
 
 
-```{r per_file}
+```{r per_file2}
 reg_by_reserve <- statistics_reg()
 reg_by_height <- statistics_reg_height()
 reg_by_height_species <- statistics_reg_height_species()
+reg_by_height_species %>% distinct(variable)
+# approx_nr_regeneration_ha				
+# rubbing_damage_perc				
+# perc_plots_met_soort
 
 nrow(reg_by_reserve); nrow(reg_by_height); nrow(reg_by_height_species)
 ```
@@ -179,7 +183,28 @@ summary(reg_by_reserve)
 summary(reg_by_height)
 ```
 
-```{r overkoepelend_reh}
+```{r n_plots_vgl_veg_reg, eval = FALSE}
+compare(n_plots, n_plots_per_BR)
+# sevendocnk periode 1: 77 vs 78
+
+regeneration_by_plot %>% filter(forest_reserve == "Sevendonck" & period == 1) %>% nrow()
+vegetation_by_plot %>% filter(forest_reserve == "Sevendonck" & period == 1) %>% nrow()
+
+a <- regeneration_by_plot %>% filter(forest_reserve == "Sevendonck" & period == 1) 
+b <- vegetation_by_plot %>% filter(forest_reserve == "Sevendonck" & period == 1)
+
+a %>% filter(!plot_id %in% b$plot_id)
+
+# plot 1176: geen herbs genoteerd, ook geen bedekking kruidlaag, maar wel bedekking moslaag 
+# en waterlayer
+
+```
+
+Toch aangewezen om aantal plots te bepalen obv veg_by_plot eerder dan obv herblayer_by_plot
+Want héél uitz (plot 1176, periode 1) toch geen soorten genoteerd.
+
+
+```{r overkoepelend_reg}
 reg_stat <- statistics_regeneration()
 # is een list
 for (tablename in names(reg_stat)) {
@@ -191,49 +216,68 @@ for (tablename in names(reg_stat)) {
 
 # Statistics_vegetation
 
-TO DO E, nu nog copy van reg
-
-
-
 ## Test
 
 ```{r}
 repo_path <- path_to_git_forresdat
 ```
 
-```{r}
+
+```{r eval = FALSE}
 library(waldo)
 
-nrow(resultaat) - nrow(reg_by_reserve)  # -8
-compare(resultaat, reg_by_reserve) # => Kluisbos opgesplitst
+nrow(resultaat) - nrow(veg_by_reserve)  
+compare(resultaat, veg_by_reserve) 
 
+compare(stat_veg_by_reserve, veg_by_reserve)
+
+```
+```{r eval = FALSE}
+compare(n_plots, n_plots_per_BR) 
+
+resultaata_ <- resultaata %>% 
+  filter(!str_detect(forest_reserve, "Kluisbos")) %>% 
+  select(-contains("year"))
+                      
+compare(resultaata_
+        , resultaat2 %>% filter(!str_detect(forest_reserve, "Kluisbos"))) 
+
+compare(resultaatb %>% 
+  filter(!str_detect(forest_reserve, "Kluisbos")) %>% 
+  select(-contains("year"))
+  , resultaat3 %>% filter(!str_detect(forest_reserve, "Kluisbos"))) 
+
+compare(resultaat, herbs_by_reserve)
+compare(stat_herbs_by_reserve, herbs_by_reserve)
+
+compare(n_plots_veg, n_plots_reg)
+# OK, withoefse heide tweede keer geen veg-opname
 ```
 
 
-```{r per_file}
-reg_by_reserve <- statistics_reg()
-reg_by_height <- statistics_reg_height()
-reg_by_height_species <- statistics_reg_height_species()
+```{r per_file3}
+veg_by_reserve <- statistics_veg()
+herbs_by_reserve <- statistics_herbs()
 
-nrow(reg_by_reserve); nrow(reg_by_height); nrow(reg_by_height_species)
+nrow(veg_by_reserve); nrow(herbs_by_reserve)
 ```
 
 ```{r}
-summary(reg_by_reserve)
-summary(reg_by_height)
+summary(veg_by_reserve)
+summary(herbs_by_reserve)
 ```
 
-```{r overkoepelend_reh}
-reg_stat <- statistics_regeneration()
+```{r overkoepelend_veg}
+veg_stat <- statistics_vegetation()
 # is een list
-for (tablename in names(reg_stat)) {
-  assign(tablename, reg_stat[[tablename]])
+for (tablename in names(veg_stat)) {
+  assign(tablename, veg_stat[[tablename]])
 } 
+
+
 ```
 
 
-
-## Export 
 
 ## Export 
 
@@ -241,7 +285,7 @@ Ev. alle files aan elkaar plakken (zonder species, decaystage, ;; enkel stratum)
 en dan zo naar acces exporteren met datum in de naam van de tabel 
 
 
-```{r export}
+```{r export, eval = FALSE}
 
 for i in list do select
 
