@@ -547,7 +547,7 @@ dataset3b <- dendro_by_diam_plot_species %>%
 
 
 ```{r add_zeros_all_dbhs_3b}
-dataset3_0 <- add_zeros(dataset = dataset3 %>% 
+dataset3b_0 <- add_zeros(dataset = dataset3b %>% 
                           select(plot_id, period, dbh_class_5cm, species, contains("_ha")),
                         comb_vars = c("plot_id", "dbh_class_5cm", "species"),
                         grouping_vars = c("period")
@@ -555,62 +555,17 @@ dataset3_0 <- add_zeros(dataset = dataset3 %>%
   # left_join(qSpecies %>% dplyr::select(species = ID, speciesTxt = Value1)) %>% 
   left_join(plotinfo %>% select(plot_id, period, forest_reserve))
 
+
+# !! soorten en diameterklasses die niet voorkomen verwijderen alvores statistics toe te passen, zie functie
 ```
 
-```{r}
-variables_for_statistics3 <- dataset3_0 %>% 
-  select(contains("_ha")) %>% 
-  names()
-
-variables_for_statistics3
-#
-```
-
-
-```{r}
-# !! één resultaat per dbh-class en per BR
-
-resultaat3 <- create_statistics(
-  dataset = dataset3_0,
-  level = c("period", "forest_reserve", "dbh_class_5cm"),
-  variables = variables_for_statistics3,
-  include_year_range = FALSE,
-  na_rm = FALSE,
-    interval_information = suppressMessages(read_csv2(system.file("extdata/class_data.csv",
-    package = "forrescalc")))
-  ) %>% 
-  select(-logaritmic) %>% 
-  filter(mean != 0 & !is.na(mean)) %>% 
-  round_df(., 2) %>% 
-  mutate(strata = "dbh_class",
-         stratum_name = dbh_class_5cm,
-         strata2 = NA,
-         stratum_name2 = NA)
-```
-
-
-```{r check_add_zeros3b}
-totaal_NGV_per_BR <- resultaat3 %>% 
-  filter(variable == "basal_area_dead_m2_ha") %>% 
-  group_by(period, forest_reserve) %>% 
-  summarize(G = sum(mean)) %>% 
-  ungroup()
-
-# vgl met Result_NGV_per_PNV obv analyseset (zonder soorten)
-check_NGV <- totaal_NGV_per_BR %>% 
-  left_join(resultaat %>% filter(variable == "basal_area_dead_m2_ha") 
-            , by = c("period", "forest_reserve")) %>% 
-  mutate(verschil = G - mean)
-
-range(check_NGV$verschil)
-```
 
 ```{r export3b}
-My.ResultsToDatabase(results = resultaat3, 
+My.ResultsToDatabase(results = resultaat3b, 
                      dbHandle = dbResults, 
                      tblName = "tblResultaten", 
                      scriptName = "dendro_per_BR.Rmd", 
-                     description = "dendro per ha per diameterklasse en per bosreservaat",
+                     description = "dendro per ha per diameterklasse, soort en per bosreservaat",
                      request_from = "Team bosecologie",
                      run_by = run)
 ```
