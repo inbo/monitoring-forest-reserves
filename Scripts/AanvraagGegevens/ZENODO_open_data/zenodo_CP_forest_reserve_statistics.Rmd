@@ -80,7 +80,7 @@ Met species, heightclass, decaystage en browseindex
 
 ## Lookuplijsten
 
-```{r load_LU_lists}
+```{r load_LU_lists, eval = FALSE}
 con <- odbcConnectAccess2007(path_to_fieldmap_db)
   
   qSpecies <- sqlFetch(con, "qspecies", stringsAsFactors = FALSE)
@@ -92,7 +92,7 @@ con <- odbcConnectAccess2007(path_to_fieldmap_db)
 odbcClose(con)
 ```
 
-```{r}
+```{r eval = FALSE}
 qSpecies <- qSpecies %>% 
   select(1:3) %>% 
   rename(name_nl = Value1, 
@@ -108,6 +108,24 @@ qHerbSpecies <- qHerbSpecies %>%
 ```
 
 ## Dendro
+
+
+```{r overkoepelend_dendro}
+dendro_stat <- statistics_dendrometry()
+
+# is een list
+for (tablename in names(dendro_stat)) {
+  assign(tablename, dendro_stat[[tablename]])
+} 
+
+
+names(dendro_stat)
+
+
+```
+
+
+
 
 ```{r read_dendro}
 # read_forresdat met dadelijk al selectie van enkel CP's werkte niet (18/4/2023)
@@ -300,29 +318,10 @@ Zie functions_overall_statistics.R
 
 ## Algemeen
 
-Functie create_statistics zou normaliter moeten toelaten om een year-range toe te voegen.
-Lukt niet (issue aangemaakt)
-Daarom hier via plotinfo
+Functie `create_statistics()` zou normaliter moeten toelaten om een year-range toe te voegen.
+Lukt niet (issue aangemaakt).
+Daarom mee opgenomen in de functies.
 
-Ook mee opgenomen in de dendro-functies
-
-```{r year_range}
-names(plotinfo)
-
-year_range <- plotinfo %>% 
-  group_by(forest_reserve, period) %>% 
-  summarize(min_year = min(year_dendro), 
-            max_year = max(year_dendro),
-            year_range = paste0(min_year, " - ", max_year)) %>% 
-  ungroup()
-
-# groei jaar 
-# year_dendro = year(round_date(.data$date_dendro, "year")) - 1
-# date1 <- as.Date("2010/07/12")
-# date2 <- as.Date("2010/12/10")
-# year(round_date(date1, "year")) - 1
-# year(round_date(date2, "year")) - 1
-```
 
 ## Dendro
 
