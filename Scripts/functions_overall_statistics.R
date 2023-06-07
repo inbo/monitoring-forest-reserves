@@ -263,7 +263,7 @@ get_diamclasses_per_species_per_reserve <- function(dataset){
   resultaat <- dataset %>% 
     group_by(forest_reserve, period, species, dbh_class_5cm) %>% 
     # summarize(n_tree_species = sum(number_of_tree_species)) %>% 
-    summarize(n = n()) %>% 
+    summarize() %>% 
     ungroup()
   
   resultaat
@@ -293,7 +293,7 @@ get_diamclasses_per_species_per_reserve <- function(dataset){
 get_species_per_reserve <- function(dataset){
   resultaat <- dataset %>% 
     group_by(forest_reserve, period, species) %>% 
-    summarize(n = n()) %>% 
+    summarize() %>% 
     ungroup() %>% 
     filter(!is.na(species)) 
   
@@ -377,7 +377,8 @@ statistics_dendro <- function(repo_path = path_to_git_forresdat){
            stratum_name = NA,
            strata2 = NA,
            stratum_name2 = NA) %>% 
-    get_year_range
+    get_year_range() %>% 
+    select(-contains(c("log", "min", "max")))
   
   resultaat
 }
@@ -439,7 +440,6 @@ statistics_dendro_species <- function(repo_path = path_to_git_forresdat){
     include_year_range = FALSE,
     na_rm = TRUE # stems_per_tree soms NA, als soort niet voorkomt
     ) %>% 
-    select(-logaritmic) %>% 
     filter(mean != 0 & !is.na(mean)) %>% 
     round_df(., 2) %>% 
     left_join(qSpecies, by = c("species" = "ID")) %>% 
@@ -447,7 +447,8 @@ statistics_dendro_species <- function(repo_path = path_to_git_forresdat){
            stratum_name = name_nl,
            strata2 = NA,
            stratum_name2 = NA) %>% 
-    get_year_range()
+    get_year_range() %>% 
+    select(-contains(c("log", "species", "name_nl", "min", "max")))
   
   resultaat
 }
@@ -505,14 +506,14 @@ statistics_dendro_diam <- function(repo_path = path_to_git_forresdat){
     include_year_range = FALSE,
     na_rm = FALSE
     ) %>% 
-    select(-logaritmic) %>% 
     filter(mean != 0 & !is.na(mean)) %>% 
     round_df(., 2) %>% 
     mutate(strata = "dbh_class",
            stratum_name = dbh_class_5cm,
            strata2 = NA,
            stratum_name2 = NA) %>% 
-    get_year_range()
+    get_year_range() %>% 
+    select(-contains(c("log", "dbh", "min", "max")))
   
   resultaat
 }
@@ -566,7 +567,7 @@ statistics_dendro_diam_species <- function(repo_path = path_to_git_forresdat){
                          grouping_vars = c("period")
                          ) %>%
     left_join(forest_plot %>% select(plot_id, period, forest_reserve)) %>% 
-    inner_join(diam_spec_BR %>% select(-n)) %>% 
+    inner_join(diam_spec_BR) %>% 
     differentiate_managed_plots()
   
   variables_for_statistics <- dataset_0 %>% 
@@ -580,7 +581,6 @@ statistics_dendro_diam_species <- function(repo_path = path_to_git_forresdat){
     include_year_range = FALSE,
     na_rm = FALSE
   ) %>% 
-    select(-logaritmic) %>% 
     filter(!is.na(mean)) %>% # Kerss periode 1 en Kluisbos_managed geen liggend dood hout
     round_df(., 2) %>% 
     left_join(qSpecies, by = c("species" = "ID")) %>% 
@@ -588,7 +588,8 @@ statistics_dendro_diam_species <- function(repo_path = path_to_git_forresdat){
            stratum_name = dbh_class_5cm,
            strata2 = "species",
            stratum_name2 = name_nl) %>% 
-    get_year_range()
+    get_year_range() %>% 
+    select(-contains(c("log", "dbh", "species", "name_nl", "min", "max")))
   
   resultaat
 }
@@ -669,7 +670,6 @@ statistics_logs_decay <- function(repo_path = path_to_git_forresdat){
     include_year_range = FALSE,
     na_rm = FALSE
     ) %>% 
-    select(-logaritmic) %>% 
     filter(!is.na(mean)) %>% 
     round_df(., 2) %>% 
     left_join(qDecaystage, by = c("decaystage" = "ID")) %>% 
@@ -680,7 +680,8 @@ statistics_logs_decay <- function(repo_path = path_to_git_forresdat){
            stratum_name = decaystageTxt,
            strata2 = NA,
            stratum_name2 = NA) %>% 
-    get_year_range()
+    get_year_range() %>% 
+    select(-contains(c("log", "decayst", "min", "max")))
 
   resultaat
 }
@@ -750,7 +751,7 @@ statistics_logs_decay_species <- function(repo_path = path_to_git_forresdat){
                          grouping_vars = c("period")
                          ) %>%
     left_join(forest_plot %>% select(plot_id, period, forest_reserve)) %>% 
-    inner_join(species_BR %>% select(-n)) %>%
+    inner_join(species_BR) %>%
     differentiate_managed_plots() %>% 
     filter(forest_reserve != "Kluisbos_managed")
   # niet in elke plot van managed deel van Kluisbos werden logs genoteerd
@@ -766,8 +767,7 @@ statistics_logs_decay_species <- function(repo_path = path_to_git_forresdat){
     variables = variables_for_statistics,
     include_year_range = FALSE,
     na_rm = FALSE
-  ) %>% 
-    select(-logaritmic) %>% 
+    ) %>% 
     filter(!is.na(mean)) %>% 
     round_df(., 2) %>% 
     left_join(qDecaystage, by = c("decaystage" = "ID")) %>% 
@@ -779,13 +779,11 @@ statistics_logs_decay_species <- function(repo_path = path_to_git_forresdat){
            stratum_name = decaystageTxt,
            strata2 = "species",
            stratum_name2 = name_nl) %>% 
-    get_year_range()
+    get_year_range() %>% 
+    select(-contains(c("log", "decay", "species", "name_nl", "min", "max")))
   
   resultaat
 }
-
-
-
 
 
 #' create statistics per forest reserve, based on carbon_by_plot
@@ -829,14 +827,14 @@ statistics_carbon <- function(repo_path = path_to_git_forresdat){
     include_year_range = FALSE,   
     # year_range: nu nog bug in package, op termijn wel interessant
     na_rm = FALSE
-  ) %>% 
+    ) %>% 
     round_df(., 2) %>% 
-    # rename(strata = forest_reserve) %>% 
     mutate(strata = NA,
            stratum_name = NA,
            strata2 = NA,
            stratum_name2 = NA) %>% 
-    get_year_range()
+    get_year_range() %>% 
+    select(-contains(c("log", "min", "max")))
   
   resultaat
 }
@@ -859,7 +857,7 @@ statistics_dendrometry <- function(repo_path = path_to_git_forresdat){
       stat_dendro_by_reserve = by_reserve
       , stat_dendro_by_species = by_species
       , stat_dendro_by_diam = by_diam
-      , stat_dendro_by_diam_species = by_diam_species,
+      , stat_dendro_by_diam_species = by_diam_species
       , stat_dendro_by_decay = by_decay
       , stat_dendro_by_decay_species = by_decay_species
       , stat_carbon_by_reserve = carbon_by_reserve
@@ -919,12 +917,12 @@ statistics_reg <- function(repo_path = path_to_git_forresdat){
     na_rm = TRUE # stems_per_tree soms NA
   ) %>% 
     round_df(., 2) %>% 
-    # rename(strata = forest_reserve) %>% 
     mutate(strata = NA,
            stratum_name = NA,
            strata2 = NA,
            stratum_name2 = NA) %>% 
-    get_year_range_reg
+    get_year_range_reg() %>% 
+    select(-contains(c("log", "min", "max")))
   
   resultaat
 
@@ -998,8 +996,7 @@ statistics_reg_height <- function(repo_path = path_to_git_forresdat){
     variables = variables_for_statistics,
     include_year_range = FALSE,
     na_rm = TRUE # stems_per_tree soms NA, als soort niet voorkomt
-  ) %>% 
-    select(-logaritmic) %>% 
+    ) %>% 
     filter(!is.na(mean)) %>% 
     round_df(., 2) %>% 
     left_join(qHeightClass, by = c("height_class" = "ID")) %>% 
@@ -1007,7 +1004,8 @@ statistics_reg_height <- function(repo_path = path_to_git_forresdat){
            stratum_name = heightclass_txt,
            strata2 = NA,
            stratum_name2 = NA) %>% 
-    get_year_range_reg()
+    get_year_range_reg() %>% 
+    select(-contains(c("log", "height", "min", "max")))
   
   resultaat
 
@@ -1074,7 +1072,7 @@ statistics_reg_height_species <- function(repo_path = path_to_git_forresdat){
                            ) %>%
       left_join(plotinfo %>% select(plot_id, period, forest_reserve)) %>% 
       inner_join(heightclasses_BR) %>% 
-      inner_join(species_BR %>% select(-n_heightclasses)) %>% 
+      inner_join(species_BR) %>% 
       mutate(rubbing_damage_perc = ifelse(approx_nr_regeneration_ha == 0 & rubbing_damage_perc == 0,
                                           NA,
                                           rubbing_damage_perc)
@@ -1092,7 +1090,6 @@ statistics_reg_height_species <- function(repo_path = path_to_git_forresdat){
       include_year_range = FALSE,
       na_rm = TRUE # stems_per_tree soms NA, als soort niet voorkomt
       ) %>% 
-      select(-logaritmic) %>% 
       filter(!is.na(mean)) %>% 
       round_df(., 2) %>% 
       left_join(qHeightClass, by = c("height_class" = "ID")) %>% 
@@ -1102,7 +1099,8 @@ statistics_reg_height_species <- function(repo_path = path_to_git_forresdat){
              strata2 = "species",
              stratum_name2 = name_nl
       ) %>% 
-      get_year_range_reg()
+      get_year_range_reg() %>% 
+      select(-contains(c("log", "height", "species", "name_", "min", "max")))
     
     # percentage plots waar soort per hoogteklasse voorkomt
     resultaat2 <- dataset %>% 
@@ -1123,13 +1121,7 @@ statistics_reg_height_species <- function(repo_path = path_to_git_forresdat){
              , stratum_name = heightclass_txt
              , strata2 = "species"
              , stratum_name2 = name_nl) %>% 
-      get_year_range_reg()
-    
-    names(resultaat1)
-    names(resultaat2)
-    resultaat1 <- resultaat1 %>% 
-      select(-contains(c("height", "species", "name_", "min", "max")))
-    resultaat2 <- resultaat2 %>% 
+      get_year_range_reg() %>% 
       select(-contains(c("height", "species", "name_", "min", "max", "plots")))
     
     resultaat <- rbind(resultaat1, resultaat2)
@@ -1204,7 +1196,8 @@ statistics_veg <- function(repo_path = path_to_git_forresdat){
            stratum_name = NA,
            strata2 = NA,
            stratum_name2 = NA) %>% 
-    get_year_range_veg
+    get_year_range_veg() %>% 
+    select(-contains(c("log", "min", "max")))
   
   resultaat
 
@@ -1293,7 +1286,6 @@ statistics_herbs <- function(repo_path = path_to_git_forresdat){
            , strata2 = NA
            , stratum_name2 = NA)  %>% 
     get_year_range_veg()
-    
     
   resultaat1 <- resultaat1 %>% 
     select(-contains(c("plots", "species", "name_nl", "min", "max")))

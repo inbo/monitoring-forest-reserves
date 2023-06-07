@@ -54,7 +54,7 @@ maar ev. wel tot op soortniveau of afbraakklasse bij liggend dood hout
 # deze worden ook in "Setup.R" gedefinieerd (aanroepen van "Paths.R")
 # hier ev. extra "paths" toevoegen indien nodig 
 
-path_to_datarequest <- "C:/03_BR/1_DataVerwerkingBR/Open_data/"
+path_to_datarequest <- "C:/03_BR/1_DataVerwerkingBR/Open_data_zenodo/"
 
 path_to_datarequest_gdrive <- paste0(path_to_output_gdrive, "ZENODO_open_data/")
 ```
@@ -102,8 +102,18 @@ qHerbSpecies <- qHerbSpecies %>%
 
 ```
 
+# Statistics
 
-# Berekenen dendro & carbon
+Zie functions_overall_statistics.R 
+
+## Algemeen
+
+Functie `create_statistics()` zou normaliter moeten toelaten om een year-range toe te voegen.
+Lukt niet (issue aangemaakt).
+Daarom mee opgenomen in de functies.
+
+
+## Berekenen dendro (met logs en carbon)
 
 ```{r overkoepelend_dendro}
 dendro_stat <- statistics_dendrometry()
@@ -113,120 +123,33 @@ for (tablename in names(dendro_stat)) {
   assign(tablename, dendro_stat[[tablename]])
 } 
 
-
-names(dendro_stat)
-
-
 ```
-
-
-
-
-```{r read_dendro}
-# read_forresdat met dadelijk al selectie van enkel CP's werkte niet (18/4/2023)
-# en bovendien dient dan join_plotinfo = TRUE
-
-# names(dendro_by_plot)
-dendro_by_plot <- read_forresdat("dendro_by_plot"
-                                 , repo_path = path_to_git_forresdat
-                                 , join_plotinfo = TRUE) %>% 
-  filter(plot_id %in% list_CP) %>% 
-  select(plot_id, year, period, 
-         forest_reserve,
-         number_of_tree_species,
-         number_of_trees_ha, stem_number_ha,
-         basal_area_alive_m2_ha, basal_area_dead_m2_ha, 
-         vol_alive_m3_ha, vol_dead_standing_m3_ha,
-         vol_bole_alive_m3_ha, vol_bole_dead_m3_ha,
-         vol_log_m3_ha, vol_deadw_m3_ha,
-         stems_per_tree)
-# 1680
-
-#--- 
-dendro_by_plot_species <- read_forresdat("dendro_by_plot_species"
-                                         , repo_path = path_to_git_forresdat
-                                         , join_plotinfo = TRUE) %>% 
-  left_join(qSpecies, by = c("species" = "ID")) %>% 
-  filter(plot_id %in% list_CP) %>% 
-  select(plot_id, year, period, 
-         forest_reserve,
-         species_code = species, name_nl, name_sc, 
-         number_of_trees_ha, stem_number_ha,
-         basal_area_alive_m2_ha, basal_area_dead_m2_ha, 
-         vol_alive_m3_ha, vol_dead_standing_m3_ha,
-         vol_bole_alive_m3_ha, vol_bole_dead_m3_ha,
-         vol_log_m3_ha, vol_deadw_m3_ha,
-         stems_per_tree) 
-
-```
-
-```{r read_logs}
-logs_by_decay_plot <- read_forresdat("logs_by_decay_plot"
-                                     , repo_path = path_to_git_forresdat
-                                     , join_plotinfo = FALSE) %>% 
-  left_join(qDecaystage %>% select(2:4), by = c("decaystage" = "ID")) %>% 
-  rename(decaystage_code = decaystage,
-         afbraak = Value1, 
-         decaystage = Value2) %>% 
-  filter(plot_id %in% list_CP) %>% 
-  select(plot_id, year, period, decaystage_code, decaystage, vol_log_m3_ha) 
-
-```
-
-
-### Overview
-
-Hoeveel plots?
-Hoeveel bosreservaten?
-Hoeveel twee en hoeveel drie cycli?
 
 ```{r}
-n_BR <- dendro_by_plot %>% left_join(plotinfo) %>% 
-  group_by(forest_reserve) %>% 
-  summarize(n = n(), 
-            n_periodes = n_distinct(period))
+names(dendro_stat)
+
+```
+
+## Berekenen regeneration
 
 
-n_plots <- dendro_by_plot %>% left_join(plotinfo) %>% 
-  group_by(plot_id) %>% 
-  summarize(n = n(), 
-            n_periodes = n_distinct(period))
+```{r overkoepelend_reg, results = 'hide'}
+reg_stat <- statistics_regeneration()
 
+# is een list
+for (tablename in names(reg_stat)) {
+  assign(tablename, reg_stat[[tablename]])
+} 
+
+```
+
+```{r}
+names(reg_stat)
 
 ```
 
 
-## Regeneration
-
-```{r read_reg1}
-# names(regeneration_by_plot)
-regeneration_by_plot <- read_forresdat("regeneration_by_plot"
-                                 , repo_path = path_to_git_forresdat
-                                 , join_plotinfo = FALSE) %>% 
-  filter(plot_id %in% list_CP) %>% 
-  select(plot_id, year, period, 
-         number_of_tree_species, rubbing_damage_perc,
-         approx_nr_established_ha, approx_nr_seedlings_ha, 
-         mean_number_established_ha, lci_number_established_ha, uci_number_established_ha, 
-         mean_number_seedlings_ha, lci_number_seedlings_ha, uci_number_seedlings_ha)
-# 1677 vs 1680 dendro - OK (zie hierna)
-```
-
-```{r check_reg, eval = FALSE}
-
-plotinfo %>% filter(plottype == "CP" & survey_trees == TRUE & data_processed == TRUE) %>% 
-  anti_join(regeneration_by_plot)
-# 3 records met survey_reg == FALSE
-
-dplyr::n_distinct(regeneration_by_plot$plot_id) == dplyr::n_distinct(dendro_by_plot$plot_id)
-# 999
-regeneration_by_plot %>% group_by(period) %>% summarize(n_plots = n_distinct(plot_id))
-regeneration_by_plot %>% group_by() %>% summarize(n_plots = n_distinct(plot_id))
-
-```
-
-
-## Vegetation
+## Berekenen vegetation
 
 In monitoringrapporten werd als volgt gerapporteerd:   
 
@@ -246,113 +169,126 @@ Daarnaast een kaartje met per plot:
 Bijschrift: Aantal soorten en totale bedekking van de kruidlaag in de cirkelplots
 Bron : veg_by_plot
 
-```{r read_veg}
-# names(vegetation_by_plot)
-vegetation_by_plot <- read_forresdat("vegetation_by_plot"
-                                 , repo_path = path_to_git_forresdat
-                                 , join_plotinfo = FALSE) %>% 
-  filter(plot_id %in% list_CP) %>% 
-  select(plot_id, year_main_survey, date_vegetation, period, 
-         number_of_species, cumm_herb_coverage_class_average_perc,
-         moss_cover_min, moss_cover_max, moss_cover_mid, 
-         herb_cover_min, herb_cover_max, herb_cover_mid, 
-         shrub_cover_min, shrub_cover_max, shrub_cover_mid,
-         tree_cover_min, tree_cover_max, tree_cover_mid,
-         waterlayer_cover_min, waterlayer_cover_max, waterlayer_cover_mid,
-         soildisturbance_game_cover_min, soildisturbance_game_cover_max, soildisturbance_game_cover_mid,
-         cumulated_canopy_cover_min, cumulated_canopy_cover_max, cumulated_canopy_cover_mid)
-# 1651 vs 1680 dendro - OK (zie hierna)
-```
 
 
-```{r check_veg, eval = FALSE}
-plotinfo %>% filter(plottype == "CP" & survey_trees == TRUE & data_processed == TRUE) %>% 
-  anti_join(vegetation_by_plot)
-# 29 records met survey_veg == FALSE
+```{r overkoepelend_veg, results = 'hide'}
+veg_stat <- statistics_vegetation()
 
-dplyr::n_distinct(vegetation_by_plot$plot_id) == dplyr::n_distinct(dendro_by_plot$plot_id)
-# 999
-vegetation_by_plot %>% group_by(period) %>% summarize(n_plots = n_distinct(plot_id))
-vegetation_by_plot %>% group_by() %>% summarize(n_plots = n_distinct(plot_id))
-
-```
-
-
-```{r read_herbs}
-# names(herblayer_by_plot)
-herblayer_by_plot <- read_forresdat("herblayer_by_plot"
-                                 , repo_path = path_to_git_forresdat
-                                 , join_plotinfo = FALSE) %>% 
-  filter(plot_id %in% list_CP) %>% 
-  left_join(qHerbSpecies, by = c("species" = "ID")) %>% 
-  left_join(qBrowseIndex %>% select(1,3), by = c("browse_index_id" = "ID")) %>% 
-  select(plot_id, period, year, date_vegetation,
-         species_code = species, name_nl, name_sc, 
-         coverage_class_average_perc,
-         browse_index_id, browse_index = Value2)
+# is een list
+for (tablename in names(veg_stat)) {
+  assign(tablename, veg_stat[[tablename]])
+} 
 
 ```
 
 
 
-```{r check_herbs, eval = FALSE}
-plotinfo %>% filter(plottype == "CP" & survey_trees == TRUE & data_processed == TRUE) %>% 
-  anti_join(herblayer_by_plot)
-# 29 records met survey_veg == FALSE
-
-dplyr::n_distinct(herblayer_by_plot$plot_id) == dplyr::n_distinct(dendro_by_plot$plot_id)
-# 999
-herblayer_by_plot %>% group_by(period) %>% summarize(n_plots = n_distinct(plot_id))
-herblayer_by_plot %>% group_by() %>% summarize(n_plots = n_distinct(plot_id))
-```
-
-
-# Statistics
-
-Zie functions_overall_statistics.R 
-
-## Algemeen
-
-Functie `create_statistics()` zou normaliter moeten toelaten om een year-range toe te voegen.
-Lukt niet (issue aangemaakt).
-Daarom mee opgenomen in de functies.
-
-
-## Dendro
-
-```{r variables}
-names_plotinfo <- names(plotinfo)
-
-variables_ <- names(dendro_by_plot %>% select(-year)) 
-variables_ <- names(dendro_by_plot) 
-
-vars <- variables_[!variables_ %in% names_plotinfo]
-vars
+```{r}
+names(veg_stat)
 
 ```
 
-```{r dendro_by_plot}
-data <- dendro_by_plot
-names(data)
-vars
+# shapefiles
 
-stat <- create_statistics(
-  dataset = data,
-  level = c("forest_reserve", "period"),
-  variables = c("vol_alive_m3_ha"),
-  include_year_range = TRUE
-  ) %>% 
-  round_df(., 2) %>% 
-  # rename(strata = forest_reserve) %>% 
-  mutate(strata = NA,
-         stratum_name = NA,
-         strata2 = NA,
-         stratum_name2 = NA)
+Enkel deze met cirkelplots verwerkt.
 
-str(stat)
-head(stat)
+```{r}
+list_BR <- plotinfo %>% distinct(forest_reserve)
 ```
 
+```{r}
+path_to_shp <- "G:/Gedeelde drives/Team_Boseco/00_projecten/PRJ_BR_Bosreservaten/gebieden/0_overkoepelend/"
+
+shp <- "bosreservaten_IntensieveMonitoring.shp"
+
+path_to_shp2 <- "G:/Gedeelde drives/Team_Boseco/00_projecten/PRJ_BR_AanvraagGegevens/00_METADATA-ALL_PLOTS/GIS-lagen bosreservaten/alle cirkelplots/"
+
+shp2 <- "Bosreservaten_allecirkels.shp"
+
+```
+
+De shapefile `bosreservaten_IntensieveMonitoring.shp` bevat 17 BR-en
+
+Bevat ook deze met enkel een KV => wegfilteren:
+- Hannecartbos
+- Rodebos
+- Walenbos
+- Harras
+
+Anderzijds zijn de volgende reservaten er bij gekomen:
+- Zwaenepoel
+- Kluisbos
+- Ename
+
+Shapefile `Bosreservaten_allecirkels.shp` is correcter/vollediger:
+
+Everzwijnbad (Meerdaalwoud)
+Withoefse Heide
+Wijnendalebos
+Heirnisse
+Jansheideberg (Hallerbos)
+Ter Rijst
+Pruikemakers (Meerdaalwoud)
+Liedekerkebos
+Sevendonck - eiken-berken
+Sevendonck - elzenbroek
+Muizenbos
+Bos t'Ename
+De Heide (Meerdaalwoud)
+Kluisbos
+Kolmontbos
+Kersselaerspleyn (ZoniÔö£┬¢nwoud)
+Harras (ZoniÔö£┬¢nwoud)
+
+```{r}
+
+```
+
+
+
+# Strata op niveau van BR?
+
+info_forest_reserve_level_EUFORIA
+info_forest_reserve_level_management
+
+```{r}
+con <- odbcConnectAccess2007(path_to_strata_db)
+ strata_tables <- sqlTables(con) %>% filter(!str_detect(TABLE_NAME, "MSys"))
+ info_EUFORIA <- sqlFetch(con, "info_forest_reserve_level_EUFORIA", stringsAsFactors = FALSE)
+ info_management <- sqlFetch(con, "info_forest_reserve_level_management", stringsAsFactors = FALSE)
+odbcClose(con)
+
+
+names(info_EUFORIA)
+names(info_management)
+
+```
+
+```{r info_samenvoegen}
+info_BR <- info_EUFORIA %>% 
+  filter(plottype == "CP")
+
+info_BR2 <- info_management %>% 
+  filter(plottype == "CP")
+
+info_BR %>% anti_join(list_BR)
+info_BR2 %>% anti_join(list_BR)
+list_BR %>% anti_join(info_BR2)
+list_BR %>% anti_join(info_BR) # De heide zit niet mee in data voor euforia, omdat het een managed site is ...
+```
+
+
+```{r info_samenvoegen}
+info_BR <- list_BR %>% 
+  left_join(info_management %>% filter(plottype == "CP")) %>% 
+  left_join(info_EUFORIA %>% filter(plottype == "CP")) %>% 
+  mutate(reserve_area_ha = ifelse(forest_reserve == "De heide",
+                                  31.2, reserve_area_ha)) %>% 
+  select(-contains(c("Id", "plottype")))  #"reserve_name_euforia", 
+  
+names(info_BR) 
+
+```
 
 
 
@@ -363,11 +299,11 @@ head(stat)
 
 Dendro (dendro, logs en reg) en vegetatie in afzonderlijke folder (ook afz. publiceren op zenodo)
 
-Als list samenvoegen en dan afronden zoals gewenst 
-(nu op 2 cijfers na de komma voor dendro en 0 voor reg)
+Reeds als list samengevoegd in de overkoepelden functies, en ook reeds afgerond
+(op 2 cijfers na de komma)
 
 
-```{r list_round}
+```{r list_round_NIET_NODIG, eval = FALSE}
 list_dendro <- list(
       dendro_by_plot = dendro_by_plot,
       dendro_by_plot_species = dendro_by_plot_species,
@@ -407,49 +343,25 @@ list_reg <- list_reg %>%
 path_to_datarequest
 
 # naar dendro-folder
-for (i in 1:length(list_dendro)){
+for (i in 1:length(dendro_stat)){
 	  # selectie <- list_dendro[[i]]
 	  # naam <- paste0(names(list_dendro)[i], ".csv")
-	  write.csv2(list_dendro[[i]], paste0(path_to_datarequest, "CP_dendro/", names(list_dendro)[i], ".csv")) 
+	  write.csv2(dendro_stat[[i]], paste0(path_to_datarequest, "BR_niveau/", names(dendro_stat)[i], ".csv")) 
 }
 
-for (i in 1:length(list_reg)){
+for (i in 1:length(reg_stat)){
 	  # selectie <- list_dendro[[i]]
 	  # naam <- paste0(names(list_dendro)[i], ".csv")
-	  write.csv2(list_reg[[i]], paste0(path_to_datarequest, "CP_dendro/", names(list_reg)[i], ".csv")) 
+	  write.csv2(reg_stat[[i]], paste0(path_to_datarequest, "BR_niveau/", names(reg_stat)[i], ".csv")) 
 }
 
 # naar veg-folder
-for (i in 1:length(list_veg)){
+for (i in 1:length(veg_stat)){
 	  # selectie <- list_dendro[[i]]
 	  # naam <- paste0(names(list_dendro)[i], ".csv")
-	  write.csv2(list_veg[[i]], paste0(path_to_datarequest, "CP_veg/", names(list_veg)[i], ".csv")) 
+	  write.csv2(veg_stat[[i]], paste0(path_to_datarequest, "BR_niveau/", names(veg_stat)[i], ".csv")) 
 }
 
-```
-
-Plotinfo: enkel processed data
-
-```{r plotinfo_export, results = 'hide'}
-# plotinfo
-names(plotinfo)
-summary(plotinfo)
-
-t1 <- plotinfo %>% filter(is.na(year_dendro) & data_processed)
-t2 <- plotinfo %>% filter(is.na(survey_number) & data_processed)
-t3 <- plotinfo %>% filter(!data_processed & !is.na(year_dendro))
-# ! zorgen dat er in plotinfo enkel de plots en periodes zitten die ook in de data zitten
-
-plotinfo <- plotinfo %>% 
-  filter(data_processed) %>% 
-  select(plot_id, plottype, forest_reserve, 
-         XLon_wgs84, YLat_wgs84, Z_m_TAW,
-         period, year_dendro, survey_number,
-         contains(c("survey", "game")), data_processed)
-
-write.csv2(plotinfo, paste0(path_to_datarequest, "CP_dendro/plotinfo.csv")) 
-
-write.csv2(plotinfo, paste0(path_to_datarequest, "CP_veg/plotinfo.csv")) 
 ```
 
 Ook rechtstreeks naar gdrive
@@ -459,30 +371,24 @@ Ook rechtstreeks naar gdrive
 path_to_datarequest_gdrive
 
 # naar dendro-folder
-for (i in 1:length(list_dendro)){
+for (i in 1:length(dendro_stat)){
 	  # selectie <- list_dendro[[i]]
 	  # naam <- paste0(names(list_dendro)[i], ".csv")
-	  write.csv2(list_dendro[[i]], paste0(path_to_datarequest_gdrive, "CP_dendro/", names(list_dendro)[i], ".csv")) 
+	  write.csv2(dendro_stat[[i]], paste0(path_to_datarequest_gdrive, "BR_niveau/", names(dendro_stat)[i], ".csv")) 
 }
 
-for (i in 1:length(list_reg)){
+for (i in 1:length(reg_stat)){
 	  # selectie <- list_dendro[[i]]
 	  # naam <- paste0(names(list_dendro)[i], ".csv")
-	  write.csv2(list_reg[[i]], paste0(path_to_datarequest_gdrive, "CP_dendro/", names(list_reg)[i], ".csv")) 
+	  write.csv2(reg_stat[[i]], paste0(path_to_datarequest_gdrive, "BR_niveau/", names(reg_stat)[i], ".csv")) 
 }
 
 # naar veg-folder
-for (i in 1:length(list_veg)){
+for (i in 1:length(veg_stat)){
 	  # selectie <- list_dendro[[i]]
 	  # naam <- paste0(names(list_dendro)[i], ".csv")
-	  write.csv2(list_veg[[i]], paste0(path_to_datarequest_gdrive, "CP_veg/", names(list_veg)[i], ".csv")) 
+	  write.csv2(veg_stat[[i]], paste0(path_to_datarequest_gdrive, "BR_niveau/", names(veg_stat)[i], ".csv")) 
 }
 
 ```
 
-
-```{r plotinfo_gdrive, eval = FALSE}
-write.csv2(plotinfo, paste0(path_to_datarequest_gdrive, "CP_dendro/plotinfo.csv")) 
-
-write.csv2(plotinfo, paste0(path_to_datarequest_gdrive, "CP_veg/plotinfo.csv")) 
-```
