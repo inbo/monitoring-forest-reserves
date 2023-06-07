@@ -716,6 +716,10 @@ statistics_reg_height <- function(repo_path = path_to_git_forresdat){
     select(ID, heightclass_txt = Value1)
   odbcClose(con)
   
+  plotinfo <- read_forresdat("plotinfo", repo_path, join_plotinfo = FALSE) %>% 
+    filter(survey_reg == TRUE) %>% 
+    differentiate_managed_plots()
+  
   forest_plot <- get_forest_plot()
   
   dataset <- read_forresdat("regeneration_by_plot_height", repo_path) %>% 
@@ -738,8 +742,6 @@ statistics_reg_height <- function(repo_path = path_to_git_forresdat){
                                         NA,
                                         rubbing_damage_perc)
     )
-  
-  dataset_0 <- differentiate_managed_plots(dataset_0)
   
   variables_for_statistics <- dataset_0 %>% 
     select(contains(c("_perc", "number_of_tree_species", "approx"))) %>%  
@@ -799,12 +801,18 @@ statistics_reg_height_species <- function(repo_path = path_to_git_forresdat){
       select(ID, name_nl = Value1, name_sc = Value2)
     odbcClose(con)
     
+    plotinfo <- read_forresdat("plotinfo", repo_path, join_plotinfo = FALSE) %>% 
+      filter(survey_reg == TRUE) %>% 
+      differentiate_managed_plots()
+    
     forest_plot <- get_forest_plot()
     
     dataset <- read_forresdat("regeneration_by_plot_height_species", repo_path) %>% 
       select(-contains(c("lci", "mean", "uci", "subplot"))) %>% 
       filter(plottype == "CP" & plot_id %in% forest_plot$plot_id) %>% 
-      differentiate_managed_plots()
+      differentiate_managed_plots() 
+    
+    n_plots_reg <- get_n_plots_per_reserve(dataset) # totaal aantal plots per BR
     
     heightclasses_BR <- get_heights_per_reserve(dataset)
     # deze functie maakt een lijst van de heightclasses die voorkomen in elk BR 
@@ -826,8 +834,6 @@ statistics_reg_height_species <- function(repo_path = path_to_git_forresdat){
                                           NA,
                                           rubbing_damage_perc)
       )
-    
-    dataset_0 <- differentiate_managed_plots(dataset_0)
     
     variables_for_statistics <- dataset_0 %>% 
       select(contains(c("_perc", "approx"))) %>%  
@@ -854,8 +860,6 @@ statistics_reg_height_species <- function(repo_path = path_to_git_forresdat){
       get_year_range_reg()
     
     # percentage plots waar soort per hoogteklasse voorkomt
-    n_plots_reg <- get_n_plots_per_reserve(dataset)
-    
     resultaat2 <- dataset %>% 
       filter(!is.na(approx_nr_regeneration_ha)) %>% 
       group_by(forest_reserve, period, species, height_class) %>% 
@@ -987,6 +991,12 @@ statistics_veg <- function(repo_path = path_to_git_forresdat){
 repo_path <- path_to_git_forresdat
 
 statistics_herbs <- function(repo_path = path_to_git_forresdat){
+  
+  con <- odbcConnectAccess2007(path_to_fieldmap_db)
+  qHerbSpecies <- sqlFetch(con, "qHerbSpecies240810", stringsAsFactors = FALSE) %>% 
+    select(ID, name_nl = Value1)
+  odbcClose(con)
+  
   forest_plot <- get_forest_plot()
   
   # aantal plots obv veg-opname
