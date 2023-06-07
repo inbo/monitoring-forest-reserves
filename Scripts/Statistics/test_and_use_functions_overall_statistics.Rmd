@@ -130,6 +130,10 @@ by_reserve <- statistics_dendro()
 by_species <- statistics_dendro_species()
 by_diam <- statistics_dendro_diam()
 by_decay <- statistics_logs_decay()
+
+carbon_by_reserve <- statistics_carbon()
+
+
 ```
 
 ```{r}

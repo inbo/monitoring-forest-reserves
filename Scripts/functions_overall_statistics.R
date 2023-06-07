@@ -156,7 +156,7 @@ differentiate_managed_plots <- function(dataset){
 #'
 get_year_range <- function(dataset, repo_path = path_to_git_forresdat){
   plotinfo <- read_forresdat("plotinfo", repo_path, join_plotinfo = FALSE) %>% 
-    filter(survey_trees == TRUE)
+    filter(survey_trees == TRUE & plottype == "CP")
   plotinfo <- differentiate_managed_plots(plotinfo)
   year_range <- plotinfo %>% 
     group_by(forest_reserve, period) %>%
@@ -601,6 +601,62 @@ statistics_logs_decay_species <- function(repo_path = path_to_git_forresdat){
 }
 
 
+
+
+#' create statistics per forest reserve, based on carbon_by_plot
+#' 
+#' This function first selects all the circular, forested plots.
+#' Then the managed part of 'Kluisbos' is changed into 'Kluisbos_managed' and 
+#' 'Kluisbos_managed_non_intervention'.
+#' Finally the function `create_statistics()` is used to create statistics on 
+#' all of the variables in `carbon_by_plot`.
+#' 
+#' @inheritParams get_open_area
+#' 
+#' @return statistics (mean, variance, lci, uci, n_obs) per period, 
+#' forest_reserve and all of the variables included in 'carbon_by_plot'
+#'
+#' @examples
+#' \dontrun{
+#' resultaat <- statistics_dendro()
+#' }
+#'
+#' @importFrom functions get_forest_plot differentiate_managed_plots
+#' @importFrom forrescalc read_forresdat create_statistics
+#'
+statistics_carbon <- function(repo_path = path_to_git_forresdat){
+  forest_plot <- get_forest_plot()
+
+  dataset <- read_forresdat("carbon_by_plot", repo_path) %>% 
+    select(-contains(c("_reg", "_veg"))) %>% 
+    filter(plottype == "CP" & plot_id %in% forest_plot$plot_id)
+  
+  dataset <- differentiate_managed_plots(dataset)
+  
+  variables_for_statistics <- dataset %>% 
+    select(contains(c("_t_ha"))) %>% 
+    names()
+  
+  resultaat <- create_statistics(
+    dataset = dataset,
+    level = c("period", "forest_reserve"),
+    variables = variables_for_statistics,
+    include_year_range = FALSE,   
+    # year_range: nu nog bug in package, op termijn wel interessant
+    na_rm = FALSE
+  ) %>% 
+    round_df(., 2) %>% 
+    # rename(strata = forest_reserve) %>% 
+    mutate(strata = NA,
+           stratum_name = NA,
+           strata2 = NA,
+           stratum_name2 = NA) %>% 
+    get_year_range()
+  
+  resultaat
+}
+
+
 #' create statistics on dendrometry per forest reserve
 
 statistics_dendrometry <- function(repo_path = path_to_git_forresdat){
@@ -609,6 +665,7 @@ statistics_dendrometry <- function(repo_path = path_to_git_forresdat){
   by_species <- statistics_dendro_species()
   by_diam <- statistics_dendro_diam()
   by_decay <- statistics_logs_decay()
+  carbon_by_reserve <- statistics_carbon()
 
   return(
     list(
@@ -618,6 +675,7 @@ statistics_dendrometry <- function(repo_path = path_to_git_forresdat){
       # , stat_dendro_by_diam_species = by_diam_species,
       , stat_dendro_by_decay = by_decay
       # , stat_dendro_by_decay_species = by_decay_species
+      , stat_carbon_by_reserve = carbon_by_reserve
     )
   )
 }
