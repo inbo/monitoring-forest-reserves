@@ -567,8 +567,6 @@ statistics_dendro_diam_species <- function(repo_path = path_to_git_forresdat){
                          ) %>%
     left_join(forest_plot %>% select(plot_id, period, forest_reserve)) %>% 
     inner_join(diam_spec_BR %>% select(-n)) %>% 
-    # inner_join(species_BR %>% select(-n)) %>%
-    # inner_join(diamclasses_BR %>% select(-n)) %>%
     differentiate_managed_plots()
   
   variables_for_statistics <- dataset_0 %>% 
