@@ -63,7 +63,7 @@ path_to_datarequest_gdrive <- paste0(path_to_output_gdrive, "ZENODO_open_data/")
 
 # Inladen plotinfo - enkel cirkelplots
 
-```{r}
+```{r eval = FALSE}
 plotinfo <- read_vc(file = "plotinfo", root = path_to_forresdat_data) %>% 
   filter(plottype == "CP")
 colnames(plotinfo)
@@ -73,12 +73,7 @@ length(list_CP) == 2205
 ```
 
 
-# Inladen plot data - enkel cirkelplots
-
-Zonder plotinfo (afzonderlijke file)    
-Met species, heightclass, decaystage en browseindex
-
-## Lookuplijsten
+# Inladen lookuplijsten
 
 ```{r load_LU_lists, eval = FALSE}
 con <- odbcConnectAccess2007(path_to_fieldmap_db)
@@ -107,8 +102,8 @@ qHerbSpecies <- qHerbSpecies %>%
 
 ```
 
-## Dendro
 
+# Berekenen dendro & carbon
 
 ```{r overkoepelend_dendro}
 dendro_stat <- statistics_dendrometry()
