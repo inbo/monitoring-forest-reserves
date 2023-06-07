@@ -72,13 +72,10 @@ De functies zijn ook gemaakt met het oog op een vlottere
 **Een eerste analyse gebeurde in **    
 
 - dendro_per_BR - OK, ook functies al afgerond   
-- reg_per_BR - OK, gechekt en afgerond muv speciale analyses - functies nog te doen 
-- veg_per_BR - TO DO    
+- reg_per_BR - OK, gechekt en afgerond 
+- veg_per_BR - OK, gechekt en afgerond     
 
-Deze scripts worden als intseek gebruikt bij de aanmaak van de functies
-
-
-
+Deze scripts werden als insteek gebruikt bij de aanmaak van de functies
 
 
 # Nog nodig
