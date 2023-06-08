@@ -50,6 +50,9 @@ maar ev. wel tot op soortniveau of afbraakklasse bij liggend dood hout
 - species (latijnse naam) en decaystage mee opnemen (niet via LU-lists)
 
 
+Beslist om "De heide" te verwijderen, want is een beheerd reservaat.
+
+
 ```{r Path}
 # deze worden ook in "Setup.R" gedefinieerd (aanroepen van "Paths.R")
 # hier ev. extra "paths" toevoegen indien nodig 
@@ -63,13 +66,14 @@ path_to_datarequest_gdrive <- paste0(path_to_output_gdrive, "ZENODO_open_data/")
 
 # Inladen plotinfo - enkel cirkelplots
 
-```{r eval = FALSE}
+```{r }
 plotinfo <- read_vc(file = "plotinfo", root = path_to_forresdat_data) %>% 
-  filter(plottype == "CP")
+  filter(plottype == "CP" & forest_reserve != "De heide")
 colnames(plotinfo)
 
-list_CP <- plotinfo$plot_id
-length(list_CP) == 2205
+list_CP <- plotinfo$plot_id  
+n_distinct(plotinfo$plot_id) == 947
+length(list_CP) == 2101
 ```
 
 
@@ -115,7 +119,7 @@ Daarom mee opgenomen in de functies.
 
 ## Berekenen dendro (met logs en carbon)
 
-```{r overkoepelend_dendro}
+```{r overkoepelend_dendro, message=FALSE, warning=FALSE}
 dendro_stat <- statistics_dendrometry()
 
 # is een list
@@ -133,7 +137,7 @@ names(dendro_stat)
 ## Berekenen regeneration
 
 
-```{r overkoepelend_reg, results = 'hide'}
+```{r overkoepelend_reg, message=FALSE, warning=FALSE}
 reg_stat <- statistics_regeneration()
 
 # is een list
@@ -171,7 +175,7 @@ Bron : veg_by_plot
 
 
 
-```{r overkoepelend_veg, results = 'hide'}
+```{r overkoepelend_veg, message=FALSE, warning=FALSE}
 veg_stat <- statistics_vegetation()
 
 # is een list
@@ -187,10 +191,99 @@ for (tablename in names(veg_stat)) {
 names(veg_stat)
 
 ```
+# Correcties over alle dataframes heen
 
-# shapefiles
+Mbv een list
 
-Enkel deze met cirkelplots verwerkt.
+## Aanpassen naam veld "strata en stratum_name"
+
+Zijn zo aangemaakt, om makkelijk in de resultatendb op te slaan
+
+In dit geval kloppen de namen niet.
+
+Naar zenodo: beter "level".
+Zie functie `create_statistics()`: 
+`level` = grouping variables that determine on which level the values
+should be calculated (e.g. forest_reserve, year and species), given as a
+string or a vector of strings. Defaults to forest_reserve & period.
+
+level1_name, level1
+level2_name,
+
+In florabank maken ze gebruik van "Kenmerk" (bv. diam class) en "Omschrijving" (bv. 5-10 cm)
+In Engels wordt dat    
+- feature/attribute/trait(eigenschap) en
+- characterization/description
+
+
+```{r list_all, eval = FALSE}
+list_all <- list(
+      stat_dendro = by_reserve
+      , stat_dendro_by_species = by_species
+      , stat_dendro_by_diam = by_diam
+      , stat_dendro_by_diam_species = by_diam_species
+      , stat_logs_by_decay = by_decay
+      , stat_logs_by_decay_species = by_decay_species
+      , stat_carbone = carbon_by_reserve
+      , stat_reg = reg_by_reserve
+      , stat_reg_by_height = reg_by_height
+      , stat_reg_by_height_species = reg_by_height_species
+      , stat_veg = veg_by_reserve
+      , stat_herbs = herbs_by_reserve
+              )
+
+# functie
+list_all_ <- list_all %>%
+      lapply(., function(x) {
+        data.frame(x) %>%
+          rename(trait = strata
+                  , trait2 = strata2
+                  , description = stratum_name
+                  , description2 = stratum_name2)
+        })
+
+
+```
+
+
+## Verwijderen van "De heide" 
+
+Verwijderen van "De heide" uit de dataset, want geen onbeheer bos (geen strikt forest reserve)
+
+
+## Mbv lapply
+
+```{r}
+# test
+
+list_test <- list(
+      stat_dendro_by_reserve = stat_dendro
+      , stat_dendro_by_species = stat_dendro_by_species
+      , stat_dendro_by_diam_species = stat_dendro_by_diam_species)
+
+list_test_ <- list_test %>%
+      lapply(., function(x) {
+        data.frame(x) %>%
+          rename(level1 = strata
+                  , level2 = strata2
+                  , description1 = stratum_name
+                  , description2 = stratum_name2) %>% 
+          filter(forest_reserve != "De heide")
+        })
+
+```
+
+
+
+# Shapefiles - NEE
+
+Enkel de bosreservaten met cirkelplots.
+
+Shapefile dateert van 2012 en bevat volgende reesrvaten (noog) niet:
+
+- ename
+- kluisbos
+- Zwaenepoel
 
 ```{r}
 list_BR <- plotinfo %>% distinct(forest_reserve)
@@ -240,16 +333,16 @@ Kolmontbos
 Kersselaerspleyn (ZoniÔö£┬¢nwoud)
 Harras (ZoniÔö£┬¢nwoud)
 
+
+
+# Strata op niveau van BR - BETER
+
+Tabellen `info_forest_reserve_level_EUFORIA`en `info_forest_reserve_level_management` combineren.
+
 ```{r}
-
+list_BR <- plotinfo %>% distinct(forest_reserve) %>% 
+  filter(forest_reserve != "De heide")
 ```
-
-
-
-# Strata op niveau van BR?
-
-info_forest_reserve_level_EUFORIA
-info_forest_reserve_level_management
 
 ```{r}
 con <- odbcConnectAccess2007(path_to_strata_db)
@@ -264,7 +357,7 @@ names(info_management)
 
 ```
 
-```{r info_samenvoegen}
+```{r diff_ok, eval = FALSE}
 info_BR <- info_EUFORIA %>% 
   filter(plottype == "CP")
 
@@ -284,9 +377,18 @@ info_BR <- list_BR %>%
   left_join(info_EUFORIA %>% filter(plottype == "CP")) %>% 
   mutate(reserve_area_ha = ifelse(forest_reserve == "De heide",
                                   31.2, reserve_area_ha)) %>% 
-  select(-contains(c("Id", "plottype")))  #"reserve_name_euforia", 
+  rename(forest_typ_1 = For_typ_1
+         , forest_typ_2 = For_typ_2) %>% 
+  select(-contains(c("Id", "plottype", "reserve_name_euforia"
+                     , "_ann_")))  # 
   
 names(info_BR) 
+
+```
+Eventueel ook aantal cirkelplots toevoegen?
+Zitten anderzijds ook in n_obs ...
+
+```{r}
 
 ```
 
@@ -294,33 +396,35 @@ names(info_BR)
 
 
 
-
 # Export 
 
-Dendro (dendro, logs en reg) en vegetatie in afzonderlijke folder (ook afz. publiceren op zenodo)
+Statistieken op bosreservaatsniveau als echte open data publiceren op zenodo 
+(onafhankelijk van het CP-niveau)
 
-Reeds als list samengevoegd in de overkoepelden functies, en ook reeds afgerond
+Reeds als list samengevoegd in de overkoepelende functies, en ook al afgerond
 (op 2 cijfers na de komma)
 
 
 ```{r list_round_NIET_NODIG, eval = FALSE}
 list_dendro <- list(
-      dendro_by_plot = dendro_by_plot,
-      dendro_by_plot_species = dendro_by_plot_species,
-      dendro_by_diam_plot = dendro_by_diam_plot,
-      dendro_by_diam_plot_species = dendro_by_diam_plot_species,
-      logs_by_decay_plot = logs_by_decay_plot,
-      logs_by_decay_plot_species = logs_by_decay_plot_species
+      stat_dendro = by_reserve
+      , stat_dendro_by_species = by_species
+      , stat_dendro_by_diam = by_diam
+      , stat_dendro_by_diam_species = by_diam_species
+      , stat_logs_by_decay = by_decay
+      , stat_logs_by_decay_species = by_decay_species
+      , stat_carbon = carbon_by_reserve
       )
 
 list_reg <- list(
-      regeneration_by_plot = regeneration_by_plot, 
-      regeneration_by_plot_height = regeneration_by_plot_height, 
-      regeneration_by_plot_height_species = regeneration_by_plot_height_species
+      stat_reg = reg_by_reserve
+      , stat_reg_by_height = reg_by_height
+      , stat_reg_by_height_species = reg_by_height_species
       )
 
-list_veg <- list(vegetation_by_plot = vegetation_by_plot,
-              herblayer_by_plot = herblayer_by_plot
+list_veg <- list(
+      stat_veg = veg_by_reserve
+      , stat_herbs = herbs_by_reserve
               ) # geen afronding nodig
 
 # ----
@@ -342,7 +446,7 @@ list_reg <- list_reg %>%
 ```{r list_export, eval = FALSE}
 path_to_datarequest
 
-# naar dendro-folder
+# stats
 for (i in 1:length(dendro_stat)){
 	  # selectie <- list_dendro[[i]]
 	  # naam <- paste0(names(list_dendro)[i], ".csv")
@@ -355,12 +459,14 @@ for (i in 1:length(reg_stat)){
 	  write.csv2(reg_stat[[i]], paste0(path_to_datarequest, "BR_niveau/", names(reg_stat)[i], ".csv")) 
 }
 
-# naar veg-folder
 for (i in 1:length(veg_stat)){
 	  # selectie <- list_dendro[[i]]
 	  # naam <- paste0(names(list_dendro)[i], ".csv")
 	  write.csv2(veg_stat[[i]], paste0(path_to_datarequest, "BR_niveau/", names(veg_stat)[i], ".csv")) 
 }
+
+# info_BR
+write.csv2(info_BR, paste0(path_to_datarequest, "BR_niveau/", "site_info.csv"))
 
 ```
 
@@ -370,7 +476,7 @@ Ook rechtstreeks naar gdrive
 ```{r list_export_gdrive, eval = FALSE}
 path_to_datarequest_gdrive
 
-# naar dendro-folder
+# stats
 for (i in 1:length(dendro_stat)){
 	  # selectie <- list_dendro[[i]]
 	  # naam <- paste0(names(list_dendro)[i], ".csv")
@@ -383,12 +489,15 @@ for (i in 1:length(reg_stat)){
 	  write.csv2(reg_stat[[i]], paste0(path_to_datarequest_gdrive, "BR_niveau/", names(reg_stat)[i], ".csv")) 
 }
 
-# naar veg-folder
 for (i in 1:length(veg_stat)){
 	  # selectie <- list_dendro[[i]]
 	  # naam <- paste0(names(list_dendro)[i], ".csv")
 	  write.csv2(veg_stat[[i]], paste0(path_to_datarequest_gdrive, "BR_niveau/", names(veg_stat)[i], ".csv")) 
 }
+
+
+# info_BR
+write.csv2(info_BR, paste0(path_to_datarequest_gdrive, "BR_niveau/", "site_info.csv"))
 
 ```
 
