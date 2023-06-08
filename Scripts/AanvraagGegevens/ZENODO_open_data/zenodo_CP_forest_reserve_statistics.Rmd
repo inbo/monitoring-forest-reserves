@@ -216,39 +216,39 @@ In Engels wordt dat
 - characterization/description
 
 
-```{r list_all, eval = FALSE}
+```{r list_all}
 list_all <- list(
-      stat_dendro = by_reserve
-      , stat_dendro_by_species = by_species
-      , stat_dendro_by_diam = by_diam
-      , stat_dendro_by_diam_species = by_diam_species
-      , stat_logs_by_decay = by_decay
-      , stat_logs_by_decay_species = by_decay_species
-      , stat_carbone = carbon_by_reserve
-      , stat_reg = reg_by_reserve
-      , stat_reg_by_height = reg_by_height
-      , stat_reg_by_height_species = reg_by_height_species
-      , stat_veg = veg_by_reserve
-      , stat_herbs = herbs_by_reserve
+      stat_dendro = stat_dendro
+      , stat_dendro_by_species = stat_dendro_by_species
+      , stat_dendro_by_diam = stat_dendro_by_diam
+      , stat_dendro_by_diam_species = stat_dendro_by_diam_species
+      , stat_logs_by_decay = stat_logs_by_decay
+      , stat_logs_by_decay_species = stat_logs_by_decay_species
+      , stat_carbon = stat_carbon
+      , stat_reg = stat_reg
+      , stat_reg_by_height = stat_reg_by_height
+      , stat_reg_by_height_species = stat_reg_by_height_species
+      , stat_veg = stat_veg
+      , stat_herbs = stat_herbs
               )
 
 # functie
 list_all_ <- list_all %>%
       lapply(., function(x) {
         data.frame(x) %>%
-          rename(trait = strata
-                  , trait2 = strata2
-                  , description = stratum_name
+          rename(level1 = strata
+                  , level2 = strata2
+                  , description1 = stratum_name
                   , description2 = stratum_name2)
         })
 
-
+list_all <- list_all_
 ```
 
 
 ## Verwijderen van "De heide" 
 
-Verwijderen van "De heide" uit de dataset, want geen onbeheer bos (geen strikt forest reserve)
+Verwijderen van "De heide" uit de dataset, want geen onbeheerd bos (geen strikt forest reserve)
 
 
 ## Mbv lapply
@@ -386,11 +386,7 @@ names(info_BR)
 
 ```
 Eventueel ook aantal cirkelplots toevoegen?
-Zitten anderzijds ook in n_obs ...
-
-```{r}
-
-```
+NEE, want zitten in n_obs.
 
 
 
@@ -443,7 +439,16 @@ list_reg <- list_reg %>%
 ```
 
 
-```{r list_export, eval = FALSE}
+```{r list_all_export, eval = FALSE}
+path_to_datarequest
+
+# stats
+for (i in 1:length(list_all)){
+	  write.csv2(list_all[[i]], paste0(path_to_datarequest, "BR_niveau/statistics_per_reserve/", names(list_all)[i], ".csv")) 
+}
+```
+
+```{r list_export_OLD, eval = FALSE}
 path_to_datarequest
 
 # stats
@@ -466,38 +471,22 @@ for (i in 1:length(veg_stat)){
 }
 
 # info_BR
-write.csv2(info_BR, paste0(path_to_datarequest, "BR_niveau/", "site_info.csv"))
+write.xlsx(info_BR, paste0(path_to_datarequest, "BR_niveau/", "site_info.xlsx"))
 
 ```
 
 Ook rechtstreeks naar gdrive
 
-
 ```{r list_export_gdrive, eval = FALSE}
 path_to_datarequest_gdrive
 
 # stats
-for (i in 1:length(dendro_stat)){
-	  # selectie <- list_dendro[[i]]
-	  # naam <- paste0(names(list_dendro)[i], ".csv")
-	  write.csv2(dendro_stat[[i]], paste0(path_to_datarequest_gdrive, "BR_niveau/", names(dendro_stat)[i], ".csv")) 
+for (i in 1:length(list_all)){
+	  write.csv2(list_all[[i]], paste0(path_to_datarequest_gdrive, "BR_niveau/statistics_per_reserve/", names(list_all)[i], ".csv")) 
 }
-
-for (i in 1:length(reg_stat)){
-	  # selectie <- list_dendro[[i]]
-	  # naam <- paste0(names(list_dendro)[i], ".csv")
-	  write.csv2(reg_stat[[i]], paste0(path_to_datarequest_gdrive, "BR_niveau/", names(reg_stat)[i], ".csv")) 
-}
-
-for (i in 1:length(veg_stat)){
-	  # selectie <- list_dendro[[i]]
-	  # naam <- paste0(names(list_dendro)[i], ".csv")
-	  write.csv2(veg_stat[[i]], paste0(path_to_datarequest_gdrive, "BR_niveau/", names(veg_stat)[i], ".csv")) 
-}
-
 
 # info_BR
-write.csv2(info_BR, paste0(path_to_datarequest_gdrive, "BR_niveau/", "site_info.csv"))
+write.xlsx(info_BR, paste0(path_to_datarequest_gdrive, "BR_niveau/", "site_info.xlsx"))
 
 ```
 
