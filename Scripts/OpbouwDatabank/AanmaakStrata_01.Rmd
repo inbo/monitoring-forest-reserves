@@ -60,7 +60,7 @@ source(here::here("scripts/Setup.R"))
 
 ## Shapefile Marc
 
-<!-- VPN opstarten! -->
+> VPN opstarten!
 
 ```{r import_data_shp}
 # fc_strata_shp <-read_sf("C:/03_BR/1_Dataverwerking/Data/Strata/input/boseco_alleproefvlakken_centraalpunt_lam72_metinfo.shp", crs = 31370) %>% rename(plot_id = PlotID)
