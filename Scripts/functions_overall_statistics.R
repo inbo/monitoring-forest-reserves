@@ -160,9 +160,10 @@ get_year_range <- function(dataset, repo_path = path_to_git_forresdat){
   plotinfo <- differentiate_managed_plots(plotinfo)
   year_range <- plotinfo %>% 
     group_by(forest_reserve, period) %>%
-    summarize(min_year = min(year_dendro), 
-              max_year = max(year_dendro),
-              year_range = paste0(min_year, " - ", max_year)) %>% 
+    summarize(min_year = min(year_dendro)
+              ,max_year = max(year_dendro)
+              # ,year_range = paste0(min_year, " - ", max_year)
+              ) %>% 
     ungroup()
   
   resultaat <- dataset %>% 
@@ -178,9 +179,10 @@ get_year_range_reg <- function(dataset, repo_path = path_to_git_forresdat){
   reg_by_plot <- differentiate_managed_plots(reg_by_plot)
   year_range <- reg_by_plot %>% 
     group_by(forest_reserve, period) %>%
-    summarize(min_year = min(year), 
-              max_year = max(year),
-              year_range = paste0(min_year, " - ", max_year)) %>% 
+    summarize(min_year = min(year) 
+              , max_year = max(year)
+              # , year_range = paste0(min_year, " - ", max_year)
+              ) %>% 
     ungroup()
   
   resultaat <- dataset %>% 
@@ -197,9 +199,10 @@ get_year_range_veg <- function(dataset, repo_path = path_to_git_forresdat){
   year_range <- veg_by_plot %>% 
     mutate(year = year(date_vegetation)) %>% 
     group_by(forest_reserve, period) %>%
-    summarize(min_year = min(year), 
-              max_year = max(year),
-              year_range = paste0(min_year, " - ", max_year)) %>% 
+    summarize(min_year = min(year) 
+              , max_year = max(year)
+              # , year_range = paste0(min_year, " - ", max_year)
+              ) %>% 
     ungroup()
   
   resultaat <- dataset %>% 
@@ -378,7 +381,7 @@ statistics_dendro <- function(repo_path = path_to_git_forresdat){
            strata2 = NA,
            stratum_name2 = NA) %>% 
     get_year_range() %>% 
-    select(-contains(c("log", "min", "max")))
+    select(-contains(c("log")))
   
   resultaat
 }
@@ -448,7 +451,7 @@ statistics_dendro_species <- function(repo_path = path_to_git_forresdat){
            strata2 = NA,
            stratum_name2 = NA) %>% 
     get_year_range() %>% 
-    select(-contains(c("log", "species", "name_nl", "min", "max")))
+    select(-contains(c("log", "species", "name_nl")))
   
   resultaat
 }
@@ -513,7 +516,7 @@ statistics_dendro_diam <- function(repo_path = path_to_git_forresdat){
            strata2 = NA,
            stratum_name2 = NA) %>% 
     get_year_range() %>% 
-    select(-contains(c("log", "dbh", "min", "max")))
+    select(-contains(c("log", "dbh")))
   
   resultaat
 }
@@ -589,7 +592,7 @@ statistics_dendro_diam_species <- function(repo_path = path_to_git_forresdat){
            strata2 = "species",
            stratum_name2 = name_nl) %>% 
     get_year_range() %>% 
-    select(-contains(c("log", "dbh", "species", "name_nl", "min", "max")))
+    select(-contains(c("log", "dbh", "species", "name_nl")))
   
   resultaat
 }
@@ -681,7 +684,7 @@ statistics_logs_decay <- function(repo_path = path_to_git_forresdat){
            strata2 = NA,
            stratum_name2 = NA) %>% 
     get_year_range() %>% 
-    select(-contains(c("log", "decayst", "min", "max")))
+    select(-contains(c("log", "decayst")))
 
   resultaat
 }
@@ -780,7 +783,7 @@ statistics_logs_decay_species <- function(repo_path = path_to_git_forresdat){
            strata2 = "species",
            stratum_name2 = name_nl) %>% 
     get_year_range() %>% 
-    select(-contains(c("log", "decay", "species", "name_nl", "min", "max")))
+    select(-contains(c("log", "decay", "species", "name_nl")))
   
   resultaat
 }
@@ -834,7 +837,7 @@ statistics_carbon <- function(repo_path = path_to_git_forresdat){
            strata2 = NA,
            stratum_name2 = NA) %>% 
     get_year_range() %>% 
-    select(-contains(c("log", "min", "max")))
+    select(-contains(c("log")))
   
   resultaat
 }
@@ -854,13 +857,13 @@ statistics_dendrometry <- function(repo_path = path_to_git_forresdat){
 
   return(
     list(
-      stat_dendro_by_reserve = by_reserve
+      stat_dendro = by_reserve
       , stat_dendro_by_species = by_species
       , stat_dendro_by_diam = by_diam
       , stat_dendro_by_diam_species = by_diam_species
-      , stat_dendro_by_decay = by_decay
-      , stat_dendro_by_decay_species = by_decay_species
-      , stat_carbon_by_reserve = carbon_by_reserve
+      , stat_logs_by_decay = by_decay
+      , stat_logs_by_decay_species = by_decay_species
+      , stat_carbon = carbon_by_reserve
     )
   )
 }
@@ -922,7 +925,7 @@ statistics_reg <- function(repo_path = path_to_git_forresdat){
            strata2 = NA,
            stratum_name2 = NA) %>% 
     get_year_range_reg() %>% 
-    select(-contains(c("log", "min", "max")))
+    select(-contains(c("log")))
   
   resultaat
 
@@ -1005,7 +1008,7 @@ statistics_reg_height <- function(repo_path = path_to_git_forresdat){
            strata2 = NA,
            stratum_name2 = NA) %>% 
     get_year_range_reg() %>% 
-    select(-contains(c("log", "height", "min", "max")))
+    select(-contains(c("log", "height")))
   
   resultaat
 
@@ -1100,7 +1103,7 @@ statistics_reg_height_species <- function(repo_path = path_to_git_forresdat){
              stratum_name2 = name_nl
       ) %>% 
       get_year_range_reg() %>% 
-      select(-contains(c("log", "height", "species", "name_", "min", "max")))
+      select(-contains(c("log", "height", "species", "name_")))
     
     # percentage plots waar soort per hoogteklasse voorkomt
     resultaat2 <- dataset %>% 
@@ -1113,7 +1116,7 @@ statistics_reg_height_species <- function(repo_path = path_to_git_forresdat){
       left_join(qSpecies, by = c("species" = "ID")) %>% 
       left_join(qHeightClass, by = c("height_class" = "ID")) %>% 
       round_df(., 2) %>% 
-      mutate(variable = "perc_plots_verjonging"
+      mutate(variable = "perc_plots_rejuvenation"
              , n_obs = n_max_plots
              , mean = perc_plots
              , variance = NA, lci = NA, uci = NA
@@ -1122,7 +1125,7 @@ statistics_reg_height_species <- function(repo_path = path_to_git_forresdat){
              , strata2 = "species"
              , stratum_name2 = name_nl) %>% 
       get_year_range_reg() %>% 
-      select(-contains(c("height", "species", "name_", "min", "max", "plots")))
+      select(-contains(c("height", "species", "name_", "plots")))
     
     resultaat <- rbind(resultaat1, resultaat2)
   
@@ -1139,7 +1142,7 @@ statistics_regeneration <- function(repo_path = path_to_git_forresdat){
   
   return(
     list(
-      stat_reg_by_reserve = reg_by_reserve
+      stat_reg = reg_by_reserve
       , stat_reg_by_height = reg_by_height
       , stat_reg_by_height_species = reg_by_height_species
     )
@@ -1197,7 +1200,7 @@ statistics_veg <- function(repo_path = path_to_git_forresdat){
            strata2 = NA,
            stratum_name2 = NA) %>% 
     get_year_range_veg() %>% 
-    select(-contains(c("log", "min", "max")))
+    select(-contains(c("log")))
   
   resultaat
 
@@ -1258,7 +1261,7 @@ statistics_herbs <- function(repo_path = path_to_git_forresdat){
     mutate(perc_plots = 100*n_plots/n_max_plots) %>% 
     left_join(qHerbSpecies, by = c("species" = "ID")) %>% 
     round_df(., 2) %>% 
-    mutate(variable = "perc_plots_met_soort"
+    mutate(variable = "perc_plots_species_herblayer"
            , n_obs = n_max_plots
            , mean = perc_plots
            , variance = NA, lci = NA, uci = NA
@@ -1277,7 +1280,7 @@ statistics_herbs <- function(repo_path = path_to_git_forresdat){
     mutate(karakt_bedekking = sum_cover/n_plots) %>% 
     left_join(qHerbSpecies, by = c("species" = "ID")) %>% 
     round_df(., 2) %>% 
-    mutate(variable = "karakt_bedekking"
+    mutate(variable = "characteristic_cover"
            , n_obs = n_max_plots
            , mean = karakt_bedekking
            , variance = NA, lci = NA, uci = NA
@@ -1288,9 +1291,9 @@ statistics_herbs <- function(repo_path = path_to_git_forresdat){
     get_year_range_veg()
     
   resultaat1 <- resultaat1 %>% 
-    select(-contains(c("plots", "species", "name_nl", "min", "max")))
+    select(-contains(c("plots", "species", "name_nl")))
   resultaat2 <- resultaat2 %>% 
-    select(-contains(c("sum", "karakt", "plots", "species", "name_nl", "min", "max")))
+    select(-contains(c("sum", "karakt", "plots", "species", "name_nl")))
     
   resultaat <- rbind(resultaat1, resultaat2)
   
@@ -1306,8 +1309,8 @@ statistics_vegetation <- function(repo_path = path_to_git_forresdat){
   
   return(
     list(
-      stat_veg_by_reserve = veg_by_reserve
-      , stat_herbs_by_reserve = herbs_by_reserve
+      stat_veg = veg_by_reserve
+      , stat_herbs = herbs_by_reserve
     )
   )
 }
