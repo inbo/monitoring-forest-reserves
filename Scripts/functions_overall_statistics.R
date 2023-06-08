@@ -447,11 +447,11 @@ statistics_dendro_species <- function(repo_path = path_to_git_forresdat){
     round_df(., 2) %>% 
     left_join(qSpecies, by = c("species" = "ID")) %>% 
     mutate(strata = "species",
-           stratum_name = name_nl,
+           stratum_name = name_sc,
            strata2 = NA,
            stratum_name2 = NA) %>% 
     get_year_range() %>% 
-    select(-contains(c("log", "species", "name_nl")))
+    select(-contains(c("log", "species", "name_sc")))
   
   resultaat
 }
@@ -590,9 +590,9 @@ statistics_dendro_diam_species <- function(repo_path = path_to_git_forresdat){
     mutate(strata = "dbh_class",
            stratum_name = dbh_class_5cm,
            strata2 = "species",
-           stratum_name2 = name_nl) %>% 
+           stratum_name2 = name_sc) %>% 
     get_year_range() %>% 
-    select(-contains(c("log", "dbh", "species", "name_nl")))
+    select(-contains(c("log", "dbh", "species", "name_sc")))
   
   resultaat
 }
@@ -781,9 +781,9 @@ statistics_logs_decay_species <- function(repo_path = path_to_git_forresdat){
            strata = "decaystage",
            stratum_name = decaystageTxt,
            strata2 = "species",
-           stratum_name2 = name_nl) %>% 
+           stratum_name2 = name_sc) %>% 
     get_year_range() %>% 
-    select(-contains(c("log", "decay", "species", "name_nl")))
+    select(-contains(c("log", "decay", "species", "name_sc")))
   
   resultaat
 }
@@ -1100,10 +1100,10 @@ statistics_reg_height_species <- function(repo_path = path_to_git_forresdat){
       mutate(strata = "height_class",
              stratum_name = heightclass_txt,
              strata2 = "species",
-             stratum_name2 = name_nl
+             stratum_name2 = name_sc
       ) %>% 
       get_year_range_reg() %>% 
-      select(-contains(c("log", "height", "species", "name_")))
+      select(-contains(c("log", "height", "species", "name_sc")))
     
     # percentage plots waar soort per hoogteklasse voorkomt
     resultaat2 <- dataset %>% 
@@ -1123,9 +1123,9 @@ statistics_reg_height_species <- function(repo_path = path_to_git_forresdat){
              , strata = "height_class"
              , stratum_name = heightclass_txt
              , strata2 = "species"
-             , stratum_name2 = name_nl) %>% 
+             , stratum_name2 = name_sc) %>% 
       get_year_range_reg() %>% 
-      select(-contains(c("height", "species", "name_", "plots")))
+      select(-contains(c("height", "species", "name_sc", "plots")))
     
     resultaat <- rbind(resultaat1, resultaat2)
   
@@ -1235,7 +1235,7 @@ statistics_herbs <- function(repo_path = path_to_git_forresdat){
   
   con <- odbcConnectAccess2007(path_to_fieldmap_db)
   qHerbSpecies <- sqlFetch(con, "qHerbSpecies240810", stringsAsFactors = FALSE) %>% 
-    select(ID, name_nl = Value1)
+    select(ID, name_nl = Value1, name_sc = Value2)
   odbcClose(con)
   
   forest_plot <- get_forest_plot()
@@ -1266,7 +1266,7 @@ statistics_herbs <- function(repo_path = path_to_git_forresdat){
            , mean = perc_plots
            , variance = NA, lci = NA, uci = NA
            , strata = "species"
-           , stratum_name = name_nl
+           , stratum_name = name_sc
            , strata2 = NA
            , stratum_name2 = NA) %>% 
     get_year_range_veg() 
@@ -1285,15 +1285,15 @@ statistics_herbs <- function(repo_path = path_to_git_forresdat){
            , mean = karakt_bedekking
            , variance = NA, lci = NA, uci = NA
            , strata = "species"
-           , stratum_name = name_nl
+           , stratum_name = name_sc
            , strata2 = NA
            , stratum_name2 = NA)  %>% 
     get_year_range_veg()
     
   resultaat1 <- resultaat1 %>% 
-    select(-contains(c("plots", "species", "name_nl")))
+    select(-contains(c("plots", "species", "name_sc")))
   resultaat2 <- resultaat2 %>% 
-    select(-contains(c("sum", "karakt", "plots", "species", "name_nl")))
+    select(-contains(c("sum", "karakt", "plots", "species", "name_sc")))
     
   resultaat <- rbind(resultaat1, resultaat2)
   
