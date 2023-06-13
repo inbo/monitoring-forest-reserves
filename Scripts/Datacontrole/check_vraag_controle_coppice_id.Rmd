@@ -63,15 +63,19 @@ source(here::here("scripts/Setup.R"))
 ```{r}
 # verschil_XY_coppiceid_detail2.csv & meerdere_soorten_zelfde_coppice_id2.csv: 21/2/2022
 # verschil_XY_coppiceid_detail3.csv & meerdere_soorten_zelfde_coppice_id3.csv: 8/4/2022
+# verschil_XY_coppiceid_detail3.csv & meerdere_soorten_zelfde_coppice_id5.csv: 30/5/2022
 
 verschil_XY_2 <- read_csv2("Data_controle/verschil_XY_coppiceid_detail2.csv") 
+# verschil_XY_3 <- read_csv2("Data_controle/verschil_XY_coppiceid_detail3.csv") 
 verschil_XY_3 <- read_csv2("Data_controle/verschil_XY_coppiceid_detail3.csv") 
 
 meerdere_soorten_2 <-  read_csv2("Data_controle/meerdere_soorten_zelfde_coppice_id2.csv") 
+# meerdere_soorten_3 <-  read_csv2("Data_controle/meerdere_soorten_zelfde_coppice_id3.csv") 
 meerdere_soorten_3 <-  read_csv2("Data_controle/meerdere_soorten_zelfde_coppice_id3.csv") 
 
-zelfde_status_3 <-  read_csv2("Data_controle/hakhout_verschillende_id_zelfde_status_levend_dood3.csv")
 
+# zelfde_status_3 <-  read_csv2("Data_controle/hakhout_verschillende_id_zelfde_status_levend_dood3.csv")
+zelfde_status_5 <-  read_csv2("Data_controle/hakhout_verschillende_id_zelfde_status_levend_dood5.csv")
 ```
 
 
@@ -79,40 +83,40 @@ zelfde_status_3 <-  read_csv2("Data_controle/hakhout_verschillende_id_zelfde_sta
 
 # Verschil
 
-meerdere_soorten_2/3: geen dubbels
+meerdere_soorten_2/5: geen dubbels
 
 ```{r}
-names(verschil_XY_3)
-verschil_XY_3_niet_2 <- verschil_XY_3 %>% 
+names(verschil_XY_5)
+verschil_XY_5_niet_2 <- verschil_XY_5 %>% 
   anti_join(verschil_XY_2, by = c("plot_id", "tree_measure_id", "species"))
 
-verschil_XY_3_en_2 <- verschil_XY_3 %>% 
+verschil_XY_5_en_2 <- verschil_XY_5 %>% 
   inner_join(verschil_XY_2, by = c("plot_id", "tree_measure_id", "species"))
 # !! toch één die zou moeten behouden blijven
 
 ```
 
 ```{r}
-verschil_XY_3_niet_2_ <- verschil_XY_3_niet_2 %>% 
+verschil_XY_5_niet_2_ <- verschil_XY_5_niet_2 %>% 
   filter(verschilX > 2 | verschily > 2)
 # 23
 
-verschil_XY_3_niet_2_ <- verschil_XY_3_niet_2 %>% 
+verschil_XY_5_niet_2_ <- verschil_XY_5_niet_2 %>% 
   filter(verschilX > 3 | verschily > 3)
 # 18
 
-verschil_XY_3_niet_2_ <- verschil_XY_3_niet_2 %>% 
+verschil_XY_5_niet_2_ <- verschil_XY_5_niet_2 %>% 
   filter(between(verschilX, 2, 3) | between(verschily, 2, 3))
 # 5 extra 
 
 ```
 
-Bekeken en alle records in de lijst (verschil_XY_3_niet_2) hebben verschil > 3 m OF zijn 2x zelfde status
+Bekeken en alle records in de lijst (verschil_XY_5_niet_2) hebben verschil > 3 m OF zijn 2x zelfde status
 
 Eventeel wel één lijst maken van meerdere soorten en van zelfde status
 
 ```{r}
-te_checken1 <- verschil_XY_3_niet_2 %>% 
+te_checken1 <- verschil_XY_5_niet_2 %>% 
   select(plot_id, tree_id, tree_measure_id, coppice_id, old_id, x_local, y_local, 
   period, species, alive_dead, intact_snag, ind_sht_cop, dbh_mm) %>% 
   mutate(mogelijke_fout = "andere XY") %>%
@@ -121,12 +125,12 @@ te_checken1 <- verschil_XY_3_niet_2 %>%
                 mogelijke_fout)
   )
 
-te_checken2 <- zelfde_status_3 %>% 
+te_checken2 <- zelfde_status_5 %>% 
   select(plot_id, tree_id, tree_measure_id, coppice_id, old_id, x_local, y_local, 
   period, species, alive_dead, intact_snag, ind_sht_cop, dbh_mm) %>% 
   mutate(mogelijke_fout = "2 x zelfde status (levend/dood)")
 
-te_checken3 <- meerdere_soorten_3 %>% 
+te_checken3 <- meerdere_soorten_5 %>% 
   select(plot_id, tree_id, tree_measure_id, coppice_id, old_id, x_local, y_local, 
   period, species, alive_dead, intact_snag, ind_sht_cop, dbh_mm) %>% 
   mutate(mogelijke_fout = "andere soort")
@@ -146,8 +150,8 @@ table(te_checken$mogelijke_fout)
 
 ```{r}
 
-write_csv2(te_checken, "Data_controle/te_checken_coppiceid_soort_status4.csv") 
-
+# write_csv2(te_checken, "Data_controle/te_checken_coppiceid_soort_status4.csv") 
+write_csv2(te_checken, "Data_controle/te_checken_coppiceid_soort_status6.csv") 
 ```
 
 Mail Peter: "heb je voor je eerste mail van gisteren betreffende coppice id's rekening gehouden met opmerkingen hieronder, vooral betreffende stoven van KV Muizenbos en KV Rodebos? Als toch nieuwe run dan zou het makkelijk zijn om voorgaande meegegeven records uit te sluiten kwestie van ze niet nog eens te checken!!

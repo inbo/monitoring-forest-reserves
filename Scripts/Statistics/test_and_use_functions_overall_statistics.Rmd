@@ -1,0 +1,323 @@
+---
+title: "Gebruik van de functies voor statistieken per bosreservaat"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: FALSE
+      smooth_scroll: FALSE
+---
+
+# Setup
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+
+run <- "test_AL"
+```
+
+
+# Vraagstelling
+
+Script `functions_overall_statistics.R` bevat functies die op niveau van bosreservaat (obv cirkelplots) alle statistieken berekenen.
+
+En dit voor alle basis variabelen van de monitoring:
+- dendro
+- dendro_per_species
+- dendro_by_diam
+- ....
+- decaystage logs (op termijn decaystage ook van staand dood hout)
+
+Hierna worden deze één voor één doorlopen en gecontroleerd.
+Vervolgens worden de resultaten weggeschreven naar de resultatendb.
+
+Naast de afzonderlijke functies per dendro_xxxx.csv, reg_xxxx.csv, ..., bestaan er ook overkoepelende functies die een set van functies combineren (dendro, reg en veg) en de resultaten als een lijst wegschrijven.
+
+Elke functie bevat volgende stappen:   
+
+- inlezen data     
+- filteren op CP’s (< forresdat => enkel processed)  
+- toevoegen nulwaardes waar nodig    
+- al dan niet filteren op enkel bosplots (ev. als variabele; default enkel bosplots): Ename!!
+- Kluisbos opsplitsen obv beheer
+- wegfilteren van bosreservaten zonder de vereiste data
+
+
+De functies zijn ook gemaakt met het oog op een vlottere  
+- aanmaak van een dataset voor op zenodo   
+- aanmaak van rapporten met bookdown
+
+
+**Een eerste analyse gebeurde in **    
+
+- dendro_per_BR - OK, ook functies al afgerond   
+- reg_per_BR - OK, gechekt en afgerond 
+- veg_per_BR - OK, gechekt en afgerond     
+
+Deze scripts werden als insteek gebruikt bij de aanmaak van de functies
+
+
+# Nog nodig
+Wat nog ontbreekt is een verwijzing naar versie dataset
+Dat zou een commit van forresdat moeten zijn
+
+Alvast enkel processed data (in forresdat wordt enkel processed data opgeslagen)
+Het zou ook handig zijn om ergens aan een commit te geraken
+
+---
+(c) Els: Euh, zelf nog niet getest, maar ik vermoed dat het package git2r wel een functie zal hebben om die hash van een commit op te vragen? Of anders eens zoeken in Thierry z'n git2rdata-package? Alternatief is om uit te zoeken hoe je git-commando's kan doorgeven in R-code, maar als er al een R-functie bestaat om dit op te vragen, kan je best die gebruiken.
+
+Als ik binnenkort forrescalc terug opneem, zal ik nakijken hoe ik die hash kan meegeven in de functie read_forresdat(), of misschien meer algemeen eens nakijken wat de meest gebruikte of handigste methode is om de versie van gepubliceerde data te documenteren (hash of doi)?
+
+
+
+
+# Get_open_area / Get_forest_plot
+
+
+```{r }
+open_area <- get_open_area()
+forest_plot <- get_forest_plot()
+```
+
+
+# Differentiate_managed_plots
+
+```{r}
+dendro_by_plot <- read_forresdat("dendro_by_plot", path_to_git_forresdat) %>% 
+  filter(plottype == "CP")
+
+dendro_by_plot_ <- differentiate_managed_plots(dataset = dendro_by_plot)
+
+dendro_by_plot_ %>% group_by(forest_reserve) %>% 
+  summarize(n_plots = n_distinct(plot_id)) %>% 
+  ungroup() %>% 
+  filter(str_detect(forest_reserve, "Kluisbos|managed"))
+
+```
+
+# Statistics_dendrometry
+
+## Test
+
+```{r}
+repo_path <- path_to_git_forresdat
+```
+
+```{r per_file1}
+by_reserve <- statistics_dendro()
+by_species <- statistics_dendro_species()
+by_diam <- statistics_dendro_diam()
+by_decay <- statistics_logs_decay()
+
+carbon_by_reserve <- statistics_carbon()
+
+
+```
+
+```{r}
+summary(by_reserve)
+# OK, geen NA's bij mean (was eerst wel zo bij variabele stems_per_tree - gecorrigeerd)
+```
+
+```{r overkoepelend_dendro}
+dendro_stat <- statistics_dendrometry()
+# is een list
+for (tablename in names(dendro_stat)) {
+  assign(tablename, dendro_stat[[tablename]])
+} 
+```
+
+
+# Statistics_regeneration
+
+## Test
+
+```{r}
+repo_path <- path_to_git_forresdat
+```
+
+```{r eval = FALSE}
+library(waldo)
+
+nrow(resultaat) - nrow(reg_by_reserve)  # -8
+compare(resultaat, reg_by_reserve) # => Kluisbos opgesplitst
+
+```
+
+
+```{r per_file2}
+reg_by_reserve <- statistics_reg()
+reg_by_height <- statistics_reg_height()
+reg_by_height_species <- statistics_reg_height_species()
+reg_by_height_species %>% distinct(variable)
+# approx_nr_regeneration_ha				
+# rubbing_damage_perc				
+# perc_plots_met_soort
+
+nrow(reg_by_reserve); nrow(reg_by_height); nrow(reg_by_height_species)
+```
+
+```{r}
+summary(reg_by_reserve)
+summary(reg_by_height)
+```
+
+```{r n_plots_vgl_veg_reg, eval = FALSE}
+compare(n_plots, n_plots_per_BR)
+# sevendocnk periode 1: 77 vs 78
+
+regeneration_by_plot %>% filter(forest_reserve == "Sevendonck" & period == 1) %>% nrow()
+vegetation_by_plot %>% filter(forest_reserve == "Sevendonck" & period == 1) %>% nrow()
+
+a <- regeneration_by_plot %>% filter(forest_reserve == "Sevendonck" & period == 1) 
+b <- vegetation_by_plot %>% filter(forest_reserve == "Sevendonck" & period == 1)
+
+a %>% filter(!plot_id %in% b$plot_id)
+
+# plot 1176: geen herbs genoteerd, ook geen bedekking kruidlaag, maar wel bedekking moslaag 
+# en waterlayer
+
+```
+
+Toch aangewezen om aantal plots te bepalen obv veg_by_plot eerder dan obv herblayer_by_plot
+Want héél uitz (plot 1176, periode 1) toch geen soorten genoteerd.
+
+
+```{r overkoepelend_reg}
+reg_stat <- statistics_regeneration()
+# is een list
+for (tablename in names(reg_stat)) {
+  assign(tablename, reg_stat[[tablename]])
+} 
+```
+
+
+
+# Statistics_vegetation
+
+## Test
+
+```{r}
+repo_path <- path_to_git_forresdat
+```
+
+
+```{r eval = FALSE}
+library(waldo)
+
+nrow(resultaat) - nrow(veg_by_reserve)  
+compare(resultaat, veg_by_reserve) 
+
+compare(stat_veg_by_reserve, veg_by_reserve)
+
+```
+```{r eval = FALSE}
+compare(n_plots, n_plots_per_BR) 
+
+resultaata_ <- resultaata %>% 
+  filter(!str_detect(forest_reserve, "Kluisbos")) %>% 
+  select(-contains("year"))
+                      
+compare(resultaata_
+        , resultaat2 %>% filter(!str_detect(forest_reserve, "Kluisbos"))) 
+
+compare(resultaatb %>% 
+  filter(!str_detect(forest_reserve, "Kluisbos")) %>% 
+  select(-contains("year"))
+  , resultaat3 %>% filter(!str_detect(forest_reserve, "Kluisbos"))) 
+
+compare(resultaat, herbs_by_reserve)
+compare(stat_herbs_by_reserve, herbs_by_reserve)
+
+compare(n_plots_veg, n_plots_reg)
+# OK, withoefse heide tweede keer geen veg-opname
+```
+
+
+```{r per_file3}
+veg_by_reserve <- statistics_veg()
+herbs_by_reserve <- statistics_herbs()
+
+nrow(veg_by_reserve); nrow(herbs_by_reserve)
+```
+
+```{r}
+summary(veg_by_reserve)
+summary(herbs_by_reserve)
+```
+
+```{r overkoepelend_veg}
+veg_stat <- statistics_vegetation()
+# is een list
+for (tablename in names(veg_stat)) {
+  assign(tablename, veg_stat[[tablename]])
+} 
+
+
+```
+
+
+
+## Export 
+
+Ev. alle files aan elkaar plakken (zonder species, decaystage, ;; enkel stratum)
+en dan zo naar acces exporteren met datum in de naam van de tabel 
+
+
+```{r export, eval = FALSE}
+
+for i in list do select
+
+....
+
+stat_by_reserve_ <- stat_by_reserve %>% 
+  select(period, forest_reserve, variable, n_obs, mean, variance, lci, uci, 
+         contains("strat"))
+
+rbind
+
+
+en dan naar access
+
+stat_by_species = by_species
+stat_by_diam = by_diam
+stat_by_decay = by_decay
+
+
+
+
+
+My.ResultsToDatabase(results = resultaat2, 
+                     dbHandle = dbResults, 
+                     tblName = "tblResultaten", 
+                     scriptName = "dendro_per_BR.Rmd", 
+                     description = "dendro per ha per soort en per bosreservaat",
+                     request_from = "Team bosecologie",
+                     run_by = run)
+
+
+
+
+```

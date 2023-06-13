@@ -31,8 +31,7 @@ library(here)
 
 # libraries & invoergegevens
 source(here::here("scripts/Setup.R"))
-source(here::here("scripts/ExtraFunctions.R"))
-source(here::here("scripts/ExtraFunctions_volume.R"))
+
 ```
 
 
@@ -110,6 +109,44 @@ data_herblayer %>% filter(plot_id == 1176 & period == 1)
 vegetation_by_plot %>% filter(plot_id == 1176 & period == 1)
 
 ```
+
+
+Tijdelijk hier oplossen
+
+```{r correctie_add_plot1176}
+col_names <- colnames(vegetation_by_plot)
+plot1176 <- data.frame(matrix(nrow = 0, ncol = length(col_names))) 
+colnames(plot1176) <- col_names
+nrow(plot1176)
+names(plot1176)
+
+# meeste is NA
+for (i in 1:ncol(plot1176))
+  {
+      plot1176[1,i]<-NA
+  }
+
+# dan enkel deze die geen NA zijn, invullen
+plot1176$plot_id <- 1176
+plot1176$period <- 1
+plot1176$number_of_species <- 0
+plot1176$subplot_id <- 1
+plot1176$cumm_herb_coverage_class_average_perc <- 0
+plot1176$year_main_survey <- 2007
+plot1176$date_vegetation <- as.Date("2007-06-28")
+plot1176$moss_cover_mid <- 0.5
+plot1176$waterlayer_cover_mid <- 0.5
+
+# samenvoegen
+vegetation_by_plot_ <- rbind(vegetation_by_plot, plot1176)
+
+vegetation_by_plot <- vegetation_by_plot_
+
+```
+
+
+
+
 
 # Check NA's
 
@@ -231,7 +268,7 @@ Hier niet aangepast, geeft geen immens grote afwijking, tijdelijk zo laten ...
 
 Bij regeneration wordt van regeneration-subplots vertrokken, dus daar is het aantal subplots wel correct.
 
-```{r check_n_subplots_veg}
+```{r check_n_subplots_veg, eval = FALSE}
 # controle n_subplots door runnen van deel van de functie -> OK!!
 table(by_core_area_species$n_subplots)
 #     1    10    34    50    97    98   105   140   710 
@@ -272,8 +309,8 @@ veg_plotinfo <- lapply(vegetation, function(x) left_join(x, plotinfo %>% select(
 save_results_git(
   results = vegetation,
   repo_path = path_to_git_forresdat,
-  # strict = TRUE, 
-  strict = TRUE
+  strict = TRUE 
+  # strict = FALSE
 )
 ```
 

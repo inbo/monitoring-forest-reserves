@@ -54,12 +54,12 @@ Folder op gdrive:
 # deze worden ook in "Setup.R" gedefinieerd (aanroepen van "Paths.R")
 # hier ev. extra "paths" toevoegen indien nodig 
 
-path_to_request <- paste0(path_to_datarequests, "INBO_biomassa_vglBR_VBI/")
-path_to_gdrive <- paste0(path_to_datarequests_gdrive, "INBO_biomassa_vglBR_VBI/")
+path_to_request <- paste0(path_to_datarequests, "INBO_artikel_vglCarbon_BR_VBI/")
+path_to_gdrive <- paste0(path_to_datarequests_gdrive, "INBO_artikel_vglCarbon_BR_VBI/")
 
 # rechtstreeks naar data-folder van artikel
 path_to_article <- "G:/.shortcut-targets-by-id/1GY3uYeL5JjG14h_BAkzsQwse31el-yhC/artikel_FrontiersForestsGlobalChange/data/"
-# !! oppassen van nisk te overschrijven
+# !! oppassen om niks te overschrijven
 ```
 
 ```{r load_info_lkp}
@@ -91,7 +91,8 @@ n_distinct(analyseSet$plot_id) == nrow(analyseSet)/2
 
 plots <- unique(analyseSet$plot_id)
 ```
-
+Deze analyseset bevat geen "volume inclusief kroon", enkel "volume bole".
+Daarom `dendro_by_plot` importeren.
 
 ```{r load_dendro_by_plot}
 # data_dendro <- load_data_dendrometry(path_to_fieldmap, plottype = "Circular plot", extra_variables = TRUE)
@@ -115,6 +116,19 @@ names(dendro_by_plot)
 analyseSet <- dendro_by_plot %>% 
   select(1:3, vol_alive_m3_ha, vol_deadw_m3_ha, 17:19)
 # vol_dead_standing_m3_ha, vol_log_m3_ha: niet verder meenemen, direct totaal volume dood hout
+
+```
+
+# Export plot-level
+
+```{r eval = FALSE}
+write_excel_csv2(analyseSet,paste0(path_to_request, "volume_plot_level.csv"))
+
+write_excel_csv2(analyseSet,paste0(path_to_gdrive, "volume_plot_level.csv"))
+
+# oppassen om niet te overschrijven
+write_excel_csv2(analyseSet,paste0(path_to_article, "BR_volume_plot_level.csv"))
+
 
 ```
 

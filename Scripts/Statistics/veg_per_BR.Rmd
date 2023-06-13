@@ -1,0 +1,471 @@
+---
+title: "Statistieken vegetatie per bosreservaat"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: FALSE
+      smooth_scroll: FALSE
+---
+
+# Setup
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+
+run <- "test_AL"
+```
+
+
+# Vraagstelling
+
+Statistieken op niveau van bosreservaat, obv de cirkelplots.
+
+Alle basis variabelen van de monitoring:
+- veg
+- reg_per_height
+- reg_per_height_species
+
+
+Hierna worden deze één voor één doorlopen en weggeschreven naar de resultatendb
+
+Om gemiddeldes per BR te verkrijgen, beperken we ons tot de CP's. 
+(KV's zijn beter afz. te verwerken)
+
+Dit dient als insteek voor de ontwikkeling van functies die alles integreren:
+zie `functions_overall_statistics.R`.
+
+Eerst afzonderlijke functies per veg_xxxx.csv
+Dan al deze functies in één overkoepelend functie
+
+Elke functie moet volgende stappen bevatten:   
+
+- inlezen data     
+- filteren op CP’s    
+- filteren op afgewerkt      
+- toevoegen nulwaardes waar nodig    
+- al dan niet filteren op enkel bosplots (ev. als variabele; default enkel bosplots): Ename!!
+- Kluisbos opsplitsen obv beheer
+- ev. wegfilteren van bosreservaten zonder de vereiste data
+
+vervolgens al die functies combineren in één superfunctie (cfr Els met dendro calc)
+
+Idem voor reg & veg
+
+Nodig voor:   
+
+- zenodo   
+- bookdown-rapporten   
+- …    
+
+
+# Inladen lookuplijsten
+
+```{r fetch_access}
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+
+qHerbSpecies <- sqlFetch(con, "qHerbSpecies240810", stringsAsFactors = FALSE)
+qCoverHerbs <- sqlFetch(con, "qCoverHerbs", stringsAsFactors = FALSE)
+qBrowsIndex <- sqlFetch(con, "qBrowsIndex")
+qLayer <- sqlFetch(con, "qLayer")
+qtotalCover <- sqlFetch(con, "qtotalCover")
+
+odbcClose(con)
+
+qHerbSpecies <- qHerbSpecies %>% select(ID, name_nl = Value1)
+qBrowsIndex <- qBrowsIndex %>% select(ID, browse_txt = Value1)
+qCoverHerbs <- qCoverHerbs %>% select(ID, cover_herbs_txt = Value1)
+qtotalCover <- qtotalCover %>% select(ID, cover_txt = Value1)
+```
+
+
+# Inladen plotinfo
+
+```{r read_forresdat2}
+plotinfo <- read_forresdat("plotinfo", repo_path = path_to_git_forresdat, join_plotinfo = FALSE)
+
+```
+
+# Enkel bosplots
+
+Zie functie get_forest_plot
+
+```{r}
+open_area <- get_open_area()
+forest_plot <- get_forest_plot()
+```
+
+
+Veg per BR: enkel obv de bosplots  
+=> eerst de open ruimtes verwijderen (zonder bomen én zonder verjonging)   
+=> link met dendro_by_plot nodig
+
+plot 475 Wijnendale periode 1: bevat dood hout; omdat er in periode 2 wel soorten genoteerd werden zit plot mee in dendro_by_plot_species
+
+
+# Statistieken
+
+## Veg_by_plot
+
+? Waarin geïnteresseerd op reservaatsniveau?
+
+Volgens mij enkel in aantal plots per soort en karakteristieke bedekking
+En dat komt uit herblayer.
+
+Ev. wel een gemiddelde bedekking van   
+
+- kruidlaag  
+- struiklaag
+- boomlaag
+- moslaag
+- soildisturbance !! indien opgemeten
+- cumulated canopy_cover
+
+! waterlayer cover vaak niet ingevuld!!
+? ev. waterlayer cover: als NA vervangen door 0?
+NEE, blijkbaar vaak op reservaat-niveau al dan niet ingevuld 
+=> ev. aan te passen wanneer we rapporten maken (bookdown, hier nu nog niet)
+
+Als we in `create_statistics()` kiezen voor `na_rm = TRUE`, zien we aan `n_obs` 
+bij hoeveel CP's de bedekking genoteerd werd.
+Als daar 1 staat, werd dat in geen enkele opgemeten (mean = NA)
+Als daar duidelijk minder staat dan de andere bedekkingen, weten we dat dat minder nauwkeurig is ....
+Zal zich ook weerspiegelen in BI.
+
+```{r load_veg, eval = FALSE}
+data_vegetation <-
+  load_data_vegetation(
+    database = path_to_fieldmap_db,
+    processed = TRUE
+  )
+
+
+data_herblayer <-
+  load_data_herblayer(
+    database = path_to_fieldmap_db,
+    processed = TRUE
+  )
+
+```
+
+
+```{r data, results='hide'}
+names(plotinfo)
+
+vegetation_by_plot <- read_forresdat("vegetation_by_plot", repo_path = path_to_git_forresdat, join_plotinfo = TRUE) 
+herblayer_by_plot <- read_forresdat("herblayer_by_plot", repo_path = path_to_git_forresdat, join_plotinfo = TRUE) 
+```
+
+```{r forest}
+dataset <- vegetation_by_plot %>%
+  select(-contains(c("_min", "_max", "subplot"))) %>% 
+  # select(-contains(c("_min", "_max"))) %>%
+  filter(plottype == "CP") %>%   # enkel cirkelplots
+  filter(!plot_id %in% open_area$plot_id)
+
+dataset_open <- vegetation_by_plot %>%
+  filter(plottype == "CP") %>%   # enkel cirkelplots
+  filter(plot_id %in% open_area$plot_id)
+
+table(dataset$forest_reserve, dataset$period)
+table(dataset_open$forest_reserve, dataset_open$period)
+```
+
+Geen plots zonder enige bedekking.
+Wel soms een bedeking niet genoteerd (NA) => zie summary
+
+```{r subplots_ok, eval = FALSE}
+dataset %>% filter(number_of_species == 0) %>% nrow() == 0
+
+summary(dataset)
+
+dataset %>% group_by(plot_id, period) %>% summarize(n_subplots = n_distinct(subplot_id)) %>% 
+  ungroup() %>% filter(n_subplots > 1) %>% nrow == 0
+```
+
+```{r, results='hide'}
+dataset %>% filter(is.na(waterlayer_cover_mid)) %>% nrow()
+dataset %>% filter(is.na(moss_cover_mid)) %>% nrow()
+dataset %>% filter(is.na(shrub_cover_mid)) %>% nrow()
+dataset %>% filter(is.na(herb_cover_mid)) %>% nrow()
+
+dataset %>% filter(is.na(cumm_herb_coverage_class_average_perc)) %>% nrow()
+dataset %>% filter(is.na(cumulated_canopy_cover_mid)) %>% nrow()
+
+# [1] 1052
+# [1] 48
+# [1] 105
+# [1] 32
+# [1] 0
+# [1] 111
+```
+
+```{r variables, results='hide'}
+names(dataset)
+
+variables_for_statistics <- dataset %>% 
+  select(contains(c("mid", "perc", "number_of_species"))) %>% 
+  names()
+
+variables_for_statistics
+
+```
+
+```{r stat, results='hide'}
+resultaat <- create_statistics(
+  dataset = dataset,
+  level = c("period", "forest_reserve"),
+  variables = variables_for_statistics,
+  include_year_range = FALSE,
+  na_rm = TRUE   # regelmatig een NA bij één of andere bedekking, vaak op reesrvaatsniveau
+  # ingevulde bedekkingen beter toch meenemen (door na_rm = TRUE) en kijken naar n_obs 
+  ) %>% 
+  round_df(., 2) %>% 
+  # rename(strata = forest_reserve) %>% 
+  mutate(strata = NA,
+         stratum_name = NA,
+         strata2 = NA,
+         stratum_name2 = NA)
+
+resultaat %>% filter(is.na(mean)) %>% nrow()   
+
+names(resultaat)
+head(resultaat)
+```
+
+```{r eval = FALSE}
+# check soildisturbance_game_cover_mid
+soildist_BR <- plotinfo %>% 
+  group_by(forest_reserve, period) %>% 
+  summarize(n_game_impact_veg_T = sum(game_impact_veg == TRUE ),
+            n_game_impact_veg_F = sum(game_impact_veg == FALSE )) %>% 
+  ungroup()
+
+resultaat2_ <- resultaat %>% left_join(soildist_BR)
+# klopt
+
+resultaat2_ %>% filter(variable == "soildisturbance_game_cover_mid" 
+                      & is.na(mean)
+                      & n_game_impact_veg_T > 0) %>% nrow()
+
+```
+
+
+```{r export}
+resultaat %>% distinct(variable)
+# cumm_herb_coverage_class_average_perc				
+# cumulated_canopy_cover_mid				
+# herb_cover_mid				
+# moss_cover_mid				
+# number_of_species				
+# shrub_cover_mid				
+# soildisturbance_game_cover_mid				
+# tree_cover_mid				
+# waterlayer_cover_mid
+
+My.ResultsToDatabase(results = resultaat, 
+                     dbHandle = dbResults, 
+                     tblName = "tblResultaten", 
+                     scriptName = "veg_per_BR.Rmd", 
+                     description = "bedekkingen en aantal soorten per bosreservaat (enkel bosplots)",
+                     request_from = "Team bosecologie",
+                     run_by = run)
+```
+
+
+
+### Obv intervallen - NIET
+Statistics voor intervals cfr Els: variance bijna steeds Inf en mean = 0
+=> geen bruikbare resultaten
+
+Ev. later uit te klaren met ELs ...
+
+
+
+
+## Herblayer_by_plot
+
+In combinatie met veg_by_plot
+
+Per soort:   
+
+- aantal plots waar soort voorkomt !! best procentueel, want exact aantal plots niet gekend door gebruiker
+- karakteristieke bedekking = som van bedekkingen over alle plots heen/aantal plots waar de soort voorkomt
+
+
+Enkel bosplots bekijken!
+
+
+```{r data2}
+herblayer_by_plot <- read_forresdat("herblayer_by_plot", repo_path = path_to_git_forresdat, join_plotinfo = TRUE) 
+
+dataset2 <- herblayer_by_plot %>%
+  filter(plottype == "CP") %>%   # enkel cirkelplots
+  select(-contains(c("subplot"))) %>% 
+  filter(!plot_id %in% open_area$plot_id)
+
+table(dataset2$forest_reserve, dataset2$period)
+```
+
+```{r n_subplots_OK, eval = FALSE}
+names(dataset2)
+range(dataset2$subplot_id)
+
+# één subplot per plot - JA
+dataset2 %>% group_by(plot_id, period) %>% summarize(n_subplots = n_distinct(subplot_id)) %>% 
+  ungroup() %>% filter(n_subplots > 1) %>% nrow == 0
+
+```
+
+
+### Aantal/percentage plots waar soort voorkomt
+
+```{r species_n_plots, results='hide'}
+names(dataset2)  # herblayer_by_plot, reeds gefilterd op CPs en open area
+
+species_n_plots <- dataset2 %>% 
+  filter(!is.na(coverage_class_average_perc)) %>% 
+  group_by(forest_reserve, period, species) %>% 
+  summarize(n_plots = n()) %>% 
+  ungroup()
+
+names(species_n_plots)
+
+n_plots_per_BR <- dataset %>%   # veg_by_plot
+  # filter(plottype == "CP") %>% 
+  group_by(forest_reserve, period) %>%
+  summarize(n_max_plots = n()) %>% 
+  ungroup()
+
+species_perc_plots <- species_n_plots %>% 
+  left_join(n_plots_per_BR) %>% 
+  mutate(perc_plots = 100*n_plots/n_max_plots)
+
+```
+
+
+```{r check_max_n_plots_OK, eval = FALSE}
+# check
+t <- species_n_plots %>% 
+  group_by(forest_reserve, period) %>% 
+  summarize(max_n_plots = max(n_plots)) %>% 
+  ungroup()
+
+# aantal_plots_per_BR
+n_plots_per_BR <- vegetation_by_plot %>% 
+  filter(plottype == "CP") %>% 
+  group_by(forest_reserve, period) %>%
+  summarize(n_plots = n()) %>% 
+  ungroup()
+
+check <- t %>% 
+  left_join(n_plots_per_BR) %>% 
+  mutate(verschil = max_n_plots - n_plots)
+
+range(check$verschil)
+# OK: nooit meer plots dan er werkelijk zijn
+```
+
+
+```{r resultaat2, results='hide'}
+names(resultaat)
+names(species_perc_plots)
+
+
+resultaat2 <- species_perc_plots %>% 
+  left_join(qHerbSpecies, by = c("species" = "ID")) %>% 
+  round_df(., 2) %>% 
+  mutate(variable = "perc_plots_met_soort"
+         , n_obs = n_max_plots
+         , mean = perc_plots
+         , variance = NA, lci = NA, uci = NA
+         , strata = "species"
+         , stratum_name = name_nl
+         , strata2 = NA
+         , stratum_name2 = NA) 
+
+```
+
+```{r export2}
+My.ResultsToDatabase(results = resultaat2, 
+                     dbHandle = dbResults, 
+                     tblName = "tblResultaten", 
+                     scriptName = "veg_per_BR.Rmd", 
+                     description = "percentage plots waar de soort voorkomt, per bosreservaat (enkel bosplots)",
+                     request_from = "Team bosecologie",
+                     run_by = run)
+```
+
+### Karakteristieke bedekking
+
+Obv aantal plots waar soort voorkomt
+
+som van bedekkingen in de plots waar soort voorkomt en dat delen door aantal plots
+
+
+```{r, results='hide'}
+dataset2 %>% filter(is.na(coverage_class_average_perc)) %>% nrow() == 0
+
+karakt_bedekking <- dataset2 %>% 
+  group_by(forest_reserve, period, species) %>% 
+  summarize(sum_cover = sum(coverage_class_average_perc)) %>% 
+  ungroup() %>% 
+  left_join(species_perc_plots) %>% 
+  mutate(karakt_bedekking = sum_cover/n_plots)
+  
+```
+
+
+
+```{r resultaat3, results='hide'}
+names(karakt_bedekking)
+resultaat3 <- karakt_bedekking %>% 
+  left_join(qHerbSpecies, by = c("species" = "ID")) %>% 
+  round_df(., 2) %>% 
+  mutate(variable = "karakt_bedekking"
+         , n_obs = n_max_plots
+         , mean = karakt_bedekking
+         , variance = NA, lci = NA, uci = NA
+         , strata = "species"
+         , stratum_name = name_nl
+         , strata2 = NA
+         , stratum_name2 = NA) 
+  
+#? hoe lci en uci berekenen op een 
+  
+```
+
+
+```{r export3}
+My.ResultsToDatabase(results = resultaat3, 
+                     dbHandle = dbResults, 
+                     tblName = "tblResultaten", 
+                     scriptName = "veg_per_BR.Rmd", 
+                     description = "karakteristieke bedekking per soort en per bosreservaat (enkel bosplots)",
+                     request_from = "Team bosecologie",
+                     run_by = run)
+```
+
+
+

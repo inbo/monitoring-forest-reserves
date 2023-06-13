@@ -60,7 +60,7 @@ source(here::here("scripts/Setup.R"))
 
 ## Shapefile Marc
 
-<!-- VPN opstarten! -->
+> VPN opstarten!
 
 ```{r import_data_shp}
 # fc_strata_shp <-read_sf("C:/03_BR/1_Dataverwerking/Data/Strata/input/boseco_alleproefvlakken_centraalpunt_lam72_metinfo.shp", crs = 31370) %>% rename(plot_id = PlotID)
@@ -996,6 +996,12 @@ Per plot en per periode
 
 
 ## Export
+
+Kleine correcties rechtstreeks in access-db aangepast:
+- with heide year dendro = 2000 ipv 1999
+- Kerss CP's: nulbeheer sinds 1993 ipv 1983
+(basisfile sook aangepast zdd als we code opnieuw runnen, resultaat ook OK is)
+
 
 ```{r save_strata, eval = FALSE}
 con <- odbcConnectAccess2007(path_to_strata_db)

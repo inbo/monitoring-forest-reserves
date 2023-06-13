@@ -50,9 +50,10 @@ library(forrescalc)
 
 
 
-### Extra functies ----
-source(here::here("Scripts/ExtraFunctions.r"))
-
+### Extra functies tov package forrescalc ----
+source(here::here("Scripts/functions.r"))
+source(here::here("Scripts/functions_volume.r"))
+source(here::here("Scripts/functions_overall_statistics.r"))
 
 ### Load packages (na herinstallatie pc) -----
 # install.packages("glue")

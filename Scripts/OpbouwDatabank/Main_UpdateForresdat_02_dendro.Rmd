@@ -30,10 +30,9 @@ knitr::opts_chunk$set(
 
 library(here)
 
-# libraries & invoergegevens
+# libraries & invoergegevens & functions
 source(here::here("scripts/Setup.R"))
-source(here::here("scripts/ExtraFunctions.R"))
-source(here::here("scripts/ExtraFunctions_volume.R"))
+
 ```
 
 
@@ -61,7 +60,9 @@ path_to_meetgegevens
 
 # Load plotinfo
 
-Plotinfo samenstellen, zijnde plottype, naam forest_reserve en info over survey en data al dan niet processed.
+Verder werken met plotinfo uit Main_01, want correcties mbt date_dendro doorgevoerd.
+
+Plotinfo inladen: plottype, naam forest_reserve en info over survey en data al dan niet processed.
 
 ```{r }
 plotinfo <- read_vc(file = "plotinfo", root = path_to_forresdat_data)
@@ -96,7 +97,7 @@ Enkel nog CP's derde set Withoefse heide (dd 13/7/2022), is gepland voor 2023.
 
 
 
-# Load dendro data - voorlopig OK - 23/1/2023
+# Load dendro data - voorlopig OK - 12/5/2023
 
 Standaard wordt enkel processed data ingeladen mbv de load-functies
 
@@ -143,7 +144,8 @@ height_model %>% group_by(forest_reserve) %>% summarise(n = n()) %>% ungroup() %
 # Walenbos	28	- OK, als algemeen voor beide KV's, niet gelinkt aan een feitelijke KV (= Walenbos KV1 en Walenbos OT)
 ```
 
-## Correctie year van dendrometrie
+# Correctie year van dendrometrie
+Gevraagd aan Els (issue #114)
 
 Year = jaar van groeiseizoen
 Grens was gelegd op 1/7, nu naar 1/5.
@@ -154,6 +156,10 @@ Hier geen sluitende code, gewoon deze waarvan ik weet dat het niet klopt, die aa
 - Bos Terrijst CA: OK
 - Heirnisse: 5 plots 9/2014: OK
 - enkel Kerss: alle 16 plots 2009 te wijzigen in 2010: CP's en CA
+
+- !! ook Withoefse heide
+(gecheckt in dbEls_deel2 op datum dendro in plotdetails en Kerss en With heide zijn enige reservaten in dit geval)
+
 
 ```{r check}
 names(data_dendro)
@@ -177,7 +183,11 @@ data_dendro_ <- data_dendro %>%
   mutate(year = ifelse(year == 2009 & forest_reserve == "Kersselaerspleyn"
     , year + 1
     , year)
-  )
+  ) %>% 
+  mutate(year = ifelse(year == 1999 & forest_reserve == "Withoefse heide"
+    , year + 1
+    , year)
+  )   
 
 data_dendro <- data_dendro_
 
@@ -189,7 +199,11 @@ data_deadwood_ <- data_deadwood %>%
   mutate(year = ifelse(year == 2009 & forest_reserve == "Kersselaerspleyn"
     , year + 1
     , year)
-  )
+  ) %>% 
+  mutate(year = ifelse(year == 1999 & forest_reserve == "Withoefse heide"
+    , year + 1
+    , year)
+  )  
 
 data_deadwood <- data_deadwood_
 
@@ -559,7 +573,16 @@ Staat ook in metadata
 
 # Calculate dendro data
 
-```{r calc_dendro}
+```{r save_previous, eval = FALSE}
+# laatste update: 15/5/2023 (with heide 2000 ipv 1999)
+save(data_stems, data_dendro, data_shoots, height_model, data_deadwood,
+     file=here::here("RData/main02_dendro_basics.RData"))
+
+# load(here::here("RData/main02_dendro_basics.RData"))
+```
+
+
+```{r calc_stems_tree}
 data_stems_calc <- calc_variables_stem_level(data_stems, height_model)
 
 data_dendro_calc <- calc_variables_tree_level(data_dendro, data_stems_calc)
@@ -640,7 +663,10 @@ dendro_by_plot %>% filter_at(col, any_vars(is.na(.)))
 ```
 
 Plot 475, periode 1, bevat geen staande bomen, wel liggende.
-> Voorlopig '0' van maken, maar moet in package opgelost worden (opgenomen als issue nov 2022).
+> Voorlopig '0' van maken, maar moet in package opgelost worden (opgenomen als issue nov 2022)
+!! met uitz. van stems_per_tree!!!
+
+stems_per_tree moet NA blijven
 
 ```{r change_NA2}
 dendro_by_plot_ <- dendro_by_plot %>% 
@@ -651,6 +677,13 @@ dendro_by_plot_ %>% filter_at(col, any_vars(is.na(.)))
 # OK, geen NA's meer
 
 dendro_by_plot <- dendro_by_plot_
+
+
+# stems_per_tree toch NA!!
+dendro_by_plot_ <- dendro_by_plot %>% 
+  mutate(stems_per_tree = ifelse(stems_per_tree == 0, NA, stems_per_tree))
+
+dendro_by_plot <- dendro_by_plot_
 ```
 
 
@@ -659,8 +692,13 @@ dendro_by_plot <- dendro_by_plot_
 Foutje in package: op dit moment NA's als soort niet voorkomt staand, maar wel liggend.
 Dat moet 0 worden.
 
+Gevraagd aan Els: Issue #117: 0 vs NA bij dendro_by_plot(_species_diam) 
+
 > In forrescalc aangeduid als te verbeteren.
 > Hierna voorlopig corrigeren
+
+stems_per_tree moet NA blijven
+
 
 ```{r}
 col <- c("year", "species", "number_of_trees_ha", "stem_number_ha",
@@ -673,7 +711,7 @@ dendro_by_plot_species %>% filter_at(col, any_vars(is.na(.))) %>% nrow()
 
 check <- dendro_by_plot_species %>% filter_at(col, any_vars(is.na(.)))
 
-# deze moeten allemaal 0 worden
+# deze moeten allemaal 0 worden - !! met uitz van stems_per_tree
 dendro_by_plot_species_ <- dendro_by_plot_species %>% 
   replace((is.na(.)), 0) %>% 
   mutate(vol_deadw_m3_ha = vol_dead_standing_m3_ha + vol_log_m3_ha)
@@ -682,6 +720,51 @@ dendro_by_plot_species_ %>% filter_at(col, any_vars(is.na(.))) %>% nrow()
 # OK, geen NA's meer
 
 dendro_by_plot_species <- dendro_by_plot_species_
+
+
+# stems_per_tree MOET toch NA blijven!!
+dendro_by_plot_species_ <- dendro_by_plot_species %>% 
+  mutate(stems_per_tree = ifelse(stems_per_tree == 0, NA, stems_per_tree))
+
+dendro_by_plot_species <- dendro_by_plot_species_
+
+```
+
+
+
+# Stems per tree - NA ipv 0  
+
+Momenteel is "stems_per_tree" = 0, wanneer er geen bomen opgemeten werden.
+Dat is fout, dat moet NA zijn.
+Mag niet verder meegenomen worden in de berekeningen van de statistieken op reservaatsniveau.
+
+Komt voor in `dendro_by_plot` en `dendro_by_plot_species`, als proxy voor de meerstammigheid.
+
+Forrescalc code is OK voor stems_per_tree, maar was/is niet OK voor N, G, V van soorten zonder staande levends bomen.
+Die NA's worden hogerop gewijzigd naar 0 (onder ## Dendro_by_plot en ## Dendro_by_plot_species).
+Initieel gebeurde dat ook voor stems_per_tree, maar is nu aangepast (zie check hierna)
+
+```{r}
+dendro_by_plot %>% filter(is.na(stems_per_tree))
+# enkel plot 475 waar geen opname gebeurd is (alles NA)
+
+dendro_by_plot %>% filter( stems_per_tree == 0)
+# komt niet voor
+# verderop kunstmatig 0 van gemaakt, en terug gecorrigeerd naar NA
+
+```
+`dendro_by_plot_species`
+
+```{r}
+dendro_by_plot_species %>% filter(is.na(stems_per_tree)) %>% nrow()
+# 1235 records
+dendro_by_plot_species %>% filter(stem_number_ha == 0) %>% nrow()
+# ook 1235 => OK
+
+dendro_by_plot_species %>% filter( stems_per_tree == 0)
+# komt niet voor
+# verderop kunstmatig 0 van gemaakt, en terug gecorrigeerd naar NA
+
 ```
 
 
@@ -830,7 +913,8 @@ zero_biomass_plots <- dendro_by_plot %>%
               select(plot_id, period, year = year_dendro)
   ) %>% 
   filter(is.na(vol_alive_m3_ha) & is.na(vol_log_m3_ha)) %>% 
-  replace((is.na(.)), 0)
+  replace((is.na(.)), 0) %>% 
+  mutate(stems_per_tree = ifelse(stems_per_tree == 0, NA, stems_per_tree))
 
 table(zero_biomass_plots$plot_id)
 
@@ -946,6 +1030,8 @@ dendro_by_diam_plot_species_ %>% filter(plot_id == 1620 & period == 2) %>% dplyr
 dendro_by_diam_plot_species <- dendro_by_diam_plot_species_ %>% 
   select(-survey_deadw)
 
+#
+summary(dendro_by_plot_species)
 ```
 
 
@@ -1280,15 +1366,24 @@ logs_by_decay_plot_species <- logs_by_decay_plot_species_
 
 # Vergelijking met oude data
 
-```{r}
+```{r eval = FALSE}
 dendro_by_plot_git <- read_vc(file = "dendro_by_plot", root = path_to_forresdat_data)
+
+dendro_by_plot_git <- dendro_by_plot_git %>% 
+  select(plot_id, year, everything()) %>% 
+  select(names(dendro_by_plot))
 nrow(dendro_by_plot) == nrow(dendro_by_plot_git)
 summary(dendro_by_plot)
+names(dendro_by_plot) == names(dendro_by_plot_git)
 summary(dendro_by_plot_git)
 
-dendro_by_plot %>% select(-year) %>% arrange(plot_id) == dendro_by_plot_git %>% select(-year) %>% arrange(plot_id)
+
+dendro_by_plot %>% select(-year) %>% arrange(plot_id, period) == dendro_by_plot_git %>% select(-year) %>% arrange(plot_id, period)
 # OK denk ik andere ordening van variabelen
 dendro_by_plot == dendro_by_plot_git
+
+head(dendro_by_plot %>% arrange(plot_id, period)); head(dendro_by_plot_git %>% arrange(plot_id, period))
+
 
 dendro_by_plot_species_git <- read_vc(file = "dendro_by_plot_species", root = path_to_forresdat_data)
 nrow(dendro_by_plot_species) == nrow(dendro_by_plot_species_git)
@@ -1393,7 +1488,7 @@ save_results_access (
 ```
 
 Direct naar gdrive exporteren (csv): 
-naar **/PRJ_BOSECO_ALGEMEEN/PRJ_BR_AanvraagGegevens/!METADATA-ALL_PLOTS/_plot-level-data/**
+naar **/PRJ_BOSECO_ALGEMEEN/PRJ_BR_AanvraagGegevens/00_METADATA-ALL_PLOTS/_plot-level-data/**
 
 ```{r save_dendro_gdrive, eval = FALSE}
 save_results_csv(
