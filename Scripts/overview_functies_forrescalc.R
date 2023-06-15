@@ -4,7 +4,10 @@
 # !! functies zelf nooit laten lopen van hieruit,
 # want dan worden dependencies (libraries) niet meegeladen)
 
-path_to_functions <- "C:/3BR/2_VisualisatieDataBR/1Packages/forrescalc/R"
+# path_to_functions <- "C:/03_BR/2_Forrescalc_Forresdat/1_forrescalc/R"
+path_to_functions <- str_sub(path_to_forrescalc, 1, -2)
+path_to_functions
+
 
 list_functions  <- list.files(path = path_to_functions)
 write.csv2(list_functions, paste(here::here("Output"), "/overzicht_functies_forrescalc.csv", sep = ""))
