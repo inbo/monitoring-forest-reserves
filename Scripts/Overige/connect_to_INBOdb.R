@@ -23,3 +23,9 @@ library(watina)
 watina <- connect_watina()
 inboveg <- connect_inbo_dbase("D0010_00_Cydonia")
 florabank <- connect_inbo_dbase("D0021_00_userFlora")
+
+
+
+# ? ik weet niet meer goed wat onderstaande code doet, 
+# maar om niet te verliezen ...
+remotes::install_github("inbo/inbodb@fb-traits-bron", build_vignettes = TRUE)
