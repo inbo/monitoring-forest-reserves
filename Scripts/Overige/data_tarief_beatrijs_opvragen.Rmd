@@ -1,0 +1,123 @@
+---
+title: "Tarieven: metingen eik & beuk uit db Beatrijs halen"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: yes
+      smooth_scroll: yes
+---
+
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = FALSE,  # FALSE: dan kan ik knitten zonder dat er iets gebeurt
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+library(tidyverse) #bevat oa dplyr en ggplot
+library(RODBC)
+
+```
+
+# Data inladen
+
+1) Link naar db leggen 
+
+```{r}
+path <- "G:/Mijn Drive/Dendrometrie/Tarieven_Beatrijs/data/"
+db <- paste0(path, "mei-2005-import03gekuist.mdb")
+
+```
+
+2) Overzicht van de aanwezige tabellen opvragen
+
+```{r}
+con <- odbcConnectAccess2007(db)
+
+dbtables <- sqlTables(con) %>% filter(TABLE_TYPE != "SYSTEM TABLE")
+str(dbtables)
+
+odbcClose(con)
+```
+
+
+3) Specifieke tabel opvragen, volledig
+
+```{r}
+con <- odbcConnectAccess2007(db)
+
+beuk <- sqlFetch(con, "Beuk")
+eik <- sqlFetch(con, "Eik")
+#tblStaandDiamGeg <- sqlFetch(con, "tblStaandDiamGeg")
+#qryBasisgegevens <- sqlFetch(con, "qryBasisgegevens")
+
+odbcClose(con)
+
+str(beuk) 
+# C = C130 - in METER
+# C150 - in CENTIMETER
+names(eik)
+```
+
+4) Query gebruiken om deel van een tabel in te laden
+
+```{r vb, eval = FALSE}
+query_dendro <-
+      "SELECT Plots.ID AS plot_id,
+        qPlotType.Value3 AS plottype,
+        Trees.ID AS tree_measure_id,
+        Trees.OldID AS old_id,
+        pd.ForestReserve AS forest_reserve,
+        pd.rA1 AS r_A1, pd.rA2 AS r_A2, pd.rA3 AS r_A3, pd.rA4 AS r_A4,
+        pd.TresHoldDBH_Trees_A3_alive AS dbh_min_a3,
+        pd.TresHoldDBH_Trees_A3_dead AS dbh_min_a3_dead,
+        pd.TresHoldDBH_Trees_A4_alive AS dbh_min_a4,
+        pd.TresHoldDBH_Trees_A4_dead AS dbh_min_a4_dead,
+        Trees.DBH_mm AS dbh_mm,
+        Trees.Height_m AS height_m,
+        Trees.Species AS species,
+        Trees.AliveDead AS alive_dead,
+        Trees.IntactSnag AS intact_snag,
+        Trees.DecayStage AS decaystage,
+        Trees.Calcheight_m AS calc_height_fm,
+        Trees.IndShtCop AS ind_sht_cop,
+        Trees.TreeNumber AS nr_of_stems
+      FROM (((Plots INNER JOIN Trees_3eSET Trees ON Plots.ID = Trees.IDPlots)
+        INNER JOIN PlotDetails_3eSet pd ON Plots.ID = pd.IDPlots)
+        INNER JOIN qPlotType ON Plots.Plottype = qPlotType.ID)
+        ;"
+
+con <- odbcConnectAccess2007(db)
+
+dataset <- sqlQuery(con, query_dendro)
+
+odbcClose(con)
+
+```
+
+
+# Export metingen eik en beuk
+
+C = C130 - in METER    
+C150 - in CENTIMETER
+
+```{r eval = FALSE}
+write.csv2(beuk, paste0(path, "metingen_beuk_db.csv"))
+write.csv2(eik, paste0(path, "metingen_eik_db.csv"))
+```
+
