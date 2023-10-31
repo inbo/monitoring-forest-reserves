@@ -5,12 +5,15 @@
 library(here)
 
 # libraries & invoergegevens
-source(here::here("scripts/ScriptsToStart/Setup_ForresCalc.R"))    # runt het setup-script met info over pad-namen en nuttige packages
+source(here::here("scripts/VoorbeeldscriptsOmMeeTeBeginnen/Setup_ForresCalc.R"))    # runt het setup-script met info over pad-namen en nuttige packages
+# OF
+source(here::here("scripts/Setup.R")) 
+
 
 #### lookuplijsten inladen ----
 
 # rechtstreeks uit fieldmap-db
-con <- odbcConnectAccess2007(path_to_fieldmap)
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
 
 qIufroheight <- sqlFetch(con, "qiufroheight", stringsAsFactors = FALSE)
 qIndShootCop <- sqlFetch(con, "qIndShootCop", stringsAsFactors = FALSE)
@@ -22,11 +25,20 @@ odbcClose(con)
 
 # OF mbv read_forresdat
 qSpecies <- read_forresdat("qSpecies", repo_path = "C:/3BR/2_VisualisatieDataBR/1Packages/forresdat", join_plotinfo = FALSE)
+#OF
+qSpecies <- read_forresdat("qSpecies", repo_path = path_to_git_forresdat, join_plotinfo = FALSE)
 
 
 #### Reeds berekende plotdata inladen ----
 dendro_by_plot_species <- read_forresdat("dendro_by_plot_species", repo_path = "C:/3BR/2_VisualisatieDataBR/1Packages/forresdat", join_plotinfo = TRUE)
+# OF
+dendro_by_plot_species <- read_forresdat("dendro_by_plot_species", repo_path = path_to_git_forresdat, join_plotinfo = TRUE)
 # join_plotinfo = TRUE : is default en hoeft niet noodzakelijk vermeld te worden
+dendro_by_plot <- read_forresdat("dendro_by_plot", repo_path = path_to_git_forresdat, join_plotinfo = TRUE)
+# plotinfo <- read_forresdat("plotinfo", repo_path = path_to_git_forresdat)
+plotinfo <- read_vc(file = "plotinfo", root = "C:/03_BR/2_Forrescalc_Forresdat/2_forresdat/data/")
+
+
 
 # OF mbv read_vc als read_forresdat mankeert (read_forresdat = functie uit package van Els; read_vc is algemener)
 # hier wordt de tsv-file die op c-schijf staat, rechtstreeks ingeladen

@@ -213,7 +213,7 @@ get_year_range_veg <- function(dataset, repo_path = path_to_git_forresdat){
 
 
 
-#' get the height classes used per forest reserve and per period
+#' get the height classes of regeneration used per forest reserve and per period
 #' 
 #' This function helps to remove the incorrect zeros added by the function `add_zeros()`
 #' 

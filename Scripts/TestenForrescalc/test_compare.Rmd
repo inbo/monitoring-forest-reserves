@@ -32,7 +32,18 @@ knitr::opts_chunk$set(
 library(here)
 
 # libraries & invoergegevens
-source(here::here("scripts/Setup_ForresCalc.R"))
+source(here::here("scripts/Setup.R"))
+
+```
+
+
+```{r results='hold', eval=TRUE}
+path_to_forresdat_data
+path_to_analysis_set_db
+path_to_plotlevel_csv
+path_to_treelevel_csv
+path_to_output_gdrive
+path_to_meetgegevens
 
 ```
 
@@ -40,16 +51,6 @@ source(here::here("scripts/Setup_ForresCalc.R"))
 
 Doel van dit script is het uittesten van de functie compare statistiche functies uit het package forrescalc.
 Deze laten toe statistieken te berekenen per bosreservaat, en ook over alle bosreservaten heen (bv. voor een bepaald stratum).
-
-```{r Path}
-# deze worden ook in "Setup_ForresCalc.R" gedefinieerd, hier ev. extra "paths" toevoegen indien nodig voor huidig script
-      # path_to_fieldmap <- "C:/3BR/5_MDB_BOSRES_selectieEls/FieldMapData_MDB_BOSRES_selectieEls.accdb"
-      # path_to_git_forresdat <- "C:/3BR/2_VisualisatieDataBR/2Packages/forresdat"
-      # 
-      # path_to_results <- "C:/3BR/2_VisualisatieDataBR/1DataVerwerkingBR/Output/BR_resultaten.accdb"
-      # path_to_forrestcalc <- "C:/3BR/2_VisualisatieDataBR/2Packages/forrescalc/R/"
-
-```
 
 <!-- Onderstaande tabel geeft een overzicht van de gegevens die gebruikt worden voor de analyse.   -->
 
@@ -75,7 +76,7 @@ data_overzicht %>%
 
 
 ```{r LoadLookuplists}
-con <- odbcConnectAccess2007(path_to_fieldmap)
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
   
   qIufroheight <- sqlFetch(con, "qiufroheight", stringsAsFactors = FALSE)
   qIndShootCop <- sqlFetch(con, "qIndShootCop", stringsAsFactors = FALSE)
@@ -98,10 +99,10 @@ Deze werden in een vorige stap opgeslagen in access, en zullen op termijn ook op
 
 
 ```{r LoadAnalyseSetsDendro}
-path_to_analysis_set
+path_to_analysis_set_db
 
 # overview tables in BR_analysedb.accdb
-con <- odbcConnectAccess2007(path_to_analysis_set)
+con <- odbcConnectAccess2007(path_to_analysis_set_db)
       dbtables <- sqlTables(con) %>% 
                 filter(str_detect(TABLE_NAME, "MSys", negate = TRUE ))
                 # wegfilteren van records waar TABLE_NAME "MSys" bevat
@@ -146,9 +147,35 @@ Zie mail van Els van 27/5: vooral testen mbt regeneration en NA's in rubbing ...
 compare_periods(test$regeneration_by_plot_height(_species),
 
 ```{r DiffRegRubbbing}
-compare_periods(test$regeneration_by_plot_height(_species),
-                
+compare_periods(test$regeneration_by_plot_height)
+      
+compare_periods(test$regeneration_by_plot_height_species)             
+                          
 ```
+
+
+### Dendro_by_plot
+
+```{r}
+plotinfo <- read_vc(file = "plotinfo", root = path_to_forresdat_data) 
+
+dendro_by_plot <- read_vc(file = "dendro_by_plot", root = path_to_forresdat_data) %>% 
+  left_join(plotinfo %>% select(1:3), by = c("plot_id", "period"))
+
+```
+```{r}
+dendro_by_plot <- read_vc(file = "dendro_by_plot", root = path_to_forresdat_data) %>% 
+  left_join(plotinfo %>% select(1:9), by = c("plot_id", "period"))
+
+colnames(dendro_by_plot)
+
+t <- dendro_by_plot %>% 
+  filter(is.na(number_of_trees_ha))
+
+
+
+```
+
 
 
 ```{r DiffDendroPlot_BR}
@@ -156,10 +183,21 @@ compare_periods(test$regeneration_by_plot_height(_species),
 colnames(dendro_by_plot)
 
 data <- dendro_by_plot %>% 
-  select(forest_reserve, year, period, plot_id, volume_alive_m3_ha) %>%
+  select(forest_reserve, year, period, plot_id, vol_alive_m3_ha) %>%
   distinct()
 
-diff <- compare_periods(dataset = data, measure_vars = c("year", "volume_alive_m3_ha"))
+diff <- compare_periods_per_plot(dataset = data, measure_vars = c("year", "vol_alive_m3_ha"))
+
+
+# zonder p3
+
+data2 <- dendro_by_plot %>% 
+  select(forest_reserve, year, period, plot_id, vol_alive_m3_ha) %>%
+  distinct() %>% 
+  filter(period %in% c(1,2))
+
+diff2 <- compare_periods_per_plot(dataset = data2, measure_vars = c("year", "vol_alive_m3_ha"))
+
 # year moet uitdrukkelijk vermeld worden bij measure_vars, als je info wil verkrijgen 
 # over aantal jaar tss 2 metingen
 # soms wil je dat immers niet, wanneer je over alle bosreservaten heen variabelen wil vergelijken

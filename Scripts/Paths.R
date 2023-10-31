@@ -6,6 +6,15 @@ path_to_dataverwerking <- "C:/03_BR/1_DataverwerkingBR/"
 path_to_forrescalc <- "C:/03_BR/2_Forrescalc_Forresdat/1_forrescalc/R/"
 path_to_git_forresdat <- "C:/03_BR/2_Forrescalc_Forresdat/2_forresdat/"
 path_to_fieldmap <- "C:/03_BR/3_dB_Els_deel2/"
+
+# zou ev. ook AWS kunnen worden, dan wel vpn opzetten als niet in VAC
+# vb-code van faunabeheer (sander devisscher)
+    # library(DBI)
+    # myconn <- dbConnect(odbc::odbc(),
+    #                     .connection_string = "Driver={Microsoft Access Driver (*.mdb, *.accdb)};DBQ=//172.31.11.14/inbo/Prjdata/Projects/PRJ_Faunabeheer/Monitoring-Vraatschade/Fieldmap/FieldMapData_GameImpact_INBO.accdb")
+    # 
+    # Qry_Plots_ICEpunten_Name <- dbGetQuery(myconn, "SELECT * FROM Qry_Plots_ICEpunten_Name")
+
 path_to_reserves <- "C:/03_BR_gebieden/"
 
 
