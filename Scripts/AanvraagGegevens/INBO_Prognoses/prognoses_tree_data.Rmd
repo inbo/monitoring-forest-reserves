@@ -1,0 +1,488 @@
+---
+title: "Prognoses trees data from Sonian Forest"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: FALSE
+      smooth_scroll: FALSE
+---
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  eval = FALSE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+# libraries & invoergegevens & functions
+source(here::here("scripts/Setup.R"))
+
+# paths ---- 
+    ### eigen c-schijf
+path_to_c <- "C:/03_BR/1_DataVerwerkingBR/Aanvraag_gegevens/INBO_Prognoses/"
+path_to_db <- paste0(path_to_c, "PROGNOSES_EDIT12m/FieldMapData_PROGNOSES_EDIT12m.accdb")
+path_to_output_c <- paste0(path_to_c, "Output/")
+
+    ### AWS - algemeen toegankelijk - !! VPN moet geconnecteerd zijn !!!
+path_to_aws <- "//172.31.11.14/inbo/Prjdata/Projects/PRJ_BosEco/PRJ_BR_LIFE-PROGNOSES/"
+# path_to_db <- paste0(path_to_aws, "PROGNOSES_EDIT12m/FieldMapData_PROGNOSES_EDIT12m.accdb")
+      # VEEL TE TRAAG
+
+    ### gdrive
+path_to_gdrive <- "G:/Gedeelde drives/Team_Boseco/00_projecten/PRJ_BR_LIFE-PROGNOSES/"
+path_to_output_gdrive <- paste0(path_to_gdrive, "Dataverwerking-bovengronds/data_fm_anja_12m/")
+
+
+# brondata -----
+gsheet_prognoses_input <- "https://docs.google.com/spreadsheets/d/1nuJsh_G_sRaJPTicRaWbBdvneVmruzMkxUURhwBYWog"
+# gsheet_prognoses_input <- paste0(path_to_gdrive, "Dataverwerking-bovengronds/PROGNOSES_data_trees.gsheet") # WERKT NIET
+# blijkbaar kan gewone "naam niet, moet zijn
+        # Something that identifies a Google Sheet:
+                # 
+                # - its file id as a string or drive_id
+                # 
+                # - a URL from which we can recover the id
+                # 
+                # - a one-row dribble, which is how googledrive represents Drive files
+                # 
+                # - an instance of googlesheets4_spreadsheet, which is what gs4_get() returns
+
+```
+
+
+```{r results='hold', eval=TRUE}
+path_to_forresdat_data
+path_to_analysis_set_db
+path_to_plotlevel_csv
+path_to_treelevel_csv
+path_to_gdrive
+path_to_meetgegevens
+
+```
+
+# Vraagstelling
+
+Dit script creëertde ruwe tree data voor het project "PROGNOSES".
+
+Zie [PRJ_BR_LIFE-PROGNOSES](https://drive.google.com/drive/folders/1mlOjWInoNNw6fdur1igwE-3Gd_YXomrm?usp=drive_link)
+
+Peter levert een fieldmap-databank aan:
+
+- met enkel de relevante plots (G beuk > 1/3 G totaal)    
+- afgesneden op r = 12 m    
+- met extra info over voorkomen (y/n) van dik staand (L & D) en dik liggend dood hout
+in r = 20 m
+
+Nummering van de plots:   
+
+- IDPlots 2000: onbeheerde plots in Zoniën   
+- IDPlots 2100: uitbreiding Zoniên: beheerde plots  
+- IDPlots 2200: extra beheerde plots, enkel ikv Prognoses   
+
+
+<!-- Onderstaande tabel geeft een overzicht van de gegevens die gebruikt worden voor de analyse.   -->
+
+```{r Overzicht, results="markup", include=FALSE}
+
+data_overzicht <- data.frame(
+  tabelnaam = c("FieldMapData_PROGNOSES_EDIT12m.accdb"),
+  locatie = c(path_to_db),
+  md5 = c(md5(path_to_db))
+)
+
+data_overzicht %>%
+  kable() %>%
+  kable_styling()
+
+
+```
+
+<!-- dbtables geeft lijst van de tabellen aanwezig in de FM-db-->
+
+```{r ConnectieDb, include=FALSE}
+# C:\03_BR\1_DataVerwerkingBR\Aanvraag_gegevens\INBO_Prognoses\PROGNOSES_EDIT12m
+
+con <- odbcConnectAccess2007(path_to_db)
+
+dbtables <- sqlTables(con) %>% filter(TABLE_TYPE != "SYSTEM TABLE")
+str(dbtables)
+
+odbcClose(con)
+
+
+# vb reevraat: conn to AWS
+# library(DBI)
+# myconn <- dbConnect(odbc::odbc(),
+#                            .connection_string = "Driver={Microsoft Access Driver (*.mdb, *.accdb)};DBQ=//172.31.11.14/inbo/Prjdata/Projects/PRJ_Faunabeheer/Monitoring-Vraatschade/Fieldmap/FieldMapData_GameImpact_INBO.accdb")
+# 
+# 
+# Qry_Plots_ICEpunten_Name <- dbGetQuery(myconn, "SELECT * FROM Qry_Plots_ICEpunten_Name")
+
+
+
+```
+
+Nog aan te passen/aan te vullen in db:     
+- rA4 en Area_ha
+- tresholds en rAxx bij de extra plots
+- forest_reserve bij de extra plots (Prognoses_extra)
+- Value3 (CP) in qPlotType
+
+
+*!! plot 2201 en 2214: geen records plotdetails_3eSET => zelf in FM-DC aangepast*
+*bij nieuwe databank of gebruik db op AWS moet dat nog gebeuren!*
+Momenteel ontbreekt er nog een datum (data_dendro)
+
+
+```{r update_db, eval = FALSE}
+con <- odbcConnectAccess2007(path_to_db)
+
+# rA4, tresholds
+   query_update <- paste0("UPDATE PlotDetails_3eSET t SET
+                           t.rA1=3,
+                           t.rA2=6,
+                           t.rA3=12,
+                           t.rA4=12,
+                           t.TresHoldDBH_Trees_A3_alive=50,
+                           t.TresHoldDBH_Trees_A3_dead=50,
+                           t.TresHoldDBH_Trees_A4_alive=300,
+                           t.TresHoldDBH_Trees_A4_dead=100,
+                           t.TresHoldDiam_Deadwood_A4=100,
+                           t.Survey_Trees_YN=10,
+                           t.Survey_Deadwood_YN=10,
+                           t.Survey_Regeneration_YN=10,
+                           t.DataProcessed_YN=10
+                           WHERE t.IDPlots > 1998") %>% noquote()
+   sqlQuery(con,query_update)
+   
+# naam forest_reserve extra plots
+   query_update <- paste0("UPDATE PlotDetails_3eSET t SET
+                           t.ForestReserve='Prognoses_extra'
+                           WHERE t.IDPlots > 2200") %>% noquote()
+   sqlQuery(con,query_update)
+
+
+# r = 12m => plotarea = pi*12*12  
+   query_update <- paste0("UPDATE Plots t SET
+                           t.Area_ha=0.04523893
+                           WHERE t.ID > 1998") %>% noquote()
+   sqlQuery(con,query_update)
+
+# value3 qPlotType niet ingevuld  
+   query_update <- paste0("UPDATE qPlotType t SET
+                           t.Value3='CP'
+                           WHERE t.Value1 = 'Cirkelplot'") %>% noquote()
+   sqlQuery(con,query_update)
+   
+odbcClose(con)
+
+```
+```{r load_LU_lists}
+con <- odbcConnectAccess2007(path_to_db)
+  
+  qSpecies <- sqlFetch(con, "qspecies", stringsAsFactors = FALSE)
+  qDecaystage <- sqlFetch(con, "qdecaystage", stringsAsFactors = FALSE)
+  qHeightClass <- sqlFetch(con, "qHeightClass_regeneration", stringsAsFactors = FALSE)
+  qHerbSpecies <- sqlFetch(con, "qHerbSpecies240810", stringsAsFactors = FALSE)
+  qBrowseIndex <- sqlFetch(con, "qBrowsIndex", stringsAsFactors = FALSE)
+  
+odbcClose(con)
+```
+
+
+```{r}
+qSpecies <- qSpecies %>% 
+  select(1:3) %>% 
+  rename(name_nl = Value1, 
+         name_sc = Value2)
+
+qHerbSpecies <- qHerbSpecies %>% 
+  select(1:3) %>% 
+  rename(name_nl = Value1, 
+         name_sc = Value2)
+
+```
+
+Speciescode prognoses toevoegen
+Zie [gdrive](https://docs.google.com/spreadsheets/d/1nuJsh_G_sRaJPTicRaWbBdvneVmruzMkxUURhwBYWog/edit#gid=339255930)
+
+```{r}
+
+qSpecies_prognoses <- read_sheet(gsheet_prognoses_input, sheet = "species_list")
+names(qSpecies_prognoses)
+
+# test <- read_sheet("G:/Gedeelde drives/Team_Boseco/00_projecten/PRJ_BR_LIFE-PROGNOSES/Dataverwerking-bovengronds/PROGNOSES_data_plots.gsheet")
+# test <- read_xlsx("G:/Gedeelde drives/Team_Boseco/00_projecten/PRJ_BR_LIFE-PROGNOSES/Dataverwerking-bovengronds/test.xlsx")
+# names(qSpecies_prognoses)
+# 
+# test <- read_sheet("G:/Mijn Drive/04_R/PROGNOSES_data_plots.gsheet")
+# test <- read_xlsx("G:/Mijn Drive/04_R/test.xlsx")
+# names(qSpecies_prognoses)
+
+qSpecies_ <- qSpecies %>% 
+  full_join(qSpecies_prognoses, by = c("name_sc" = "species_name"))
+
+# PROGNOSES_data_plots.gsheet
+# PROGNOSES_data_plots.gsheet
+# 
+# G:\Gedeelde drives\Team_Boseco\00_projecten\PRJ_BR_LIFE-PROGNOSES\Dataverwerking-bovengronds\PROGNOSES_data_plots.gsheet
+# 
+# file:///G:/Gedeelde%20drives/Team_Boseco/00_projecten/PRJ_BR_LIFE-PROGNOSES/Dataverwerking-bovengronds/PROGNOSES_data_plots.gsheet
+# smb:///G:/Gedeelde%20drives/Team_Boseco/00_projecten/PRJ_BR_LIFE-PROGNOSES/Dataverwerking-bovengronds/PROGNOSES_data_plots.gsheet
+# G:/Gedeelde drives/Team_Boseco/00_projecten/PRJ_BR_LIFE-PROGNOSES/Dataverwerking-bovengronds/PROGNOSES_data_plots.gsheet
+# 
+# https://docs.google.com/spreadsheets/d/1nuJsh_G_sRaJPTicRaWbBdvneVmruzMkxUURhwBYWog/edit?usp=sharing
+# 
+# 
+# test <- read_sheet("https://docs.google.com/spreadsheets/d/1nuJsh_G_sRaJPTicRaWbBdvneVmruzMkxUURhwBYWog/edit?usp=sharing")
+```
+
+
+
+```{r load_trees}
+# test <- load_data_dendrometry(path_to_db)
+data_dendro <- load_data_dendrometry(path_to_db) %>% filter(period == 3)
+# between(plot_id, 2000, 2300) & 
+
+str(data_dendro)
+
+# data_dendro <- data_dendro %>% 
+#   select(-contains(c("core")))
+```
+
+
+```{r}
+# is er hakhout? JA
+data_dendro %>% filter(ind_sht_cop == 12) %>% nrow() == 0
+```
+
+Hoogtes worden berekend obv hoogtemodellen zoals aangemaakt voor forest_reserve =  
+- Kersselaerspleyn (plot 2001-2065)
+- Zwaenepoel (plot 2101-2186)
+- Prognoses_extra (plot 2201-2223): kopie van "HeightParams_Zwaenep_CP_3.xlsx" (OK voor Peter)
+
+Er wordt tijdelijk deadwood uit dbEls gehaald, omdat er problemen waren met fctie load_deadwood.
+
+```{r load_other_data}
+plotinfo <- load_plotinfo(database = path_to_db) %>% filter(plottype == "CP")
+names(plotinfo)
+
+data_shoots <-
+  load_data_shoots(
+    database = path_to_db
+  ) %>% filter(period == 3)
+
+data_stems  <- compose_stem_data(data_dendro, data_shoots)
+
+
+# path_to_height_models
+height_model <- load_height_models(path_to_height_models)
+
+height_model %>% filter(forest_reserve == "Prognoses_extra") %>% nrow
+# 25
+
+height_model %>% group_by(forest_reserve) %>% summarise(n = n()) %>% ungroup()
+```
+
+
+
+```{r calc_dendro}
+data_stems_calc <- calc_variables_stem_level(data_stems, height_model)
+data_dendro_calc <- calc_variables_tree_level(data_dendro, data_stems_calc)
+names(data_dendro_calc)
+
+```
+
+```{r species_id_prognoses, eval = FALSE}
+# andere species_code - TOCH NIET 
+trees_prognoses_ <- data_dendro_calc %>% 
+    select(plot_id, tree_measure_id, forest_reserve, date_dendro
+         , contains(c("r_A", "dbh_min_a"))
+         , species, alive_dead, ind_sht_cop
+         , dbh_mm, height_m, calc_height_m
+         , decaystage, intact_snag
+         , nr_of_stems, basal_area_m2, vol_bole_m3, vol_crown_m3
+  ) %>% 
+  left_join(qSpecies_,by = c("species" = "ID"))
+
+trees_prognoses_ %>% filter(is.na(species_id)) %>% nrow()
+
+trees_prognoses_ %>% group_by(name_nl, name_sc) %>% summarise(n = n()) %>% ungroup()
+```
+
+
+```{r}
+trees_prognoses <- data_dendro_calc %>% 
+    select(plot_id, tree_measure_id, forest_reserve, date_dendro, period
+         , contains(c("r_A", "dbh_min_a"))
+         , species, alive_dead, ind_sht_cop
+         , dbh_mm, height_m, calc_height_m
+         , decaystage, intact_snag
+         , nr_of_stems, basal_area_m2, vol_bole_m3, vol_crown_m3
+    )
+
+```
+
+Controle op stamniveau
+
+```{r check_height}
+names(data_stems_calc)
+
+check_H <- data_stems_calc %>% 
+  filter(intact_snag == 11 & alive_dead == 11 & !is.na(height_m)) %>% 
+  mutate(check_H = height_m - calc_height_m) %>% 
+  select(plot_id, tree_measure_id, forest_reserve,
+         species, dbh_mm, height_m, calc_height_m, check_H,
+         period, year,
+         alive_dead, intact_snag, ind_sht_cop, decaystage)
+
+check_H2 <- check_H %>% filter(abs(check_H) > 5)
+# Zwaenepoel en Kerss, geen hoogtes gemeten in extra plots
+# behalve van 3 dode snags
+
+# alle bomen hebben een berekende hoogte
+data_stems_calc %>% filter(is.na(calc_height_m)) %>% nrow() == 0
+
+```
+
+
+# Check NA's
+
+Niet alle NA's moeten door een 0 vervangen worden.
+Een NA wijst vaak op een missing value in FM => dat eerst oplossen
+
+> OPGEPAST
+> Als in trees layer het veld `ind_sht_cop` = coppice (12)
+én de  shoot zit toch niet in de shoots layer
+dan wordt een fout gecreëerd in forrescalc (met NA voor volume als gevolg)
+DUS BEST MEENEMEN IN DATACONTROLE
+
+> OOK AANDACHT VOOR MISSING DBH OF HEIGHT VAN SNAGS !!!
+
+
+## Tree-level
+
+```{r check_NA1, eval = FALSE}
+col <- c("dbh_mm", "species", "calc_height_m", "vol_crown_m3",
+         "vol_bole_m3", "vol_crown_m3", 
+         "stem_number_alive_ha", "stem_number_dead_ha",
+         "dbh_class_5cm", "vol_tot_m3",
+         "basal_area_alive_m2_ha", "basal_area_dead_m2_ha", "vol_alive_m3_ha",
+         "vol_dead_standing_m3_ha", "vol_bole_alive_m3_ha", "vol_bole_dead_m3_ha",
+         "intact_snag", "alive_dead", "ind_sht_cop")
+nrow(data_stems_calc  %>%
+       filter_at(col, any_vars(is.na(.)))) == 0
+
+col <- c("dbh_mm", "species", "dbh_class_5cm", "calc_height_m",
+         "basal_area_m2", "vol_bole_m3", "vol_crown_m3", "vol_tot_m3",
+         "basal_area_alive_m2_ha", "basal_area_dead_m2_ha", "vol_alive_m3_ha",
+         "vol_dead_standing_m3_ha", "vol_bole_alive_m3_ha", "vol_bole_dead_m3_ha",
+         "number_of_trees_alive_ha", "number_of_trees_dead_ha")
+
+nrow(data_dendro_calc  %>%
+       filter_at(col, any_vars(is.na(.)))) == 0
+
+```
+
+
+# Vgl met oude data 
+
+```{r }
+trees_calc_old <- read_csv2("C:/03_BR/1_DataVerwerkingBR/Output/_tree-level-data/trees_calc.csv") %>% 
+  filter(period == 3 & between(plot_id, 2000, 2300))
+
+# stems_calc.csv
+
+```
+
+
+```{r vgl }
+vgl <- trees_prognoses %>% 
+  filter(plot_id < 2200) %>% 
+  left_join(trees_calc_old, by = c("plot_id", "tree_measure_id", "period")) %>% 
+  select(plot_id, tree_measure_id, 
+         contains(c("dbh_mm", "calc_height_m", 
+                    "basal_area_m2",
+                    "vol_bole", "vol_crown")),
+         everything()
+         )
+
+vgl <- trees_prognoses %>% 
+  filter(plot_id < 2200) %>% 
+  left_join(trees_calc_old, by = c("plot_id", "tree_measure_id", "period")) %>% 
+  select(plot_id, tree_measure_id, 
+         contains(c("dbh_mm", "calc_height_m", 
+                    "basal_area_m2",
+                    "vol_bole_m", "vol_crown_"))
+         )
+
+summary(vgl)
+# liggen waardes wat in elkaars buurt?
+
+```
+
+
+
+
+# Wegschrijven output
+
+De resultaten worden weggeschreven naar csv.
+
+```{r WegschrijvenOutput}
+write.csv2(trees_prognoses, paste0(path_to_output_c, "trees_prognoses.csv"))
+
+# trees_prognoses_saved <- read_csv2(paste0(path_to_output_c, "trees_prognoses.csv"))
+# t <- trees_prognoses_saved %>% filter(plot_id == 2003)
+# 
+# pi * .data$height_m * .data$dbh_mm^2 / 2000^2
+
+```
+
+
+```{r WegschrijvenOutput_gdrive}
+write.csv2(trees_prognoses, paste0(path_to_output_gdrive, "trees_prognoses.csv"))
+
+```
+
+```{r write_gsheet_test, eval = False}
+
+# write googlesheet?
+# 
+# gs_new(title = "iris sheet", input = iris)
+# 
+# drive_mv("iris sheet", path = "~/R/Demo/")
+
+
+googledrive::drive_auth(email = "*@inbo.be")
+my_sheet <- gs4_create(name = "trees_prognoses", sheets = trees_prognoses) 
+    # komt in hoofdfolder van MyDrive terecht - ok
+    # creëert een my_sheet, dat dan een "google-id" heeft:
+              # 1lvboR6Xy20fR_lPxp41efMcu9iIhVoVuoxK4qz2Lrck
+drive_mv(as_id(my_sheet),
+         path = shared_drive_find("Team_Boseco") %>%
+           drive_ls(pattern = "^00projecten$", type = "folder") %>%
+           drive_ls(pattern = "PRJ_BR_LIFE-PROGNOSES", type = "folder")
+         )
+#my_sheet %>%
+#  googledrive::drive_trash()
+path <- shared_drive_find("Team_Boseco") %>%
+           drive_ls(pattern = "00projecten", type = "folder") %>%
+           drive_ls(pattern = "PRJ_BR_LIFE-PROGNOSES", type = "folder")
+
+?read_sheet
+```
+
