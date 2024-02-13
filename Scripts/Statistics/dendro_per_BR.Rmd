@@ -263,7 +263,7 @@ dataset <- dendro_by_plot %>%
 
 dataset2 <- dendro_by_plot %>%
   filter(plottype == "CP") %>%   # enkel cirkelplots
-  filter(plot_id %in% forest_plot$plot_id)
+  filter(plot_id %in% bosplots$plot_id)
 
 
 table(dataset$forest_reserve, dataset$period)
@@ -279,7 +279,7 @@ table(dataset$forest_reserve, dataset$period)
 
 # korter
 variables_for_statistics <- dataset %>% 
-  select(contains(c("_ha"), "number_of_tree_species")) %>% 
+  dplyr::select(contains(c("_ha", "number_of_tree_species"))) %>% 
   names()
 
 variables_for_statistics
@@ -304,6 +304,24 @@ resultaat <- create_statistics(
 str(resultaat)
 head(resultaat)
 ```
+
+testje tussendoor - temp!!
+
+```{r}
+names(dataset)
+unique(dataset$year)
+
+stat <- create_statistics(
+   dataset = dataset,
+   level = c("forest_reserve", "period"),
+   variables = c("vol_alive_m3_ha"),
+   include_year_range = TRUE
+   ) 
+
+summary(stat)
+
+```
+
 
 ```{r export}
 My.ResultsToDatabase(results = resultaat, 
