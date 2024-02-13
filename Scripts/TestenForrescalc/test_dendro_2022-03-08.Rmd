@@ -89,12 +89,33 @@ range(plotinfo$period)
 
 Eerst dienen de dendrometrische gegevens ingeladen te worden (dendro, deadwood, shoots en stems).
 
+```{r}
+# extra test 9/11/2023
+forestreserve <- "Zwaenepoel"
+forestreserve <- "Everzwijnbad" 
+forestreserve <- "Kluisbos" 
+forestreserve <- "Kersselaerspleyn" 
+plot_type <- "CA"
+plot_type <- "CP"
+
+trees <- load_data_dendrometry(database = path_to_fieldmap_db, 
+                                plottype = plot_type, 
+                                forest_reserve = forestreserve, 
+                                extra_variables = TRUE)
+
+unique(trees$forest_reserve)
+unique(trees$plottype)
+```
+
+
+
+
 ```{r LoadDataDendro}
 data_dendro <- load_data_dendrometry(database = path_to_fieldmap_db, extra_variables = TRUE, processed = TRUE)
-#80849
+#80849 / 83171
 
 # data_dendro_tmp <- load_data_dendrometry(database = path_to_fieldmap_db, extra_variables = TRUE, processed = FALSE)
-#86399
+#86399 / 89382
 
 # data_shoots <- load_data_shoots(database = path_to_fieldmap_db, extra_variables = TRUE)
 data_shoots <- load_data_shoots(database = path_to_fieldmap_db)
@@ -163,7 +184,7 @@ Om een data-opvolgingssysteem te verkrijgen, moet weggeschreven worden naar git.
 
 
 ```{r FunctionCalcDendroGlobal}
-dendro <- calculate_dendrometry(data_dendro, data_deadwood, data_shoots, height_model)
+dendro <- calculate_dendrometry(data_dendro, data_deadwood, data_shoots, height_model, plotinfo)
 
 ```
 
@@ -175,8 +196,9 @@ save_results_access (results = dendro, database = path_to_analysis_set_db, remov
 ```{r save_dendro_git, eval = FALSE}
 # geen plotinfo naar git
 save_results_git(
-  results = dendro,
-  repo_path = path_to_git_forresdat
+  results = dendro
+  , repo_path = path_to_git_forresdat
+  # , strict = FALSE
 )
 ```
 
@@ -282,6 +304,10 @@ check_Kerss_CP_tree_id <- data_dendro %>%
 trees_with_id_Kerss2000 <- create_unique_tree_id(check_1986_tree_id)
 
 trees_with_id_all <- create_unique_tree_id(data_dendro)
+trees_with_id_all %>% filter(is.na(tree_id)) %>% nrow() == 0
+trees_with_id_all <- trees_with_id_all %>% 
+  select(forest_reserve, period, plot_id, tree_measure_id, old_id, tree_id, date_dendro)
+
 
 trees_with_id_all_Kerss <- trees_with_id_all %>% 
   filter(forest_reserve == "Kersselaerspleyn") %>% 
