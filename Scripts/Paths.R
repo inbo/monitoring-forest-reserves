@@ -38,10 +38,10 @@ path_to_dbResults <- paste0(path_to_dataverwerking, "Output/BR_resultaten.accdb"
 dbResults <- path_to_dbResults
 
 
-# Output - gdrive (PRJ_BR_AanvraagGegevens)
+# Output - gdrive (PRJ_BR_AanvraagGegevens) ----
 # path_to_output_gdrive <- "G:/.shortcut-targets-by-id/0B0xcP-eNvJ9dQ2w5ZFhSZEpCU0E/PRJ_BOSECO_ALGEMEEN/PRJ_BR_AanvraagGegevens/"   # oude drive
 
-path_to_output_gdrive <- "G:/Gedeelde drives/Team_Boseco/00_projecten/PRJ_BR_AanvraagGegevens/"
+path_to_output_gdrive <- "G:/Gedeelde drives/Team_Boseco_BR/PRJ_BR_AanvraagGegevens/"
 
 path_to_plotlevel_gdrive <- paste0(path_to_output_gdrive, "00_METADATA-ALL_PLOTS/_plot-level-data/") 
 path_to_treelevel_gdrive <- paste0(path_to_output_gdrive, "00_METADATA-ALL_PLOTS/_tree-level-data/")
@@ -50,7 +50,8 @@ path_to_treelevel_gdrive <- paste0(path_to_output_gdrive, "00_METADATA-ALL_PLOTS
 # Strata, Externe data, .... ------
 dbExterneData <- paste0(path_to_data, "ExterneData/BR_ExterneData.accdb")
 
-dbStrata <- "BR_Strata_2023-05-15.accdb"
+dbStrata <- "BR_Strata_2024-02-22.accdb"
+# dbStrata <- "BR_Strata_2023-05-15.accdb"
 # dbStrata <- "BR_Strata_2022-11-30.accdb"
 # dbStrata <- "BR_Strata_2022-11-07.accdb"
 # dbStrata <- "BR_Strata_2022-02-14.accdb"
