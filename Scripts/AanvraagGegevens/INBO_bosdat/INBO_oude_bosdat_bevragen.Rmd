@@ -1,5 +1,5 @@
 ---
-title: "Tabellen uit bosdat ophaen, joinen en exporteren"
+title: "Tabellen uit bosdat ophalen, joinen en exporteren"
 author: "Anja Leyman"
 date: "`r Sys.Date()`"
 output: 
