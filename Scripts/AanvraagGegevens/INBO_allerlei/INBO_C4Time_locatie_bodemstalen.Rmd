@@ -1,0 +1,235 @@
+---
+title: "Selectie plots C4Time"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: FALSE
+      smooth_scroll: FALSE
+---
+
+
+```{r Rm}
+rm(list=ls())
+
+```
+
+```{r Setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+
+```
+
+```{r paths}
+# deze worden ook in "Setup.R" gedefinieerd (aanroepen van "Paths.R")
+# hier ev. extra "paths" toevoegen indien nodig 
+
+path_to_datarequests
+path_to_datarequests_gdrive
+
+path_to_datarequest <- paste0(path_to_datarequests, "INBO_C4Time/")
+path_to_datarequest_gdrive <- paste0(path_to_datarequests_gdrive, "INBO_C4Time/")
+
+```
+
+
+# Luc vraagt plots 
+
+Zijn er in de bosreservaten cirkelplots die voldoen aan
+ - oude bossen met vooral eik, met een hoge voorraad (>350 m3 per ha bvb)
+ - op een PNV 5 of 6 site
+ - gekoppelde plots
+ 
+
+We hebben niet zoveel plots nodig: ik schat dat 5 à 10 volstaat, liefst wel verspreid over Vlaanderen. Ik kan er enkele bedenken in de bosreservaten: Muizenbos, Rodebos (kernvlakte weliswaar), Wijnendalebos, maar het zou goed zijn om nog wat meer mogelijkheden te hebben (ik denk bvb aan Buggenhoutbos).
+
+Selectie van :
+
+    - cirkelplots 
+    - 2 opnames
+    - zero management
+    - PNV 5 of 6
+    - Ferrarisbos
+    - bestandsvolume > 350 m³/ha NODIG??????????
+    - bms met grootste G is Inlandse eik: 70% of 80% eik
+
+Ter info: VBI-plots geselecteerd obv :
+
+    - plots gebruikt bij de eerdere C-berekeningen
+    - PNV 5 of 6
+    - geen rand-of overgangsplots
+    - geen plots met verschillende segmenten
+    - inschatting bestandsleeftijd > 60 jaar
+    - bestandsvolume > 350 m³/ha
+    - bms met grootste G is Inlandse eik
+    - openbaar bos (eigendom ANB, technisch beheer, huur, erfpacht, toegewezen, beheerovereenkomst en protocol landsverdediging)
+
+
+# Data inladen
+
+```{r load_dendro_by_plot}
+path_to_forresdat_data
+
+dendro_by_plot <- read_forresdat(tablename = "dendro_by_plot", repo_path = path_to_forresdat_data) 
+dendro_by_plot_species <- read_forresdat(tablename = "dendro_by_plot_species", repo_path = path_to_forresdat_data)
+
+dendro_by_plot <- dendro_by_plot %>% 
+  select(forest_reserve, plottype, plot_id, period, survey_number,
+         number_of_trees_ha, basal_area_alive_m2_ha, vol_alive_m3_ha)
+
+dendro_by_plot_species <- dendro_by_plot_species %>% 
+  select(forest_reserve, plottype, plot_id, period, survey_number, 
+         species,
+         number_of_trees_ha, basal_area_alive_m2_ha, vol_alive_m3_ha)
+```
+
+```{r load_strata}
+# PNV 5 of 6
+# inschatting bestandsleeftijd > 60 jaar
+# bms met grootste G is Inlandse eik
+
+plotinfo <- read_vc(file = "plotinfo", root = path_to_forresdat_data)
+qSpecies <- read_vc(file = "qSpecies", root = path_to_forresdat_data)
+
+con <- odbcConnectAccess2007(path_to_strata_db)
+ strata_tables <- sqlTables(con) %>% filter(!str_detect(TABLE_NAME, "MSys"))
+ 
+ pnv <- sqlFetch(con, "strata_soil", stringsAsFactors = FALSE)
+ qpnv <- sqlFetch(con, "qPNV", stringsAsFactors = FALSE)
+
+ management <- sqlFetch(con, "cirkelplots_management_startbeheer_exotenbeheer") 
+ dominant_tree <- sqlFetch(con, "dominant_tree", stringsAsFactors = FALSE)
+ strata_history <- sqlFetch(con, "strata_history", stringsAsFactors = FALSE)
+ 
+odbcClose(con)
+
+
+pnv <- pnv %>% 
+  select(plot_id, PNV)
+qpnv <- qpnv %>%
+   select(PNVcde = Code, PNVtxt = "Nederlandse naam") %>% 
+   mutate(PNVcde = as.integer(PNVcde))
+
+management <- management %>% 
+  filter(censusid == 2) %>% 
+  select(-censusid, -Id)
+
+hist <- strata_history %>% 
+  select(plot_id, hist_beknopt, boslftd_cde, boslftd)
+
+```
+
+
+# Selectie
+
+
+- cirkelplots 
+- zero management
+- PNV 5 of 6
+- Ferrarisbos
+- bms met grootste G is Inlandse eik: 70% of 80% eik
+- 2 opnames
+
+
+```{r minimal_two_surveys}
+two_surveys <- plotinfo %>% 
+  # filter(period != 3) %>% 
+  select(forest_reserve, plot_id, plottype, period, data_processed, year_dendro) %>% 
+  filter(plottype == "CP") %>% 
+  filter(data_processed == TRUE) %>% 
+  group_by(plot_id) %>% 
+  summarize(aantal_surveys = n(),
+            opname_range = paste0(min(year_dendro), "-",max(year_dendro)) 
+            ) %>% 
+  ungroup() %>% 
+  filter(aantal_surveys > 1)
+# unique(two_surveys$forest_reserve)
+
+```
+
+
+```{r selection}
+selection <- dendro_by_plot %>% 
+  # cp
+  filter(plottype == "CP") %>% 
+  # niet beheerd
+  inner_join(management %>% filter(management_indicator == "zero management")
+             , by = c("plot_id" = "plotid")
+             ) %>% 
+  # pnv 5 of 6
+  inner_join(pnv %>% filter(PNV %in% c(5, 6))) %>% 
+  # ferraris
+  inner_join(hist %>% filter(boslftd_cde == 1)) %>% 
+  # dominant tree is eik
+  inner_join(dominant_tree %>% 
+               filter(MaxBasalAreaSpeciesName %in% c("Zomereik", "Wintereik")) %>% 
+               select(-contains("Stamtal"))
+             , by = c("plot_id", "period")
+             ) %>% 
+  # two_surveys
+  inner_join(two_surveys) %>% 
+  mutate_at(c("number_of_trees_ha", "basal_area_alive_m2_ha", "vol_alive_m3_ha"), round, 1)
+
+
+# unique(dominant_tree$MaxBasalAreaSpeciesName)
+```
+
+```{r 70_80_perc_eik, results='hide'}
+names(selection)
+nrow(selection)
+range(selection$survey_number)
+#70 of 80 percent bij 2de opname (nog nergens in deze dataset een derde opname)
+
+recent_70perc_oak <- selection %>% 
+  # group_by(plot_id) %>% 
+  # mutate(recent_survey = max(survey_number)) %>% 
+  # ungroup() %>% 
+  filter(survey_number == 2 & Perc_MaxBasalArea >= 70)
+
+recent_80perc_oak <- selection %>% 
+  # group_by(plot_id) %>% 
+  # mutate(recent_survey = max(survey_number)) %>% 
+  # ungroup() %>% 
+  filter(survey_number == 2 & Perc_MaxBasalArea >= 80)
+
+
+nrow(recent_70perc_oak)
+nrow(recent_80perc_oak)
+```
+# Output
+
+```{r export}
+path_to_datarequest
+
+write.csv2(recent_70perc_oak, paste0(path_to_datarequest, "recent_70perc_oak.csv")) 
+write.csv2(recent_80perc_oak, paste0(path_to_datarequest, "recent_80perc_oak.csv")) 
+
+
+```
+
+Ook rechtstreeks naar gdrive
+
+```{r }
+path_to_datarequest_gdrive
+
+write.csv2(recent_70perc_oak, paste0(path_to_datarequest_gdrive, "recent_70perc_oak.csv")) 
+write.csv2(recent_80perc_oak, paste0(path_to_datarequest_gdrive, "recent_80perc_oak.csv")) 
+
+
+```
+
