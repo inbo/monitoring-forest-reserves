@@ -634,9 +634,13 @@ Info over dominante boomsoort als afzonderlijke tabel behouden, want is een dyna
 
 Dus één record per periode!
 
+Naast `MaxStamtal`, `MaxBasalArea` en `MaxStamtalSpeciesName`, `MaxBasalAreaSpeciesName`
+ook interessant om percentage te kennen: `Perc_MaxStamtal`, `Perc_MaxBasalArea` (22/2/2024 ingevoerd)
+
 ```{r bms_plotlevel_results}
 dendro_by_plot_species <- read_vc(file = "dendro_by_plot_species", root = path_to_forresdat_data)
 names(dendro_by_plot_species)
+
 
 dominant_tree <- dendro_by_plot_species %>% 
   arrange(desc(basal_area_alive_m2_ha)) %>% 
@@ -652,8 +656,8 @@ dominant_tree <- dendro_by_plot_species %>%
 summary(dominant_tree)
 
 # zijn er waar stamtal of basal area 0 is voor alle soorten
-dominant_tree %>% filter(MaxStamtal == 0) %>% nrow() == 1
-dominant_tree %>% filter(MaxStamtal == 0)
+dominant_tree %>% filter(MaxStamtal == 0 & !is.na(MaxStamtalSpeciesID)) %>% nrow() == 1
+dominant_tree %>% filter(MaxStamtal == 0 & !is.na(MaxStamtalSpeciesID))
 # ja, één plot: 475
 # ??waarom deze Lork? wellicht eerste soort => correctie in volgende chunck
 
@@ -681,11 +685,56 @@ for (i in col){
 }
 
 # is aanpassing gelukt? 
-dominant_tree %>% filter(MaxStamtal == 0)
+dominant_tree %>% filter(MaxStamtal == 0 & !is.na(MaxStamtalSpeciesID)) %>% nrow() == 0
 # JA
 
-dominant_tree <- dominant_tree_
+dominant_tree <- dominant_tree_ %>% 
+  filter(!is.na(MaxStamtalSpeciesID))
 ```
+
+
+```{r perc_tov_totaal}
+dendro_by_plot <- read_vc(file = "dendro_by_plot", root = path_to_forresdat_data)
+names(dendro_by_plot)
+
+dominant_tree_ <- dominant_tree %>% 
+  left_join(dendro_by_plot %>% 
+              select(plot_id, period, number_of_trees_ha, basal_area_alive_m2_ha),
+            by = c("plot_id", "period"))
+
+# check of BA van soort niet groter is dabn totaal BA
+dominant_tree_ %>% 
+  mutate(check = round(basal_area_alive_m2_ha, 1) < MaxBasalArea) %>% 
+  filter(check) %>% 
+  nrow() == 0
+
+dominant_tree_ %>% 
+  mutate(check = round(number_of_trees_ha, 1) < MaxStamtal) %>% 
+  filter(check) %>% 
+  nrow() == 0
+
+
+names(dominant_tree_)
+# calc percentage
+dominant_tree_ <- dominant_tree_ %>% 
+  mutate(Perc_MaxStamtal = round(100*MaxStamtal/round(number_of_trees_ha, 1), 1),
+         Perc_MaxBasalArea = round(100*MaxBasalArea/round(basal_area_alive_m2_ha,1), 1)
+         # 2x afronden anders soms 100.1 %
+         ) %>% 
+  select(plot_id, period,
+         MaxStamtalSpeciesID, MaxStamtalSpeciesName,
+         MaxStamtal, Perc_MaxStamtal, 
+         # number_of_trees_ha,
+         MaxBasalAreaSpeciesID, MaxBasalAreaSpeciesName,
+         MaxBasalArea, Perc_MaxBasalArea
+         # , basal_area_alive_m2_ha
+         )
+  
+summary(dominant_tree_)
+
+dominant_tree <- dominant_tree_ 
+```
+
 
 
 
