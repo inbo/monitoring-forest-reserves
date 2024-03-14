@@ -1,0 +1,17 @@
+---
+title: "Untitled"
+author: "Anja leyman"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+INBOmd: zie mail Thierry van 29/11/2023 "Nieuwe versie van INBOmd"
+
+https://mail.google.com/mail/u/0/#label/R?compose=CllgCJlLWsgwfrSTPHCSlrvzCFxxtQTtJvtgtQRzVVSrWprTfdXzkRCmSzLTprxGVSssvDGstlV
+
+
+```{r}
+install.packages("INBOmd")
+
+```
+

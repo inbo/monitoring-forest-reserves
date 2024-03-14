@@ -1,0 +1,120 @@
+---
+title: "Meetnet Spontane Dynamiek Bosreservaten"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,
+                      message = FALSE)
+
+library(tidyverse)
+library(plotly)
+library(crosstalk)
+```
+
+# Resultaten {.tabset}
+
+## Biomassa
+
+```{r}
+stat_carbon <- read_csv2("../data/stat_carbon.csv")
+stat_dendro <- read_csv2("../data/stat_dendro.csv")
+
+stat_carbon_wide <- stat_carbon %>%
+  filter(forest_reserve != "Kluisbos_managed_non_intervention") %>%
+  mutate(lci_diff = mean - lci,
+         uci_diff = uci - mean) %>%
+  select(forest_reserve, period, variable, mean, lci_diff, uci_diff) %>%
+  pivot_wider(names_from = "variable", values_from = c("mean", "lci_diff", uci_diff)) %>%
+  mutate(forest_reserve = factor(forest_reserve),
+         forest_reserve = fct_reorder(forest_reserve, mean_BiomassAboveGr_t_ha))
+```
+
+```{r}
+select_var <- "BiomassAboveGr_t_ha"
+
+sd <- SharedData$new(stat_carbon_wide)
+
+bscols(widths = c(4, 4),
+       filter_select("br", "Selecteer bosreservaat", sd, ~forest_reserve),
+       filter_checkbox("periode", "Selecteer periode", sd, ~period))
+
+bscols(widths = c(6, 6),
+       sd %>%
+        plot_ly(x = ~mean_BiomassAboveGr_t_ha, y = ~forest_reserve, type = 'scatter', split = ~period, mode = 'markers',
+                error_x = ~list(array = uci_diff_BiomassAboveGr_t_ha)) %>%
+        layout(legend = list(title = list(text = 'Periode')),
+               xaxis = list(title = "BiomassAboveGr_t_ha"),
+               yaxis = list(title = "Bosreservaat")),
+       sd %>%
+        plot_ly(x = ~mean_BiomassBelowGr_t_ha, y = ~forest_reserve, type = 'scatter', split = ~period, mode = 'markers',
+                error_x = ~list(array = uci_diff_BiomassBelowGr_t_ha)) %>%
+        layout(legend = list(title = list(text = 'Periode')),
+               xaxis = list(title = "BiomassBelowGr_t_ha"),
+               yaxis = list(title = "Bosreservaat")))
+
+bscols(widths = c(6, 6),
+       sd %>%
+        plot_ly(x = ~mean_CarbonAboveGr_t_ha, y = ~forest_reserve, type = 'scatter', split = ~period, mode = 'markers',
+                error_x = ~list(array = uci_diff_CarbonAboveGr_t_ha)) %>%
+        layout(legend = list(title = list(text = 'Periode')),
+               xaxis = list(title = "CarbonAboveGr_t_ha"),
+               yaxis = list(title = "Bosreservaat")),
+       sd %>%
+        plot_ly(x = ~mean_CarbonBelowGr_t_ha, y = ~forest_reserve, type = 'scatter', split = ~period, mode = 'markers',
+                error_x = ~list(array = uci_diff_CarbonBelowGr_t_ha)) %>%
+        layout(legend = list(title = list(text = 'Periode')),
+               xaxis = list(title = "CarbonBelowGr_t_ha"),
+               yaxis = list(title = "Bosreservaat")))
+```
+
+## Dendrometerie
+
+```{r}
+stat_dendro <- read_csv2("../data/stat_dendro.csv")
+
+stat_dendro_wide <- stat_dendro %>%
+  filter(forest_reserve != "Kluisbos_managed_non_intervention") %>%
+  mutate(lci_diff = mean - lci) %>%
+  select(forest_reserve, period, variable, mean, lci_diff) %>%
+  pivot_wider(names_from = "variable", values_from = c("mean", "lci_diff")) %>%
+  mutate(forest_reserve = factor(forest_reserve),
+         forest_reserve = fct_reorder(forest_reserve, mean_vol_alive_m3_ha))
+```
+
+```{r}
+
+sd <- SharedData$new(stat_dendro_wide)
+
+bscols(widths = c(4, 4),
+       filter_select("br", "Selecteer bosreservaat", sd, ~forest_reserve),
+       filter_checkbox("periode", "Selecteer periode", sd, ~period))
+
+bscols(widths = c(6, 6),
+       sd %>%
+        plot_ly(x = ~mean_vol_alive_m3_ha, y = ~forest_reserve, type = 'scatter', split = ~period, mode = 'markers',
+                error_x = ~list(array = lci_diff_vol_alive_m3_ha)) %>%
+        layout(legend = list(title = list(text = 'Periode')),
+               xaxis = list(title = "vol_alive_m3_ha"),
+               yaxis = list(title = "Bosreservaat")),
+       sd %>%
+        plot_ly(x = ~mean_vol_dead_standing_m3_ha, y = ~forest_reserve, type = 'scatter', split = ~period, mode = 'markers',
+                error_x = ~list(array = lci_diff_vol_dead_standing_m3_ha)) %>%
+        layout(legend = list(title = list(text = 'Periode')),
+               xaxis = list(title = "vol_dead_standing_m3_ha"),
+               yaxis = list(title = "Bosreservaat")))
+
+bscols(widths = c(6, 6),
+       sd %>%
+        plot_ly(x = ~mean_vol_deadw_m3_ha, y = ~forest_reserve, type = 'scatter', split = ~period, mode = 'markers',
+                error_x = ~list(array = lci_diff_vol_deadw_m3_ha)) %>%
+        layout(legend = list(title = list(text = 'Periode')),
+               xaxis = list(title = "vol_deadw_m3_ha"),
+               yaxis = list(title = "Bosreservaat")),
+       sd %>%
+        plot_ly(x = ~mean_vol_log_m3_ha, y = ~forest_reserve, type = 'scatter', split = ~period, mode = 'markers',
+                error_x = ~list(array = lci_diff_vol_log_m3_ha)) %>%
+        layout(legend = list(title = list(text = 'Periode')),
+               xaxis = list(title = "vol_log_m3_ha"),
+               yaxis = list(title = "Bosreservaat")))
+```

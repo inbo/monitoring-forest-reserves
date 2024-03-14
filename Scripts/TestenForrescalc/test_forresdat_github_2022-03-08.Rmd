@@ -58,14 +58,56 @@ Eén dataverantwoordelijke schrijft op regelmatige tijdstippen berekende data op
 Omgekeerd dient iedereen eerst een lokale kopie van forresdat aan te maken
 
 Inladen van deze data kan vervolgens heel makkelijk met behulp van `read_forresdat`.
+Default worden enkel de CP's ingeladen.
+
 
 
 ```{r ReadGit}
 dendro_by_plot<- read_forresdat("dendro_by_plot", path_to_git_forresdat, join_plotinfo=TRUE, plottype = c("CP", "CA"))
 unique(dendro_by_plot$plottype)
+# enkel CP !!!
 
 dendro_by_plot2<- read_forresdat("dendro_by_plot", path_to_git_forresdat, join_plotinfo=FALSE)
+# alles, maar geen info over CP of CA - OK
+range(dendro_by_plot2$plot_id)
+
+dendro_by_plot3<- read_forresdat("dendro_by_plot", path_to_git_forresdat, join_plotinfo=TRUE)
+# enkel CP !!!
 
 dendro_by_plot_CA <- read_forresdat("dendro_by_plot", path_to_git_forresdat, join_plotinfo=TRUE, plottype = "CA")
+unique(dendro_by_plot_CA$plottype)
+# enkel CA - OK
+
+dendro_by_plot_CP <- read_forresdat("dendro_by_plot", path_to_git_forresdat, join_plotinfo=TRUE, plottype = "CP")
+unique(dendro_by_plot_CP$plottype)
+# enkel CP - OK
+
+
+dendro_by_plot4<- read_forresdat("dendro_by_plot", path_to_git_forresdat, join_plotinfo=FALSE, plottype = "CP")
+# alles, maar geen info over CP of CA - OK
+range(dendro_by_plot4$plot_id)
+
+
+```
+
+?? "To load table plotinfo, set argument `join_plotinfo = FALSE`."
+= om de tabel "plotinfo" zelf in te laden !!
+
+```{r}
+plotinfo <- read_forresdat("plotinfo", path_to_git_forresdat, join_plotinfo=FALSE)
+names(plotinfo)
+```
+
+```{r}
+dendro_by_plot<- read_forresdat("dendro_by_plot", path_to_git_forresdat, join_plotinfo=FALSE, plottype = c("CP", "CA"))
+unique(dendro_by_plot$plottype)
+
+dendro_by_plot<- read_forresdat("dendro_by_plot", path_to_git_forresdat, join_plotinfo=FALSE)
+dendro_by_plot2<- read_forresdat("dendro_by_plot", path_to_git_forresdat, join_plotinfo=TRUE)
+dendro_by_plot3<- read_forresdat("dendro_by_plot", path_to_git_forresdat)
+names(dendro_by_plot)
+names(dendro_by_plot2)
+names(dendro_by_plot3)  # enkel CP's, alle info
+
 ```
 

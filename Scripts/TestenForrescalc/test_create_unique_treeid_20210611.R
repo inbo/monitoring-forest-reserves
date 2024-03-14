@@ -1,3 +1,8 @@
+# data_dendro <- trees
+
+trees_with_id <- create_unique_tree_id(data_dendro) %>% 
+  select(forest_reserve, period, plot_id, tree_measure_id, old_id, tree_id, date_dendro)
+
 
 
 status_tree <- data_dendro %>%

@@ -106,6 +106,10 @@ con <- odbcConnectAccess2007(path_to_analysis_set_db)
       dbtables <- sqlTables(con) %>% 
                 filter(str_detect(TABLE_NAME, "MSys", negate = TRUE ))
                 # wegfilteren van records waar TABLE_NAME "MSys" bevat
+      
+      regeneration_by_plot <- sqlFetch(con, "regeneration_by_plot")
+      dendro_by_plot  <- sqlFetch(con, "dendro_by_plot")
+      
 odbcClose(con)
 
 ```
@@ -121,8 +125,11 @@ Om een data-opvolgingssysteem te verkrijgen, moet weggeschreven worden naar git,
 ```{r DiffRegPlot}
 str(regeneration_by_plot)
 
-r1 <- compare_periods(regeneration_by_plot, c("year", "number_of_tree_species", "min_number_of_trees_ha", "max_number_of_trees_ha")) %>% 
-  filter(forest_reserve == "Muizenbos")
+
+r1 <- compare_periods_per_plot(regeneration_by_plot %>% filter(subplot_id == 1) %>% select(period, plot_id, year, number_of_tree_species, mean_number_established_ha), c("year", "number_of_tree_species", "mean_number_established_ha")) 
+
+# %>% 
+#   filter(forest_reserve == "Muizenbos")
 
 
 str(regeneration_by_plot_height)
@@ -176,6 +183,15 @@ t <- dendro_by_plot %>%
 
 ```
 
+```{r}
+treenr_by_plot <-
+   read_forresdat(tablename = "dendro_by_plot", repo_path = path_to_forresdat_data) %>%
+   select(period, year, plot_id, number_of_tree_species, number_of_trees_ha) %>%
+   distinct()
+
+str(treenr_by_plot)
+compare_periods_per_plot(treenr_by_plot, c("year", "number_of_tree_species", "number_of_trees_ha"))
+```
 
 
 ```{r DiffDendroPlot_BR}
@@ -183,10 +199,13 @@ t <- dendro_by_plot %>%
 colnames(dendro_by_plot)
 
 data <- dendro_by_plot %>% 
-  select(forest_reserve, year, period, plot_id, vol_alive_m3_ha) %>%
+  select(year, period, plot_id, vol_alive_m3_ha) %>%
   distinct()
 
-diff <- compare_periods_per_plot(dataset = data, measure_vars = c("year", "vol_alive_m3_ha"))
+str(data)
+diff <- compare_periods_per_plot(treenr_by_plot, c("year", "number_of_tree_species", "number_of_trees_ha"))
+
+diff <- compare_periods_per_plot(data, c("year", "vol_alive_m3_ha"))
 
 
 # zonder p3
