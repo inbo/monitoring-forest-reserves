@@ -5,7 +5,6 @@
 path_to_dataverwerking <- "C:/03_BR/1_DataverwerkingBR/"
 path_to_forrescalc <- "C:/03_BR/2_Forrescalc_Forresdat/1_forrescalc/R/"
 path_to_git_forresdat <- "C:/03_BR/2_Forrescalc_Forresdat/2_forresdat/"
-path_to_fieldmap <- "C:/03_BR/3_dB_Els_deel2/"
 path_to_teamdrive <- "G:/Gedeelde drives/Team_Boseco_BR/"
 
 # zou ev. ook AWS kunnen worden, dan wel vpn opzetten als niet in VAC
@@ -20,8 +19,14 @@ path_to_reserves <- "C:/03_BR_gebieden/"
 
 
 # Fieldmap-db ------
+
+path_to_fieldmap <- "C:/03_BR_db_monitoring/3_dB_Els_deel2_vs20231012/"
+# path_to_fieldmap <- "C:/03_BR_db_monitoring/dB_Els_deel2_vs20220714/"
+
+
 dbFieldmap <- "FieldMapData_dB_Els_deel2.accdb"
 path_to_fieldmap_db <- paste0(path_to_fieldmap, dbFieldmap)
+
 
 
 # Data -------
@@ -65,10 +70,12 @@ path_to_strata_db <- paste0(path_to_strata, dbStrata)
 path_to_meetgegevens <- paste0(path_to_data, "Meetgegevens/")
 
 
-# OVERIGE
+# Hoogtemodellen ----
 path_to_height_models <- paste0(path_to_data, "Hoogtemodellen/")
 path_to_heightmodels_teamdrive <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverwerking/Hoogtemodellen/")
 
+
+# Data-aanvragen ------
 path_to_datarequests <- paste0(path_to_dataverwerking, "Aanvraag_gegevens/")
 path_to_datarequests_gdrive <- path_to_output_gdrive
 
