@@ -6,6 +6,7 @@ path_to_dataverwerking <- "C:/03_BR/1_DataverwerkingBR/"
 path_to_forrescalc <- "C:/03_BR/2_Forrescalc_Forresdat/1_forrescalc/R/"
 path_to_git_forresdat <- "C:/03_BR/2_Forrescalc_Forresdat/2_forresdat/"
 path_to_fieldmap <- "C:/03_BR/3_dB_Els_deel2/"
+path_to_teamdrive <- "G:/Gedeelde drives/Team_Boseco_BR/"
 
 # zou ev. ook AWS kunnen worden, dan wel vpn opzetten als niet in VAC
 # vb-code van faunabeheer (sander devisscher)
@@ -41,7 +42,7 @@ dbResults <- path_to_dbResults
 # Output - gdrive (PRJ_BR_AanvraagGegevens) ----
 # path_to_output_gdrive <- "G:/.shortcut-targets-by-id/0B0xcP-eNvJ9dQ2w5ZFhSZEpCU0E/PRJ_BOSECO_ALGEMEEN/PRJ_BR_AanvraagGegevens/"   # oude drive
 
-path_to_output_gdrive <- "G:/Gedeelde drives/Team_Boseco_BR/PRJ_BR_AanvraagGegevens/"
+path_to_output_gdrive <- paste0(path_to_teamdrive, "PRJ_BR_AanvraagGegevens/")
 
 path_to_plotlevel_gdrive <- paste0(path_to_output_gdrive, "00_METADATA-ALL_PLOTS/_plot-level-data/") 
 path_to_treelevel_gdrive <- paste0(path_to_output_gdrive, "00_METADATA-ALL_PLOTS/_tree-level-data/")
@@ -56,18 +57,19 @@ dbStrata <- "BR_Strata_2024-02-22.accdb"
 # dbStrata <- "BR_Strata_2022-11-07.accdb"
 # dbStrata <- "BR_Strata_2022-02-14.accdb"
 # dbStrata <- "BR_Strata_2022-02-11.accdb"
-path_to_strata <- paste0(paste0(path_to_data, "Strata/"))
-path_to_strata_db <- paste0(paste0(path_to_strata, dbStrata))
+path_to_strata <- paste0(path_to_data, "Strata/")
+path_to_strata_db <- paste0(path_to_strata, dbStrata)
 
 
 # Extra meetgegevens ----
-path_to_meetgegevens <- paste0(paste0(path_to_data, "Meetgegevens/"))
+path_to_meetgegevens <- paste0(path_to_data, "Meetgegevens/")
 
 
 # OVERIGE
-path_to_height_models <- paste0(paste0(path_to_data, "Hoogtemodellen/"))
+path_to_height_models <- paste0(path_to_data, "Hoogtemodellen/")
+path_to_heightmodels_teamdrive <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverwerking/Hoogtemodellen/")
 
-path_to_datarequests <- paste0(paste0(path_to_dataverwerking, "Aanvraag_gegevens/"))
+path_to_datarequests <- paste0(path_to_dataverwerking, "Aanvraag_gegevens/")
 path_to_datarequests_gdrive <- path_to_output_gdrive
 
 
