@@ -3,8 +3,8 @@
 ### ALGEMEEN ----
 
 path_to_dataverwerking <- "C:/03_BR/1_DataverwerkingBR/"
-path_to_forrescalc <- "C:/03_BR/2_Forrescalc_Forresdat/1_forrescalc/R/"
-path_to_git_forresdat <- "C:/03_BR/2_Forrescalc_Forresdat/2_forresdat/"
+path_to_forrescalc <- "C:/03_BR/2_Forrescalc/R/"
+path_to_git_forresdat <- "C:/03_BR/2_Forresdat/"
 path_to_teamdrive <- "G:/Gedeelde drives/Team_Boseco_BR/"
 
 # zou ev. ook AWS kunnen worden, dan wel vpn opzetten als niet in VAC
@@ -76,7 +76,7 @@ path_to_heightmodels_teamdrive <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverw
 
 
 # Data-aanvragen ------
-path_to_datarequests <- paste0(path_to_dataverwerking, "Aanvraag_gegevens/")
+path_to_datarequests <- "C:/03_BR/3_Aanvraag_gegevens/"
 path_to_datarequests_gdrive <- path_to_output_gdrive
 
 
