@@ -144,12 +144,15 @@ height_model %>% group_by(forest_reserve) %>% summarise(n = n()) %>% ungroup() %
 # Walenbos	28	- OK, als algemeen voor beide KV's, niet gelinkt aan een feitelijke KV (= Walenbos KV1 en Walenbos OT)
 ```
 
-# Correctie year van dendrometrie
+# Correctie year van dendrometrie - NIET MEER NODIG
 Gevraagd aan Els (issue #114)
 
 Year = jaar van groeiseizoen
 Grens was gelegd op 1/7, nu naar 1/5.
-Aangevraagd in issue # 114, nog niet geïmplementeerd (28/4/2023)
+Aangevraagd in issue # 114, OK (27/3/2024)
+
+*Berekening van year en year_dendro aangepast voor load_data_dendrometry() en load_plotinfo(): t.e.m. 30 april wordt nog bij het vorige jaar geteld, vanaf 1 mei wordt bij het nieuwe jaar geteld (1 mei bij huidig jaar).*
+
 
 Hier geen sluitende code, gewoon deze waarvan ik weet dat het niet klopt, die aanpassen: 
 
@@ -308,21 +311,19 @@ data_deadwood %>% filter(is.na(calc_volume_m3)) %>% nrow()
 # 2 (intacte)
 ```
 
-## Intacte bomen - correctie mbv R-code (voorlopig)
+## Intacte bomen - correctie mbv R-code - NIET MEER NODIG
 
 Indien deadwood als intact (veld `IntactFragment`) aangevinkt staat, moeten er 
 **tarieven** gebruikt worden om dit volume te berekenen.
 
-> Issue # 105 aangemaakt in forrescalc. Zal geïmplementeerd worden.
-Toch nog steeds eens checken of intact-fragment wel klopt!!
+> Issue # 105 aangemaakt in forrescalc. Is geïmplementeerd.
+Toch nog eens checken of intact-fragment wel klopt!!
+(klopte alvast wel bij Wijnendale KV, één intacte kastanje - sp 64)
 
 Er werd afgesproken met Peter `intact` enkel nog te gebruiken voor de BE's of de KV's  
 (als bomen tenminste plotgrens van KV niet overschrijden). 
 
-- Enkel in *Kerss* KV - 2eSET & 3eSET staan nog (veel) intacte bomen: 
-klopt wel degelijk...voor KV KP = BEkartering....
-- In 1eSET geen intacte bomen meer (aangevuld met fragmenten - copy van 2eSET - door Peter)
-- Héél uitzonderlijk in 3e SET: 2 bomen in KV *Rodebos* (plot 43000 - volledig binnen plot)
+- hier in KV Wijnendale één intacte
 
 In onderstaande code wordt het volume voor intacte bomen (ook indien NIET NA) 
 bijgewerkt obv tarieven (stam + kroon), 
@@ -393,6 +394,8 @@ table(posssible_fragment$decaystage)
 write_csv2(posssible_fragment, here::here("output/posssible_fragment_Kerss_KV.csv"))
 
 ```
+
+
 ```{r select_intact_deadw}
 ## TIJDELIK toch nog doen , lijkt nog niet aangepoast in db
 data_deadwood_intact_TOCH_NIET <- data_deadwood %>% 
@@ -1467,7 +1470,7 @@ save_results_tsv(dendro,
 
 
 ```{r save_dendro_access_csv, eval = FALSE}
-# hier wel plotinfo (plottyupe, BR, surveynr mee wegschrijven)
+# hier wel plotinfo (plottype, BR, surveynr mee wegschrijven)
 
 # volgende functie heb ik zelf geschreven, zit niet in het package!
 save_results_csv (
