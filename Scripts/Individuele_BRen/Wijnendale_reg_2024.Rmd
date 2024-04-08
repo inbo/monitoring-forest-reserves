@@ -1,0 +1,594 @@
+---
+title: "Dataverwerking - regeneration"
+subtitle: "Wijnendale - cirkelplots & kernvlakte"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: TRUE
+      smooth_scroll: TRUE
+---
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 7,
+  fig.height = 3,
+  fig.align = TRUE)
+
+library(here)
+library(writexl)
+library(scales)
+
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+
+```
+
+
+```{r Setup2}
+forestreserve <- "Wijnendalebos"
+forestreserve_short <- forestreserve
+forestreserve_short <- "Wijnendale"
+# plot_type <- "CA"
+# plot_type <- "CP"
+
+forestreserve_folder <- paste0(path_to_reserves, "4b_Wijnendale")
+
+path_to_datarequest <- paste0(forestreserve_folder, "/verwerking_2024_1e2e3eSET/output_forrescalc/")
+path_to_datarequest_teamdrive <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverwerking/per_gebied/2024_", forestreserve_short, "/output_forrescalc/")
+
+# plots_to_exclude <- c(701, 707, 709, 727, 728, 738, 739, 740, 759, 760)
+
+path_to_datacontrol <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverwerking/per_gebied/2024_", forestreserve_short, "/datacontrole/")
+
+```
+
+
+TIJDELIJK `path_to_fieldmap_db` aanpassen naar export van wijnendale en everzwijnbad uit moederdb (4/3/2024)
+
+```{r Path_tmp}
+path_to_fieldmap_db <- "C:/03_BR_db_monitoring/3_db_Els_deel2_Wijn_Ever/FieldMapData_3_db_Els_deel2_Wijn_Ever.accdb"
+```
+
+
+
+# Vraagstelling
+
+**Bosreservaat `r forestreserve`**
+
+Dataverwerking Wijnendale (nalv 3eSET), gebruik makend van (nieuwe) forrescalc.
+
+<br>
+
+
+```{r results='hold', eval=TRUE}
+path_to_forresdat_data
+path_to_analysis_set_db
+path_to_plotlevel_csv
+path_to_treelevel_csv
+path_to_output_gdrive
+path_to_meetgegevens
+
+```
+
+# Load plotinfo
+
+Plotinfo samenstellen, zijnde plottype, naam forest_reserve en info over survey en data al dan niet processed.
+Wegschrijven naar git, access en opslaan als csv
+
+```{r plotinfo_load}
+plotinfo <- load_plotinfo(database = path_to_fieldmap_db) %>% 
+  filter(forest_reserve == forestreserve)
+names(plotinfo)
+```
+# Load lookuplijsten
+
+```{r load_lkp}
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+
+  # qIndShootCop <- sqlFetch(con, "qIndShootCop", stringsAsFactors = FALSE)
+  # # deadw_test <- sqlFetch(con, "Deadwood_3eSET", stringsAsFactors = FALSE)
+  # qAliveDead <- sqlFetch(con, "qAliveDead", stringsAsFactors = FALSE)
+  # qSpecies <- sqlFetch(con, "qSpecies", stringsAsFactors = FALSE)
+  # qDecaystage <- sqlFetch(con, "qdecaystage", stringsAsFactors = FALSE)
+  # qIntactSnag <- sqlFetch(con, "qIntactSnag", stringsAsFactors = FALSE)
+  # qVdagnVfm <- sqlFetch(con, "qVdagnVfm", stringsAsFactors = FALSE)
+  #   
+  # qHerbSpecies240810<- sqlFetch(con, "qHerbSpecies240810", stringsAsFactors = FALSE)
+  # qCoverHerbs <- sqlFetch(con, "qCoverHerbs", stringsAsFactors = FALSE)
+  qBrowsIndex <- sqlFetch(con, "qBrowsIndex", stringsAsFactors = FALSE)
+  
+  qHeightClass_regeneration <- sqlFetch(con, "qHeightClass_regeneration", stringsAsFactors = FALSE)
+  qnumber_regeneration_classes <- sqlFetch(con, "qnumber_regeneration_classes", stringsAsFactors = FALSE)
+  
+  qcommonremark <- sqlFetch(con, "qcommonremark", stringsAsFactors = FALSE)
+  # qCrownVolRedu <- sqlFetch(con, "qCrownVolRedu", stringsAsFactors = FALSE)
+  # qBranchLenghtReduction <- sqlFetch(con, "qBranchLenghtReduction", stringsAsFactors = FALSE)
+  # 
+  # qiufroheight <- sqlFetch(con, "qiufroheight", stringsAsFactors = FALSE)
+  # qiufroheight_shoots <- sqlFetch(con, "qiufroheight_shoots", stringsAsFactors = FALSE)
+  # qiufrovitality <- sqlFetch(con, "qiufrovitality", stringsAsFactors = FALSE)
+  # qiufrovitality_shoots <- sqlFetch(con, "qiufrovitality_shoots", stringsAsFactors = FALSE)
+  # qiufrosocialstatus <- sqlFetch(con, "qiufrosocialstatus", stringsAsFactors = FALSE)
+  # qiufrosocialstatus_shoots <- sqlFetch(con, "qiufrosocialstatus_shoots", stringsAsFactors = FALSE)
+  
+odbcClose(con)
+
+```
+
+# Load regeneration
+
+```{r load_reg}
+data_regeneration <-
+  load_data_regeneration(
+    database = path_to_fieldmap_db,
+    processed = TRUE
+  ) %>% 
+  filter(forest_reserve == forestreserve)
+
+```
+
+
+Velden `data_regeneration`:  
+
+- number_class: 1 tem 1001 (LU-list)
+(1, 2-5, 6-10, 11-20, 21-40, 41-60,61-100, >100, >1000 --> 1,3,8,15,30,50,80,101,1001)    
+
+- nr_of_regeneration: exact aantal    
+
+- rubbing_damage_number    
+
+- rubbing_damage_perc: procentueel tov totaal aantal 
+
+- approx_nr_regeneration: mid-waarde cfr Kris van interval    
+
+- min_number_of_regeneration: exacte waarde OF min-waarde interval   
+
+- max_number_of_regeneration: exacte waarde OF max-waarde interval    
+
+- subcircle: A1 of A2: seedlings vs established   
+
+- subcirclearea_ha: enkel berekend bij CP's (als `r_A1` & `r_A2` bestaa,); NA bij KV's    
+
+- plotarea_ha:     
+
+  * CP's: steeds gelijk aan subcirclearea_ha    
+  * KV's (als (1) niet kan, dan (2) en dan pas (3)):   
+      (1) length_core_area_m * width_core_area_m OF    
+      (2) core_area_ha < Area_ha uit Plotdetails OF    
+      (3) totalplotarea_ha < Area_ha of Area_m2 uit layer Plots    
+           
+
+
+```{r}
+select_colnames_reg <- data_regeneration %>% select(1:2, 4, period, year, subcircle
+         , height_class, species, number_class, nr_of_regeneration
+         , approx_nr_regeneration, min_number_of_regeneration, max_number_of_regeneration
+         , rubbing_damage_number, rubbing_damage_perc
+         ) %>% 
+  colnames()
+```
+
+
+
+
+# Check aantalsklasse (A1) vs exact aantal (A2)
+
+Volgens de standaard methodiek zou `aantal` steeds een aantalsklasse moeten zijn 
+bij seedlings (subcircle = A1) en een exact aantal bij established(subcircle = A2).
+Het is goed om het package in die zin op te bouwen.
+
+MAAR er zijn ook bosreservaten waar de standaard methodiek niet gevolgd werd (bv. Everzwijnbad)
+Dat zijn geen fouten in de dataset, maar gewoon iets andere afspraken toendertijd.
+
+Els heeft het package in die zin aangepast door in `load_data_regeneration()` 
+min, max en approx gelijk te stellen aan `nr_regeneration` ingeval van A2. 
+In het andere geval (A1) wordt voorrang gegeven aan de klassen om min, max en approx 
+in te vullen, wat voor de aanpassing de algemene regel was voor min, max en approx."
+(zie issue #106)
+
+
+```{r check_data_nr_A1A2}
+names(data_regeneration)
+
+data_regeneration %>% filter(!is.na(nr_of_regeneration) & !is.na(number_class)) %>% nrow()
+# 1211 van de 33000 // 177 van 2525 waar beide ingevuld staan
+
+test <- data_regeneration %>% filter(!is.na(nr_of_regeneration) & !is.na(number_class)) %>% 
+  select(select_colnames_reg)
+table(test$subcircle)
+# A1 A2 
+# 89  1
+# komt meer voor bij seedlings: exact number dat vertaald is naar numberclass 
+# (is gebeurd bij de datacontrole of op terrein - zit niet in package)
+```
+
+Als beide beschikbaar zijn, zal package voor berekening van min, max en approx zich bij de A1 sowieso 
+op de numberclass baseren, zelfs al is er een exact number bekend. 
+Dat is OK zo, strookt met de standaard methodiek.
+
+**MAAR** als er enkel een exact number is bij **A1**, en géén number class, wordt het exact number gebruikt.
+Omgekeerd ook bij **A2**: als er enkel een klasse genoteerd werd, en géén number, dan zal
+het package de klasse gebruiken (is OK, want geen andere keuze)
+
+```{r check_data_nr_A1}
+checkA1 <- data_regeneration %>%
+  filter(subcircle == "A1" & is.na(number_class)) %>% 
+  select(select_colnames_reg)
+# 328 zonder number_class => dan wordt 
+
+checkA2 <- data_regeneration %>% 
+  filter(subcircle == "A2" & 
+           is.na(nr_of_regeneration) &
+           !is.na(number_class)) %>% 
+  select(select_colnames_reg)
+# 71 waar enkel klasse vermeld staat, terwijl het een exact nummer zou moeten zijn
+# package zal dan automatisch de klasse gebruiken ==> OK
+```
+
+
+
+# Check rubbing damage
+
+## NA ipv 0 
+
+<!-- Ter aanvulling bij issue #102 : met Peter VdK besproken, en blijkbaar brengt het veel workload met zich mee, om ook 0-waardes in te voeren bij browsing en rubbing. -->
+<!-- Tot nu toe werd er steeds achteraf bij de datacontrole een update-query uitgevoerd die alle NA's omzette naar 0 (gamedamage) of 100 (no browsing). Maar dat is weer een extra bewerking. -->
+<!-- Daarom zou het goed zijn om in forrescalc de code zodanig aan te passen dat - als game_impact_reg/game_impact_veg == TRUE én GameDamage_number/BrowseIndex = NA - dit als een '0' beschouwd wordt. -->
+
+
+8/4/2024: package aangepast zdd rubbing_damage_number 0 wordt (ipv NA), 
+zodra pd.GameImpactRegObserved == 10 (ongeacht of species al dan niet ingevuld staat).
+
+
+```{r check_rubbingnr_NA}
+check_rubbingnr_NA <- data_regeneration  %>% 
+  select(select_colnames_reg) %>% 
+  left_join(plotinfo %>% select(plot_id, period, game_impact_reg)) %>% 
+  filter(is.na(rubbing_damage_number)) %>% 
+  filter(game_impact_reg == TRUE)
+table(check_rubbingnr_NA$period)
+#   3 
+# 807
+
+# lijkt alsof package enkel bij species = NA een "0" creëert
+check_rubbingnr_NA2 <- data_regeneration %>% 
+  select(select_colnames_reg) %>% 
+  left_join(plotinfo %>% select(plot_id, period, game_impact_reg)) %>% 
+  filter(game_impact_reg == TRUE)
+
+```
+
+## Percentage
+
+`rubbing_damage_perc`    
+
+- moet ook berekend worden obv aantalsklasses (als exact nr niet gekend): OK
+
+- max. 100%: aangepast in forrescalc - OK 8/4/2024
+
+```{r check_rubbing_perc}
+check_rubbing_perc <- data_regeneration %>% 
+  select(select_colnames_reg) %>% 
+  left_join(plotinfo %>% select(plot_id, period, game_impact_reg)) %>% 
+  filter(game_impact_reg == TRUE) 
+
+table(check_rubbing_perc$rubbing_damage_perc)
+summary(check_rubbing_perc$rubbing_damage_perc)
+
+check_rubbing_perc %>% filter(is.na(rubbing_damage_perc))
+# OK, zijn twee records waar géén soort waargenomen is 
+
+check_rubbing_perc %>% filter(is.na(rubbing_damage_perc) & 
+                                (number_class > 0 | nr_of_regeneration > 0)) %>% 
+  nrow() == 0
+```
+
+```{r rubbing_perc_based_on_class}
+check_nrclass <- check_rubbing_perc %>% 
+  filter(!is.na(number_class) & is.na(nr_of_regeneration)) %>% 
+  filter(rubbing_damage_number > 0)
+```
+
+
+## Datacontrole
+
+Het aantal van rubbing_damage kan niet hoger zijn dan het waargenomen aantal van die soort.
+
+```{r too_high_nr_gamedamage}
+too_high_gamedamage <- check_rubbing_perc %>% 
+  filter(rubbing_damage_number > max_number_of_regeneration |
+           rubbing_damage_number > nr_of_regeneration)
+
+```
+
+```{r eval = FALSE}
+write.xlsx(too_high_gamedamage
+           , paste0(path_to_datacontrol, "regeneration.xlsx")
+           , sheetName = "too_high_gamedamage"
+           , showNA = FALSE
+           , append = TRUE) 
+# via mail aan Peter gevraagd en zelf 2CP's aangepast (10 naar 1) - 8/4/2024
+
+# ?write.xlsx
+
+```
+
+
+
+# Calculate regeneration 
+
+```{r calc_reg}
+regeneration <- calculate_regeneration(data_regeneration)
+
+```
+
+
+```{r CreateSeparateDataframesReg}
+for (tablename in names(regeneration)) {
+     assign(tablename, regeneration[[tablename]])
+} 
+
+```
+
+
+# Check aantalsklasse (A1) vs exact aantal (A2)
+
+```{r test_issue106}
+# hier eens testen of dit klopt
+
+# welke hoogteklasses komen voor?
+names(regeneration_by_plot_height)
+table(regeneration_by_plot_height$period, regeneration_by_plot_height$height_class)
+table(regeneration_by_plot_height$period, regeneration_by_plot_height$height_class, regeneration_by_plot_height$plottype)
+
+qHeightClass_regeneration
+# 
+```
+
+
+```{r}
+regeneration_by_plot_height %>% filter(is.na(lci_number_of_regeneration_ha)) %>% nrow() == 0
+regeneration_by_plot_height %>% filter(is.na(approx_nr_regeneration_ha)) %>% nrow() == 0
+```
+
+
+# Check NA's plot-level_resultaten
+
+```{r}
+names(regeneration_by_plot)
+```
+
+```{r}
+col <- c("number_of_tree_species", "approx_nr_established_ha", "approx_nr_seedlings_ha",
+         "mean_number_established_ha", "lci_number_established_ha", "uci_number_established_ha",
+         "mean_number_seedlings_ha" , "lci_number_seedlings_ha", "uci_number_seedlings_ha")
+
+regeneration_by_plot %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+
+```
+
+```{r}
+col <- c("number_of_tree_species", "approx_nr_regeneration_ha",
+         "mean_number_of_regeneration_ha", 
+         "lci_number_of_regeneration_ha", "uci_number_of_regeneration_ha")
+
+regeneration_by_plot_height %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+
+```
+
+
+```{r}
+col <- c("approx_nr_regeneration_ha",
+         "mean_number_of_regeneration_ha", 
+         "lci_number_of_regeneration_ha", "uci_number_of_regeneration_ha")
+
+regeneration_by_plot_height_species %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+
+```
+
+```{r}
+col <- c("nr_of_subplots_with_regeneration", "perc_subplots_with_regeneration", 
+         "approx_nr_established_ha", "approx_nr_seedlings_ha",
+         "mean_number_established_ha", "lci_number_established_ha", "uci_number_established_ha",
+         "mean_number_seedlings_ha" , "lci_number_seedlings_ha", "uci_number_seedlings_ha")
+
+regeneration_by_core_area_species %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+
+```
+
+
+```{r}
+col <- c("nr_of_subplots_with_regeneration", "perc_subplots_with_regeneration", 
+         "approx_nr_regeneration_ha",
+         "mean_number_of_regeneration_ha", 
+         "lci_number_of_regeneration_ha", "uci_number_of_regeneration_ha")
+
+regeneration_by_core_area_height_species %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+
+```
+
+
+# Extra processing
+
+## Plotinfo toevoegen
+
+Plotinfo (`plot_id`, `forest_reserve`, `period` en `survey_number`) toevoegen aan de resultaten
+
+```{r join_plottype_surveynr_BR}
+reg_plotinfo <- lapply(regeneration, function(x) left_join(x, plotinfo %>% select(plot_id, forest_reserve, period, survey_number), by = c("plot_id", "period")))
+# lapply: same function over all elements of the list
+```
+
+
+## Non-processed data wegfilteren
+
+Hier niet nodig, want bij `load_data()` reeds weggefilterd.
+
+```{r processed}
+reg_plotinfo2 <- lapply(reg_plotinfo, 
+                           function(x) anti_join(x, plotinfo %>% filter(data_processed == FALSE),
+                                                 by = c("plot_id", "period")))
+
+library(waldo) 
+waldo::compare(reg_plotinfo, reg_plotinfo2)
+```
+
+
+## Eventueel afronden
+
+```{r afronden}
+reg_plotinfo_round <- reg_plotinfo2 %>% 
+  lapply(., function(x) forestmangr::round_df(x, 2))
+```
+
+
+
+```{r CreateSeparateDataframesDendro2}
+for (tablename in names(reg_plotinfo2)) {
+     assign(tablename, reg_plotinfo2[[tablename]])
+} 
+
+```
+
+
+
+# Vergelijking met oude data
+
+```{r eval = FALSE}
+regeneration_by_plot_git <- read_forresdat(tablename = "regeneration_by_plot"
+                                     , join_plotinfo = TRUE) %>% 
+  filter(forest_reserve == forestreserve)
+
+regeneration_by_plot_new <- regeneration_by_plot %>% filter(period != 3)
+
+regeneration_by_plot_git <- regeneration_by_plot_git %>% 
+  select(plot_id, year, everything()) 
+
+nrow(regeneration_by_plot_new) == nrow(regeneration_by_plot_git)
+summary(regeneration_by_plot_new)
+
+names(regeneration_by_plot_new) == names(regeneration_by_plot_git)
+summary(regeneration_by_plot_git)
+
+diff <- regeneration_by_plot_new %>% anti_join(regeneration_by_plot_git, by = c("plot_id", "period"))
+diff
+
+
+regeneration_by_plot_new %>% select(-year) %>% arrange(plot_id, period) == regeneration_by_plot_git %>% select(-year) %>% arrange(plot_id, period)
+# OK denk ik andere ordening van variabelen
+regeneration_by_plot_new == regeneration_by_plot_git
+
+head(regeneration_by_plot_new %>% arrange(plot_id, period)); head(regeneration_by_plot_git %>% arrange(plot_id, period))
+head(regeneration_by_plot_new %>% arrange(desc(plot_id), period)); head(regeneration_by_plot_git %>% arrange(desc(plot_id), period))
+
+```
+
+```{r eval = FALSE}
+regeneration_by_core_area_species_git <- read_forresdat(tablename = "regeneration_by_core_area_species"
+                                     , join_plotinfo = TRUE) %>% 
+  filter(forest_reserve == forestreserve)
+
+regeneration_by_core_area_species_new <- regeneration_by_core_area_species %>% filter(period != 3)
+
+regeneration_by_core_area_species_git <- regeneration_by_core_area_species_git %>% 
+  select(plot_id, year, everything()) 
+
+nrow(regeneration_by_core_area_species_new) == nrow(regeneration_by_core_area_species_git)
+summary(regeneration_by_core_area_species_new)
+
+names(regeneration_by_core_area_species_new) == names(regeneration_by_core_area_species_git)
+summary(regeneration_by_core_area_species_git)
+
+diff <- regeneration_by_core_area_species_new %>% anti_join(regeneration_by_core_area_species_git, by = c("plot_id", "period"))
+diff
+
+names(regeneration_by_core_area_species_new); names(regeneration_by_core_area_species_git)
+regeneration_by_core_area_species_new %>% select(-year) %>% arrange(plot_id, period) == regeneration_by_core_area_species_git %>% select(-year, -year_dendro) %>% arrange(plot_id, period)
+# OK denk ik andere ordening van variabelen
+regeneration_by_core_area_species_new == regeneration_by_core_area_species_git %>% select(-year_dendro)
+
+head(regeneration_by_core_area_species_new %>% arrange(plot_id, period)); head(regeneration_by_core_area_species_git %>% arrange(plot_id, period))
+head(regeneration_by_core_area_species_new %>% arrange(desc(plot_id), period)); head(regeneration_by_core_area_species_git %>% arrange(desc(plot_id), period))
+
+```
+
+Lijkt OK
+
+# Aandachtspunten       
+
+Wijnendale cirkelplots: in 1e decade enkel 0-50 cm en 50-200 cm (qHeightclass = 3000 en 5000)     
+Wijnendale kernvlakte: wel alle decades de 4 standaard hoogteklasses (0-30, 30-50, 50-200, >200 cm; qHeightclass 1000 tem 4000)     
+
+<!-- table(regeneration_by_plot_height$period, regeneration_by_plot_height$height_class, regeneration_by_plot_height$plottype) -->
+<!-- , ,  = CA -->
+
+<!--     1000 2000 3000 4000 5000 -->
+<!--   1   84   35   44   54    0 -->
+<!--   2   97   61   20   32    0 -->
+<!--   3   98   65   29   17    0 -->
+
+<!-- , ,  = CP -->
+
+<!--     1000 2000 3000 4000 5000 -->
+<!--   1    0    0   24    0   48 -->
+<!--   2   92   50   49   53    0 -->
+<!--   3  109   73   53   50    0 -->
+
+
+# Export
+
+Resultaten worden opgeslagen als csv op c-schijf en in teamdrive:
+
+```{r}
+path_to_datarequest
+path_to_datarequest_teamdrive
+
+# names(regeneration_by_core_area_height_species)
+# names(regeneration_by_plot_height_species)
+```
+
+Enkele verduidelijkingen:
+
+* "approx_nr_regeneration_ha" = midwaarde van de aantalsklasses (cfr Kris VdK)
+
+* "mean_number_of_regeneration_ha" = gemiddelde obv een log-transformatie (cfr BMK)
+# "lci_number_of_regeneration_ha", "uci_number_of_regeneration_ha" = lower en upper confidence interval obv log-transformatie
+
+* "rubbing_damage_perc" = percentage obv exact aantal damaged tov ofwel (1) exact aantal van de soort(en), of (2) mid-waarde van de aantalsklasse(s) 
+
+
+```{r save, eval=FALSE}
+save_results_csv(
+    results = reg_plotinfo,
+    output_dir = path_to_datarequest
+  )
+
+```
+
+
+```{r save_teamdrive, eval=FALSE}
+save_results_csv(
+    results = reg_plotinfo,
+    output_dir = path_to_datarequest_teamdrive
+  )
+
+```
+
+
+

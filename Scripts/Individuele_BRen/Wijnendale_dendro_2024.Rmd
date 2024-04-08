@@ -1,0 +1,517 @@
+---
+title: "Dataverwerking - dendro"
+subtitle: "Wijnendale - cirkelplots & kernvlakte"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: TRUE
+      smooth_scroll: TRUE
+---
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 7,
+  fig.height = 3,
+  fig.align = TRUE)
+
+library(here)
+library(writexl)
+library(scales)
+
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+
+```
+
+
+```{r Setup2}
+forestreserve <- "Wijnendalebos"
+forestreserve_short <- forestreserve
+forestreserve_short <- "Wijnendale"
+# plot_type <- "CA"
+# plot_type <- "CP"
+
+forestreserve_folder <- paste0(path_to_reserves, "4b_Wijnendale")
+
+path_to_datarequest <- paste0(forestreserve_folder, "/verwerking_2024_1e2e3eSET/output_forrescalc/")
+path_to_datarequest_teamdrive <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverwerking/per_gebied/2024_", forestreserve_short, "/output_forrescalc/")
+
+# plots_to_exclude <- c(701, 707, 709, 727, 728, 738, 739, 740, 759, 760)
+```
+
+
+TIJDELIJK `path_to_fieldmap_db` aanpassen naar export van wijnendale en everzwijnbad uit moederdb (4/3/2024)
+
+```{r Path_tmp}
+path_to_fieldmap_db <- "C:/03_BR_db_monitoring/3_db_Els_deel2_Wijn_Ever/FieldMapData_3_db_Els_deel2_Wijn_Ever.accdb"
+```
+
+
+
+# Vraagstelling
+
+**Bosreservaat `r forestreserve`**
+
+Dataverwerking Wijnendale (nalv 3eSET), gebruik makend van (nieuwe) forrescalc.
+
+<br>
+
+
+```{r results='hold', eval=TRUE}
+path_to_forresdat_data
+path_to_analysis_set_db
+path_to_plotlevel_csv
+path_to_treelevel_csv
+path_to_output_gdrive
+path_to_meetgegevens
+
+```
+
+# Load plotinfo
+
+Plotinfo samenstellen, zijnde plottype, naam forest_reserve en info over survey en data al dan niet processed.
+Wegschrijven naar git, access en opslaan als csv
+
+```{r plotinfo_load}
+plotinfo <- load_plotinfo(database = path_to_fieldmap_db) %>% 
+  filter(forest_reserve == forestreserve)
+names(plotinfo)
+```
+## Processed
+
+We controleren of er nog plots "not processed" zijn.
+
+```{r check_processed, results='hide'}
+# enkel checken bij deze waar er een dendro-opname gebeurd is
+# anders ook deze van vorige decades mee, die niet kunne processed zijn
+check_processed <- plotinfo %>% 
+  filter(survey_trees == TRUE)
+
+table(check_processed$forest_reserve, check_processed$data_processed)
+# table(plotinfo$forest_reserve, plotinfo$data_processed)
+```
+
+```{r check_not_processed, results='hide'}
+plotinfo_check <- plotinfo %>% 
+  group_by(forest_reserve, plottype, period, survey_trees, data_processed) %>% 
+  summarize(n_plots = n()) %>% 
+  ungroup()
+
+plotinfo_check %>% 
+  filter(survey_trees == TRUE & data_processed == FALSE)
+
+# omgekeerd geen plots die processed zijn, en géén survey_trees
+plotinfo %>%  filter(data_processed & !survey_trees) %>% nrow() == 0
+```
+
+
+**!! OPGEPAST:** nadat de data gecontroleerd zijn door Peter, moet veld `processed` aangepast worden.
+
+Met behulp van een updatequery voor een vooraf geselecteerde decade, plottype en bosreservaat zetten we `DataProcessed_YN` op `10` (code 10 = 'ja'), indien `Survey_Trees_YN = 10`. 
+
+```{r update_processed, eval = FALSE}
+# Predefined strings
+decade <- "3" 
+# plot_type <- "CP"
+# forestreserve <- "Wijnendalebos"
+
+# Construct the query string using sprintf
+query_update <- paste0(sprintf("UPDATE (PlotDetails_%seSET pd 
+                         INNER JOIN Plots p ON pd.IDPlots = p.ID) 
+                         INNER JOIN qPlotType q ON p.Plottype = q.ID 
+                         SET pd.DataProcessed_YN = 10 
+                         WHERE (pd.Survey_Trees_YN = 10) 
+                         AND (q.Value3 = '%s') 
+                         AND (pd.ForestReserve = '%s')",
+                         decade, plot_type, forestreserve)
+                       ) %>% noquote()
+
+   sqlQuery(con,query_update)
+
+odbcClose(con)
+
+```
+
+
+```{r plotinfo_load2, eval=FALSE}
+plotinfo <- load_plotinfo(database = path_to_fieldmap_db) %>% 
+  filter(forest_reserve == forestreserve)
+names(plotinfo)
+```
+
+In het geval van `r forestreserve` gaat het om volgende plots die na de eerste decade niet 
+meer heropgemeten werden:     
+
+```{r}
+plotinfo %>% filter(survey_trees == FALSE) %>% distinct(plot_id)
+```
+
+
+## Correctie year_dendro - NIET 
+
+Year_dendro = jaar van groeiseizoen
+Grens was gelegd op 1/7, nu naar 1/5.
+**Opgelost in issue # 114**
+
+```{r check, eval=FALSE}
+names(plotinfo)
+summary(plotinfo)
+
+plotinfo %>% filter(is.na(year_dendro)) %>% distinct(data_processed) 
+# enkel NA daar waar data_processed = FALSE - OK
+
+year_range <- plotinfo %>% 
+  group_by(forest_reserve, period) %>% 
+  dplyr::summarize(min_year = min(year_dendro, na.rm = TRUE), 
+            max_year = max(year_dendro, na.rm = TRUE),
+            year_range = paste0(min_year, " - ", max_year)) %>% 
+  ungroup()
+
+t <- year_range %>% 
+  filter(min_year != max_year)
+t_ <- t %>% 
+  left_join(plotinfo)
+
+t_ %>% filter(year_dendro == 2023)
+```
+plot 425 en 503 hebben een afwijkende dendro-date, gecheckt in FM-DC en klopt.
+
+
+# Load dendro data
+
+Standaard worden enkel de "processed" data ingeladen mbv de load-functies.
+
+```{r load_data, results='hide'}
+data_dendro <- load_data_dendrometry(database = path_to_fieldmap_db
+                                     # , plottype = plot_type
+                                     , forest_reserve = forestreserve
+                                     , processed = FALSE  # default: data_processed = TRUE
+                                     , extra_variables = TRUE)
+
+
+data_shoots <- load_data_shoots(database = path_to_fieldmap_db
+                                , extra_variables = TRUE)
+
+# door shoots en trees te combineren,  blijft enkel gewenst BR over
+data_stems  <- compose_stem_data(data_dendro, data_shoots
+                                 , extra_variables = TRUE)
+
+height_model <- load_height_models(path_to_height_models) %>%
+  filter(forest_reserve == forestreserve)
+
+data_deadwood <- load_data_deadwood(database = path_to_fieldmap_db
+                                    # , plottype = plot_type
+                                    , forest_reserve = forestreserve
+                                    , processed = TRUE)
+```
+
+```{r check_heightmodels, results = 'hide'}
+table(height_model$forest_reserve, height_model$period)
+table(plotinfo$forest_reserve)
+
+height_model %>% group_by(forest_reserve) %>% summarise(n = n()) %>% ungroup() %>% anti_join(plotinfo, by = c("forest_reserve"))
+
+missing_heightmodel <- data_stems %>% 
+  select(forest_reserve, plot_id, plottype, period, species, alive_dead) %>% 
+  left_join(height_model) %>% 
+  filter(is.na(P1))
+
+```
+
+Er zijn `r nrow(missing_heightmodel)` ontbrekende hoogtemodellen.
+
+
+# Correctie liggend dood hout  
+
+## Volume bijwerken intacte bomen - NIET
+
+Niet meer nodig: issue #105: geïncorporeerd in forrescal. 
+
+
+De volumeberekening van liggend dood hout baseert zich op het veld `calc_volume_m3`
+uit FM-databank (layer `Deadwood`).
+
+Indien deadwood als fragment opgemeten werd (zie veld `IntactFragment` en 
+bijhorende LU-list `qVdagnVfm`), is dit een kopie van het veld `Volume_m3.`
+Dit veld wordt in FM-DC automatisch berekend. 
+Belangrijk is om te zorgen dat dit volume als "inside plot" berekend wordt.
+
+Indien deadwood als intact aangevinkt staat, moeten er tarieven gebruikt worden om
+dit volume te berekenen.
+Er werd afgesproken met Peter dit **enkel nog te gebruiken voor de BE's of de KV's** als ze plotgrens niet overschrijden. 
+
+- Enkel in Kerss KV - 2eSET & 3eSET staan nog (veel) intacte bomen: 
+klopt wel degelijk...voor KV KP = BEkartering....
+- In 1eSET niks meer (aangevuld met fragmenten - copy van 2eSET - door Peter)
+- Héél uitzonderlijk in 3e SET: 2 bomen in KV Rodebos (plot 43000)
+
+
+## Fragmenten - update van volume in FM
+
+**Elke keer te doen bij nieuwe db**
+
+In Fieldmap zijn er twee velden opgenomen, die "manueel" bijgewerkt moeten worden.
+Makkelijkste is om dit hier op te vangen in een updatequery.
+
+Het gaat om de velden 
+- `calc_volume_m3`
+- `calc_length`
+
+Deze velden zijn exacte copies van de velden 
+- `volume_m3` (als IntactFragment = 20)
+- `length_m`
+
+Maar omdat deze laatste twee velden per ongeluk gewijzigd kunnen worden in FM-DC 
+(te berekenen als "Total Volume" of "Volume inside plot"), is het veiliger om 
+deze waardes vast te klikken in `calc_volume_m3` & `calc_length`.
+
+Voor 3de set was `calc_volume_m3` niet steeds berekend (in acces).
+Dat doen we hier mbv een updatequery, nadat we zeker zijn dat de waardes correct 
+berekend zijn in FM-DC ("inside plot").
+Dit moet normaliter enkel gebeuren voor periode 3, periode 1 en 2 zijn bijgewerkt 
+in de moederdatabank zelf.
+
+```{r sql_update_calc_deadw_inside_plot, eval = FALSE}
+# queries - enkel deadw_3eSET
+qry_update_calc_vol <- paste0("UPDATE Deadwood_3eSET SET Deadwood_3eSET.CalcVolume_m3 = Deadwood_3eSET.Volume_m3 WHERE ((Deadwood_3eSET.CalcVolume_m3 Is Null) AND (Deadwood_3eSET.IntactFragment=20))") %>%
+           noquote()
+
+qry_update_calc_length <- "UPDATE Deadwood_3eSET SET Deadwood_3eSET.CalcLength_m = Deadwood_3eSET.Length_m WHERE ((Deadwood_3eSET.CalcLength_m) Is Null)" %>%
+           noquote()
+
+# update
+conn <- odbcConnectAccess2007(path_to_fieldmap_db)
+
+  sqlQuery(conn,qry_update_calc_vol)
+  sqlQuery(conn,qry_update_calc_length)
+
+odbcClose(conn)
+
+# opnieuw inladen
+data_deadwood_old <- data_deadwood
+data_deadwood <- load_data_deadwood(database = path_to_fieldmap_db
+                                    , plottype = plot_type
+                                    , forest_reserve = forestreserve
+                                    , processed = TRUE)
+
+# check
+data_deadwood %>% filter(is.na(calc_volume_m3)) %>% nrow()
+# CP: 0
+# KV: 1 (KV Wijnendale)
+    # lying_deadw_id 46
+    # intact_fragm 10
+    # calc_volume_m3 NA
+    # calc_length 23.9
+    # max_diam_mm 950
+
+dendro_by_diam_plot_species %>% filter(plot_id == 71000
+                                       & species == 64
+                                       & dbh_class_5cm == "95 - 100 cm" 
+                                       & period == 3) %>% 
+  distinct(vol_log_m3_ha)
+# 10.9718	
+
+# calc_volume = 10.3338  - dbh = 950, hoogte = 23.865
+
+
+
+```
+
+```{r posssible_fragment_check, eval = FALSE}
+# !! gemerkt dat calc_vol in Kerss KV (plot 11000, 2de en 3de decade) exacte copie 
+# is van volume inside plot, terwijl het om intacte bomen gaat
+# => volume bijwerken
+
+data_deadwood_intact <- data_deadwood %>% 
+  filter(intact_fragm == 10)
+
+# toch nog niet helemaal zoals afgesproken met Peter => file doormailen met mogelijke fragmenten
+posssible_fragment <- data_deadwood_intact %>% 
+  filter((calc_length_m < total_length_m/2)|
+           decaystage == 14|
+           (decaystage == 13 & min_diam_mm > 150) |
+           min_diam_mm > 150) %>% 
+  select(plot_id, plottype, forest_reserve, , period, date_dendro, lying_deadw_id,
+         species, decaystage, intact_fragm, calc_volume_m3, calc_length_m, total_length_m,
+         min_diam_mm, max_diam_mm)
+
+table(posssible_fragment$decaystage)
+
+# write_csv2(posssible_fragment, here::here("output/posssible_fragment_Kerss_KV.csv"))
+
+```
+
+# Calculate dendro data
+
+```{r calc_stems_tree}
+data_stems_calc <- calc_variables_stem_level(data_stems, height_model)
+
+data_dendro_calc <- calc_variables_tree_level(data_dendro, data_stems_calc)
+
+dendro <- calculate_dendrometry(data_dendro, data_deadwood, data_shoots, height_model, plotinfo)
+# waar survey_trees = TRUE, wordt een '0' toegekend, als er geen andere metingen zijn
+# DUS: als ik wegfilter obv data_processed, worden data NIET ingeladen,
+# MAAR omdat survey_trees = TRUE, wordt er hier een '0' toegekend aan die non-processed plots ( 400, ...°)
+
+```
+
+
+```{r CreateSeparateDataframesDendro}
+for (tablename in names(dendro)) {
+     assign(tablename, dendro[[tablename]])
+} 
+
+```
+
+# Extra processing
+
+## Plotinfo toevoegen
+
+Plotinfo (`plot_id`, `forest_reserve`, `period` en `survey_number`) toevoegen aan de resultaten
+
+```{r join_plottype_surveynr_BR}
+dendro_plotinfo <- lapply(dendro, function(x) left_join(x, plotinfo %>% select(plot_id, forest_reserve, period, survey_number), by = c("plot_id", "period")))
+# lapply: same function over all elements of the list
+```
+
+
+## Non-processed data wegfilteren
+
+```{r processed}
+dendro_plotinfo2 <- lapply(dendro_plotinfo, 
+                           function(x) anti_join(x, plotinfo %>% filter(data_processed == FALSE),
+                                                 by = c("plot_id", "period")))
+
+```
+
+
+## Eventueel afronden
+
+```{r afronden, eval=FALSE}
+dendro_plotinfo_round <- dendro_plotinfo2 %>% 
+  lapply(., function(x) forestmangr::round_df(x, 2))
+```
+
+
+
+```{r CreateSeparateDataframesDendro2}
+for (tablename in names(dendro_plotinfo2)) {
+     assign(tablename, dendro_plotinfo2[[tablename]])
+} 
+
+```
+
+
+
+# Vergelijking met oude data
+
+```{r eval = FALSE}
+dendro_by_plot_git <- read_forresdat(tablename = "dendro_by_plot"
+                                     , join_plotinfo = TRUE) %>% 
+  filter(forest_reserve == forestreserve)
+
+dendro_by_plot_new <- dendro_by_plot %>% filter(period != 3)
+
+dendro_by_plot_git <- dendro_by_plot_git %>% 
+  select(plot_id, year, everything()) %>% 
+  select(names(dendro_by_plot))
+
+nrow(dendro_by_plot_new) == nrow(dendro_by_plot_git)
+summary(dendro_by_plot_new)
+
+names(dendro_by_plot_new) == names(dendro_by_plot_git)
+summary(dendro_by_plot_git)
+
+diff <- dendro_by_plot_new %>% anti_join(dendro_by_plot_git, by = c("plot_id", "period"))
+diff
+
+
+dendro_by_plot_new %>% select(-year) %>% arrange(plot_id, period) == dendro_by_plot_git %>% select(-year) %>% arrange(plot_id, period)
+# OK denk ik andere ordening van variabelen
+dendro_by_plot_new == dendro_by_plot_git
+
+head(dendro_by_plot_new %>% arrange(plot_id, period)); head(dendro_by_plot_git %>% arrange(plot_id, period))
+head(dendro_by_plot_new %>% arrange(desc(plot_id), period)); head(dendro_by_plot_git %>% arrange(desc(plot_id), period))
+
+# dendro_by_plot_species_git <- read_vc(file = "dendro_by_plot_species", root = path_to_forresdat_data)
+# nrow(dendro_by_plot_species) == nrow(dendro_by_plot_species_git)
+# 
+# dendro_by_diam_plot_git <- read_vc(file = "dendro_by_diam_plot", root = path_to_forresdat_data)
+# nrow(dendro_by_diam_plot) == nrow(dendro_by_diam_plot_git)
+# 
+# logs_by_decay_plot_git <- read_vc(file = "logs_by_decay_plot", root = path_to_forresdat_data)
+# nrow(logs_by_decay_plot) == nrow(logs_by_decay_plot_git)
+
+```
+
+
+
+# Export
+
+Resultaten worden opgeslagen als csv op c-schijf en in teamdrive:
+
+```{r}
+path_to_datarequest
+path_to_datarequest_teamdrive
+
+```
+
+Enkele verduidelijkingen:
+
+* "number_of_tree_species" = aantal soorten obv de levende bomen
+
+* "stems_per_tree" = meerstammigheid (stem_number_ha / number_of_trees_ha): heeft hier geen zin, maar dient als insteek voor berekeningen per soort
+
+* "vol_bole_alive_m3_ha" en "vol_bole_dead_m3_ha": volume zonder crown, 
+versus "vol_alive_m3_ha" en "vol_dead_standing_m3_ha"
+
+* "vol_log_m3_ha": liggend dood hout (NA als er geen deadwood survey gebeurd is)
+
+* "vol_deadw_m3_ha": staand en liggend dood hout (NA als er geen deadwood survey gebeurd is)
+
+
+```{r save}
+save_results_csv(
+    results = list(plotinfo = plotinfo),
+    output_dir = path_to_datarequest
+  )
+
+save_results_csv(
+    results = dendro_plotinfo,
+    output_dir = path_to_datarequest
+  )
+
+```
+
+
+```{r save_teamdrive}
+save_results_csv(
+    results = list(plotinfo = plotinfo),
+    output_dir = path_to_datarequest_teamdrive
+  )
+
+save_results_csv(
+    results = dendro_plotinfo,
+    output_dir = path_to_datarequest_teamdrive
+  )
+
+```
+
+
+
