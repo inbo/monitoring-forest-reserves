@@ -104,7 +104,7 @@ con <- odbcConnectAccess2007(path_to_fieldmap_db)
   # qIndShootCop <- sqlFetch(con, "qIndShootCop", stringsAsFactors = FALSE)
   # # deadw_test <- sqlFetch(con, "Deadwood_3eSET", stringsAsFactors = FALSE)
   # qAliveDead <- sqlFetch(con, "qAliveDead", stringsAsFactors = FALSE)
-  # qSpecies <- sqlFetch(con, "qSpecies", stringsAsFactors = FALSE)
+  qSpecies <- sqlFetch(con, "qSpecies", stringsAsFactors = FALSE)
   # qDecaystage <- sqlFetch(con, "qdecaystage", stringsAsFactors = FALSE)
   # qIntactSnag <- sqlFetch(con, "qIntactSnag", stringsAsFactors = FALSE)
   # qVdagnVfm <- sqlFetch(con, "qVdagnVfm", stringsAsFactors = FALSE)
@@ -176,7 +176,9 @@ Velden `data_regeneration`:
 
 
 ```{r}
-select_colnames_reg <- data_regeneration %>% select(1:2, 4, period, year, subcircle
+select_colnames_reg <- data_regeneration %>% 
+  select(plot_id, subplot_id, plottype, forest_reserve
+         , period, year, subcircle
          , height_class, species, number_class, nr_of_regeneration
          , approx_nr_regeneration, min_number_of_regeneration, max_number_of_regeneration
          , rubbing_damage_number, rubbing_damage_perc
@@ -243,7 +245,7 @@ checkA2 <- data_regeneration %>%
 
 
 
-# Check rubbing damage
+# Check rubbing damage in data_regeneration
 
 ## NA ipv 0 
 
@@ -252,8 +254,8 @@ checkA2 <- data_regeneration %>%
 <!-- Daarom zou het goed zijn om in forrescalc de code zodanig aan te passen dat - als game_impact_reg/game_impact_veg == TRUE én GameDamage_number/BrowseIndex = NA - dit als een '0' beschouwd wordt. -->
 
 
-8/4/2024: package aangepast zdd rubbing_damage_number 0 wordt (ipv NA), 
-zodra pd.GameImpactRegObserved == 10 (ongeacht of species al dan niet ingevuld staat).
+8/4/2024: package aangepast zdd `rubbing_damage_number` 0 wordt (ipv NA), 
+zodra `pd.GameImpactRegObserved == 10` (ongeacht of species al dan niet ingevuld staat).
 
 
 ```{r check_rubbingnr_NA}
@@ -279,10 +281,9 @@ check_rubbingnr_NA2 <- data_regeneration %>%
 `rubbing_damage_perc`    
 
 - moet ook berekend worden obv aantalsklasses (als exact nr niet gekend): OK
-
 - max. 100%: aangepast in forrescalc - OK 8/4/2024
 
-```{r check_rubbing_perc}
+```{r check_rubbing_perc, results= 'hide'}
 check_rubbing_perc <- data_regeneration %>% 
   select(select_colnames_reg) %>% 
   left_join(plotinfo %>% select(plot_id, period, game_impact_reg)) %>% 
@@ -336,7 +337,12 @@ write.xlsx(too_high_gamedamage
 ```{r calc_reg}
 regeneration <- calculate_regeneration(data_regeneration)
 
+# warnings hebben te maken met feit dat er subplots zijn van de kernvlakte zonder species
+# en dus ook zonder "plotarea"subcircle"
+
 ```
+
+
 
 
 ```{r CreateSeparateDataframesReg}
@@ -357,7 +363,7 @@ names(regeneration_by_plot_height)
 table(regeneration_by_plot_height$period, regeneration_by_plot_height$height_class)
 table(regeneration_by_plot_height$period, regeneration_by_plot_height$height_class, regeneration_by_plot_height$plottype)
 
-qHeightClass_regeneration
+# qHeightClass_regeneration
 # 
 ```
 
@@ -367,8 +373,58 @@ regeneration_by_plot_height %>% filter(is.na(lci_number_of_regeneration_ha)) %>%
 regeneration_by_plot_height %>% filter(is.na(approx_nr_regeneration_ha)) %>% nrow() == 0
 ```
 
+# Check perc_rubbing op plot-niveau
 
-# Check NA's plot-level_resultaten
+Initiële fout deels opgelost door bij `load_regeneration()` `GameImpactRegObserved = 10` te 
+gebruiken voor toekennen van 0 ipv NA.
+
+Deels door nog wat extra aanpassingen bij de calc-functies (commits 10/4/2024, branch `testdatabase_AL`):
+
+(1) zdd ook nr van numberclass gebruikt wordt
+(2) niet enkel A2
+(3) afgetopt op 100%
+
+Hierna nog enkele testen.
+
+
+```{r}
+# CP
+check_rubbing_perc_NA <- regeneration_by_plot_height %>% 
+  left_join(plotinfo %>% select(plot_id, period, game_impact_reg)) %>%
+  filter(is.na(rubbing_damage_perc) & number_of_tree_species > 0) %>% 
+  filter(game_impact_reg == TRUE) 
+
+check_rubbing_perc_NA %>% nrow() == 0
+
+# CA
+check_rubbing_perc_NA <- regeneration_by_core_area_height_species %>% 
+  left_join(plotinfo %>% select(plot_id, period, game_impact_reg)) %>%
+  filter(is.na(rubbing_damage_perc) & nr_of_subplots_with_regeneration > 0) %>% 
+  filter(game_impact_reg == TRUE) 
+
+check_rubbing_perc_NA %>% nrow() == 0
+```
+
+```{r}
+# plot-niveau: mag enkel NA zijn ,wanneer er géén van die soort gezien is en damaged ook 0 (dus 0/0)
+check_rubbing_perc_NA <- regeneration_by_plot %>% 
+  left_join(plotinfo %>% select(plot_id, period, game_impact_reg)) %>%
+  filter(is.na(approx_rubbing_damage_perc_established) & mean_number_established_ha > 0) %>% 
+  filter(game_impact_reg == TRUE) 
+
+check_rubbing_perc_NA %>% nrow() == 0
+
+check_rubbing_perc_NA <- regeneration_by_plot %>% 
+  left_join(plotinfo %>% select(plot_id, period, game_impact_reg)) %>%
+  filter(is.na(approx_rubbing_damage_perc_seedlings) & mean_number_seedlings_ha > 0) %>% 
+  filter(game_impact_reg == TRUE) 
+
+check_rubbing_perc_NA %>% nrow() == 0
+
+```
+
+
+# Check NA's plot-level-resultaten
 
 ```{r}
 names(regeneration_by_plot)
