@@ -31,6 +31,16 @@ save_results_csv <- function(results, output_dir){
 }
 
 
+
+save_results_xlsx <- function(results, output_dir){
+  for (tablename in names(results)) {
+    write.xlsx2(results[[tablename]]
+                , file = paste0(output_dir, tablename, ".xlsx")
+                , showNA = FALSE)
+                # , row.names = FALSE)
+  }
+}
+
 save_results_tsv <- function(results, root = path_to_forresdat_data, strict = TRUE){
   sorting_max <-
     c("period", "year", "plot_id", "dbh_class_5cm", "decaystage", "subplot_id", 

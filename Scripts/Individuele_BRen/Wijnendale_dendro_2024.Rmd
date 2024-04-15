@@ -486,13 +486,13 @@ versus "vol_alive_m3_ha" en "vol_dead_standing_m3_ha"
 * "vol_deadw_m3_ha": staand en liggend dood hout (NA als er geen deadwood survey gebeurd is)
 
 
-```{r save}
-save_results_csv(
+```{r save, eval=FALSE}
+save_results_xlsx(
     results = list(plotinfo = plotinfo),
     output_dir = path_to_datarequest
   )
 
-save_results_csv(
+save_results_xlsx(
     results = dendro_plotinfo,
     output_dir = path_to_datarequest
   )
@@ -500,13 +500,13 @@ save_results_csv(
 ```
 
 
-```{r save_teamdrive}
-save_results_csv(
+```{r save_teamdrive, eval=FALSE}
+save_results_xlsx(
     results = list(plotinfo = plotinfo),
     output_dir = path_to_datarequest_teamdrive
   )
 
-save_results_csv(
+save_results_xlsx(
     results = dendro_plotinfo,
     output_dir = path_to_datarequest_teamdrive
   )

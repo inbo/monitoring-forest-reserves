@@ -36,6 +36,7 @@ path_to_RData <- paste0(path_to_dataverwerking, "RData/")
 
 # Output ----
 path_to_plotlevel_csv <- paste0(path_to_dataverwerking, "Output/_plot-level-data/") 
+path_to_lulists_csv <- paste0(path_to_dataverwerking, "Output/_qXX_lookuplijsten/") 
 path_to_treelevel_csv <- paste0(path_to_dataverwerking, "Output/_tree-level-data/")
 
 path_to_analysis_set_db <- paste0(path_to_dataverwerking, "Output/BR_analysedb.accdb") # accessdb
@@ -50,6 +51,7 @@ dbResults <- path_to_dbResults
 path_to_output_gdrive <- paste0(path_to_teamdrive, "PRJ_BR_AanvraagGegevens/")
 
 path_to_plotlevel_gdrive <- paste0(path_to_output_gdrive, "00_METADATA-ALL_PLOTS/_plot-level-data/") 
+path_to_lulists_gdrive <- paste0(path_to_output_gdrive, "00_METADATA-ALL_PLOTS/_qXX_lookuplijsten/") 
 path_to_treelevel_gdrive <- paste0(path_to_output_gdrive, "00_METADATA-ALL_PLOTS/_tree-level-data/")
 
 
