@@ -51,6 +51,7 @@ Deze uitzonderingen worden na het inladen van de data gecorrigeerd.
 path_to_forresdat_data
 path_to_analysis_set_db
 path_to_plotlevel_csv
+path_to_lulists_csv
 path_to_treelevel_csv
 path_to_output_gdrive
 path_to_meetgegevens
@@ -125,13 +126,13 @@ names(list_lkp)
 # save naar C-schijf
 save_results_csv(
     results = list_lkp,
-    output_dir = path_to_plotlevel_csv
+    output_dir = path_to_lulists_csv
   )
 
 # save naar gdrive
 save_results_csv(
     results = list_lkp,
-    output_dir = path_to_plotlevel_gdrive
+    output_dir = path_to_lulists_gdrive
   )
 
 ```
