@@ -3,17 +3,18 @@ title: "Statistieken obv cirkelplots"
 subtitle: "Wijnendale"
 author: "Anja Leyman"
 date: "`r Sys.Date()`"
-output: 
+output:
   html_document:
-    keep_md: FALSE
-    number_sections: yes
-    fig_caption: yes
+    keep_md: false
+    number_sections: true
+    fig_caption: true
     code_folding: hide
-    toc: TRUE
+    toc: true
     toc_float:
-      collapsed: TRUE
-      smooth_scroll: TRUE
+      collapsed: true
+      smooth_scroll: true
 ---
+
 
 ```{r Rm, eval = FALSE}
 rm(list=ls())
@@ -25,10 +26,9 @@ knitr::opts_chunk$set(
   eval = TRUE,
   message = FALSE,
   warning = FALSE, 
-  fig.width = 9,
+  fig.width = 7,
+  fig.height = 3,
   fig.align = TRUE)
-
-library(here)
 
 # libraries & invoergegevens
 source(here::here("scripts/Setup.R"))
@@ -47,13 +47,14 @@ forestreserve_folder <- paste0(path_to_reserves, "4b_Wijnendale")
 
 path_to_datarequest <- paste0(forestreserve_folder, "/verwerking_2024_1e2e3eSET/output_forrescalc/")
 path_to_datarequest_teamdrive <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverwerking/per_gebied/2024_", forestreserve_short, "/output_forrescalc/")
+path_to_html_teamdrive <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverwerking/per_gebied/2024_", forestreserve_short, "/")
 
 # plots_to_exclude <- c(701, 707, 709, 727, 728, 738, 739, 740, 759, 760)
 ```
 
 
-<!-- TIJDELIJK `path_to_fieldmap_db` aanpassen naar export van wijnendale en everzwijnbad  -->
-<!-- uit moederdb (4/3/2024) -->
+TIJDELIJK `path_to_fieldmap_db` aanpassen naar export van wijnendale en everzwijnbad
+uit moederdb (4/3/2024)
 
 ```{r Path_tmp}
 path_to_fieldmap_db <- "C:/03_BR_db_monitoring/3_db_Els_deel2_Wijn_Ever/FieldMapData_3_db_Els_deel2_Wijn_Ever.accdb"
@@ -71,7 +72,6 @@ Alle basis variabelen van de monitoring:
 - dendro_by_diam
 - ....
 - decaystage logs (op termijn decaystage ook van staand dood hout)
-
 
 > Hierna worden deze één voor één doorlopen en weggeschreven naar de resultatendb
 
@@ -107,7 +107,7 @@ Nodig voor:
 
 # Inladen data
 
-We werken verder met de data aangemaakt specifiek voor `r bosreservaat`. 
+We werken verder met de data aangemaakt specifiek voor `r forestreserve`.
 
 ## Lookuplijsten
 
@@ -121,14 +121,14 @@ con <- odbcConnectAccess2007(path_to_fieldmap_db)
   qDecaystage <- sqlFetch(con, "qdecaystage", stringsAsFactors = FALSE)
   qIntactSnag <- sqlFetch(con, "qIntactSnag", stringsAsFactors = FALSE)
   qVdagnVfm <- sqlFetch(con, "qVdagnVfm", stringsAsFactors = FALSE)
-    
+
   qHerbSpecies240810<- sqlFetch(con, "qHerbSpecies240810", stringsAsFactors = FALSE)
   qCoverHerbs <- sqlFetch(con, "qCoverHerbs", stringsAsFactors = FALSE)
   qBrowsIndex <- sqlFetch(con, "qBrowsIndex", stringsAsFactors = FALSE)
-  
+
   qHeightClass_regeneration <- sqlFetch(con, "qHeightClass_regeneration", stringsAsFactors = FALSE)
   qnumber_regeneration_classes <- sqlFetch(con, "qnumber_regeneration_classes", stringsAsFactors = FALSE)
-  
+
   qcommonremark <- sqlFetch(con, "qcommonremark", stringsAsFactors = FALSE)
   qCrownVolRedu <- sqlFetch(con, "qCrownVolRedu", stringsAsFactors = FALSE)
   qBranchLenghtReduction <- sqlFetch(con, "qBranchLenghtReduction", stringsAsFactors = FALSE)
@@ -139,7 +139,7 @@ con <- odbcConnectAccess2007(path_to_fieldmap_db)
   qiufrovitality_shoots <- sqlFetch(con, "qiufrovitality_shoots", stringsAsFactors = FALSE)
   qiufrosocialstatus <- sqlFetch(con, "qiufrosocialstatus", stringsAsFactors = FALSE)
   qiufrosocialstatus_shoots <- sqlFetch(con, "qiufrosocialstatus_shoots", stringsAsFactors = FALSE)
-  
+
 odbcClose(con)
 
 ```
@@ -157,17 +157,16 @@ qDecaystage <- qDecaystage %>% select(-Value3, -OrderField, -Active, -MasterID)
 
 ```{r }
 plotinfo <- read_excel(paste0(path_to_datarequest, "plotinfo.xlsx")) %>% 
-  select(-1)
-
+   select(-1)
 
 ```
 
 ## Dendro
 
 ```{r}
-dendro_by_plot <- read_excel(paste0(path_to_datarequest, "dendro_by_plot.xlsx")) %>% 
-  select(-1) %>% 
-  filter(plottype == "CP") %>% 
+dendro_by_plot <- read_excel(paste0(path_to_datarequest, "dendro_by_plot.xlsx")) %>%
+  select(-1) %>%
+  filter(plottype == "CP") %>%
   left_join(plotinfo)
 
 
@@ -1052,3 +1051,18 @@ gecorrigeerd.
 Enkel 0 voor de variabelen per ha en number_of_species.
 
 
+# Copy html to teamdrive
+
+Na knitting - manueel
+
+```{r eval = FALSE}
+# Specify the path of the file you want to copy
+source_file <- here::here("Scripts/Individuele_BRen/Wijnendale_stat_dendro_2024.html")
+
+# Specify the destination directory where you want to copy the file
+destination_dir <- path_to_html_teamdrive
+
+# Copy the file to the destination directory
+file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
+# ? file.copy
+```
