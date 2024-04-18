@@ -429,21 +429,22 @@ path_to_datarequest_teamdrive
 
 ```
 
-```{r export2}
+```{r export2, eval = FALSE}
 resultaat2 %>% distinct(variable)
 # perc_plots_with_species
 
-write.xlsx(resultaat
-           , paste0(path_to_datarequest, "stat_veg.xlsx")
-           , sheetName = "perc_plots_with_species"
-           , showNA = FALSE
-           , append = TRUE) 
-
-write.xlsx(resultaat
-           , paste0(path_to_datarequest_teamdrive, "stat_veg.xlsx")
-           , sheetName = "perc_plots_with_species"
-           , showNA = FALSE
-           , append = TRUE) 
+# NIET NODIG, want ook in resultaat 3
+# write.xlsx(resultaat2
+#            , paste0(path_to_datarequest, "stat_veg.xlsx")
+#            , sheetName = "perc_plots_with_species"
+#            , showNA = FALSE
+#            , append = TRUE) 
+# 
+# write.xlsx(resultaat2
+#            , paste0(path_to_datarequest_teamdrive, "stat_veg.xlsx")
+#            , sheetName = "perc_plots_with_species"
+#            , showNA = FALSE
+#            , append = TRUE) 
 ```
 
 
@@ -471,18 +472,17 @@ karakt_bedekking <- dataset2 %>%
 names(karakt_bedekking)
 resultaat3 <- karakt_bedekking %>% 
   left_join(qHerbSpecies, by = c("species" = "ID")) %>% 
-  forestmangr::round_df(., 2) %>% 
-  mutate(variable = "karakt_bedekking"
-         , n_obs = n_total_plots
-         , mean = karakt_bedekking
-         , variance = NA, lci = NA, uci = NA
-         , strata = "species"
-         , stratum_name = name_nl
-         , strata2 = NA
-         , stratum_name2 = NA) 
+  forestmangr::round_df(., 2) 
+# %>% 
+#   mutate(variable = "karakt_bedekking"
+#          , n_obs = n_total_plots
+#          , mean = karakt_bedekking
+#          , variance = NA, lci = NA, uci = NA
+#          , strata = "species"
+#          , stratum_name = name_nl
+#          , strata2 = NA
+#          , stratum_name2 = NA) 
   
-#? hoe lci en uci berekenen op een 
-
 names(resultaat3)
 ```
 
@@ -508,16 +508,13 @@ path_to_datarequest_teamdrive
 ```
 
 ```{r export3}
-resultaat3 %>% distinct(variable)
-# karakt_bedekking
-
-write.xlsx(resultaat
+write.xlsx(resultaat3
            , paste0(path_to_datarequest, "stat_veg.xlsx")
            , sheetName = "karakt_bedekking"
            , showNA = FALSE
            , append = TRUE) 
 
-write.xlsx(resultaat
+write.xlsx(resultaat3
            , paste0(path_to_datarequest_teamdrive, "stat_veg.xlsx")
            , sheetName = "karakt_bedekking"
            , showNA = FALSE
