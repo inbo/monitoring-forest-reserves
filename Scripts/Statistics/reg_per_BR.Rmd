@@ -339,6 +339,8 @@ dataset2 %>% group_by(plot_id) %>% summarize(n_subplots = n_distinct(subplot_id)
   ungroup() %>% filter(n_subplots > 1) %>% nrow == 0
 
 ```
+
+
 ### Verschillende hoogteklasses
 
 > OPGEPAST met heightclass: bv. Kerselaerspleyn: andere hoogteklasses dan bv. Jansheideberg
@@ -367,7 +369,7 @@ names(dataset2)
 
 heightclasses_BR <- dataset2 %>% 
   group_by(forest_reserve, period, height_class) %>% 
-  summarize(nr_tree_species = sum(number_of_tree_species)) %>% 
+  summarize(n_tree_species = sum(number_of_tree_species)) %>% 
   ungroup()
 
 n_heightclasses <- heightclasses_BR %>% 
@@ -378,11 +380,13 @@ n_heightclasses <- heightclasses_BR %>%
 ```
 
 
+### Add zeros
+
+**OPGEPAST 1**: Achteraf de hoogteklasses die niet relevant zijn terug verwijderen ...
+Mbv een inner_join met list van welke hoogteklasses er per BR voorkomen
 
 
-### Perc rubbing
-
-OPGEPAST met perc_rubbing: door "add_zeros" worden bij alle hoogteklasses die NIET opgenomen werden, een nul geplaatst bij rubbing, terwijl dt
+**OPGEPAST 2**: perc_rubbing: door "add_zeros" worden bij alle hoogteklasses die NIET opgenomen werden, een nul geplaatst bij rubbing, terwijl dit
 
 - ofwel NA moet zijn, want geen survey_rubbing
 - ofwel NA moet zijn, want geen boom aanwezig in die hoogteklasse, dus geen idee mbt rubbing
@@ -390,22 +394,10 @@ OPGEPAST met perc_rubbing: door "add_zeros" worden bij alle hoogteklasses die NI
 => nullen omzetten naar NA na add_zeros
 
 
-```{r eval = FALSE}
-t <- dataset2_0 %>% filter(rubbing_damage_perc == 0)
-```
-
-
-
-
-### Add zeros
-
-Achteraf de hoogteklasses die niet relevant zijn terug verwijderen ...
-Mbv een inner_join met list van welke hoogteklasses er per BR voorkomen
-
 ```{r lijst_hoogteklasses_per_BR}
 heightclasses_BR <- dataset2 %>% 
   group_by(forest_reserve, period, height_class) %>% 
-  summarize(nr_tree_species = sum(number_of_tree_species)) %>% 
+  summarize(n_tree_species = sum(number_of_tree_species)) %>% 
   ungroup() %>% 
   filter(!is.na(height_class))
 
@@ -415,7 +407,7 @@ n_heightclasses <- heightclasses_BR %>%
   summarize(n = n()) %>% 
   ungroup()
 
-# OK: enkel With hiede 3, Meerd, Kerss en Wijnen 2, rest 4
+# OK: enkel With heide 3, Meerd, Kerss en Wijnen 2, rest 4
 ```
 
 ```{r add_zeros_all_heights}
@@ -426,21 +418,27 @@ dataset2_0 <- add_zeros(dataset = dataset2 %>%
                         grouping_vars = c("period")
                         ) %>%
   left_join(plotinfo %>% select(plot_id, period, forest_reserve)) %>% 
-  inner_join(heightclasses_BR %>% select(-nr_tree_species)) %>% 
-  mutate(rubbing_damage_perc = ifelse(number_of_tree_species == 0 & rubbing_damage_perc == 0,
+  inner_join(heightclasses_BR %>% select(-n_tree_species)) %>% 
+  mutate(approx_rubbing_damage_perc = ifelse(number_of_tree_species == 0 & approx_rubbing_damage_perc == 0,
                                       NA,
-                                      rubbing_damage_perc)
+                                      approx_rubbing_damage_perc)
         )
 
 ```
+
+```{r eval = FALSE}
+t <- dataset2_0 %>% filter(approx_rubbing_damage_perc == 0)
+# 1068 vs 197 bij aanpassing naar NA wanneer nr_species = 0
+```
+
 ```{r check_aantal_hoogteklasses}
 heightclasses_plot <- dataset2_0 %>% 
   group_by(forest_reserve, period, plot_id) %>% 
   summarize(n_heightclass = n_distinct(height_class)) %>% 
   ungroup() 
 
-t <- heightclasses_plot %>% group_by(forest_reserve, period, n_heightclass) %>% 
-  summarize(n = n()) %>% 
+heightclasses_plot %>% group_by(forest_reserve, period, n_heightclass) %>% 
+  summarize(n_plots = n()) %>% 
   ungroup() 
 # OK
 ```
@@ -551,7 +549,7 @@ Dus beetje zoals we ook hogerop (chunck `lijst_hoogteklasses_per_BR`) de hoogtek
 ```{r lijst_bmsen_per_BR}
 species_BR <- dataset3 %>% 
   group_by(forest_reserve, period, species) %>% 
-  summarize(nr_heightclasses = n_distinct(height_class)) %>% 
+  summarize(n_heightclasses = n_distinct(height_class)) %>% 
   ungroup() %>% 
   filter(!is.na(species))
 
@@ -585,15 +583,15 @@ dataset3_0 <- add_zeros(dataset = dataset3 %>%
                         ) %>%
   # left_join(qSpecies %>% dplyr::select(species = ID, speciesTxt = Value1)) %>% 
   left_join(plotinfo %>% select(plot_id, period, forest_reserve)) %>% 
-  inner_join(heightclasses_BR %>% select(-nr_tree_species)) %>% 
-  inner_join(species_BR %>% select(-nr_heightclasses)) %>% 
+  inner_join(heightclasses_BR %>% select(-n_tree_species)) %>% 
+  inner_join(species_BR %>% select(-n_heightclasses)) %>% 
   mutate(rubbing_damage_perc = ifelse(approx_nr_regeneration_ha == 0 & rubbing_damage_perc == 0,
                                       NA,
                                       rubbing_damage_perc)
         )
 
-
 ```
+
 ```{r}
 variables_for_statistics3 <- dataset3_0 %>% 
   select(contains("approx")) %>% 
@@ -604,12 +602,12 @@ variables_for_statistics3
 ```
 
 ```{r stat3, results='hide'}
-# !! één resultaat per soort en per BR
-n_BR <- dataset3 %>% distinct(forest_reserve) %>% nrow()
+# !! één resultaat per soort, hoogteklasse en BR
 n_BR <- length(unique(dataset3$forest_reserve))
 n_species <- length(unique(dataset3$species))
+n_height <- length(unique(dataset3$height_class))
 n_period <- length(unique(dataset3$period))
-n <- n_BR * n_species * 2 * length(variables_for_statistics3)
+n <- n_BR * n_species * n_height * n_period * length(variables_for_statistics3)
 n # 1856
 # DAAROM: 0 voor species die niet voorkomen in een bepaalde hoogteklasse verwijderen
 # (!! moest wel nog in dataset3_0 zitten, om gemiddelde te nemen)

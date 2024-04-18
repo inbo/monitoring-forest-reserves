@@ -1,6 +1,6 @@
 ---
 title: "Statistieken obv cirkelplots"
-subtitle: "Wijnendale"
+subtitle: "Wijnendale - dendrometrie"
 author: "Anja Leyman"
 date: "`r Sys.Date()`"
 output:
@@ -73,7 +73,7 @@ Alle basis variabelen van de monitoring:
 - ....
 - decaystage logs (op termijn decaystage ook van staand dood hout)
 
-> Hierna worden deze één voor één doorlopen en weggeschreven naar de resultatendb
+Hierna worden deze één voor één doorlopen en weggeschreven naar de resultatendb
 
 Om gemiddeldes per BR te verkrijgen, beperken we ons tot de CP's. 
 (KV's zijn beter afz. te verwerken)
@@ -335,7 +335,7 @@ deadw_by_decay_plot_species <- read_excel(
 
 # Statistieken
 
-## Dendro_by_plot
+## Obv dendro_by_plot
 
 ```{r data1}
 dataset <- dendro_by_plot
@@ -434,7 +434,7 @@ write.xlsx(resultaat
 ```
 
 
-## Dendro_by_plot_species
+## Obv dendro_by_plot_species
 
 Nulwaardes staan niet in de output.
 Een species of diam-klasse die niet voorkomt, staat niet in resulterende tabel
@@ -571,7 +571,7 @@ write.xlsx(resultaat2
 ```
 
 
-## Dendro_by_diam_plot
+## Obv dendro_by_diam_plot
 
 ```{r data3}
 dataset3 <- dendro_by_diam_plot
@@ -674,7 +674,7 @@ write.xlsx(resultaat3
 ```
 
 
-## Dendro_by_diam_plot_species
+## Obv dendro_by_diam_plot_species
 
 ```{r data4}
 dataset4 <- dendro_by_diam_plot_species 
@@ -791,7 +791,7 @@ write.xlsx(resultaat4
 ```
 
 
-## Deadw_by_decay_plot
+## Obv deadw_by_decay_plot
 
 De dataset `deadw_by_decay_plot` bevat enkel info over afbraakstadium van liggend 
 en staand dood hout afzonderlijk, niet van het dood hout in het totaal.
@@ -926,7 +926,7 @@ write.xlsx(resultaat5
 
 
 
-## Deadw_by_decay_plot_species
+## Obv deadw_by_decay_plot_species
 
 ```{r data6}
 dataset6 <- deadw_by_decay_plot_species 
@@ -1039,8 +1039,6 @@ write.xlsx(resultaat6
 
 
 
-
-
 # Overige statistieken
 
 ## Meerstammigheid per soort
@@ -1064,5 +1062,5 @@ destination_dir <- path_to_html_teamdrive
 
 # Copy the file to the destination directory
 file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
-# ? file.copy
+
 ```

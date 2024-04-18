@@ -44,15 +44,18 @@ source(here::here("scripts/Setup.R"))
 forestreserve <- "Wijnendalebos"
 forestreserve_short <- forestreserve
 forestreserve_short <- "Wijnendale"
-# plot_type <- "CA"
+plot_type <- "CA"
 # plot_type <- "CP"
 
 forestreserve_folder <- paste0(path_to_reserves, "4b_Wijnendale")
 
 path_to_datarequest <- paste0(forestreserve_folder, "/verwerking_2024_1e2e3eSET/output_forrescalc/")
 path_to_datarequest_teamdrive <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverwerking/per_gebied/2024_", forestreserve_short, "/output_forrescalc/")
+path_to_html_teamdrive <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverwerking/per_gebied/2024_", forestreserve_short, "/")
 
 # plots_to_exclude <- c(701, 707, 709, 727, 728, 738, 739, 740, 759, 760)
+
+path_to_datacontrol <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverwerking/per_gebied/2024_", forestreserve_short, "/datacontrole/")
 ```
 
 
@@ -60,6 +63,11 @@ TIJDELIJK `path_to_fieldmap_db` aanpassen naar export van wijnendale en everzwij
 
 ```{r Path_tmp}
 path_to_fieldmap_db <- "C:/03_BR_db_monitoring/3_db_Els_deel2_Wijn_Ever/FieldMapData_3_db_Els_deel2_Wijn_Ever.accdb"
+
+
+path_to_fieldmap_db <- "C:/03_BR_db_monitoring/MDB_BR_X8_inbo2020_20240222/FieldMapData_MDB_BR_X8_inbo2020.accdb"
+
+
 ```
 
 
@@ -80,6 +88,35 @@ path_to_plotlevel_csv
 path_to_treelevel_csv
 path_to_output_gdrive
 path_to_meetgegevens
+
+```
+
+
+# Load lookuplijsten
+
+```{r load_lkp}
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+
+  qIndShootCop <- sqlFetch(con, "qIndShootCop", stringsAsFactors = FALSE)
+  # deadw_test <- sqlFetch(con, "Deadwood_3eSET", stringsAsFactors = FALSE)
+  qAliveDead <- sqlFetch(con, "qAliveDead", stringsAsFactors = FALSE)
+  qSpecies <- sqlFetch(con, "qSpecies", stringsAsFactors = FALSE)
+  qDecaystage <- sqlFetch(con, "qdecaystage", stringsAsFactors = FALSE)
+  qIntactSnag <- sqlFetch(con, "qIntactSnag", stringsAsFactors = FALSE)
+  qVdagnVfm <- sqlFetch(con, "qVdagnVfm", stringsAsFactors = FALSE)
+    
+  qcommonremark <- sqlFetch(con, "qcommonremark", stringsAsFactors = FALSE)
+  qCrownVolRedu <- sqlFetch(con, "qCrownVolRedu", stringsAsFactors = FALSE)
+  qBranchLenghtReduction <- sqlFetch(con, "qBranchLenghtReduction", stringsAsFactors = FALSE)
+
+  qiufroheight <- sqlFetch(con, "qiufroheight", stringsAsFactors = FALSE)
+  qiufroheight_shoots <- sqlFetch(con, "qiufroheight_shoots", stringsAsFactors = FALSE)
+  qiufrovitality <- sqlFetch(con, "qiufrovitality", stringsAsFactors = FALSE)
+  qiufrovitality_shoots <- sqlFetch(con, "qiufrovitality_shoots", stringsAsFactors = FALSE)
+  qiufrosocialstatus <- sqlFetch(con, "qiufrosocialstatus", stringsAsFactors = FALSE)
+  qiufrosocialstatus_shoots <- sqlFetch(con, "qiufrosocialstatus_shoots", stringsAsFactors = FALSE)
+  
+odbcClose(con)
 
 ```
 
@@ -163,11 +200,10 @@ plotinfo %>% filter(survey_trees == FALSE) %>% distinct(plot_id)
 ```
 
 
-## Correctie year_dendro - NIET 
+## Check year_dendro 
 
 Year_dendro = jaar van groeiseizoen
-Grens was gelegd op 1/7, nu naar 1/5.
-**Opgelost in issue # 114**
+Grens is gelegd op 1/5.
 
 ```{r check, eval=FALSE}
 names(plotinfo)
@@ -198,6 +234,10 @@ plot 425 en 503 hebben een afwijkende dendro-date, gecheckt in FM-DC en klopt.
 Standaard worden enkel de "processed" data ingeladen mbv de load-functies.
 
 ```{r load_data, results='hide'}
+data_dendro <- load_data_dendrometry(database = path_to_fieldmap_db)
+
+
+
 data_dendro <- load_data_dendrometry(database = path_to_fieldmap_db
                                      # , plottype = plot_type
                                      , forest_reserve = forestreserve
@@ -237,12 +277,9 @@ missing_heightmodel <- data_stems %>%
 Er zijn `r nrow(missing_heightmodel)` ontbrekende hoogtemodellen.
 
 
-# Correctie liggend dood hout  
+# Volume liggend dood hout  
 
-## Volume bijwerken intacte bomen - NIET
-
-Niet meer nodig: issue #105: geïncorporeerd in forrescal. 
-
+## Fragmenten versus intacte bomen
 
 De volumeberekening van liggend dood hout baseert zich op het veld `calc_volume_m3`
 uit FM-databank (layer `Deadwood`).
@@ -379,6 +416,126 @@ for (tablename in names(dendro)) {
 
 ```
 
+
+# Datacontrole
+
+## NA's in data_dendro_calc
+
+want bij optellen wordt dat 0 in de calc functies
+
+```{r results='hide'}
+names(data_dendro_calc)
+```
+
+```{r}
+col <- c("basal_area_alive_m2_ha","basal_area_dead_m2_ha", 
+         "vol_alive_m3_ha", "vol_dead_standing_m3_ha", 
+         "vol_bole_alive_m3_ha","vol_bole_dead_m3_ha", 
+         "number_of_trees_alive_ha", "number_of_trees_dead_ha")
+
+data_dendro_calc %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+
+```
+
+## Ontbrekende dbh 
+
+Een ontbrekende dbh zorgt voor een ontbrekend volume, wat bij sommeren in de 
+calculate-functies leidt tot een '0' (geen `na.rm` opgenomen)
+
+```{r results='hide'}
+# names(data_dendro_calc)
+# select_colnames_dendro <- data_dendro_calc %>% 
+#   select(1:5, contains("_id"), species
+#          , dbh_mm, height_m, calc_height_m
+#          , alive_dead, ind_sht_cop, intact_snag
+#          , common_remark, remark
+#          , 46:57
+#          ) %>% 
+#   colnames()
+# 
+# select_colnames_dendro
+
+names(data_stems_calc)
+select_colnames_stems <- data_stems_calc %>% 
+  select(1:5, contains("_id"), species
+         , dbh_mm, height_m, calc_height_m
+         , alive_dead, ind_sht_cop, intact_snag
+         , common_remark, remark
+         , 47:57
+         ) %>% 
+  colnames()
+
+select_colnames_stems
+
+
+```
+```{r missing_dbh}
+missing_dbh <- data_stems_calc %>% 
+  filter(is.na(dbh_mm)) %>% 
+  select(select_colnames_stems)
+
+```
+
+**DBH_mm ontbreekt**
+
+```{r}
+missing_dbh %>% 
+  select(period, plot_id, tree_id = tree_measure_id, dbh_mm, height_m
+         ,ind_sht_cop, species) %>% 
+  DT::datatable(caption = "DBH ONTBREEKT")
+
+
+```
+
+```{r eval = FALSE}
+write.xlsx(missing_dbh
+           , paste0(path_to_datacontrol, "dendro.xlsx")
+           , sheetName = "missing_dbh"
+           , showNA = FALSE
+           , append = TRUE) 
+# via mail aan Peter gevraagd en zelf 2CP's aangepast (10 naar 1) - 8/4/2024
+```
+
+
+## Snags zonder hoogte
+
+Te checken op niveau van de stems
+
+Tijdelijke oplossing: ik heb daar intacte van gemaakt in `r path_to_fieldmap_db`
+
+  period	tree_measure_id	old_id   	species	   dbh_mm
+71000	CA	3	2022	144	      5520			83	        205
+71000	CA	3	2022	353	      6498			16	        90
+71000	CA	3	2022	216	      5625			89	        120
+
+
+```{r missing_height}
+missing_height <- data_stems_calc %>% 
+  filter(intact_snag == 10 & is.na(height_m)) %>% 
+  select(select_colnames_stems)
+```
+
+**Snags zonder hoogte**
+
+```{r}
+missing_height %>% 
+  select(period, plot_id, tree_id = tree_measure_id
+         , dbh_mm, height_m, intact_snag) %>% 
+  DT::datatable(caption = "SNAGS ZONDER HOOGTE")
+```
+
+
+```{r eval = FALSE}
+write.xlsx(missing_height
+           , paste0(path_to_datacontrol, "dendro.xlsx")
+           , sheetName = "snag_no_height"
+           , showNA = FALSE
+           , append = TRUE) 
+# via mail aan Peter gevraagd en zelf 2CP's aangepast (10 naar 1) - 8/4/2024
+```
+
+
+
 # Extra processing
 
 ## Plotinfo toevoegen
@@ -514,4 +671,20 @@ save_results_xlsx(
 ```
 
 
+
+# Copy html to teamdrive
+
+Na knitting - manueel
+
+```{r eval = FALSE}
+# Specify the path of the file you want to copy
+source_file <- here::here("Scripts/Individuele_BRen/Wijnendale_dendro_2024.html")
+
+# Specify the destination directory where you want to copy the file
+destination_dir <- path_to_html_teamdrive
+
+# Copy the file to the destination directory
+file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
+# ? file.copy
+```
 

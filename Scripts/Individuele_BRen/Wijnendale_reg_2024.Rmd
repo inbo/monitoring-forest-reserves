@@ -51,6 +51,7 @@ forestreserve_folder <- paste0(path_to_reserves, "4b_Wijnendale")
 
 path_to_datarequest <- paste0(forestreserve_folder, "/verwerking_2024_1e2e3eSET/output_forrescalc/")
 path_to_datarequest_teamdrive <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverwerking/per_gebied/2024_", forestreserve_short, "/output_forrescalc/")
+path_to_html_teamdrive <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverwerking/per_gebied/2024_", forestreserve_short, "/")
 
 # plots_to_exclude <- c(701, 707, 709, 727, 728, 738, 739, 740, 759, 760)
 
@@ -161,7 +162,8 @@ select_colnames_reg <- data_regeneration %>%
   select(plot_id, subplot_id, plottype, forest_reserve
          , period, year, subcircle
          , height_class, species, number_class, nr_of_regeneration
-         , approx_nr_regeneration, min_number_of_regeneration, max_number_of_regeneration
+         , approx_nr_regeneration
+         , min_number_of_regeneration, max_number_of_regeneration
          , rubbing_damage_number, rubbing_damage_perc
          ) %>% 
   colnames()
@@ -225,10 +227,39 @@ checkA2 <- data_regeneration %>%
 ```
 
 
+# Datacontrole
 
-# Check rubbing damage in data_regeneration
+## NA's in data_regeneration
 
-## NA ipv 0 
+want bij optellen wordt dat 0 in de calc functies
+
+```{r results='hide'}
+names(data_regeneration)
+```
+
+```{r}
+col <- c("approx_nr_regeneration","min_number_of_regeneration", 
+         "max_number_of_regeneration")
+
+data_regeneration %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+
+# nr_of_regeneration vs number_class: één van beide mot ingevuld zijn
+data_regeneration %>% filter(is.na(nr_of_regeneration) & is.na(number_class)) %>% nrow() == 0
+```
+OPGEPAST: per plot is er ook een species NA en heightclass NA, waar aantallen = 0 zijn: 
+dit is zo als er geen verjonging genoteerd werd
+
+```{r}
+species_NA <- data_regeneration %>% filter(is.na(species) | is.na(height_class))
+
+plot411 <- data_regeneration %>% filter(plot_id == 411)
+```
+
+
+
+## Rubbing damage
+
+### NA ipv 0 
 
 <!-- Ter aanvulling bij issue #102 : met Peter VdK besproken, en blijkbaar brengt het veel workload met zich mee, om ook 0-waardes in te voeren bij browsing en rubbing. -->
 <!-- Tot nu toe werd er steeds achteraf bij de datacontrole een update-query uitgevoerd die alle NA's omzette naar 0 (gamedamage) of 100 (no browsing). Maar dat is weer een extra bewerking. -->
@@ -257,7 +288,7 @@ check_rubbingnr_NA2 <- data_regeneration %>%
 
 ```
 
-## Percentage
+### Percentage
 
 `rubbing_damage_perc`    
 
@@ -288,7 +319,7 @@ check_nrclass <- check_rubbing_perc %>%
 ```
 
 
-## Datacontrole
+### Te hoog aantal aangetast
 
 Het aantal van rubbing_damage kan niet hoger zijn dan het waargenomen aantal van die soort.
 
@@ -372,7 +403,7 @@ Hierna nog enkele testen.
 # CP
 check_rubbing_perc_NA <- regeneration_by_plot_height %>% 
   left_join(plotinfo %>% select(plot_id, period, game_impact_reg)) %>%
-  filter(is.na(rubbing_damage_perc) & number_of_tree_species > 0) %>% 
+  filter(is.na(approx_rubbing_damage_perc) & number_of_tree_species > 0) %>% 
   filter(game_impact_reg == TRUE) 
 
 check_rubbing_perc_NA %>% nrow() == 0
@@ -380,7 +411,7 @@ check_rubbing_perc_NA %>% nrow() == 0
 # CA
 check_rubbing_perc_NA <- regeneration_by_core_area_height_species %>% 
   left_join(plotinfo %>% select(plot_id, period, game_impact_reg)) %>%
-  filter(is.na(rubbing_damage_perc) & nr_of_subplots_with_regeneration > 0) %>% 
+  filter(is.na(approx_rubbing_damage_perc) & nr_of_subplots_with_regeneration > 0) %>% 
   filter(game_impact_reg == TRUE) 
 
 check_rubbing_perc_NA %>% nrow() == 0
@@ -426,6 +457,16 @@ col <- c("number_of_tree_species", "approx_nr_regeneration_ha",
          "lci_number_of_regeneration_ha", "uci_number_of_regeneration_ha")
 
 regeneration_by_plot_height %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+
+```
+
+
+```{r}
+col <- c("approx_nr_established_ha", "approx_nr_seedlings_ha",
+         "mean_number_established_ha", "lci_number_established_ha", "uci_number_established_ha",
+         "mean_number_seedlings_ha" , "lci_number_seedlings_ha", "uci_number_seedlings_ha")
+
+regeneration_by_plot_species %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
 
 ```
 
@@ -629,3 +670,18 @@ save_results_xlsx(
 
 
 
+# Copy html to teamdrive
+
+Na knitting - manueel
+
+```{r eval = FALSE}
+# Specify the path of the file you want to copy
+source_file <- here::here("Scripts/Individuele_BRen/Wijnendale_reg_2024.html")
+
+# Specify the destination directory where you want to copy the file
+destination_dir <- path_to_html_teamdrive
+
+# Copy the file to the destination directory
+file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
+
+```

@@ -33,6 +33,9 @@
 #' }
 #'
 get_open_area <- function(repo_path = path_to_git_forresdat){
+  
+  repo_path <- path_to_git_forresdat
+  
   dendro_by_plot <- read_forresdat("dendro_by_plot", repo_path)
   regeneration_by_plot <- read_forresdat("regeneration_by_plot", repo_path)
   open_area <- dendro_by_plot %>% 
