@@ -64,10 +64,6 @@ TIJDELIJK `path_to_fieldmap_db` aanpassen naar export van wijnendale en everzwij
 ```{r Path_tmp}
 path_to_fieldmap_db <- "C:/03_BR_db_monitoring/3_db_Els_deel2_Wijn_Ever/FieldMapData_3_db_Els_deel2_Wijn_Ever.accdb"
 
-
-path_to_fieldmap_db <- "C:/03_BR_db_monitoring/MDB_BR_X8_inbo2020_20240222/FieldMapData_MDB_BR_X8_inbo2020.accdb"
-
-
 ```
 
 
