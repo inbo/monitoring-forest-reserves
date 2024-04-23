@@ -69,6 +69,7 @@ path_to_datarequest <- paste0(forestreserve_folder, "/verwerking_2024_1e2e3eSET/
 path_to_datarequest
 # hoogtemodellen
 # path_to_height_models
+# path_to_heightmodels_teamdrive
 
 ```
 
@@ -659,4 +660,16 @@ write.xlsx(parameters, file = paste0(path_to_heightmodels_teamdrive, "HeightPara
 
 Html manueel kopieren naar onze teamdrive **_`r paste0("PRJ_BR_Gegevensverwerking/per_gebied/2024_", forestreserve_short)`_**   
 
+Na knitting - manueel
 
+```{r eval = FALSE}
+# Specify the path of the file you want to copy
+source_file <- here::here(paste0("Scripts/AanmaakHoogteCurves/verkenning_DHcurves_", forestreserve_short, "_", plot_type, "_2024.html"))
+
+# Specify the destination directory where you want to copy the file
+destination_dir <- paste0(path_to_dataverwerking_teamdrive, "/per_gebied/2024_", forestreserve_short)
+
+# Copy the file to the destination directory
+file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
+# ? file.copy
+```

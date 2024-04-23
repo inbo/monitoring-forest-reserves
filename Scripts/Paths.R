@@ -6,6 +6,7 @@ path_to_dataverwerking <- "C:/03_BR/1_DataverwerkingBR/"
 path_to_forrescalc <- "C:/03_BR/2_Forrescalc/R/"
 path_to_git_forresdat <- "C:/03_BR/2_Forresdat/"
 path_to_teamdrive <- "G:/Gedeelde drives/Team_Boseco_BR/"
+path_to_dataverwerking_teamdrive <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverwerking")
 
 # zou ev. ook AWS kunnen worden, dan wel vpn opzetten als niet in VAC
 # vb-code van faunabeheer (sander devisscher)

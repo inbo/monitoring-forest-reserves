@@ -598,10 +598,34 @@ De curve voor de lorken samen, moet bij elke soort apart vermeld worden (sp 17, 
 De parameterfile kopiëren naar folder "C:/03_BR/1_DataVerwerkingBR/Data/Hoogtemodellen" 
 voor gebruik in R, package forrescalc.
 
-Eerst de oude parameterfiles die daar staan, hernoemen naar "xxxxx_vs2021.xlsx" en 
-verplaatsen naar folder "archief".
 
-De parameterfile inlezen.
+- Eerst de oude parameterfiles die daar staan, hernoemen naar "xxxxx_vs2021.xlsx" en 
+verplaatsen naar folder "archief",met behulp van onderstaande code (! versienr aanpassen).    
+
+```{r}
+versienr <- "vs2021"
+
+for (decade in c(1, 2)){
+  
+  # bestaat de file al?
+  archive_filename <- paste0(path_to_height_models, "archief/HeightParams_", forestreserve_short, "_", plot_type, "_", decade, "_", versienr, ".xlsx")
+  
+  if (file.exists(archive_filename)) {
+  print(paste0(archive_filename, " already exists!"))
+} else {
+  print("The file does not exist.")
+  parameters_old <- read_excel(paste0(path_to_height_models, "HeightParams_", forestreserve_short, "_", plot_type, "_1.xlsx"))
+  write.xlsx(parameters_old, file = archive_filename, showNA = FALSE) 
+}
+  
+}
+
+```
+
+
+
+
+- De parameterfile inlezen.    
 
 ```{r}
 parameters <- read_excel(path = paste0(path_to_datarequest, "HeightParams_", forestreserve_short, "_", plot_type, ".xlsx"))
@@ -609,7 +633,7 @@ parameters <- read_excel(path = paste0(path_to_datarequest, "HeightParams_", for
 # eerste sheet inlezen
 ```
 
-De parameterfile opslaan onder `r path_to_height_models`, met een afzonderlijke file per decade.
+- De parameterfile opslaan onder `r path_to_height_models`, met een afzonderlijke file per decade.
 
 ```{r}
 write.xlsx(parameters, file = paste0(path_to_height_models, "HeightParams_", forestreserve_short, "_", plot_type, "_1.xlsx"), showNA = FALSE)  # row.names = TRUE geeft foutmelding
@@ -617,6 +641,38 @@ write.xlsx(parameters, file = paste0(path_to_height_models, "HeightParams_", for
 write.xlsx(parameters, file = paste0(path_to_height_models, "HeightParams_", forestreserve_short, "_", plot_type, "_2.xlsx"), showNA = FALSE)
 
 write.xlsx(parameters, file = paste0(path_to_height_models, "HeightParams_", forestreserve_short, "_", plot_type, "_3.xlsx"), showNA = FALSE)
+```
+
+
+- De parameterfile ook direct opslaan in onze teamdrive `r path_to_heightmodels_teamdrive`
+
+```{r eval = FALSE}
+write.xlsx(parameters, file = paste0(path_to_heightmodels_teamdrive, "HeightParams_", forestreserve_short, "_", plot_type, "_1.xlsx"), showNA = FALSE)  # row.names = TRUE geeft foutmelding
+
+write.xlsx(parameters, file = paste0(path_to_heightmodels_teamdrive, "HeightParams_", forestreserve_short, "_", plot_type, "_2.xlsx"), showNA = FALSE)
+
+write.xlsx(parameters, file = paste0(path_to_heightmodels_teamdrive, "HeightParams_", forestreserve_short, "_", plot_type, "_3.xlsx"), showNA = FALSE)
+```
+
+
+
+
+# Html kopieren naar teamdrive
+
+Html manueel kopieren naar onze teamdrive **_`r paste0("PRJ_BR_Gegevensverwerking/per_gebied/2024_", forestreserve_short)`_**   
+
+Na knitting - manueel
+
+```{r eval = FALSE}
+# Specify the path of the file you want to copy
+source_file <- here::here(paste0("Scripts/AanmaakHoogteCurves/verkenning_DHcurves_", forestreserve_short, "_", plot_type, "_2024.html"))
+
+# Specify the destination directory where you want to copy the file
+destination_dir <- paste0(path_to_dataverwerking_teamdrive, "/per_gebied/2024_", forestreserve_short)
+
+# Copy the file to the destination directory
+file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
+# ? file.copy
 ```
 
 
