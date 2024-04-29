@@ -5,6 +5,8 @@
 path_to_dataverwerking <- "C:/03_BR/1_DataverwerkingBR/"
 path_to_forrescalc <- "C:/03_BR/2_Forrescalc/R/"
 path_to_git_forresdat <- "C:/03_BR/2_Forresdat/"
+path_to_forresheights <- "C:/03_BR/2_Forresheights/data/"   # csv, gitrepo
+
 path_to_teamdrive <- "G:/Gedeelde drives/Team_Boseco_BR/"
 path_to_dataverwerking_teamdrive <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverwerking")
 
@@ -73,9 +75,10 @@ path_to_strata_db <- paste0(path_to_strata, dbStrata)
 path_to_meetgegevens <- paste0(path_to_data, "Meetgegevens/")
 
 
-# Hoogtemodellen ----
+# Hoogtemodellen - xlsx ----
 path_to_height_models <- paste0(path_to_data, "Hoogtemodellen/")
 path_to_heightmodels_teamdrive <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverwerking/Hoogtemodellen/")
+# op git: path_to_forresheights <- "C:/03_BR/2_Forresheights/data/" 
 
 
 # Data-aanvragen ------
