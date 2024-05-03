@@ -98,9 +98,7 @@ Onderstaand R-script helpt en geeft info bij
 een extra tabblad ("detail") aan te maken met daarin de outliers met vermelding 
 van soort, dbh, hoogte en ev. opmerkingen
 
-2. het checken van de curves: de globale curves (0_xx.emf) en de curves op plotniveau 
-(`r paste0(virt_plot, "_xx.emf")`) worden in in FM-IA overlopen en de probleemgevallen 
-worden in onderstaand R-script beschreven
+2. het checken van de curves: de globale curves (0_xx.emf) en de curves op plotniveau (`r virt_plot`_xxx.emf) worden in in FM-IA overlopen en de probleemgevallen worden in onderstaand R-script beschreven
 
 3. het controleren of er wel voor elke soort een curve opgesteld is
 
@@ -351,8 +349,7 @@ ggplot(sp_xx, aes(dbh_cm, height_m)) + geom_point() + geom_smooth() +
 
 > Show existing charts - tabblad "Model Parameters" - Copy to clipboard
 
-Plakken in excel-file "`r paste0("HeightParams_", forestreserve_short, "_", plot_type,".xlsx")`" 
-in folder "`r path_to_datarequest`".
+Plakken in excel-file **_`r paste0("HeightParams_", forestreserve_short, "_", plot_type,".xlsx")`_** in folder **_`r path_to_datarequest`_**
 
 - tabblad log    
 - tabblad exp
@@ -469,6 +466,9 @@ Er zijn `r nrow(nr_measured %>% filter(n_alive == 0))` soorten die enkel als dod
 
 Deze moeten manueel toegevoegd worden aan de excel-file "HeightParams_`r forestreserve`_`r plot_type`.xlsx", met de parameters van de algemene curve en n = 0.
 
+In geval van `r forestreserve` gaat het om Witte els: mochten er meer metingen van Zwarte els geweest zijn, zou ik de curve van Zwarte els overnemen, maar deze is ook maar obv één hoogte bepaald (en verschilt heel weinig).
+
+
 
 ## Geen hoogtes
 
@@ -481,7 +481,10 @@ nr_measured %>% filter(between(n_height_alive, 0, 0)) %>%
 Er zijn `r nrow(nr_measured %>% filter(between(n_height_alive, 0, 0)))` soorten waar geen hoogtes gemeten zijn.
 
 Mogelijks is er een optie om soorten te clusteren, wat hier niet het geval is.
+Zie hoger bij "Enkel dode bomen". 
+
 Voor deze soorten wordt de algemene curve gebruikt.
+
 
 
 ## Adjusted curve 
@@ -573,7 +576,7 @@ nr_measured %>% filter(grepl("berk",name_nl, ignore.case = TRUE)) %>%
 
 ### Els
 
-Ook bij Els geen nut om te clusteren (zie hoger).
+Ook bij Els geen nut om te clusterejn (zie hoger).
 
 <!-- We zouden ook kunnen overwegen om witte en zwarte els samen te voegen, maar er zijn  -->
 <!-- voor beide soorten apart voldoende metingen. -->
@@ -619,7 +622,7 @@ van geclusterde soorten" toevoegen
 van geclusterde soorten, intercept aangepast aan soort" toevoegen   
 
 - idem dito voor de soorten met meer dan 4 metingen, waar toch geen eigen curve voor 
-opgesteld kon worden (hier komt dit niet voor)
+opgesteld kon worden (hier komt dt niet voor)
 
 
 
@@ -809,7 +812,7 @@ Vervolgens in "forresheights.Rproj" de nieuwe hoogtecurves pushen naar github.
 
 Html manueel kopieren naar onze teamdrive "`r paste0("PRJ_BR_Gegevensverwerking/per_gebied/2024_", forestreserve_short)`".   
 
-Na knitting - manueel mbv onderstaande code.
+Na knitting - manueel
 
 ```{r eval = FALSE}
 # Specify the path of the file you want to copy

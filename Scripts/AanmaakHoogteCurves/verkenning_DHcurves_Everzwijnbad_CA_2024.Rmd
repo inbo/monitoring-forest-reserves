@@ -1,6 +1,6 @@
 ---
 title: "Verkenning DHcurves aangemaakt in FM-IA"
-subtitle: "Everzwijnbad - cirkelplots"
+subtitle: "Everzwijnbad - kernvlakte"
 author: "Anja Leyman"
 date: "`r Sys.Date()`"
 output: 
@@ -14,12 +14,6 @@ output:
       collapsed: TRUE
       smooth_scroll: TRUE
 ---
-
-TO DO bij start
-
-- Wijnendale vervangen door BR in verwerking
-- setup aanpassen (CP naar CA, virt_plot, ....)
-- 
 
 
 ```{r Rm, eval = FALSE}
@@ -52,11 +46,11 @@ forestreserve <- "Everzwijnbad"
 forestreserve_short <- forestreserve
 forestreserve_short <- "Everzwijnbad"
 plot_type <- "CA"
-plot_type <- "CP"
+# plot_type <- "CP"
 
 forestreserve_folder <- paste0(path_to_reserves, "4b_Everzw_DEELS")
 
-virt_plot <- 199
+virt_plot <- 81001
 
 # plots_to_exclude <- c(701, 707, 709, 727, 728, 738, 739, 740, 759, 760)
 ```
@@ -83,7 +77,7 @@ path_to_datarequest
 Zie [_Stappenplan_dataverwerking_individuele_bosreservaten.gdoc](https://docs.google.com/document/d/14yPx-a0Aavat0l1eHy2tR4JDOmYoSWK1Dq3A85OY5Gs/edit?usp=sharing) voor een overzicht van te volgen
 stappen bij de dataverwerking, met ondermeer de aanmaak van de dh-curves in FM-IA.    
 
-Zie [aanmaak_virt_trees_Everzwijnbad_CP_1e2e3eSET.html](https://drive.google.com/open?id=1BG9Diexar2ALgJ1vi8Oa0WQxs4pzR3sw&usp=drive_fs) met info over de aanmaak van de virtuele bomen.   
+Zie [aanmaak_virt_trees_Everzwijnbad_CA_1e2e3eSET.html](https://drive.google.com/open?id=1BG9Diexar2ALgJ1vi8Oa0WQxs4pzR3sw&usp=drive_fs) met info over de aanmaak van de virtuele bomen.   
 
 <br>
 
@@ -271,25 +265,19 @@ Vervolgens bekijken we de soort-curves van deze "erraneous records".
 
 ## Besluit 
 
-Bij gebruik van exponentiële functie:  
+Bij gebruik van logaritmische functie:  
 
- - 0_50_residuals.emf voor paardekastanje: 1 outlier: dbh 45 cm, hoogte 15.5;
- moeilijk, maar tweehoogtes gemeten andere is 28m bij 50 cm dbh, dus als ik die lagere hoogte wegdoe,
- dan is enkel de andere de richtlijn => behouden: gemiddelde hoogte van 21 à 22m bij beide.
- 
- - 0_7_residuals.emf voor Beuk: 4 outliers: zijn geen echte outliers, is inherent aan Beuk
- (wijkt af van andere soorten)
- 
- - 0_87_residuals.emf voor zomereik: 1 outlier, dbh 54 cm, hoogte 16.5: OK, geen hefboomeffect en voldoende metingen
-
-
- 
+ - 0_16_residuals.emf voor esdoorn: geen echte outlier
+ - 0_87_residuals.emf voor zomereik: geen outliers als we enkel naar eik kijken
 
 **Hierna dh-curves opnieuw laten berekenen in FM-IA.**
 
-Bij gebruik van logaritmische functie:  
+Bij gebruik van exponentiële functie:  
 
-- 0_7: extra outliers beuk: geen echte outliers; maar functie exp ziet er beter uit
+ - 0_16_residuals.emf voor esdoorn: geen echte outlier
+ - 0_24_residuals.emf voor grauwe abeel: geen outlier, kan zo hoog zijn, 38.5m bij dbh 115 cm
+ - 0_83_residuals.emf voor witte els: is mogelijk, wel laag
+ - 0_89_residuals.emf voor zwarte els: is mogelijk, wel laag
 
 
 # Hoogtemodellen checken
@@ -381,16 +369,11 @@ OK
 ### Exp vs log
 
 In 2014 exp gebruikt.
-In 2021 geopteerd voor log (*"Log lijkt algemeen genomen ietsje beter, niet veel* 
-*verschil =>kiezen voor logaritmische functie."*)
+In 2021 geopteerd voor log (*"Bij de CP’s reeds gekozen voor log (exp in 2014).*
+*Daar hier ook mee verder gaan."*)
 
-Visueel lijkt exp nu beter, maar soms wat steiler, zeker bij weinig voorkomende soorten
-(en daar geen R-waarde)
-
-Hulst-31: +/- geen verschil
-Spork-63: wat is beste?
-Zwarte els: één meting: wat is beste?
-
+R-waarde van log beter voor beuk en esdoorn (7 en 16), maar visueel niet echt beter 
+(zeker niet bij esdoorn: daar overscahtting zwaarste bomen)
 
 Obv R-waarde is exp beter => exp gebruiken 
 
@@ -469,6 +452,9 @@ Er zijn `r nrow(nr_measured %>% filter(n_alive == 0))` soorten die enkel als dod
 
 Deze moeten manueel toegevoegd worden aan de excel-file "HeightParams_`r forestreserve`_`r plot_type`.xlsx", met de parameters van de algemene curve en n = 0.
 
+In geval van `r forestreserve` gaat het om Witte els: mochten er meer metingen van Zwarte els geweest zijn, zou ik de curve van Zwarte els overnemen, maar deze is ook maar obv één hoogte bepaald (en verschilt heel weinig).
+
+
 
 ## Geen hoogtes
 
@@ -481,7 +467,10 @@ nr_measured %>% filter(between(n_height_alive, 0, 0)) %>%
 Er zijn `r nrow(nr_measured %>% filter(between(n_height_alive, 0, 0)))` soorten waar geen hoogtes gemeten zijn.
 
 Mogelijks is er een optie om soorten te clusteren, wat hier niet het geval is.
+Zie hoger bij "Enkel dode bomen". 
+
 Voor deze soorten wordt de algemene curve gebruikt.
+
 
 
 ## Adjusted curve 
@@ -523,7 +512,7 @@ nr_measured %>% filter(grepl("lork",name_nl, ignore.case = TRUE)) %>%
 
 ```
 
-Er komt maar één soort lork voor.
+Er komt geen lork voor.
 <!-- -	Europese en Japanse lork ev. samen?  -->
 
 <!-- Er is slechts één meting van Europese lork die wat hoger ligt dan deze van japanse lork. -->
@@ -573,7 +562,9 @@ nr_measured %>% filter(grepl("berk",name_nl, ignore.case = TRUE)) %>%
 
 ### Els
 
-Ook bij Els geen nut om te clusteren (zie hoger).
+Geen nut om te clusteren, van elks te weinig metingen.
+Witte els maar één boom, mét een hoogte.
+Zwarte els lijkt hoger, maar niet geweten of Witte els ook hoger zou moeten zijn.
 
 <!-- We zouden ook kunnen overwegen om witte en zwarte els samen te voegen, maar er zijn  -->
 <!-- voor beide soorten apart voldoende metingen. -->

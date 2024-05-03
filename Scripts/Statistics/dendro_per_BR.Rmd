@@ -159,6 +159,18 @@ Nodig voor:
 
 # Inladen lookuplijsten
 
+
+(c)A: er bestaat ook read_package (https://docs.ropensci.org/frictionless/)
+package <- read_package("https://zenodo.org/records/10053702/files/datapackage.json")
+
+resources(package) : geeft overzicht van de tabellen in het datapackage
+<!-- > [1] "reference-data" "gps"            "acceleration" -->
+
+read_resource(package, "gps")  : om één tabel in te laden
+
+!! ook lookuplijsten hebbben een andere naam gekregen: snakecase allemaal
+
+
 ```{r read_forresdat1, eval=FALSE}
 qIufroheight <- read_forresdat("qiufroheight", repo_path = path_to_git_forresdat, join_plotinfo = FALSE)
 

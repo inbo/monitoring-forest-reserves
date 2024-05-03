@@ -72,6 +72,7 @@ for (file in excel_files) {
   write.csv2(data, csv_file, row.names = FALSE)
 }
 ```
+
 ```{r check}
 csv_files <- list.files(destination_dir, pattern = "\\.csv$", full.names = TRUE)
 
