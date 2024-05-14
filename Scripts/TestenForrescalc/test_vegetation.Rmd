@@ -33,7 +33,7 @@ knitr::opts_chunk$set(
 library(here)
 
 # libraries & invoergegevens
-source(here::here("scripts/Setup_ForresCalc.R"))
+source(here::here("scripts/Setup.R"))
 
 # library(tidyr)
 # library (rlang)
@@ -89,7 +89,7 @@ data_overzicht %>%
 
 
 ```{r LoadLookuplists}
-con <- odbcConnectAccess2007(path_to_fieldmap)
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
   
   qLayer <- sqlFetch(con, "qLayer", stringsAsFactors = FALSE)
   qTotalCover <- sqlFetch(con, "qtotalCover", stringsAsFactors = FALSE)
@@ -115,11 +115,11 @@ Eerst dienen de vegetatiegegevens ingeladen te worden.
 ```{r LoadDatavegetation}
 data_vegetation <-
   load_data_vegetation(
-    database = path_to_fieldmap
+    database = path_to_fieldmap_db
   )
 data_herblayer <-
   load_data_herblayer(
-    database = path_to_fieldmap
+    database = path_to_fieldmap_db
   )
 
 ```
@@ -206,7 +206,7 @@ nrow(vegetation_by_plot)
 # aantal jaar per plot en per periode: zou toch maar één jaar per plot mogen zijn, zelfs al is er een deviating date
 test <- vegetation_by_plot %>% 
   group_by(plot_id, period) %>% 
-  summarize(aantal_yr = n_distinct(year))
+  summarize(aantal_yr = n_distinct(year_main_survey))
 # 75 plots met 2 jaartallen => aanpassen in functie: year van vegetation nemen - ok
 
 # head(vegetation_by_plot, 10) %>% DT::datatable(rownames = NULL, filter = "top", options = list(pageLength = 5))
@@ -242,7 +242,7 @@ Aandachtspunt:
 ```{r ControleMuizenbos}
 str(vegetation_by_plot)
 # info mbt BR en plottype zit in afzonderlijke tabel, dan moet ze niet elke keer opgeslagen worden
-plotinfo <- load_plotinfo(database = path_to_fieldmap)
+plotinfo <- load_plotinfo(database = path_to_fieldmap_db)
 
 controle_veg_plot <- vegetation_by_plot %>% 
   left_join(plotinfo, by= c("plot_id")) %>% 
@@ -323,3 +323,38 @@ write.csv2(controle_veg_core_area_species, paste(here::here("Output"), "/Control
 
 
 ```
+
+## Plots zonder kruidlaag
+
+Zijn er plots zonder kruidlaag, want die verdwijnen wanneer we harblayer left_join met 
+vegetation layer doen
+
+```{r}
+plots_herblayer <- data_herblayer %>% 
+  group_by(plot_id, subplot_id, period) %>% 
+  summarize(aantal_herbs = n()) %>% 
+  ungroup()
+
+plots_vegetation <- data_vegetation %>% 
+  group_by(plot_id, subplot_id, period) %>% 
+  summarize(aantal_veg = n()) %>% 
+  ungroup()
+
+plots_vegetation %>% filter(aantal_veg > 1) %>% nrow() == 0
+```
+
+```{r}
+nrow(plots_herblayer) == nrow(plots_vegetation)
+
+herblyr_1species <- plots_herblayer %>% filter(aantal_herbs == 1)
+
+herblyr_1species <- herblyr_1species %>% 
+  left_join(data_herblayer)
+```
+plot 1176 geen soorten => NA
+
+```{r}
+data_herblayer %>% filter(is.na(species)) %>% nrow()
+```
+
+

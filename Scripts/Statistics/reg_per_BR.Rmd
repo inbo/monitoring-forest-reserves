@@ -453,6 +453,14 @@ variables_for_statistics2 <- dataset2_0 %>%
 variables_for_statistics2
 ```
 
+> OPGEPAST met rubbing_damage_perc: NIET OK om daar een gemiddelde van te nemen
+Bv. plot met één plantje aangetast => 100%
+andere plot 2000 plantjes en daarvan 50% aangetast (1000): => 50%
+Gemiddeld is er dan 75% aangetast wat niet correct is:
+1001 plantjes van de 2001 aangetast ....
+
+
+
 
 ```{r stat2, results='hide'}
 # !! één resultaat per soort en per BR
