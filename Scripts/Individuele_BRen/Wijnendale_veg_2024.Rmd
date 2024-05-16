@@ -107,6 +107,7 @@ con <- odbcConnectAccess2007(path_to_fieldmap_db)
   qBrowsIndex <- sqlFetch(con, "qBrowsIndex", stringsAsFactors = FALSE)
   
   qcommonremark <- sqlFetch(con, "qcommonremark", stringsAsFactors = FALSE)
+  qtotalCover <- sqlFetch(con, "qtotalCover", stringsAsFactors = FALSE)
 
 odbcClose(con)
 
