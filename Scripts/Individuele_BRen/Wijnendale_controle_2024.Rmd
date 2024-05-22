@@ -1,6 +1,6 @@
 ---
 title: "Dataverwerking - controle"
-subtitle: "Everzwijnbad - cirkelplots & kernvlakte"
+subtitle: "Wijnendale - cirkelplots & kernvlakte"
 author: "Anja Leyman"
 date: "`r Sys.Date()`"
 output: 
@@ -41,13 +41,13 @@ source(here::here("scripts/Setup.R"))
 
 
 ```{r Setup2}
-forestreserve <- "Everzwijnbad"
+forestreserve <- "Wijnendalebos"
 forestreserve_short <- forestreserve
-# forestreserve_short <- "Wijnendale"
+forestreserve_short <- "Wijnendale"
 plot_type <- "CA"
 plot_type <- "CP"
 
-forestreserve_folder <- paste0(path_to_reserves, "4b_Everzw_DEELS")
+forestreserve_folder <- paste0(path_to_reserves, "4b_Wijnendale")
 
 path_to_datarequest <- paste0(forestreserve_folder, "/verwerking_2024_1e2e3eSET/output_forrescalc/")
 path_to_datarequest_teamdrive <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverwerking/per_gebied/2024_", forestreserve_short, "/output_forrescalc/")
@@ -153,7 +153,8 @@ data_dendro <- data_dendro %>%
 
 incorrect_data_ <- incorrect_data %>% 
   left_join(data_dendro %>% 
-              select(plot_id, period, tree_measure_id, alive_dead, ind_sht_cop, intact_snag)) 
+              select(plot_id, period, tree_measure_id, 
+                     alive_dead, ind_sht_cop, intact_snag, species)) 
 ```
 
 ```{r overview}
@@ -189,7 +190,7 @@ Sowieso al enkele aanpassingen doorgevoerd in forrescalc (branch testdb_checks_A
 <!-- minimum te beperken bij de datacontrole. -->
 
 Eerder andersom checken: als er in plotdetails staat dat browsen opgenomen is, maar er is geen enkele schade genoteerd, dan mogelijks iets fout!!!!
-Dit moet op niveau van plotdetails gecheckt worden: is het OK dat game_impact genoteerd werd? (GameImpactVeg/RegObserved = 10)
+Dit moet op niveau van bosreservaat gecheckt worden: is het OK dat game_impact genoteerd werd? (GameImpactVeg/RegObserved = 10)
 
 Idem voor game_impact_reg_observed in tabel regspecies
 
@@ -285,6 +286,10 @@ incorrect_not_in_lkp %>%
   DT :: datatable(options = list(pageLength = 10), rownames = FALSE, filter = "top")
 ```
 
+```{r}
+unique(incorrect_not_in_lkp$aberrant_value) 
+```
+
 
 ```{r export_lkp_iufro, eval = FALSE}
 write.xlsx(incorrect_not_in_lkp
@@ -302,9 +307,10 @@ write.xlsx(incorrect_not_in_lkp
 
 Voor `r forestreserve` gaat het om   
 
-- tree not alive en code 16 (NVT - levend) = fout  
 - tree alive en code 17 (NVT - stoof) = geen echte fout én overload om 
 dat te corrigeren
+- wrong shift: van 13 naar 12 en van 11 naar 10 
+<!-- - tree not alive en code 16 (NVT - levend) = fout   -->
 
 
 ```{r results = 'hide'}
@@ -364,8 +370,7 @@ Voor `r forestreserve` gaat het om
 
 - iufro-klasses: tree not alive en code 50 (NVT - stoof) = geen echte fout én 
 overload om dat te corrigeren (code 40 (NVT - dood) was misschien beter geweest)
-<!-- - iufro-klasses: tree alive en code 40 (NVT - dood) = wél fout -->
-
+- iufro-klasses: tree alive en code 40 (NVT - dood) = wél fout
 
 
 ```{r}
@@ -377,7 +382,7 @@ incorrect_iufro <- incorrect_data_ %>%
 # table(incorrect_decay$anomaly, incorrect_decay$aberrant_field)
 ```
 
-Aanpassing doorgevoerd in forrescalc (branch testdb_checks_AL).   
+Aanpassing doorgevoerd in forrescalc (branch testdb_checks_AL).     
 Tijdelijk hier opvangen zdd dit niet in output komt als fout.
 
 ```{r tmp_correct_iufro}
@@ -402,7 +407,7 @@ incorrect_iufro %>%
 ```
 
 ```{r}
-unique(incorrect_iufro$aberrant_value) == 50
+unique(incorrect_iufro$aberrant_value)
 ```
 
 ```{r export_iufro_dead, eval = FALSE}
@@ -496,10 +501,12 @@ write.xlsx(incorrect_invalid
 ## Obv toestand twee periodes
 
 De datacontrole checkt ook of status (zombie), soort (shifter) en locatie (walker) matcht met vorige periode. 
+Onlogische verandering in decaystage wordt hoger opgevangen.
 
 ```{r results = 'hide'}
 incorrect_diff <- incorrect_data_ %>% 
-  filter(str_detect(period, "_") & !str_detect(anomaly, "outlier"))
+  filter(str_detect(period, "_") & !str_detect(anomaly, "outlier") &
+           aberrant_field != "decay_stage")
 
 unique(incorrect_diff$period)
 unique(incorrect_diff$aberrant_field)
@@ -518,6 +525,13 @@ incorrect_diff %>%
   DT :: datatable(options = list(pageLength = 10), rownames = FALSE, filter = "top")
 
 ```
+
+
+"On same place but not coupled": misschien heeft het zin om verder te verfijnen obv NOMT?
+Indien bij de tweede periode NOMT = "ingegroeide boom (prev te smal)" hoeft dit niet als 
+fout weerhouden worden? 
+@Peter??
+
 
 
 ```{r export_diff, eval = FALSE}
@@ -578,6 +592,19 @@ write.xlsx(incorrect_growth
 
 ## Overige anomalies
 
+O.a. ratio_dbh_height (D/H): zou tussen 1.5 en 15 moeten liggen:     
+
+- > 15 => dikke en lage boom    
+- < 1.5 => smalle en hoge boom    
+
+<!-- ratio_dbh_height = round(.data$dbh_mm * pi / (.data$height_m * 10), 1), -->
+<!--       field_ratio_dbh_height = -->
+<!--         ifelse(.data$ratio_dbh_height < 1.5 & .data$intact_snag == 11, "tree too thin and high", NA), -->
+<!--       field_ratio_dbh_height = -->
+<!--         ifelse( -->
+<!--           .data$ratio_dbh_height > 15 & .data$intact_snag == 11, "tree too thick and low", .data$field_ratio_dbh_height -->
+<!--         ), -->
+
 ```{r results = 'hide'}
 incorrect_rest <- incorrect_data_ %>% 
   filter(!anomaly %in% c("missing", "not in lookuplist", "invalid value") 
@@ -597,7 +624,7 @@ table(incorrect_rest$period, incorrect_rest$aberrant_field)
 
 ```{r}
 incorrect_rest %>% 
-  group_by(period, layer, aberrant_field, anomaly, alive_dead, ind_sht_cop) %>% 
+  group_by(period, layer, aberrant_field, anomaly, alive_dead, ind_sht_cop, intact_snag) %>% 
   summarize(n = n()) %>% 
   ungroup() %>% 
   DT :: datatable(options = list(pageLength = 10), rownames = FALSE, filter = "top")
@@ -617,6 +644,7 @@ incorrect_rest <- incorrect_rest_
 
 ```
 
+
 ```{r}
 incorrect_rest %>% 
   group_by(period, layer, aberrant_field, anomaly, alive_dead, ind_sht_cop, intact_snag) %>% 
@@ -625,6 +653,7 @@ incorrect_rest %>%
   DT :: datatable(options = list(pageLength = 10), rownames = FALSE, filter = "top")
 
 ```
+
 
 ```{r export_rest, eval = FALSE}
 write.xlsx(incorrect_rest
@@ -817,7 +846,6 @@ path_to_datacontrol
 
 ```
 
-
 ```{r eval = FALSE}
 # copy met datum van vandaag, zdd dit niet overschreven wordt 
 
@@ -840,10 +868,10 @@ Na knitting - manueel
 
 ```{r eval = FALSE}
 # Specify the path of the file you want to copy
-source_file <- here::here("Scripts/Individuele_BRen/Everzwijnbad_controle_2024.html")
+source_file <- here::here("Scripts/Individuele_BRen/Wijnendale_controle_2024.html")
 
 # Specify the destination directory where you want to copy the file
-destination_dir <- path_to_html_teamdrive
+destination_dir <- path_to_datacontrol
 
 # Copy the file to the destination directory
 file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
