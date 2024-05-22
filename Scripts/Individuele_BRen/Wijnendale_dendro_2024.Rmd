@@ -50,7 +50,7 @@ plot_type <- "CA"
 forestreserve_folder <- paste0(path_to_reserves, "4b_Wijnendale")
 
 path_to_datarequest <- paste0(forestreserve_folder, "/verwerking_2024_1e2e3eSET/output_forrescalc/")
-path_to_datarequest_teamdrive <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverwerking/per_gebied/2024_", forestreserve_short, "/output_forrescalc/")
+path_to_datarequest_teamdrive <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverwerking/per_gebied/2024_", forestreserve_short, "/03_output_R_plotlevel/")
 path_to_html_teamdrive <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverwerking/per_gebied/2024_", forestreserve_short, "/")
 
 # plots_to_exclude <- c(701, 707, 709, 727, 728, 738, 739, 740, 759, 760)
