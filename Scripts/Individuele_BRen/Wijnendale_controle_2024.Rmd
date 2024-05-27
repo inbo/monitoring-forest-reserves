@@ -139,14 +139,25 @@ Met behulp van de overkoepelende controlefunctie in package `forrescalc`.
 # missing data
 incorrect_data <- check_data_fmdb(database = path_to_fieldmap_db, forest_reserve = forestreserve)  
 
-nrow(incorrect_data) # 6757
+nrow(incorrect_data) # 9084
 # view(incorrect_data)
 names(incorrect_data)
 
 ```
 
-```{r }
+Enkel processed plots obv 2de decade.
+Bv. plot 424 niet verder meegenomen
+
+```{r}
+processed <- load_plotinfo(database = path_to_fieldmap_db, forest_reserve = forestreserve) %>% 
+  filter(period == 2)
+```
+
+```{r link_data}
 data_dendro <- load_data_dendrometry(database = path_to_fieldmap_db)
+# enkel processed data => NA's bij niet verwerkte plots zoals 424, ..
+
+
 data_dendro <- data_dendro %>% 
   mutate(tree_measure_id = as.character(tree_measure_id),
          period = as.character(period))
@@ -154,7 +165,9 @@ data_dendro <- data_dendro %>%
 incorrect_data_ <- incorrect_data %>% 
   left_join(data_dendro %>% 
               select(plot_id, period, tree_measure_id, 
-                     alive_dead, ind_sht_cop, intact_snag, species)) 
+                     alive_dead, ind_sht_cop, intact_snag, species)) %>% 
+  filter(plot_id %in% processed$plot_id)
+
 ```
 
 ```{r overview}
@@ -168,46 +181,49 @@ incorrect_overview %>% DT :: datatable(options = list(pageLength = 10), rownames
 ```
 
 ## Missing values
+
+```{r}
+missing <- incorrect_data_ %>% 
+  filter(anomaly == "missing") 
+# 4974
+```
+
 Veel "missing" => met Peter overleggen hoe we daarmee omgaan.
 
-Sowieso al enkele aanpassingen doorgevoerd in forrescalc (branch testdb_checks_AL):    
+Sowieso al enkele aanpassingen doorgevoerd in forrescalc (branch testdb_checks_AL):   
 
 - Missing area_ha is OK, moet enkel bij CA ingevuld staan
 - Iufro-klasses mogen missing zijn als dood
+- Iufro-klasses: missing periode 1 niet meer bekijken (toch niet meer aan te vullen)
 - decaystage op niveau trees mag missing zijn bij hakhout/coppice
 - browse_index: mag missing zijn, want wordt opgevangen in dataverwerking
 - game_damage_number: mag missing zijn, want wordt opgevangen in dataverwerking
 - number en number_class: periode 1 en 2 niet meer bekijken
 
-<!-- ? browse index: in check mag dit enkel NA zijn als er niks opgemeten is cfr periode 1&2 (!! op plotniveau, maar zou eigenlijk op reservaatsniveau moeten zijn). -->
-<!-- MAAR: NA's worden opgevangen in de dataverwerking, omdat het teveel werk vraagt om op terrein elke keer "geen vraatschade aan te vinken" -->
-<!-- => is het geen optie om dat standaard in te stellen in FM-DC?  -->
+```{r}
+path_to_datacontrol
+# table(missing$period, missing$aberrant_field)
 
-<!-- Hier dit ook overrulen -->
-<!-- Els stelt voor om extra velden toe te voegen die zeggen dat fout OK is,  -->
-<!-- maar evenveel werk om dit veld in te vullen, als het kost om ontbrekende waardes aan te vullen -->
-<!-- Ik denk dat het logischer is om - al zeker voor missing values - deze tot strikte  -->
-<!-- minimum te beperken bij de datacontrole. -->
+```
 
-Eerder andersom checken: als er in plotdetails staat dat browsen opgenomen is, maar er is geen enkele schade genoteerd, dan mogelijks iets fout!!!!
-Dit moet op niveau van bosreservaat gecheckt worden: is het OK dat game_impact genoteerd werd? (GameImpactVeg/RegObserved = 10)
+```{r periods, results = 'hide'}
+missing_p3 <- missing %>% 
+  filter(period == 3)
 
-Idem voor game_impact_reg_observed in tabel regspecies
+table(missing_p3$aberrant_field)
 
-Tijdelijk hier opvangen
+missing_p12 <- missing %>% 
+  filter(period != 3)
 
-```{r tmp_correct_missing}
-# table(incorrect_data$aberrant_field)
-# table(incorrect_data$anomaly)
+table(missing_p12$aberrant_field)
+```
 
-missing <- incorrect_data_ %>% 
-  filter(anomaly == "missing") %>% 
-  filter(aberrant_field != "area_ha") %>% 
-  filter(!(str_detect(aberrant_field, "iufro") & anomaly == "missing" & alive_dead == 12)) %>% 
-  filter(!(aberrant_field == "decay_stage" & anomaly == "missing" & ind_sht_cop == 12)) %>% 
-  filter(!(aberrant_field == "browse_index" & anomaly == "missing")) %>% 
-  filter(!(aberrant_field == "game_damage_number" & anomaly == "missing")) %>% 
-  filter(!(str_detect(aberrant_field, "number") & anomaly == "missing" & period != 3)) 
+```{r}
+missing %>% 
+  group_by(period, layer, ind_sht_cop, aberrant_field, anomaly) %>% 
+  summarize(n = n()) %>% 
+  ungroup() %>% 
+  DT :: datatable(options = list(pageLength = 10), rownames = FALSE, filter = "top")
 ```
 
 Exporteren naar excel-file "missing_data"
@@ -221,25 +237,6 @@ Onderscheid maken in
 
 - ontbrekend omdat er niks waargenomen is (komt niet voor bij `r forestreserve`)   
 
-
-```{r}
-path_to_datacontrol
-# table(missing$period, missing$aberrant_field)
-
-```
-
-
-```{r periods, results = 'hide'}
-missing_p3 <- missing %>% 
-  filter(period == 3)
-
-table(missing_p3$aberrant_field)
-
-missing_p12 <- missing %>% 
-  filter(period != 3)
-
-table(missing_p12$aberrant_field)
-```
 
 ```{r export_missing, eval = FALSE}
 write.xlsx(missing_p3
@@ -307,11 +304,9 @@ write.xlsx(incorrect_not_in_lkp
 
 Voor `r forestreserve` gaat het om   
 
-- tree alive en code 17 (NVT - stoof) = geen echte fout én overload om 
-dat te corrigeren
 - wrong shift: van 13 naar 12 en van 11 naar 10 
 <!-- - tree not alive en code 16 (NVT - levend) = fout   -->
-
+<!-- - tree alive en code 17 (NVT - stoof) = geen echte fout => wordt niet meer bekeken -->
 
 ```{r results = 'hide'}
 incorrect_decay <- incorrect_data_ %>% 
@@ -323,20 +318,8 @@ incorrect_decay <- incorrect_data_ %>%
 # table(incorrect_decay$anomaly, incorrect_decay$aberrant_field)
 ```
 
-Veel "tree alive" en code 17 (NVT - stoof): dit is eigenlijk OK, code 16 (NVT - levend) 
-was misschien beter geweest.
-
-Aanpassing reeds doorgevoerd in forrescalc (branch testdb_checks_AL)  
-
-Tijdelijk hier opvangen
-
-```{r tmp_correct_decay}
-# table(incorrect_data$aberrant_field)
-# table(incorrect_data$anomaly)
-
-incorrect_decay <- incorrect_decay %>% 
-  filter(anomaly != "tree alive") 
-```
+<!-- Veel "tree alive" en code 17 (NVT - stoof): dit is eigenlijk OK, code 16 (NVT - levend) was misschien beter geweest. -->
+<!-- Aanpassing reeds doorgevoerd in forrescalc (branch testdb_checks_AL)   -->
 
 
 ```{r}
@@ -368,33 +351,16 @@ write.xlsx(incorrect_decay
 
 Voor `r forestreserve` gaat het om   
 
-- iufro-klasses: tree not alive en code 50 (NVT - stoof) = geen echte fout én 
-overload om dat te corrigeren (code 40 (NVT - dood) was misschien beter geweest)
-- iufro-klasses: tree alive en code 40 (NVT - dood) = wél fout
+- iufro-klasses: tree alive en code 40 (NVT - dood)
 
+<!-- - iufro-klasses: tree not alive en code 50 (NVT - stoof) = geen echte fout 
+(code 40 (NVT - dood) was misschien beter geweest) -->
 
 ```{r}
 incorrect_iufro <- incorrect_data_ %>% 
   filter(str_detect(aberrant_field, "iufro") & !anomaly %in% c("missing", "not in lookuplist"))
 
-# table(incorrect_decay$anomaly)
-# table(incorrect_decay$period, incorrect_decay$aberrant_field)
-# table(incorrect_decay$anomaly, incorrect_decay$aberrant_field)
 ```
-
-Aanpassing doorgevoerd in forrescalc (branch testdb_checks_AL).     
-Tijdelijk hier opvangen zdd dit niet in output komt als fout.
-
-```{r tmp_correct_iufro}
-# table(incorrect_data$aberrant_field)
-# table(incorrect_data$anomaly)
-
-incorrect_iufro <- incorrect_iufro %>% 
-  filter(!(anomaly == "tree not alive" & aberrant_value == 50 & ind_sht_cop == 12)) 
-
-
-```
-
 
 ```{r}
 incorrect_iufro %>% 
@@ -527,11 +493,7 @@ incorrect_diff %>%
 ```
 
 
-"On same place but not coupled": misschien heeft het zin om verder te verfijnen obv NOMT?
-Indien bij de tweede periode NOMT = "ingegroeide boom (prev te smal)" hoeft dit niet als 
-fout weerhouden worden? 
-@Peter??
-
+<!-- "On same place but not coupled": NIET, indien bij de tweede periode `StatusRemeasurement` = 250 (= "ingegroeide boom (prev te smal)")  -->
 
 
 ```{r export_diff, eval = FALSE}
@@ -555,10 +517,22 @@ De datacontrole checkt ook of diameter- of hoogteaangroei niet uitzonderlijk hoo
 behalve populier vergelijken (species 51) *?? nog andere soorten uitsluiten? *
 - outlier_diameter/height: als het een outlier is tov alle soorten én binnen de eigen soort
 
+Er kan maar één van hogere "fouten" gesignaleerd worden.
+
 
 ```{r results = 'hide'}
-incorrect_growth <- incorrect_data_ %>% 
-  filter(str_detect(period, "_") & str_detect(anomaly, "outlier"))
+incorrect_growth <- incorrect_data %>% 
+  filter(str_detect(period, "_") & str_detect(anomaly, "outlier")) %>% 
+  mutate(period_1 = str_extract(period, "^[^_]*"), ,
+         id_1 = str_extract(tree_measure_id, "^[^_]*")
+         ) %>% 
+  left_join(data_dendro %>% 
+              select(plot_id, period, tree_measure_id, 
+                     alive_dead, ind_sht_cop, intact_snag, species), 
+            by = c("plot_id", "period_1" = "period", 
+                                "id_1" = "tree_measure_id")) %>% 
+  left_join(qspecies %>% select(ID, name_nl = Value1), 
+            by = c("species" = "ID"))
 
 unique(incorrect_growth$period)
 unique(incorrect_growth$aberrant_field)
@@ -571,7 +545,7 @@ table(incorrect_growth$aberrant_field, incorrect_growth$anomaly)
 
 ```{r}
 incorrect_growth %>% 
-  group_by(period, layer, aberrant_field, anomaly) %>% 
+  group_by(period, layer, aberrant_field, anomaly, name_nl) %>% 
   summarize(n = n()) %>% 
   ungroup() %>% 
   DT :: datatable(options = list(pageLength = 10), rownames = FALSE, filter = "top")
@@ -580,6 +554,16 @@ incorrect_growth %>%
 
 
 ```{r export_growth, eval = FALSE}
+names(incorrect_growth)
+
+incorrect_growth_ <- incorrect_growth %>% 
+  select(1:8, alive_dead_p1 = alive_dead, ind_sht_cop_p1 = ind_sht_cop,
+         intact_snag_p1 = intact_snag, 
+         species_p1 = species, name_nl_p1 = name_nl)
+names(incorrect_growth_)
+incorrect_growth <- incorrect_growth_
+
+
 write.xlsx(incorrect_growth
            , paste0(path_to_datacontrol, "incorrect.xlsx")
            , sheetName = "growth"
@@ -592,18 +576,11 @@ write.xlsx(incorrect_growth
 
 ## Overige anomalies
 
-O.a. ratio_dbh_height (D/H): zou tussen 1.5 en 15 moeten liggen:     
+O.a. ratio_dbh_height (D/H): zou tussen 1.5 en 15 moeten liggen
+(enkel bij individuele bomen, niet bij snags):     
 
-- > 15 => dikke en lage boom    
-- < 1.5 => smalle en hoge boom    
-
-<!-- ratio_dbh_height = round(.data$dbh_mm * pi / (.data$height_m * 10), 1), -->
-<!--       field_ratio_dbh_height = -->
-<!--         ifelse(.data$ratio_dbh_height < 1.5 & .data$intact_snag == 11, "tree too thin and high", NA), -->
-<!--       field_ratio_dbh_height = -->
-<!--         ifelse( -->
-<!--           .data$ratio_dbh_height > 15 & .data$intact_snag == 11, "tree too thick and low", .data$field_ratio_dbh_height -->
-<!--         ), -->
+- groter dan 15 => dikke en lage boom    
+- kleiner dan 1.5 => smalle en hoge boom    
 
 ```{r results = 'hide'}
 incorrect_rest <- incorrect_data_ %>% 
@@ -620,29 +597,6 @@ unique(incorrect_rest$anomaly)
 table(incorrect_rest$anomaly)
 table(incorrect_rest$period, incorrect_rest$aberrant_field)
 ```  
-
-
-```{r}
-incorrect_rest %>% 
-  group_by(period, layer, aberrant_field, anomaly, alive_dead, ind_sht_cop, intact_snag) %>% 
-  summarize(n = n()) %>% 
-  ungroup() %>% 
-  DT :: datatable(options = list(pageLength = 10), rownames = FALSE, filter = "top")
-
-```
-
-
-! aberrant_field = ratio_dbh_height: enkel van toepassing bij individuele bomen, niet bij snags 
-Is aangepast in forrescalc (branc hxxx_AL)
-Hier tijdelijk opvangen.
-
-```{r tmp_correct_ratio}
-incorrect_rest_ <- incorrect_rest %>% 
-  filter(!(aberrant_field == "ratio_dbh_height" & intact_snag == 10))
-
-incorrect_rest <- incorrect_rest_
-
-```
 
 
 ```{r}
@@ -749,12 +703,6 @@ incorrect_plotdetails <- check_data_plotdetails(database = path_to_fieldmap_db, 
 nrow(incorrect_plotdetails)
 view(incorrect_plotdetails)
 ```
-
-
-
-
-
-
 
 
 
