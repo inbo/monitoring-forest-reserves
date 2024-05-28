@@ -123,6 +123,10 @@ data_regeneration <-
   ) %>% 
   filter(forest_reserve == forestreserve)
 
+data_regeneration_CP <- data_regeneration %>% filter(plottype == "CP")
+
+data_regeneration_testarea <- data_regeneration %>% filter(is.na(plotarea_ha))
+
 ```
 
 
