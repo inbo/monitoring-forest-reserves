@@ -205,6 +205,8 @@ plots_enkel_2e_set
 
 ```{r plots_to_exclude}
 plots_to_exclude <- c(400, 414, 424, 426, 482)
+# 414 wel processed 1e en 2de decade, maar nie tmeer opgemeten in 3de decade
+# andere 4 plots: not-processed in plotdetails
 ```
 
 # Enkel bosplots
