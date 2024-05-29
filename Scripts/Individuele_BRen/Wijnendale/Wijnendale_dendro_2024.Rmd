@@ -44,7 +44,7 @@ source(here::here("scripts/Setup.R"))
 forestreserve <- "Wijnendalebos"
 forestreserve_short <- forestreserve
 forestreserve_short <- "Wijnendale"
-plot_type <- "CA"
+# plot_type <- "CA"
 # plot_type <- "CP"
 
 forestreserve_folder <- paste0(path_to_reserves, "4b_Wijnendale")
@@ -248,7 +248,7 @@ data_shoots <- load_data_shoots(database = path_to_fieldmap_db
 data_stems  <- compose_stem_data(data_dendro, data_shoots
                                  , extra_variables = TRUE)
 
-height_model <- load_height_models(path_to_height_models) %>%
+height_model <- load_height_models() %>%
   filter(forest_reserve == forestreserve)
 
 data_deadwood <- load_data_deadwood(database = path_to_fieldmap_db
@@ -400,8 +400,12 @@ data_dendro_calc <- calc_variables_tree_level(data_dendro, data_stems_calc)
 dendro <- calculate_dendrometry(data_dendro, data_deadwood, data_shoots, height_model, plotinfo)
 # waar survey_trees = TRUE, wordt een '0' toegekend, als er geen andere metingen zijn
 # DUS: als ik wegfilter obv data_processed, worden data NIET ingeladen,
-# MAAR omdat survey_trees = TRUE, wordt er hier een '0' toegekend aan die non-processed plots ( 400, ...°)
-
+# MAAR omdat survey_trees = TRUE, wordt er in functie "calc_dendro_plot()" een '0' 
+# toegekend aan die non-processed plots ( 400, ...°)
+# DAAROM: hoger in chunck 'load_data' het argument processed = FALSE zetten
+# zdd dat deze toch meegenomen worden, en géén "0" toegekend krijgen.
+# OPGEPAST: er bij statistische verwerking wél voor zorgen dat deze plots niet meegenomen worden
+# ev. mbv lijstje "plots_to_exclude" obv processed = TRUE
 ```
 
 
