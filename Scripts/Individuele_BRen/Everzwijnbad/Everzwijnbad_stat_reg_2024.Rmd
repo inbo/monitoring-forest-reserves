@@ -899,7 +899,7 @@ Na knitting - manueel
 source_file <- here::here(paste0("Scripts/Individuele_BRen/", forestreserve_short, "/", forestreserve_short, "_stat_reg_2024.html"))
 
 # Specify the destination directory where you want to copy the file
-destination_dir <- paste0(path_to_html_teamdrive, "04_statistieken_BR/")
+destination_dir <- path_to_html_teamdrive
 
 # Copy the file to the destination directory
 file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
