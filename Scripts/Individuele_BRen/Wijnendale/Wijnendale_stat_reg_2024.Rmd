@@ -311,7 +311,7 @@ summary(stat)
 # snel zelf een gemiddelde maken
 mean_establ <- dataset %>% 
   group_by(period) %>% 
-  summarize(mean_establ = mean(mean_number_established_ha, na.rm = TRUE)) %>% 
+  summarize(mean_establ = mean(approx_nr_established_ha, na.rm = TRUE)) %>% 
   ungroup()
 # te vergelijken met "resultaat"
 
@@ -506,7 +506,10 @@ resultaat2 <- create_statistics(
     package = "forrescalc")))
   ) %>% 
   select(-logaritmic) %>% 
-  filter(mean != 0 & !is.na(mean)) %>% 
+  # toch nullen meenemen zdd alle variabelen per soort weergegegeven worden 
+  # (zdd perc rubbing berekend kan worden)
+  # NA's niet meenemen
+  filter(!is.na(mean)) %>% 
   forestmangr::round_df(., 2) %>% 
   left_join(qHeightClass, by = c("height_class" = "ID")) %>% 
   # left_join(qSpecies, by = c("species" = "ID")) %>% 
@@ -739,7 +742,11 @@ resultaat4 <- create_statistics(
     package = "forrescalc")))
   ) %>% 
   select(-logaritmic) %>% 
-  filter(mean != 0 & !is.na(mean)) %>% 
+  # toch nullen meenemen zdd alle variabelen per soort weergegegeven worden 
+  # (zdd perc berekend kan worden)
+  # NA's niet meenemen
+  filter(!is.na(mean)) %>% 
+  # filter(mean != 0 & !is.na(mean)) %>%  
   forestmangr::round_df(., 2) %>% 
   # left_join(qHeightClass, by = c("height_class" = "ID")) %>% 
   left_join(qSpecies, by = c("species" = "ID")) %>% 
@@ -924,7 +931,10 @@ resultaat3 <- create_statistics(
     package = "forrescalc")))
   ) %>% 
   select(-logaritmic) %>% 
-  filter(mean != 0 & !is.na(mean)) %>% 
+  # toch nullen meenemen zdd elke hoogteklasse per soort weergegegeven wordt
+  # NA's niet meenemen
+  filter(!is.na(mean)) %>% 
+  # filter(mean != 0 & !is.na(mean)) %>%  
   forestmangr::round_df(., 2) %>% 
   left_join(qHeightClass, by = c("height_class" = "ID")) %>% 
   left_join(qSpecies, by = c("species" = "ID")) %>% 

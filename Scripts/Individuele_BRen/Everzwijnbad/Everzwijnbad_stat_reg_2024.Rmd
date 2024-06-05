@@ -202,19 +202,14 @@ We beperken ons hier tot
 - nr_of_tree_species_established    
 - approx_nr_established_ha    
 - approx_nr_seedlings_ha   
-- approx_rubbing_damage_perc_established
-- approx_rubbing_damage_perc_seedlings
+- rubbing_damage_nr_established_ha
+- rubbing_damage_nr_seedlings_ha
 
 Dus geen statistieken obv mean, lci en uci van de aantalsklasses.
 
 We exporteren de resultaten naar een excel-file "stat_reg.xlsx" met als naam van het tabblad telkens de naam van de file met de gegevens op plotniveau, nl. reg_by_plot(_height)(_species).
 
-Recent (mei 2024) ook rubbing_number mee geëxporteerd in reg_by_plot(_XXX), zodat we een gemiddelde percentage vraat kunnen berekenen op reservaatsniveau.
-(gemiddelde van een percentage klopt niet) 
-
-<!-- bv. ergens 2 boompjes, die allebei aangevreten zijn => 100% vraat -->
-<!-- andere plot 100 boompjes en daar 1 van aangevreten => 1% -->
-<!-- Gemiddelde van dit percentage is dan ca 50%, wat helemaal niet klopt -->
+Recent (mei 2024) ook `rubbing_damage_nr_ha` mee geëxporteerd in reg_by_plot(_XXX), zodat we een gemiddelde percentage vraat kunnen berekenen op reservaatsniveau.
 
 
 ## Obv regeneration_by_plot
@@ -232,7 +227,7 @@ en het gemiddelde `rubbing_damage_number_ha`.
 <!-- 1001 plantjes van de 2001 aangetast .... -->
 
 
-eerst NA's wegfilteren van rubbing_damage_number?
+> eerst NA's wegfilteren van rubbing_damage_number?
 er ontstaat een NA als we per plot berekenen en dan ook bij statistics
 maar aantal(established) is wel degelijk 0 na load_data_reg().
 
@@ -240,20 +235,38 @@ maar aantal(established) is wel degelijk 0 na load_data_reg().
 enkel seedlings)
 
 
-
 ```{r data1}
 dataset <- regeneration_by_plot
 
 table(dataset$forest_reserve, dataset$period)
-  #                 1   2   3
-  # Wijnendalebos 119 119 119
+  #                 1  2  3
+  # Everzwijnbad 47 48 48
+```
+
+Er is één plot die niet opgeeten werd in 1ste decade:
+
+```{r}
+t <- dataset %>% filter(period == 3) %>% 
+  anti_join(dataset %>% filter(period ==1),
+           by = c("plot_id"))
+
+plotinfo %>% filter(plot_id == t$plot_id)
+# survey_reg en survey_veg = FALSE
+```
+plot `r t$plot_id`  (survey_reg en survey_veg = FALSE)
+
+
+
+```{r results = 'hide'}
+regeneration_by_plot %>% filter(plot_id == 126) %>% view()
+regeneration_by_plot %>% filter(plot_id == 112) %>% view()
 ```
 
 ```{r variables1}
-names(dataset)
+# names(dataset)
 variables_for_statistics <- dataset %>% 
   dplyr::select(contains(c("of_tree_species", "_ha", "approx"))
-                , -contains(c("mean", "lci", "uci"))) %>% 
+                , -contains(c("mean", "lci", "uci", "perc"))) %>% 
   names()
 
 variables_for_statistics
@@ -285,7 +298,7 @@ head(resultaat)
 
 ```{r eval = FALSE}
 # testje tussendoor - temp!!
-names(dataset)
+# names(dataset)
 unique(dataset$year)
 
 stat <- create_statistics(
@@ -298,12 +311,11 @@ stat <- create_statistics(
 summary(stat)
 
 # snel zelf een gemiddelde maken
-
 mean_establ <- dataset %>% 
   group_by(period) %>% 
-  summarize(mean_establ = mean(mean_number_established_ha, na.rm = TRUE)) %>% 
+  summarize(mean_establ = mean(approx_nr_established_ha, na.rm = TRUE)) %>% 
   ungroup()
-
+# te vergelijken met "resultaat"
 
 ```
 
@@ -312,17 +324,6 @@ resultaat %>%
   DT::datatable(options = list(dom = 'tip')
                 , rownames = FALSE
                 , filter = "top")
-```
-
-```{r }
-# My.ResultsToDatabase(results = resultaat, 
-#                      dbHandle = dbResults, 
-#                      tblName = "tblResultaten", 
-#                      scriptName = "dendro_per_BR.Rmd", 
-#                      description = "dendro per ha per bosreservaat (enkel bosplots)",
-#                      request_from = "Team bosecologie",
-#                      run_by = run)
-
 ```
 
 ```{r}
@@ -356,8 +357,12 @@ Een hoogteklasse die niet voorkomt, staat niet in resulterende tabel
 ```{r data2}
 dataset2 <- regeneration_by_plot_height 
 # table(dataset2$forest_reserve, dataset2$period)
+
 ```
 
+```{r results = 'hide'}
+regeneration_by_plot_height %>% filter(plot_id == 126) %>% view()
+```
 
 ```{r n_subplots2, results='hide'}
 names(dataset2)
@@ -388,16 +393,16 @@ n_heightclasses <- heightclasses_BR %>%
 
 ### Add zeros
 
-**OPGEPAST 1**: Achteraf de hoogteklasses die niet relevant zijn terug verwijderen ...
-Mbv een inner_join met list van welke hoogteklasses er per BR voorkomen
+**OPGEPAST 1**: Achteraf de hoogteklasses die niet relevant zijn terug 
+verwijderen!
+(mbv een inner_join met lijst van welke hoogteklasses er per BR en per periode
+voorkomen)
 
 
-**OPGEPAST 2**: perc_rubbing: door "add_zeros" worden bij alle hoogteklasses die NIET opgenomen werden, een nul geplaatst bij rubbing, terwijl dit
-
-- ofwel NA moet zijn, want geen survey_rubbing
-- ofwel NA moet zijn, want geen boom aanwezig in die hoogteklasse, dus geen idee mbt rubbing
-
-=> nullen omzetten naar NA na add_zeros
+**OPGEPAST 2**: door `add_zeros()` worden bij alle 
+hoogteklasses die NIET opgenomen werden, een nul geplaatst bij 
+`rubbing_damage_nr`, terwijl dit NA moet zijn als `game_impact_reg = FALSE`!!    
+=> nullen omzetten naar NA na `add_zeros()` indien `game_impact_reg = FALSE`
 
 
 ```{r lijst_hoogteklasses_per_BR}
@@ -415,28 +420,31 @@ n_heightclasses <- heightclasses_BR %>%
 
 n_heightclasses
 
-# OK: enkel With hiede 3, Meerd, Kerss en Wijnen 2, rest 4
 ```
 
 ```{r add_zeros_all_heights}
+# names(dataset2)
 dataset2_0 <- add_zeros(dataset = dataset2 %>% 
                           select(plot_id, period, height_class, 
-                                 contains(c("_perc", "number_of_tree_species", "approx"))),
+                                 number_of_tree_species, 
+                                 approx_nr_regeneration_ha, 
+                                 rubbing_damage_number_ha),
                         comb_vars = c("plot_id", "height_class"),
                         grouping_vars = c("period")
                         ) %>%
-  left_join(plotinfo %>% select(plot_id, period, forest_reserve)) %>% 
+  left_join(plotinfo %>% 
+              select(plot_id, period, forest_reserve, game_impact_reg)) %>% 
   inner_join(heightclasses_BR %>% select(-n_tree_species)) %>% 
-  mutate(approx_rubbing_damage_perc = ifelse(number_of_tree_species == 0 & approx_rubbing_damage_perc == 0,
-                                      NA,
-                                      approx_rubbing_damage_perc)
-        )
+  # periode 1&2 nog geen game_
+  mutate(rubbing_damage_number_ha = ifelse(game_impact_reg == FALSE
+                                           , NA
+                                           , rubbing_damage_number_ha)) %>% 
+  select(-game_impact_reg)
 
 ```
 
-```{r eval = FALSE}
-t <- dataset2_0 %>% filter(approx_rubbing_damage_perc == 0)
-# 1068 vs 197 bij aanpassing naar NA wanneer nr_species = 0
+```{r results = 'hide'}
+dataset2_0 %>% filter(plot_id == 126) %>% view()
 ```
 
 Controleren of elke hoogteklasse het verwachte aantal keer voorkomt in elke plot, 
@@ -458,13 +466,14 @@ heightclasses_plot %>% group_by(forest_reserve, period, n_heightclass) %>%
 
 ```{r}
 variables_for_statistics2 <- dataset2_0 %>% 
-  select(contains(c("number_of_tree_species", "approx"))) %>% 
+  select(number_of_tree_species, approx_nr_regeneration_ha,
+         rubbing_damage_number_ha) %>% 
   names()
 
 variables_for_statistics2
 #
 ```
-
+Statistieken berekenen
 
 ```{r stat2}
 # !! één resultaat per soort en per BR
@@ -487,7 +496,11 @@ resultaat2 <- create_statistics(
     package = "forrescalc")))
   ) %>% 
   select(-logaritmic) %>% 
-  filter(mean != 0 & !is.na(mean)) %>% 
+  # toch nullen meenemen zdd alle variabelen per soort weergegegeven worden 
+  # (zdd perc rubbing berekend kan worden)
+  # NA's niet meenemen
+  filter(!is.na(mean)) %>% 
+  # filter(mean != 0 & !is.na(mean)) %>%  
   forestmangr::round_df(., 2) %>% 
   left_join(qHeightClass, by = c("height_class" = "ID")) %>% 
   # left_join(qSpecies, by = c("species" = "ID")) %>% 
@@ -505,6 +518,8 @@ nrow(resultaat2); n
 # in zelfde grootte-orde, OK
 ```
 
+Snelle controle door vergelijking met de statistieken (`resultaat`) zonder hoogteklasses of species.
+
 ```{r check_add_zeros2}
 mean_reg_per_BR <- resultaat2 %>% 
   filter(variable == "approx_nr_regeneration_ha") %>% 
@@ -512,7 +527,7 @@ mean_reg_per_BR <- resultaat2 %>%
   summarize(reg_ha = sum(mean)) %>% 
   ungroup()
 
-# vgl met Result_NGV_per_PNV obv analyseset (zonder soorten)
+# vgl met "resultaat" zonder soort of hoogteklasse
 check_reg <- mean_reg_per_BR %>% 
   left_join(resultaat %>% filter(variable == "approx_nr_established_ha") 
             , by = c("period", "forest_reserve")) %>% 
@@ -522,6 +537,25 @@ check_reg <- mean_reg_per_BR %>%
 
 range(check_reg$verschil, na.rm = TRUE)
 # [1] 0.000000e+00 3.637979e-12
+```
+
+```{r check_add_zeros2_rubbing}
+mean_reg_per_BR <- resultaat2 %>% 
+  filter(variable == "rubbing_damage_number_ha") %>% 
+  group_by(period, forest_reserve) %>% 
+  summarize(rubbing_ha = sum(mean)) %>% 
+  ungroup()
+
+# vgl met "resultaat" zonder soort of hoogteklasse
+check_reg <- mean_reg_per_BR %>% 
+    left_join(resultaat %>% filter(variable == "rubbing_damage_nr_established_ha") 
+            , by = c("period", "forest_reserve")) %>% 
+    left_join(resultaat %>% filter(variable == "rubbing_damage_nr_seedlings_ha") 
+            , by = c("period", "forest_reserve")) %>% 
+  mutate(verschil = rubbing_ha - mean.x - mean.y)
+
+range(check_reg$verschil, na.rm = TRUE)
+# [1] 0 0
 ```
 
 ```{r table2}
@@ -549,152 +583,6 @@ write.xlsx(resultaat2
 
 
 
-## Obv regeneration_by_plot_height_species
-
-Nulwaardes staan niet in de output.
-Een species of hoogteklasse die niet voorkomt, staat niet in resulterende tabel
-
-Enkel bosplots bekijken
-
-
-```{r data3}
-dataset3 <- regeneration_by_plot_height_species
-
-table(dataset3$forest_reserve, dataset3$period)
-```
-In de resulterende tabel willen we wél weten dat een bepaalde soort in een bepaalde 
-hoogteklasse "0" heeft als `approx_nr_reg_ha`.
-MAAR niet wanneer die soort helemaal niet voorkomt in dat bosreservaat.
-
-Dus beetje zoals we ook hogerop (chunck `lijst_hoogteklasses_per_BR`) de hoogteklasses 
-verwijderd hebben die in een bepaald BR niet gebruikt worden
-
-```{r lijst_bmsen_per_BR}
-species_BR <- dataset3 %>% 
-  group_by(forest_reserve, period, species) %>% 
-  summarize(n_heightclasses = n_distinct(height_class)) %>% 
-  ungroup() %>% 
-  filter(!is.na(species))
-
-# kleine controle
-species_BR %>% 
-  group_by(forest_reserve, period, n_heightclasses) %>% 
-  summarize(n_species = n()) %>% 
-  ungroup()
-```
-
-
-```{r add_zeros_all_heights_species}
-dataset3_0 <- add_zeros(dataset = dataset3 %>% 
-                          select(plot_id, period, species, height_class, contains(c("_perc", "approx"))),
-                        comb_vars = c("plot_id", "species", "height_class"),
-                        grouping_vars = c("period")
-                        ) %>%
-  # left_join(qSpecies %>% dplyr::select(species = ID, speciesTxt = Value1)) %>% 
-  left_join(plotinfo %>% select(plot_id, period, forest_reserve)) %>% 
-  inner_join(heightclasses_BR %>% select(-n_tree_species)) %>% 
-  inner_join(species_BR %>% select(-n_heightclasses)) %>% 
-  mutate(approx_rubbing_damage_perc = ifelse(approx_nr_regeneration_ha == 0 & approx_rubbing_damage_perc == 0,
-                                      NA,
-                                      approx_rubbing_damage_perc)
-        )
-
-
-```
-```{r}
-variables_for_statistics3 <- dataset3_0 %>% 
-  select(contains("approx")) %>% 
-  names()
-
-variables_for_statistics3
-#
-```
-
-```{r stat3, results='hide'}
-# !! één resultaat per soort, hoogteklasse en BR
-n_BR <- length(unique(dataset3$forest_reserve))
-n_species <- length(unique(dataset3$species))
-n_height <- length(unique(dataset3$height_class))
-n_period <- length(unique(dataset3$period))
-n <- n_BR * n_species * n_height * n_period * length(variables_for_statistics3)
-n # 864
-# DAAROM: 0 voor species die niet voorkomen in een bepaalde hoogteklasse verwijderen
-# (!! moest wel nog in dataset3_0 zitten, om gemiddelde te nemen)
-
-resultaat3 <- create_statistics(
-  dataset = dataset3_0,
-  level = c("period", "forest_reserve", "height_class", "species"),
-  variables = variables_for_statistics3,
-  include_year_range = FALSE,
-  na_rm = TRUE,
-    interval_information = suppressMessages(read_csv2(system.file("extdata/class_data.csv",
-    package = "forrescalc")))
-  ) %>% 
-  select(-logaritmic) %>% 
-  filter(mean != 0 & !is.na(mean)) %>% 
-  forestmangr::round_df(., 2) %>% 
-  left_join(qHeightClass, by = c("height_class" = "ID")) %>% 
-  left_join(qSpecies, by = c("species" = "ID")) %>% 
-  mutate(strata = "height_class",
-         stratum_name = heightclass_txt,
-         strata2 = "species",
-         stratum_name2 = name_nl
-         )
-
-# voor export naar excel ipv access-db
-resultaat3 <- resultaat3 %>% 
-  arrange(variable, name_nl, height_class) %>%
-  select(-contains(c("log"))) # lege velden
-
-nrow(resultaat3); n
-# in zelfde grootte-orde, OK
-```
-
-
-```{r check_add_zeros3}
-mean_reg_per_BR <- resultaat3 %>% 
-  filter(variable == "approx_nr_regeneration_ha") %>% 
-  group_by(period, forest_reserve) %>% 
-  summarize(reg_ha = sum(mean)) %>% 
-  ungroup()
-
-# vgl met Result
-check_reg3 <- mean_reg_per_BR %>% 
-  left_join(resultaat %>% filter(variable == "approx_nr_established_ha") 
-            , by = c("period", "forest_reserve")) %>% 
-    left_join(resultaat %>% filter(variable == "approx_nr_seedlings_ha") 
-            , by = c("period", "forest_reserve")) %>% 
-  mutate(verschil = reg_ha - mean.x - mean.y)
-
-range(check_reg$verschil, na.rm = TRUE)
-# [1] 0.000000e+00 3.637979e-12
-```
-
-```{r table3}
-resultaat3 %>% select(period, forest_reserve, name_nl, heightclass_txt, variable
-                       , n_obs, mean, variance, lci, uci) %>% 
-  DT::datatable(options = list(dom = 'tip')
-                , rownames = FALSE
-                , filter = "top")
-```
-
-
-```{r export3}
-write.xlsx(resultaat3
-           , paste0(path_to_datarequest, "stat_reg.xlsx")
-           , sheetName = "reg_by_plot_height_species"
-           , showNA = FALSE
-           , append = TRUE) 
-
-write.xlsx(resultaat3
-           , paste0(path_to_datarequest_teamdrive, "stat_reg.xlsx")
-           , sheetName = "reg_by_plot_height_species"
-           , showNA = FALSE
-           , append = TRUE) 
-```
-
-
-
 ## Obv regeneration_by_plot_species
 
 Nulwaardes staan niet in de output.
@@ -708,6 +596,11 @@ dataset4 <- regeneration_by_plot_species
 ```
 
 
+```{r results = 'hide'}
+regeneration_by_plot_species %>% filter(plot_id == 126) %>% view()
+```
+
+
 ```{r n_subplots4, results='hide'}
 names(dataset4)
 range(dataset4$subplot_id)
@@ -718,30 +611,35 @@ dataset4 %>% group_by(plot_id) %>% summarize(n_subplots = n_distinct(subplot_id)
 
 ```
 
+In de resulterende tabel willen we wél weten dat een bepaalde soort in een bepaalde 
+periode "0" heeft als `approx_nr_reg_ha`.
+MAAR niet wanneer die soort helemaal niet voorkomt in dat bosreservaat.
 
 ```{r welke_species_in_welk_BR, results='hide'}
-names(dataset4)
+# names(dataset4)
 
 species_BR <- dataset4 %>% 
-  group_by(forest_reserve, period, species) %>% 
+  group_by(forest_reserve, species) %>% 
   summarize(n = n()) %>% 
   ungroup()
 
 ```
 
-
 ### Add zeros
 
-**OPGEPAST 1**: Achteraf de hoogteklasses die niet relevant zijn terug verwijderen ...
-Mbv een inner_join met list van welke hoogteklasses er per BR voorkomen
+**OPGEPAST 1**: Achteraf de species die niet relevant zijn terug 
+verwijderen!
+(mbv een inner_join met lijst van welke species er per BR en per periode 
+voorkomen)
+<!-- periode wordt als grouping variabele gebruikt, en daarom zullen soorten die  -->
+<!-- in een bepaalde periode niet voorkomen, ook niet aan de plot toegevoegd worden -->
+<!-- Daarom niet gewerkt met toevoegen van species over de periodes heen -->
+<!-- Als soort niet in lijst staat, is gemiddeld aantal = 0 in die periode -->
 
-
-**OPGEPAST 2**: perc_rubbing: door "add_zeros" worden bij alle hoogteklasses die NIET opgenomen werden, een nul geplaatst bij rubbing, terwijl dit
-
-- ofwel NA moet zijn, want geen survey_rubbing
-- ofwel NA moet zijn, want geen boom aanwezig in die hoogteklasse, dus geen idee mbt rubbing
-
-=> nullen omzetten naar NA na add_zeros
+**OPGEPAST 2**: door `add_zeros()` wordt bij alle soorten die 
+NIET opgenomen werden, een nul geplaatst bij `rubbing_damage_nr`, 
+terwijl dit NA moet zijn als `game_impact_reg = FALSE`!!    
+=> nullen omzetten naar NA na `add_zeros()` indien `game_impact_reg = FALSE`
 
 
 ```{r lijst_species_per_BR}
@@ -754,31 +652,36 @@ species_BR <- dataset4 %>%
 ```
 
 ```{r add_zeros_all_species}
+# names(dataset4)
 dataset4_0 <- add_zeros(dataset = dataset4 %>% 
-                          select(plot_id, period, species, 
-                                 contains(c("approx"))),
+                          select(plot_id, period, species,
+                                 approx_nr_established_ha, 
+                                 approx_nr_seedlings_ha,
+                                 rubbing_damage_nr_established_ha,
+                                 rubbing_damage_nr_seedlings_ha),
                         comb_vars = c("plot_id", "species"),
                         grouping_vars = c("period")
                         ) %>%
-  left_join(plotinfo %>% select(plot_id, period, forest_reserve)) %>% 
-  inner_join(species_BR %>% select(-n_plots), by = c("period", "forest_reserve", "species")) %>% 
-  mutate(
-    approx_rubbing_damage_perc_established = ifelse(
-      approx_nr_established_ha == 0 & approx_rubbing_damage_perc_established == 0,
-      NA,
-      approx_rubbing_damage_perc_established),
-    approx_rubbing_damage_perc_seedlings = ifelse(
-      approx_nr_seedlings_ha == 0 & approx_rubbing_damage_perc_seedlings == 0,
-      NA,
-      approx_rubbing_damage_perc_seedlings)
-    )
-
+  left_join(plotinfo %>% 
+              select(plot_id, period, forest_reserve, game_impact_reg)) %>% 
+  inner_join(species_BR %>% select(-n_plots), 
+             by = c("forest_reserve", "species", "period")) %>% 
+  mutate(rubbing_damage_nr_established_ha = ifelse(game_impact_reg == FALSE
+                                           , NA
+                                           , rubbing_damage_nr_established_ha),
+         rubbing_damage_nr_seedlings_ha = ifelse(game_impact_reg == FALSE
+                                           , NA
+                                           , rubbing_damage_nr_seedlings_ha)
+         ) %>% 
+  select(-game_impact_reg)
+  
 ```
 
-```{r eval = FALSE}
-t <- dataset4_0 %>% filter(approx_rubbing_damage_perc_seedlings == 0)
-# 5135 vs 224 bij aanpassing naar NA wanneer nr_species = 0
+
+```{r results = 'hide'}
+dataset4_0 %>% filter(plot_id == 126) %>% view()
 ```
+
 
 Controleren of elke soort het verwachte aantal keer voorkomt in elke plot, 
 na `add_zeros()`.
@@ -799,11 +702,13 @@ species_plot %>% group_by(forest_reserve, period, n_species) %>%
 
 ```{r}
 variables_for_statistics4 <- dataset4_0 %>% 
-  select(contains(c("approx"))) %>% 
+  select(approx_nr_established_ha, approx_nr_seedlings_ha,
+         rubbing_damage_nr_established_ha, 
+         rubbing_damage_nr_seedlings_ha) %>% 
   names()
 
 variables_for_statistics4
-#
+
 ```
 
 
@@ -828,7 +733,11 @@ resultaat4 <- create_statistics(
     package = "forrescalc")))
   ) %>% 
   select(-logaritmic) %>% 
-  filter(mean != 0 & !is.na(mean)) %>% 
+  # toch nullen meenemen zdd alle variabelen per soort weergegegeven worden 
+  # (zdd perc berekend kan worden)
+  # NA's niet meenemen
+  filter(!is.na(mean)) %>% 
+  # filter(mean != 0 & !is.na(mean)) %>%  
   forestmangr::round_df(., 2) %>% 
   # left_join(qHeightClass, by = c("height_class" = "ID")) %>% 
   left_join(qSpecies, by = c("species" = "ID")) %>% 
@@ -865,6 +774,23 @@ range(check_reg$verschil, na.rm = TRUE)
 # [1] -0.02 -0.01
 ```
 
+```{r check_add_zeros4_rubbing}
+mean_reg_per_BR <- resultaat4 %>% 
+  filter(variable == "rubbing_damage_nr_established_ha") %>% 
+  group_by(period, forest_reserve) %>% 
+  summarize(rubbing_ha = sum(mean)) %>% 
+  ungroup()
+
+# vgl met "resultaat" zonder soort of hoogteklasse
+check_reg <- mean_reg_per_BR %>% 
+    left_join(resultaat %>% filter(variable == "rubbing_damage_nr_established_ha") 
+            , by = c("period", "forest_reserve")) %>% 
+  mutate(verschil = rubbing_ha - mean)
+
+range(check_reg$verschil, na.rm = TRUE)
+# [1] 0 0 
+```
+
 ```{r table4}
 resultaat4 %>% select(period, forest_reserve, name_nl, variable
                        , n_obs, mean, variance, lci, uci) %>% 
@@ -888,6 +814,200 @@ write.xlsx(resultaat4
            , append = TRUE) 
 ```
 
+
+
+
+## Obv regeneration_by_plot_height_species
+
+Nulwaardes staan niet in de output.
+Een species of hoogteklasse die niet voorkomt, staat niet in resulterende tabel
+
+Enkel bosplots bekijken
+
+
+```{r data3}
+dataset3 <- regeneration_by_plot_height_species
+
+table(dataset3$forest_reserve, dataset3$period)
+```
+
+
+```{r results = 'hide'}
+regeneration_by_plot_height_species %>% filter(plot_id == 126) %>% view()
+```
+
+
+### Add zeros
+
+**OPGEPAST 1**: In de resulterende tabel willen we wél weten dat een 
+bepaalde soort in een bepaalde hoogteklasse "0" heeft als `approx_nr_reg_ha`.
+MAAR niet wanneer die soort helemaal niet voorkomt in dat bosreservaat.
+
+Dus beetje zoals we ook hogerop (chunck `lijst_hoogteklasses_per_BR`) de 
+hoogteklasses verwijderd hebben die in een bepaald BR niet gebruikt worden.
+
+**OPGEPAST 2**: door `add_zeros()` worden bij alle 
+hoogteklasses die NIET opgenomen werden, een nul geplaatst bij 
+`rubbing_damage_nr`, terwijl dit NA moet zijn als `game_impact_reg = FALSE`!!   
+=> nullen omzetten naar NA na `add_zeros()` indien `game_impact_reg = FALSE`
+
+```{r lijst_bmsen_per_BR}
+species_BR <- dataset3 %>% 
+  group_by(forest_reserve, period, species) %>% 
+  summarize(n_heightclasses = n_distinct(height_class)) %>% 
+  ungroup() %>% 
+  filter(!is.na(species))
+
+# kleine controle
+species_BR %>% 
+  group_by(forest_reserve, period, n_heightclasses) %>% 
+  summarize(n_species = n()) %>% 
+  ungroup()
+```
+
+
+```{r add_zeros_all_heights_species}
+# names(dataset3)
+
+dataset3_0 <- add_zeros(dataset = dataset3 %>% 
+                          select(plot_id, period, species, height_class,
+                                 approx_nr_regeneration_ha, 
+                                 rubbing_damage_number_ha),
+                        comb_vars = c("plot_id", "species", "height_class"),
+                        grouping_vars = c("period")
+                        ) %>%
+  # left_join(qSpecies %>% dplyr::select(species = ID, speciesTxt = Value1)) %>% 
+  left_join(plotinfo %>% 
+              select(plot_id, period, forest_reserve, game_impact_reg)) %>% 
+  inner_join(heightclasses_BR %>% select(-n_tree_species)) %>% 
+  inner_join(species_BR %>% select(-n_heightclasses)) %>% 
+  mutate(rubbing_damage_number_ha = ifelse(game_impact_reg == FALSE
+                                           , NA
+                                           , rubbing_damage_number_ha)) %>% 
+  select(-game_impact_reg)
+
+```
+
+```{r results = 'hide'}
+dataset3_0 %>% filter(plot_id == 126 & species == 87) %>% view()
+dataset3_0 %>% filter(plot_id == 126 & species == 16) %>% view()
+```
+
+```{r}
+variables_for_statistics3 <- dataset3_0 %>% 
+  select(approx_nr_regeneration_ha, rubbing_damage_number_ha) %>% 
+  names()
+
+variables_for_statistics3
+#
+```
+
+```{r stat3, results='hide'}
+# !! één resultaat per soort, hoogteklasse en BR
+n_BR <- length(unique(dataset3$forest_reserve))
+n_species <- length(unique(dataset3$species))
+n_height <- length(unique(dataset3$height_class))
+n_period <- length(unique(dataset3$period))
+n <- n_BR * n_species * n_height * n_period * length(variables_for_statistics3)
+n # 864
+# DAAROM: 0 voor species die niet voorkomen in een bepaalde hoogteklasse verwijderen
+# (!! moest wel nog in dataset3_0 zitten, om gemiddelde te nemen)
+
+resultaat3 <- create_statistics(
+  dataset = dataset3_0,
+  level = c("period", "forest_reserve", "height_class", "species"),
+  variables = variables_for_statistics3,
+  include_year_range = FALSE,
+  na_rm = TRUE,
+    interval_information = suppressMessages(read_csv2(system.file("extdata/class_data.csv",
+    package = "forrescalc")))
+  ) %>% 
+  select(-logaritmic) %>% 
+  # toch nullen meenemen zdd elke hoogteklasse per soort weergegegeven wordt
+  # NA's niet meenemen
+  filter(!is.na(mean)) %>% 
+  # filter(mean != 0 & !is.na(mean)) %>%    
+  forestmangr::round_df(., 2) %>% 
+  left_join(qHeightClass, by = c("height_class" = "ID")) %>% 
+  left_join(qSpecies, by = c("species" = "ID")) %>% 
+  mutate(strata = "height_class",
+         stratum_name = heightclass_txt,
+         strata2 = "species",
+         stratum_name2 = name_nl
+         )
+
+# voor export naar excel ipv access-db
+resultaat3 <- resultaat3 %>% 
+  arrange(variable, name_nl, height_class) %>%
+  select(-contains(c("log"))) # lege velden
+
+nrow(resultaat3); n
+# in zelfde grootte-orde, OK
+```
+
+
+```{r check_add_zeros3}
+mean_reg_per_BR <- resultaat3 %>% 
+  filter(variable == "approx_nr_regeneration_ha") %>% 
+  group_by(period, forest_reserve) %>% 
+  summarize(reg_ha = sum(mean)) %>% 
+  ungroup()
+
+# vgl met Result
+check_reg3 <- mean_reg_per_BR %>% 
+  left_join(resultaat %>% filter(variable == "approx_nr_established_ha") 
+            , by = c("period", "forest_reserve")) %>% 
+    left_join(resultaat %>% filter(variable == "approx_nr_seedlings_ha") 
+            , by = c("period", "forest_reserve")) %>% 
+  mutate(verschil = reg_ha - mean.x - mean.y)
+
+range(check_reg$verschil, na.rm = TRUE)
+# [1] 0 0
+```
+
+
+```{r check_add_zeros3_rubbing}
+mean_reg_per_BR <- resultaat3 %>% 
+  filter(variable == "rubbing_damage_number_ha") %>% 
+  group_by(period, forest_reserve) %>% 
+  summarize(rubbing_ha = sum(mean)) %>% 
+  ungroup()
+
+# vgl met "resultaat" zonder soort of hoogteklasse
+check_reg <- mean_reg_per_BR %>% 
+    left_join(resultaat %>% filter(variable == "rubbing_damage_nr_established_ha") 
+            , by = c("period", "forest_reserve")) %>% 
+    left_join(resultaat %>% filter(variable == "rubbing_damage_nr_seedlings_ha") 
+            , by = c("period", "forest_reserve")) %>% 
+  mutate(verschil = rubbing_ha - mean.x - mean.y)
+
+range(check_reg$verschil, na.rm = TRUE)
+# [1] -0.01 -0.01
+```
+
+
+```{r table3}
+resultaat3 %>% select(period, forest_reserve, name_nl, heightclass_txt, variable
+                       , n_obs, mean, variance, lci, uci) %>% 
+  DT::datatable(options = list(dom = 'tip')
+                , rownames = FALSE
+                , filter = "top")
+```
+
+
+```{r export3}
+write.xlsx(resultaat3
+           , paste0(path_to_datarequest, "stat_reg.xlsx")
+           , sheetName = "reg_by_plot_height_species"
+           , showNA = FALSE
+           , append = TRUE) 
+
+write.xlsx(resultaat3
+           , paste0(path_to_datarequest_teamdrive, "stat_reg.xlsx")
+           , sheetName = "reg_by_plot_height_species"
+           , showNA = FALSE
+           , append = TRUE) 
+```
 
 
 # Copy html to teamdrive
