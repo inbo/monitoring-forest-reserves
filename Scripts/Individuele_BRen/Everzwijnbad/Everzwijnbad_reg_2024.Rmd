@@ -1,6 +1,6 @@
 ---
 title: "Dataverwerking - regeneration"
-subtitle: "Wijnendale - cirkelplots & kernvlakte"
+subtitle: "Everzwijnbad - cirkelplots & kernvlakte"
 author: "Anja Leyman"
 date: "`r Sys.Date()`"
 output: 
@@ -41,17 +41,17 @@ source(here::here("scripts/Setup.R"))
 
 
 ```{r Setup2}
-forestreserve <- "Wijnendalebos"
+forestreserve <- "Everzwijnbad"
 forestreserve_short <- forestreserve
-forestreserve_short <- "Wijnendale"
+# forestreserve_short <- "Wijnendale"
 # plot_type <- "CA"
 # plot_type <- "CP"
 
-forestreserve_folder <- paste0(path_to_reserves, "4b_Wijnendale")
+forestreserve_folder <- paste0(path_to_reserves, "4b_Everzw_DEELS")
 
 path_to_datarequest <- paste0(forestreserve_folder, "/verwerking_2024_1e2e3eSET/output_forrescalc/")
 path_to_datarequest_teamdrive <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverwerking/per_gebied/2024_", forestreserve_short, "/03_output_R_plotlevel/")
-path_to_html_teamdrive <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverwerking/per_gebied/2024_", forestreserve_short, "/")
+path_to_html_teamdrive <- path_to_datarequest_teamdrive
 
 # plots_to_exclude <- c(701, 707, 709, 727, 728, 738, 739, 740, 759, 760)
 
@@ -72,7 +72,7 @@ path_to_fieldmap_db <- "C:/03_BR_db_monitoring/3_db_Els_deel2_Wijn_Ever/FieldMap
 
 **Bosreservaat `r forestreserve`**
 
-Dataverwerking Wijnendale (nalv 3eSET), gebruik makend van (nieuwe) forrescalc.
+Dataverwerking Everzwijnbad (nalv 3eSET), gebruik makend van (nieuwe) forrescalc.
 
 <br>
 
@@ -93,9 +93,11 @@ Plotinfo samenstellen, zijnde plottype, naam forest_reserve en info over survey 
 Wegschrijven naar git, access en opslaan als csv
 
 ```{r plotinfo_load}
-plotinfo <- load_plotinfo(database = path_to_fieldmap_db) %>% 
+plotinfo <- load_plotinfo(database = path_to_fieldmap_db, processed = FALSE) %>% 
   filter(forest_reserve == forestreserve)
 names(plotinfo)
+
+plotinfo %>% filter(data_processed == FALSE) %>% nrow()
 ```
 # Load lookuplijsten
 
@@ -119,7 +121,7 @@ odbcClose(con)
 data_regeneration <-
   load_data_regeneration(
     database = path_to_fieldmap_db,
-    processed = TRUE
+    processed = FALSE
   ) %>% 
   filter(forest_reserve == forestreserve)
 
@@ -149,7 +151,9 @@ Velden `data_regeneration`:
 
 - subcircle: A1 of A2: seedlings vs established   
 
-- subcirclearea_ha: enkel berekend bij CP's (als `r_A1` & `r_A2` bestaa,); NA bij KV's    
+- subcirclearea_ha: 
+  - enkel berekend bij CP's (als `r_A1` & `r_A2` bestaat)
+  - NA bij KV's    
 
 - plotarea_ha:     
 
@@ -199,7 +203,7 @@ data_regeneration %>% filter(!is.na(nr_of_regeneration) & !is.na(number_class)) 
 # 1211 van de 33000 // 177 van 2525 waar beide ingevuld staan
 
 test <- data_regeneration %>% filter(!is.na(nr_of_regeneration) & !is.na(number_class)) %>% 
-  select(select_colnames_reg)
+  select(all_of(select_colnames_reg))
 table(test$subcircle)
 # A1 A2 
 # 89  1
@@ -218,17 +222,21 @@ het package de klasse gebruiken (is OK, want geen andere keuze)
 ```{r check_data_nr_A1}
 checkA1 <- data_regeneration %>%
   filter(subcircle == "A1" & is.na(number_class)) %>% 
-  select(select_colnames_reg)
-# 328 zonder number_class => dan wordt 
+  select(all_of(select_colnames_reg))
+# 860 zonder number_class => dan wordt exact nr gebruikt
 
 checkA2 <- data_regeneration %>% 
   filter(subcircle == "A2" & 
            is.na(nr_of_regeneration) &
            !is.na(number_class)) %>% 
-  select(select_colnames_reg)
-# 71 waar enkel klasse vermeld staat, terwijl het een exact nummer zou moeten zijn
+  select(all_of(select_colnames_reg))
+# 452 waar enkel klasse vermeld staat, terwijl het een exact nummer zou moeten zijn
 # package zal dan automatisch de klasse gebruiken ==> OK
 ```
+
+Voor Everzwijnbad enkel in periode 1 en 2 number gebruikt waar number_class had 
+gemoeten, en omgekeerd.
+Geen probleem, dan wordt gebruikt wat wél ingevuld staat.
 
 
 # Datacontrole
@@ -257,12 +265,16 @@ dit is zo als er geen verjonging genoteerd werd
 Gevolg: `subcircle` en `subcirclearea_ha` = NA, want deze worden obv 
 hoogteklasse toegekend.
 
-```{r}
+```{r no_species}
 species_NA <- data_regeneration %>% filter(is.na(species) | is.na(height_class))
 
-plot411 <- data_regeneration %>% filter(plot_id == 411)
 ```
 
+```{r}
+species_NA %>% 
+  select(period, plot_id, height_class, species) %>% 
+  DT::datatable(caption = "GEEN VERJONGING")
+```
 
 
 ## Rubbing damage
@@ -280,14 +292,10 @@ zodra `pd.GameImpactRegObserved == 10` (ongeacht of species al dan niet ingevuld
 
 ```{r check_rubbingnr_NA}
 check_rubbingnr_NA <- data_regeneration  %>% 
-  select(select_colnames_reg) %>% 
+  select(all_of(select_colnames_reg)) %>% 
   left_join(plotinfo %>% select(plot_id, period, game_impact_reg)) %>% 
-  filter(is.na(rubbing_damage_number)) %>% 
-  filter(game_impact_reg == TRUE)
-
+  filter(is.na(rubbing_damage_number) & game_impact_reg == TRUE)
 nrow(check_rubbingnr_NA) == 0
-
-# 
 
 # wat als er geen soort is? 
 check_rubbingnr_NA2 <- data_regeneration  %>% 
@@ -296,7 +304,6 @@ check_rubbingnr_NA2 <- data_regeneration  %>%
   filter(is.na(species) & game_impact_reg == TRUE)
 
 check_rubbingnr_NA2 %>% filter(rubbing_damage_number != 0) %>% nrow() == 0
-
 ```
 
 ### Percentage
@@ -308,15 +315,14 @@ check_rubbingnr_NA2 %>% filter(rubbing_damage_number != 0) %>% nrow() == 0
 
 ```{r check_rubbing_perc, results= 'hide'}
 check_rubbing_perc <- data_regeneration %>% 
-  select(select_colnames_reg) %>% 
+  select(all_of(select_colnames_reg)) %>% 
   left_join(plotinfo %>% select(plot_id, period, game_impact_reg)) %>% 
   filter(game_impact_reg == TRUE) 
 
 table(check_rubbing_perc$rubbing_damage_perc)
 summary(check_rubbing_perc$rubbing_damage_perc)
 
-check_rubbing_perc %>% filter(is.na(rubbing_damage_perc))
-# OK, zijn twee records waar géén soort waargenomen is 
+check_rubbing_perc %>% filter(is.na(rubbing_damage_perc)) %>% nrow()
 
 check_rubbing_perc %>% filter(is.na(rubbing_damage_perc) & 
                                 (number_class > 0 | nr_of_regeneration > 0)) %>% 
@@ -330,13 +336,14 @@ check_nrclass <- check_rubbing_perc %>%
 ```
 
 
-
 # Calculate regeneration 
 
 ```{r calc_reg}
 regeneration <- calculate_regeneration(data_regeneration)
 
 ```
+
+
 
 
 ```{r CreateSeparateDataframesReg}
@@ -421,9 +428,26 @@ check_rubbing_perc_NA %>% nrow() == 0
 
 # Check NA's plot-level-resultaten
 
-```{r}
+```{r results = 'hide'}
 names(regeneration_by_plot)
 ```
+<!-- Onderstaand probleem werd opgelost in branch testdb_AL op 28/5/2024:  -->
+
+<!-- Aangezien er geen hoogteklasse is: -->
+<!-- - is er ook geen `subcircle` en `subcircle_area_ha`, want die worden toegekend  -->
+<!-- obv hoogteklasse -->
+<!-- - bij "per hoogteklasse" geen probleem, want daar worden de aantallen per hectare  -->
+<!-- berekend obv `plotarea_ha`,  -->
+<!-- die binnen eenzelfde hoogteklasse gelijk is (enkel A1 of enkel A2) -->
+<!-- - bij de calculations zonder hoogteklasse, wordt `plotarea_a1_ha` en `plotarea2_ha` -->
+<!-- bepaald obv `subcircle`, maar `subcircle` is NA (want we hebben geen hoogteklasse), -->
+<!-- DUS: ook `plotarea_a1/2_ha` = NA -->
+
+<!-- DAAROM: als geen subcircle, dan wordt opp van A2 genomen 
+<!-- (zie aanpassing branch testdb_AL op 28/5/2024)--> -->
+
+<!-- (in Everzwijnbad: bij elke subplot van CA een verjonging, dus daar stelt probleem zich nu niet) -->
+
 
 ```{r}
 col <- c("number_of_tree_species", "approx_nr_established_ha", "approx_nr_seedlings_ha",
@@ -433,6 +457,16 @@ col <- c("number_of_tree_species", "approx_nr_established_ha", "approx_nr_seedli
 regeneration_by_plot %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
 
 ```
+```{r check, results='hide'}
+regeneration_by_plot %>% filter(plot_id %in% species_NA$plot_id & period %in% c(1,2))
+# één missing hoogteklasses, naar boven gekomen bij datacontrole
+# zelf aangepast in db op c-schijf: missing heightclass > 200 cm gezet (plot 127 - decade 3)
+
+# wat rest zijn 6 plots waar géén verjonging optreedt: nr_of_tree_species = 0 (periode 1 of 2), 
+# aantallen/hectare zijn nu OK! (waren eerst nog NA)
+
+```
+
 
 ```{r}
 col <- c("number_of_tree_species", "approx_nr_regeneration_ha",
@@ -593,8 +627,8 @@ Lijkt OK
 
 # Aandachtspunten       
 
-Wijnendale cirkelplots: in 1e decade enkel 0-50 cm en 50-200 cm (qHeightclass = 3000 en 5000)     
-Wijnendale kernvlakte: wel alle decades de 4 standaard hoogteklasses (0-30, 30-50, 50-200, >200 cm; qHeightclass 1000 tem 4000)     
+Everzwijnbad cirkelplots: in 1e decade enkel 0-50 cm en 50-200 cm (qHeightclass = 3000 en 5000)     
+Everzwijnbad kernvlakte: wel alle decades de 4 standaard hoogteklasses (0-30, 30-50, 50-200, >200 cm; qHeightclass 1000 tem 4000)     
 
 <!-- table(regeneration_by_plot_height$period, regeneration_by_plot_height$height_class, regeneration_by_plot_height$plottype) -->
 <!-- , ,  = CA -->
