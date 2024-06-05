@@ -1,0 +1,690 @@
+---
+title: "Dataverwerking - vegetatie"
+subtitle: "Everzwijnbad - cirkelplots & kernvlakte"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: TRUE
+      smooth_scroll: TRUE
+---
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 7,
+  fig.height = 3,
+  fig.align = TRUE)
+
+library(here)
+library(writexl)
+library(scales)
+
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+
+```
+
+
+```{r Setup2}
+forestreserve <- "Everzwijnbad"
+forestreserve_short <- forestreserve
+# forestreserve_short <- "Wijnendale"
+# plot_type <- "CA"
+# plot_type <- "CP"
+
+forestreserve_folder <- paste0(path_to_reserves, "4b_Everzw_DEELS")
+
+path_to_datarequest <- paste0(forestreserve_folder, "/verwerking_2024_1e2e3eSET/output_forrescalc/")
+path_to_datarequest_teamdrive <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverwerking/per_gebied/2024_", forestreserve_short, "/03_output_R_plotlevel/")
+path_to_html_teamdrive <- path_to_datarequest_teamdrive
+
+# plots_to_exclude <- c(701, 707, 709, 727, 728, 738, 739, 740, 759, 760)
+
+path_to_datacontrol <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverwerking/per_gebied/2024_", forestreserve_short, "/datacontrole/")
+
+```
+
+
+TIJDELIJK `path_to_fieldmap_db` aanpassen naar export van wijnendale en everzwijnbad uit moederdb (4/3/2024)
+
+```{r Path_tmp}
+path_to_fieldmap_db <- "C:/03_BR_db_monitoring/3_db_Els_deel2_Wijn_Ever/FieldMapData_3_db_Els_deel2_Wijn_Ever.accdb"
+```
+
+
+
+# Vraagstelling
+
+**Bosreservaat `r forestreserve`**
+
+Dataverwerking Everzwijnbad (nalv 3eSET), gebruik makend van (nieuwe) forrescalc.
+
+<br>
+
+
+```{r results='hold', eval=TRUE}
+path_to_forresdat_data
+path_to_analysis_set_db
+path_to_plotlevel_csv
+path_to_treelevel_csv
+path_to_output_gdrive
+path_to_meetgegevens
+
+```
+
+# Load plotinfo
+
+Plotinfo samenstellen, zijnde plottype, naam forest_reserve en info over survey en data al dan niet processed.
+Wegschrijven naar git, access en opslaan als csv
+
+```{r plotinfo_load}
+plotinfo <- load_plotinfo(database = path_to_fieldmap_db, processed = FALSE) %>% 
+  filter(forest_reserve == forestreserve)
+names(plotinfo)
+
+plotinfo %>% filter(data_processed == FALSE) %>% nrow()
+```
+
+# Load lookuplijsten
+
+```{r load_lkp}
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+
+  qHerbSpecies240810<- sqlFetch(con, "qHerbSpecies240810", stringsAsFactors = FALSE)
+  qCoverHerbs <- sqlFetch(con, "qCoverHerbs", stringsAsFactors = FALSE)
+  qBrowsIndex <- sqlFetch(con, "qBrowsIndex", stringsAsFactors = FALSE)
+  
+  qcommonremark <- sqlFetch(con, "qcommonremark", stringsAsFactors = FALSE)
+  qtotalCover <- sqlFetch(con, "qtotalCover", stringsAsFactors = FALSE)
+
+odbcClose(con)
+
+```
+
+# Load vegetation
+
+```{r load_veg}
+data_vegetation <-
+  load_data_vegetation(
+    database = path_to_fieldmap_db,
+    processed = TRUE
+  ) %>% 
+  filter(forest_reserve == forestreserve)
+
+names(data_vegetation)
+
+```
+```{r load_herbs}
+
+data_herblayer <-
+  load_data_herblayer(
+    database = path_to_fieldmap_db,
+    processed = TRUE
+  ) %>% 
+  filter(forest_reserve == forestreserve)
+
+names(data_herblayer)
+```
+
+
+
+Velden `data_vegetation`:  
+
+- herb_cover_interval               
+
+- herb_cover_min / herb_cover_max  
+
+- herb_cover_mid    
+
+- plotarea_ha:     
+
+  * CP's: steeds gelijk aan subcirclearea_ha    
+  * KV's (als (1) niet kan, dan (2) en dan pas (3)):   
+      (1) length_core_area_m * width_core_area_m OF    
+      (2) core_area_ha < Area_ha uit Plotdetails OF    
+      (3) totalplotarea_ha < Area_ha of Area_m2 uit layer Plots    
+           
+
+
+Velden `data_herblayer`:     
+
+- coverage_id
+
+- browse_index_id
+
+- coverage_class_average_perc: getal dat overeenstemt met de bedekkingsklasse 
+(< qCoverHerbs: Value2)
+
+
+
+
+
+# Datacontrole
+
+Wordt vanaf nu (grotendeels?) opgevangen door check-functies uit forrescalc.
+Tijdelijk nog updaten in de databank met query, tot Peter probleem aangepakt heeft.
+
+
+## Missing cover
+
+```{r results='hide'}
+names(data_vegetation)
+```
+
+```{r totalcover_NA}
+col <- data_vegetation %>% select(contains(c("_cover_id", "_game_id"))) %>% colnames
+
+totalcover_missing <- data_vegetation %>% 
+  filter_at(col, any_vars(is.na(.))) %>% 
+  select(period, everything(), -contains(c("_m", "core")), -plotarea_ha)
+
+```
+
+```{r eval = FALSE}
+write.xlsx(totalcover_missing
+           , paste0(path_to_datacontrol, "vegetation.xlsx")
+           , sheetName = "totalcover_missing2"
+           , showNA = FALSE
+           , append = TRUE) 
+# via mail aan Peter gevraagd xxxxxx- xxxxxx/4/2024
+
+```
+
+```{r totalcover_20}
+col <- data_vegetation %>% select(contains(c("_cover_id", "_game_id"))) %>% colnames
+
+totalcover_20 <- data_vegetation %>% 
+  filter_at(col, any_vars(. == 20)) %>% 
+  select(period, everything(), -contains(c("_m", "core")), -plotarea_ha)
+
+```
+
+
+```{r eval = FALSE}
+write.xlsx(totalcover_20
+           , paste0(path_to_datacontrol, "vegetation.xlsx")
+           , sheetName = "totalcover_NietBeschikbaar"
+           , showNA = FALSE
+           , append = TRUE) 
+# via mail aan Peter gevraagd xxxxxx- xxxxxx/4/2024
+
+```
+
+
+### Waterlayer
+
+```{r}
+total_watercover_missing <- data_vegetation %>% 
+  filter(total_waterlayer_cover_id == 20) # 338; periode 1 en 2
+
+table(total_watercover_missing$period)
+
+data_vegetation %>% filter(is.na(total_waterlayer_cover_id)) %>% nrow() == 0
+```
+
+Waterlayer: in 2023 NA versus 1e en 2de decade "Niet beschikbaar".
+Moeten beide vervangen worden door "< 1%".
+
+Bij de dataverwerking komen beide als NA naar voor, dus niet OK!
+
+Met behulp van een updatequery voor een vooraf geselecteerde decade en bosreservaat zetten we `Total_waterlayer_cover` op `1` (code 1 = '< 1%'), indien `v.Total_waterlayer_cover is Null` (NA). 
+
+```{r update_waterlayercover, eval = FALSE}
+# derde decade: NA, zou < 1% moeten zijn
+
+# Predefined strings
+decade <- "3" 
+# plot_type <- "CP"
+# forestreserve <- "Everzwijnbad"
+
+# Construct the query string using sprintf
+query_update <- paste0(sprintf("UPDATE Vegetation_%seSet v 
+                         INNER JOIN PlotDetails_%seSet pd ON v.IDPlots = pd.IDPlots 
+                         SET v.Total_waterlayer_cover = 1 
+                         WHERE (v.Total_waterlayer_cover is Null) 
+                         AND (pd.ForestReserve = '%s')",
+                         decade, decade, forestreserve)
+                       ) %>% noquote()
+
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+   sqlQuery(con,query_update)
+odbcClose(con)
+
+
+# 1e en 2de decade: 20, zou < 1% moeten zijn
+
+# Predefined strings
+decade <- "1" 
+# plot_type <- "CP"
+# forestreserve <- "Wijnendalebos"
+
+# Construct the query string using sprintf
+query_update <- paste0(sprintf("UPDATE Vegetation v 
+                         INNER JOIN PlotDetails_%seSet pd ON v.IDPlots = pd.IDPlots 
+                         SET v.Total_waterlayer_cover = 1 
+                         WHERE (v.Total_waterlayer_cover = 20) 
+                         AND (pd.ForestReserve = '%s')",
+                         decade, forestreserve)
+                       ) %>% noquote()
+
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+   sqlQuery(con,query_update)
+odbcClose(con)
+
+# Predefined strings
+decade <- "2" 
+# plot_type <- "CP"
+# forestreserve <- "Wijnendalebos"
+
+# Construct the query string using sprintf
+query_update <- paste0(sprintf("UPDATE Vegetation_%seSet v 
+                         INNER JOIN PlotDetails_%seSet pd ON v.IDPlots = pd.IDPlots 
+                         SET v.Total_waterlayer_cover = 1 
+                         WHERE (v.Total_waterlayer_cover = 20) 
+                         AND (pd.ForestReserve = '%s')",
+                         decade, decade, forestreserve)
+                       ) %>% noquote()
+
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+   sqlQuery(con,query_update)
+odbcClose(con)
+
+```
+
+### Shrub en tree cover
+
+Geen waarnemingen met tree of shrub cover = "Niet beschikbaar"
+<!-- Moet < 1% zijn => aanpassen met updatequery -->
+
+```{r}
+data_vegetation %>% 
+  filter(shrub_cover_interval == "Niet beschikbaar" | tree_cover_interval == "Niet beschikbaar") %>% 
+  nrow() == 0
+
+total_TSHcover_missing2 <- data_vegetation %>% 
+  filter(is.na(total_shrub_cover_id) | 
+           is.na(total_tree_cover_id) |
+           is.na(total_herb_cover_id)) 
+# 1
+```
+
+Met behulp van een updatequery voor een vooraf geselecteerde decade en bosreservaat zetten we `Total_shrub_cover` op `1` (code 1 = '< 1%'), indien `v.Total_shrub_cover = 20` ("Niet beschikbaar"). 
+
+```{r update_shrubcover, eval = FALSE}
+# derde decade: NA, zou < 1% moeten zijn
+
+# Predefined strings
+decade <- "3" 
+# plot_type <- "CP"
+forestreserve <- "Wijnendalebos"
+
+# Construct the query string using sprintf
+query_update <- paste0(sprintf("UPDATE Vegetation_%seSet v 
+                         INNER JOIN PlotDetails_%seSet pd ON v.IDPlots = pd.IDPlots 
+                         SET Total_shrub_cover = 1 
+                         WHERE (v.Total_shrub_cover = 20) 
+                         AND (pd.ForestReserve = '%s')",
+                         decade, decade, forestreserve)
+                       ) %>% noquote()
+
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+   sqlQuery(con,query_update)
+odbcClose(con)
+```
+
+
+### Game soil disturbance
+
+Game disturbance: enkel 1e en 2de decade "20": dat is een NA, want NA as such komt niet voor. 
+
+Dit mag behouden blijven, want wordt op zelfde manier behandeld als een NA.
+Enkel aan te passen indien er "< 1%" mee bedoeld wordt. 
+
+Er bestaat geen veld in plotdetails die zegt of er al dan niet soil disturbance genoteerd werd.
+
+```{r}
+total_soildist_missing20 <- data_vegetation %>% 
+  filter(total_soildisturbance_game_id == 20) # 291; periode 1 en 2
+
+# zijn er NA's? NEE
+data_vegetation %>% filter(is.na(total_soildisturbance_game_id)) %>% nrow() == 0
+```
+
+```{r}
+t <- data_vegetation %>% filter(period != 3) %>% 
+  select(1:4, subplot_id, period, contains(c("game")))
+
+t_plotinfo <- t %>% 
+  left_join(plotinfo)
+```
+
+### Moss cover
+
+Vier NA's, periode 2
+
+```{r}
+total_mosscover_missing <- data_vegetation %>% 
+  filter(total_moss_cover_id == 20)  # 0 
+
+total_mosscover_missing <- data_vegetation %>% 
+  filter(is.na(total_moss_cover_id)) # 4
+
+table(total_mosscover_missing$period)
+```
+
+
+# Calculate vegetation 
+
+```{r}
+vegetation <- calculate_vegetation(data_vegetation, data_herblayer)
+```
+
+
+```{r CreateSeparateDataframesVeg}
+for (tablename in names(vegetation)) {
+     assign(tablename, vegetation[[tablename]])
+} 
+
+```
+
+
+
+# Controle plot-level-data
+
+```{r eval = FALSE, results='hide'}
+# plot 1176, periode 1: niet in veg_by_plot => Els gevraagd om dit te corrigeren (nov 2022)
+data_vegetation %>% filter(plot_id == 1176 & period == 1)
+data_herblayer %>% filter(plot_id == 1176)
+data_herblayer %>% filter(plot_id == 1176 & period == 1)
+
+vegetation_by_plot %>% filter(plot_id == 1176 & period == 1)
+
+```
+
+
+# Check NA's plot-level-resultaten
+
+## Vegetation
+
+```{r results='hide'}
+names(vegetation_by_plot)
+summary(vegetation_by_plot)
+
+```
+
+```{r total_cover}
+# veel covers niet ingevuld: cover = NA of = 20 wordt op zelfde manier behandeld bij de dataverwerking...
+t <- vegetation_by_plot %>% 
+  inner_join(totalcover_missing %>% select(plot_id, subplot_id, period))
+
+t <- vegetation_by_plot %>% 
+  inner_join(totalcover_20 %>% select(plot_id, subplot_id, period))
+```
+
+
+```{r}
+col <- c("number_of_species", "cumm_herb_coverage_class_average_perc")
+
+vegetation_by_plot %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+
+```
+
+```{r}
+names(vegetation_by_core_area_species)
+
+col <- c("number_of_subplots_with_vegetation", "perc_of_subplots", "mean_coverage_class_average_perc")
+
+vegetation_by_core_area_species %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+
+```
+
+## Herblayer
+
+```{r results='hide'}
+names(data_herblayer)
+names(data_vegetation)
+
+data_herblayer %>% filter(is.na(coverage_id)) %>% nrow()   # 0
+
+# data_herblayer %>% filter(is.na(browse_index_id)) %>% nrow()  # 5085
+missing_browsing <- data_herblayer %>% filter(is.na(browse_index_id))
+table(missing_browsing$period)
+#    1    2 
+# 2632 2453
+```
+
+# Extra processing
+
+Zowel vegetation als herblayer
+
+
+## Plotinfo toevoegen
+
+Plotinfo (`plot_id`, `forest_reserve`, `period` en `survey_number`) toevoegen aan de resultaten
+
+```{r join_plottype_surveynr_BR}
+veg_plotinfo <- lapply(vegetation, function(x) left_join(x, plotinfo %>% select(plot_id, forest_reserve, period, survey_number), by = c("plot_id", "period")))
+# lapply: same function over all elements of the list
+```
+
+
+## Non-processed data wegfilteren
+
+Hier niet nodig, want bij `load_data()` reeds weggefilterd.
+
+```{r processed}
+veg_plotinfo2 <- lapply(veg_plotinfo, 
+                           function(x) anti_join(x, plotinfo %>% filter(data_processed == FALSE),
+                                                 by = c("plot_id", "period")))
+
+library(waldo) 
+waldo::compare(veg_plotinfo, veg_plotinfo2)
+```
+
+
+## Eventueel afronden
+
+```{r afronden}
+veg_plotinfo_round <- veg_plotinfo2 %>% 
+  lapply(., function(x) forestmangr::round_df(x, 2))
+
+
+# bji herblayer niet nodig! (anders plotarea_ha ook afgerond)
+```
+
+
+
+```{r CreateSeparateDataframesVeg2}
+for (tablename in names(veg_plotinfo2)) {
+     assign(tablename, veg_plotinfo2[[tablename]])
+} 
+
+```
+
+
+
+# Vergelijking met oude data
+
+```{r eval = FALSE}
+vegetation_by_plot_git <- read_forresdat(tablename = "vegetation_by_plot"
+                                     , join_plotinfo = TRUE) %>% 
+  filter(forest_reserve == forestreserve)
+
+vegetation_by_plot_new <- vegetation_by_plot %>% filter(period != 3)
+
+vegetation_by_plot_git <- vegetation_by_plot_git %>% 
+  select(plot_id, year, everything()) 
+
+nrow(vegetation_by_plot_new) == nrow(vegetation_by_plot_git)
+summary(vegetation_by_plot_new)
+
+names(vegetation_by_plot_new) == names(vegetation_by_plot_git)
+summary(vegetation_by_plot_git)
+
+diff <- vegetation_by_plot_new %>% anti_join(vegetation_by_plot_git, by = c("plot_id", "period"))
+diff
+
+
+vegetation_by_plot_new %>% select(-year) %>% arrange(plot_id, period) == vegetation_by_plot_git %>% select(-year) %>% arrange(plot_id, period)
+# OK denk ik andere ordening van variabelen
+vegetation_by_plot_new == vegetation_by_plot_git
+
+head(vegetation_by_plot_new %>% arrange(plot_id, period)); head(vegetation_by_plot_git %>% arrange(plot_id, period))
+head(vegetation_by_plot_new %>% arrange(desc(plot_id), period)); head(vegetation_by_plot_git %>% arrange(desc(plot_id), period))
+
+```
+
+```{r eval = FALSE}
+vegetation_by_core_area_species_git <- read_forresdat(tablename = "vegetation_by_core_area_species"
+                                     , join_plotinfo = TRUE) %>% 
+  filter(forest_reserve == forestreserve)
+
+vegetation_by_core_area_species_new <- vegetation_by_core_area_species %>% filter(period != 3)
+
+vegetation_by_core_area_species_git <- vegetation_by_core_area_species_git %>% 
+  select(plot_id, year, everything()) 
+
+nrow(vegetation_by_core_area_species_new) == nrow(vegetation_by_core_area_species_git)
+summary(vegetation_by_core_area_species_new)
+
+names(vegetation_by_core_area_species_new) == names(vegetation_by_core_area_species_git)
+summary(vegetation_by_core_area_species_git)
+
+diff <- vegetation_by_core_area_species_new %>% anti_join(vegetation_by_core_area_species_git, by = c("plot_id", "period"))
+diff
+
+names(vegetation_by_core_area_species_new); names(vegetation_by_core_area_species_git)
+vegetation_by_core_area_species_new %>% select(-year) %>% arrange(plot_id, period) == vegetation_by_core_area_species_git %>% select(-year, -year_dendro) %>% arrange(plot_id, period)
+# OK denk ik andere ordening van variabelen
+vegetation_by_core_area_species_new == vegetation_by_core_area_species_git %>% select(-year_dendro)
+
+head(vegetation_by_core_area_species_new %>% arrange(plot_id, period)); head(vegetation_by_core_area_species_git %>% arrange(plot_id, period))
+head(vegetation_by_core_area_species_new %>% arrange(desc(plot_id), period)); head(vegetation_by_core_area_species_git %>% arrange(desc(plot_id), period))
+
+```
+
+Lijkt OK
+
+# Aandachtspunten       
+
+
+# Export
+
+## Vegetation
+Resultaten worden opgeslagen als csv op c-schijf en in teamdrive:
+
+```{r}
+path_to_datarequest
+path_to_datarequest_teamdrive
+
+# names(vegetation_by_core_area_height_species)
+# names(vegetation_by_plot_height_species)
+```
+
+```{r save, eval=FALSE}
+save_results_xlsx(
+    results = veg_plotinfo,
+    output_dir = path_to_datarequest
+  )
+
+```
+
+
+```{r save_teamdrive, eval=FALSE}
+save_results_xlsx(
+    results = veg_plotinfo,
+    output_dir = path_to_datarequest_teamdrive
+  )
+
+```
+
+
+## Herblayer
+
+Herblayer lichtjes omvormen
+
+
+```{r select_variables}
+# names(data_herblayer)
+
+herblayer <- data_herblayer %>%
+  select(plot_id, subplot_id, period, 
+         date_vegetation, year, 
+         species, coverage_class_average_perc, 
+         browse_index_id) %>%
+  left_join(qBrowsIndex %>% select(ID, Value2), by = c("browse_index_id" = "ID")) %>% 
+  rename(browse_index = Value2) %>% 
+  # mutate(date_vegetation = as.Date(date_vegetation)) 
+  # !! r as.Date returns previous day 
+  mutate(date_vegetation = as.Date(gsub(' SAST','',date_vegetation))) 
+  # Which will remove the timezone from part of the string and then convert to date.
+
+```
+
+
+
+
+```{r}
+# save_results_xxxx: gemaakt om list weg te schrijven
+# hier maar één dataframe
+herblayer_list <- list(herblayer_by_plot = herblayer)
+# summary(herblayer)
+```
+
+
+```{r join_plotinfo_herb}
+herb_plotinfo <- lapply(herblayer_list, function(x) left_join(x, plotinfo %>% select(plot_id, forest_reserve, plottype, period, survey_number), by = c("plot_id", "period")))
+# lapply: same function over all elements of the list
+
+```
+
+
+```{r save2, eval=FALSE}
+save_results_xlsx(
+    results = herb_plotinfo,
+    output_dir = path_to_datarequest
+  )
+
+```
+
+
+```{r save_teamdrive2, eval=FALSE}
+save_results_xlsx(
+    results = herb_plotinfo,
+    output_dir = path_to_datarequest_teamdrive
+  )
+
+```
+
+
+
+# Copy html to teamdrive
+
+Na knitting - manueel
+
+```{r eval = FALSE}
+# Specify the path of the file you want to copy
+source_file <- here::here(paste0("Scripts/Individuele_BRen/", forestreserve_short, "/", forestreserve_short, "_veg_2024.html"))
+
+# Specify the destination directory where you want to copy the file
+destination_dir <- paste0(path_to_html_teamdrive, "03_output_R_plotlevel/")
+
+# Copy the file to the destination directory
+file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
+```
+
