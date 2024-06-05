@@ -23,13 +23,14 @@ path_to_reserves <- "C:/03_BR_gebieden/"
 
 # Fieldmap-db ------
 
-path_to_fieldmap <- "C:/03_BR_db_monitoring/3_dB_Els_deel2_vs20231012/"
+path_to_fieldmap <- "C:/03_BR_db_monitoring/MDB_BR_X8_inbo2020_20240530/"
+# path_to_fieldmap <- "C:/03_BR_db_monitoring/3_dB_Els_deel2_vs20231012/"
 # path_to_fieldmap <- "C:/03_BR_db_monitoring/dB_Els_deel2_vs20220714/"
 
 
-dbFieldmap <- "FieldMapData_dB_Els_deel2.accdb"
+dbFieldmap <- "FieldMapData_MDB_BR_X8_inbo2020.accdb"
 path_to_fieldmap_db <- paste0(path_to_fieldmap, dbFieldmap)
-
+path_to_fieldmap_db_all <- paste0(path_to_fieldmap, dbFieldmap)
 
 
 # Data -------
