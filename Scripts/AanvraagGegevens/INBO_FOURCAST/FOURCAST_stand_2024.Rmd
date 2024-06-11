@@ -1,0 +1,327 @@
+---
+title: "Dataverwerking - plot description"
+subtitle: "FOURCAST - cirkelplots"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: TRUE
+      smooth_scroll: TRUE
+---
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 7,
+  fig.height = 3,
+  fig.align = TRUE)
+
+library(here)
+library(writexl)
+library(scales)
+
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+
+```
+
+
+```{r Setup2}
+path_to_project <- "C:/03_BR/3_AanvraagGegevens/FOURCAST"
+path_to_project_teamdrive <- "G:/Gedeelde drives/PRJ_FOURCAST/Data/Dendrometrie"  
+
+path_to_datarequest <- paste0(path_to_project, "/output/")
+path_to_datarequest_teamdrive <- paste0(path_to_project_teamdrive, "/2024/")
+path_to_html_teamdrive <- path_to_datarequest_teamdrive
+path_to_html <- path_to_datarequest
+
+path_to_datacontrol <- paste0(path_to_project, "/datacontrole/")
+```
+
+
+Brondata Fieldmap: `path_to_fieldmap_db` aanpassen
+
+```{r Path_tmp}
+path_to_fieldmap_db <-
+  "C:/03_BR/3_AanvraagGegevens/FOURCAST/BF_inbo23/FieldMapData_BF_inbo23.accdb"
+
+```
+
+
+
+# Vraagstelling
+
+Dataverwerking dendrometrie en verjonging in kader van FOURCAST project - per plot:   
+
+- stamtal en grondvlak per soort: xx/ha en %    
+- verjonging A1 en A2: exact aantal, stamtal/ha en %    
+- **uit plotgegevens info halen mbt liggend dood hout, kroonsluiting, **
+**leeftijdsklasse, aantal etages, mengingswijze**
+
+
+```{r results='hold', eval=TRUE}
+path_to_fieldmap_db
+path_to_datarequest
+path_to_datarequest_teamdrive
+
+```
+
+# Invoer gegevens
+
+Layer plots     
+
+Variabelen:      
+
+- Kroonsluiting
+- Leeftijdsklasse
+- Aantal_etages
+- Mengingswijze
+- Liggenddoodhout_zeerdun
+- Liggenddoodhout_dun
+- Liggenddoodhout_dik
+- Liggenddoodhout_zeerdik
+
+
+## Load plotinfo
+
+Plotinfo samenstellen, zijnde plottype, naam forest_reserve en info over survey en data al dan niet processed.
+Wegschrijven naar git, access en opslaan als csv
+
+```{r plotinfo_load}
+plotinfo <- load_plotinfo(database = path_to_fieldmap_db, processed = FALSE)
+names(plotinfo)
+
+# plotinfo %>% filter(data_processed == FALSE) %>% nrow()
+table(plotinfo$data_processed)
+```
+
+## Load plot description
+
+```{r}
+query_plotdescription <- "
+SELECT p.ID as plot_id
+, p.Plottype as plottype
+, p.Kroonsluiting as kroonsluiting
+, p.Leeftijdsklasse as leeftijdsklasse
+, p.Aantal_etages as aantal_etages
+, p.Mengingswijze as mengingswijze
+, p.Liggenddoodhout_zeerdun as ldw_zeer_dun
+, p.Liggenddoodhout_dun as ldw_dun
+, p.Liggenddoodhout_dik as ldw_dik
+, p.Liggenddoodhout_zeerdik as ldw_zeer_dik
+FROM Plots p;"
+
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+
+plotdescription <- sqlQuery(con, query_plotdescription) # , stringsAsFactors = TRUE)
+  
+odbcClose(con)
+```
+
+```{r}
+plotdescription_ <- plotdescription %>% 
+  select(-plottype) %>% 
+  left_join(plotinfo %>% select(forest_reserve, plot_id, plottype, year_dendro)
+            , by = c("plot_id")) %>% 
+  filter(plottype == "CP")
+
+plotdescription <- plotdescription_
+
+```
+
+
+
+# Datacontrole
+
+## NA's
+
+Geen NA's
+
+```{r}
+# names(plotdescription)
+col <- plotdescription %>% 
+  select(2:9) %>% 
+  names()
+col
+
+plotdescription %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+
+# summary(plotdescription)
+```
+## Stroomlijnen van karaktervelden
+
+Er werd niet steeds eenzelfde string gebruikt bij de plotdescription.
+
+"ongelijkja" vervangen door "ongelijkjarig"
+
+```{r}
+plotdescription_ <- plotdescription %>% 
+  mutate(leeftijdsklasse = ifelse(leeftijdsklasse == "ongelijkja"
+                                  , "ongelijkjarig",
+                                  leeftijdsklasse))
+```
+
+Leeftijdsklasse: soms 100 en soms 100 jaar
+
+```{r}
+table(plotdescription_$leeftijdsklasse)
+
+plotdescription_ <- plotdescription_ %>% 
+  mutate(leeftijdsklasse = recode(leeftijdsklasse,
+                                  "100 jaar" = "100",
+                                  "140 jaar" = "140",
+                                  "70 jaar" = "70",
+                                  "90 jaar" = "90"
+                                  ),
+         leeftijdsklasse2 = ifelse(leeftijdsklasse != "ongelijkjarig",
+                                   paste0(leeftijdsklasse, "jr"),
+                                   leeftijdsklasse)
+         )
+ 
+
+unique(plotdescription_$leeftijdsklasse)
+unique(plotdescription_$leeftijdsklasse2)
+
+```
+
+
+Mengingswijze
+
+```{r}
+table(plotdescription_$mengingswijze)
+
+plotdescription_ <- plotdescription_ %>% 
+  mutate(mengingswijze = tolower(mengingswijze))  # zonder hoofdletter
+
+table(plotdescription_$mengingswijze)
+```
+
+Aantal_etages
+
+```{r}
+table(plotdescription_$aantal_etages)
+
+plotdescription_ <- plotdescription_ %>% 
+  mutate(aantal_etages = ifelse(aantal_etages == "> 1",
+                                ">1", aantal_etages))
+
+table(plotdescription_$aantal_etages)
+```
+Kroonsluiting
+
+```{r}
+table(plotdescription_$kroonsluiting)
+
+plotdescription_ <- plotdescription_ %>% 
+  mutate(
+    kroonsluiting = ifelse(kroonsluiting == "> 2/3"
+                                ,">2/3", kroonsluiting),
+    kroonsluiting = ifelse(kroonsluiting %in% c("1/3 -2/3", ">1/3", "1/3 - 2/3")
+                                ,"1/3-2/3", kroonsluiting))
+
+table(plotdescription_$kroonsluiting)
+
+```
+Liggend dood hout
+
+```{r}
+table(plotdescription_$ldw_zeer_dun)
+table(plotdescription_$ldw_zeer_dik)
+table(plotdescription_$ldw_dik)
+table(plotdescription_$ldw_dun)
+
+plotdescription_ <- plotdescription_ %>% 
+  mutate(
+    ldw_zeer_dun = ifelse(ldw_zeer_dun %in% c("veel", "/")
+                          , ldw_zeer_dun, "weinig"),
+    ldw_dun = ifelse(ldw_dun %in% c("veel", "/")
+                          , ldw_dun, "weinig"),
+    ldw_dik = ifelse(ldw_dik %in% c("veel", "/")
+                          , ldw_dik, "weinig")
+  )
+    
+table(plotdescription_$ldw_zeer_dun)
+table(plotdescription_$ldw_zeer_dik)
+table(plotdescription_$ldw_dik)
+table(plotdescription_$ldw_dun)
+
+```
+
+```{r}
+names(plotdescription_) 
+
+plotdescription_ <- plotdescription_ %>% 
+  select(forest_reserve, plot_id, year_dendro, 
+         kroonsluiting, leeftijdsklasse, leeftijdsklasse2,
+         everything(), -plottype)
+
+```
+```{r}
+plotdescription <- plotdescription_ %>% 
+  arrange(plot_id)
+```
+
+
+# Export
+
+Resultaten worden opgeslagen als xlsx-file op c-schijf en in teamdrive:
+
+```{r}
+path_to_datarequest
+path_to_datarequest_teamdrive
+
+```
+
+
+```{r save, eval=FALSE}
+write.xlsx(plotdescription
+           , paste0(path_to_datarequest, "plot_level_data.xlsx")
+           , sheetName = "plotdescription"
+           , showNA = FALSE
+           , append = TRUE) 
+
+
+```
+
+
+```{r save_teamdrive, eval=FALSE}
+write.xlsx(plotdescription
+           , paste0(path_to_datarequest_teamdrive, "plot_level_data.xlsx")
+           , sheetName = "plotdescription"
+           , showNA = FALSE
+           , append = TRUE)
+
+```
+
+
+
+# Copy html to teamdrive
+
+Na knitting - manueel
+
+```{r eval = FALSE}
+# Specify the path of the file you want to copy
+source_file <- here::here(paste0("Scripts/AanvraagGegevens/INBO_FOURCAST/FOURCAST_stand_2024.html"))
+
+# Specify the destination directory where you want to copy the file
+destination_dir <- path_to_html
+
+# Copy the file to the destination directory
+file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
+# ? file.copy
+```
+

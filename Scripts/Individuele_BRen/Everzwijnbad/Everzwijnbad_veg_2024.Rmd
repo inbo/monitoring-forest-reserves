@@ -582,6 +582,9 @@ Lijkt OK
 
 # Aandachtspunten       
 
+Plot 112: dendro 3x opgemeten, MAAR reg en veg enkel decade 2 en 3, niet opgemeten
+in de 1ste decade
+
 
 # Export
 

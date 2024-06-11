@@ -643,6 +643,10 @@ head(dendro_by_plot_new %>% arrange(desc(plot_id), period)); head(dendro_by_plot
 
 ```
 
+# Aandachtspunten       
+
+Plot 112: dendro 3x opgemeten, MAAR reg en veg enkel decade 2 en 3, niet opgemeten
+in de 1ste decade
 
 
 # Export

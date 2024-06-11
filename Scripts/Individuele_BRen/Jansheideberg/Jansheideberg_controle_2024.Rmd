@@ -1,6 +1,6 @@
 ---
 title: "Dataverwerking - controle"
-subtitle: "Everzwijnbad - cirkelplots & kernvlakte"
+subtitle: "Jansheideberg - cirkelplots & kernvlakte"
 author: "Anja Leyman"
 date: "`r Sys.Date()`"
 output: 
@@ -41,26 +41,28 @@ source(here::here("scripts/Setup.R"))
 
 
 ```{r Setup2}
-forestreserve <- "Everzwijnbad"
+forestreserve <- "Jansheideberg"
 forestreserve_short <- forestreserve
 # forestreserve_short <- "Wijnendale"
 plot_type <- "CA"
 plot_type <- "CP"
 
-forestreserve_folder <- paste0(path_to_reserves, "4b_Everzw_DEELS")
+forestreserve_folder <- paste0(path_to_reserves, "4b_Jansheide_DEELS")
 
 path_to_datarequest <- paste0(forestreserve_folder, "/verwerking_2024_1e2e3eSET/output_forrescalc/")
 path_to_datarequest_teamdrive <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverwerking/per_gebied/2024_", forestreserve_short, "/01_datacontrole/")
-path_to_html_teamdrive <- path_to_datarequest_teamdrive # plots_to_exclude <- c(701, 707, 709, 727, 728, 738, 739, 740, 759, 760)
+path_to_html_teamdrive <- path_to_datarequest_teamdrive
+
+# plots_to_exclude <- c(701, 707, 709, 727, 728, 738, 739, 740, 759, 760)
 
 path_to_datacontrol <- path_to_datarequest_teamdrive
 ```
 
 
-TIJDELIJK `path_to_fieldmap_db` aanpassen naar export van wijnendale en everzwijnbad uit moederdb (4/3/2024)
+TIJDELIJK `path_to_fieldmap_db` aanpassen naar de werkversie van Jansheideberg
 
 ```{r Path_tmp}
-path_to_fieldmap_db <- "C:/03_BR_db_monitoring/3_db_Els_deel2_Wijn_Ever/FieldMapData_3_db_Els_deel2_Wijn_Ever.accdb"
+path_to_fieldmap_db <- "C:/03_BR_gebieden/4b_Jansheide_DEELS/FMprojecten_2024/JHB_HR_inbo24_datacontrole/FieldMapData_JHB_HR_inbo24.accdb"
 
 ```
 
@@ -72,27 +74,16 @@ path_to_fieldmap_db <- "C:/03_BR_db_monitoring/3_db_Els_deel2_Wijn_Ever/FieldMap
 
 Datacontrole nalv opnames 3de decade, gebruik makend van (nieuwe) forrescalc.
 
-Doel is om de scriptmatige datacontrole bosreservaat per bosreservaat te runnen, 
-niet retro-actief de volledige databank.    
-
-Enerzijds teveel NA's waar nu niks meer aan te doen is, en waar het OK is dat het een NA is.
-Het is niet de bedoeling om in de volledige databank voor elke NA een extra veld in te 
-vullen dat zegt dat die NA OK is. 
-
-Anderzijds is er bij de eerdere dataverwerkingen ook al een datacontrole uitgevoerd.
-
+Peter heeft nog géén voorafgaande datacontrole gedaan.
+Dit moet zorgen dat Peter vanaf nu geen queries meer moet aflopen in access.
 
 <br>
 
 
 ```{r results='hold', eval=TRUE}
-path_to_forresdat_data
-path_to_analysis_set_db
-path_to_plotlevel_csv
-path_to_treelevel_csv
-path_to_output_gdrive
-path_to_meetgegevens
-
+path_to_datacontrol
+path_to_fieldmap_db
+path_to_html_teamdrive
 ```
 
 
@@ -129,7 +120,67 @@ odbcClose(con)
 
 ```
 
+
+# Load data
+
+
+```{r plots}
+# soms forest_reserve missing => dan kunnen we dat niet als filter gebruiken
+# we gaan ervanuit dat bij een of ander periode forest_reserve wél ingevuld staat
+
+data_plots <- load_plotinfo(database = path_to_fieldmap_db, processed = FALSE)
+
+list_plots <- data_plots %>% 
+  dplyr::filter(forestreserve == forest_reserve) %>% 
+  dplyr::select(plot_id) %>% 
+  unique() %>% 
+  dplyr::pull(plot_id)
+print(list_plots)
+
+data_plots_ <- data_plots %>% 
+  filter(plot_id %in% list_plots)
+
+data_plots <- data_plots_
+```
+
+```{r dendro}
+data_dendro <- load_data_dendrometry(database = path_to_fieldmap_db, 
+                                     processed = FALSE) %>% 
+  filter(plot_id %in% list_plots)
+
+data_dendro <- data_dendro %>% 
+  mutate(tree_measure_id = as.character(tree_measure_id),
+         period = as.character(period))
+
+```
+
+
+```{r veg}
+data_veg <- load_data_vegetation(database = path_to_fieldmap_db, 
+                                     processed = FALSE) %>% 
+  filter(plot_id %in% list_plots)
+# data_dendro <- data_dendro %>% 
+#   mutate(tree_measure_id = as.character(tree_measure_id),
+#          period = as.character(period))
+
+data_herbs <- load_data_herblayer(database = path_to_fieldmap_db, 
+                                     processed = FALSE) %>% 
+  filter(plot_id %in% list_plots)
+
+
+vegetation <- calculate_vegetation_plot(data_veg, data_herbs)
+
+for (tablename in names(vegetation)) {
+     assign(tablename, vegetation[[tablename]])
+} 
+
+
+```
+
+
 # Check
+
+## Overview
 
 Met behulp van de overkoepelende controlefunctie in package `forrescalc`.
 
@@ -138,20 +189,20 @@ Met behulp van de overkoepelende controlefunctie in package `forrescalc`.
 
 ```{r check_fmdb}
 # missing data
-incorrect_data <- check_data_fmdb(database = path_to_fieldmap_db, forest_reserve = forestreserve)  
+incorrect_data <- check_data_fmdb(database = path_to_fieldmap_db) 
 
-nrow(incorrect_data) # 6757
+incorrect_data_ <- incorrect_data %>% 
+  filter(plot_id %in% list_plots)
+
+nrow(incorrect_data_) # 425/294/515
 # view(incorrect_data)
-names(incorrect_data)
+names(incorrect_data_)
+
+incorrect_data <- incorrect_data_
 
 ```
 
 ```{r }
-data_dendro <- load_data_dendrometry(database = path_to_fieldmap_db)
-data_dendro <- data_dendro %>% 
-  mutate(tree_measure_id = as.character(tree_measure_id),
-         period = as.character(period))
-
 incorrect_data_ <- incorrect_data %>% 
   left_join(data_dendro %>% 
               select(plot_id, period, tree_measure_id, alive_dead, ind_sht_cop, intact_snag)) 
@@ -167,10 +218,23 @@ incorrect_overview %>% DT :: datatable(options = list(pageLength = 10), rownames
 #                   colnames = c('Soort', 'aantal hoogtes', 'aantal hoogtes hakhout', 'aandeel hakhout (%)')) 
 ```
 
-## Missing values
-Veel "missing" => met Peter overleggen hoe we daarmee omgaan.
+Uit bovenstaand overzicht blijkt dat de meeste afwijkingen zich situeren bij 
 
-Sowieso al enkele aanpassingen doorgevoerd in forrescalc (branch testdb_checks_AL):    
+- `total_soildisturbance_game`, `invalid value`, zijnde '20': 
+pas opgemeten vanaf 2014 
+=> in forrescalc aangepast zdd. enkel "incorrecte" total_soildisturbance_game als year(.data$date) >= 2014
+
+- `waterlayer_cover` van vegetation layer (enkel periode 1 en 2), `invalid value`, zijnde '20': moet hetzij < 1% worden of NA
+Peter heeft deze in moederdb alle op < 1% gezet
+
+- `walkers`: controle functies aangepast, zdd pas signaal 
+indien > 1 m afwijking vanaf 3de decade, 
+en > 1.5m voor decade 0, 1 en 2.
+
+
+## Missing values
+
+Reeds volgende aanpassingen doorgevoerd in forrescalc (branch testdb_checks_AL):    
 
 - Missing area_ha is OK, moet enkel bij CA ingevuld staan
 - Iufro-klasses mogen missing zijn als dood
@@ -178,36 +242,36 @@ Sowieso al enkele aanpassingen doorgevoerd in forrescalc (branch testdb_checks_A
 - browse_index: mag missing zijn, want wordt opgevangen in dataverwerking
 - game_damage_number: mag missing zijn, want wordt opgevangen in dataverwerking
 - number en number_class: periode 1 en 2 niet meer bekijken
+- soildisturbance en waterlayercover: NA's worden niet aangeduid, bij verwerking worden NA's op < 1% gezet als er in het bosresrevaat (CP's en KV's samen) ergens een cover genotered werd.
 
-<!-- ? browse index: in check mag dit enkel NA zijn als er niks opgemeten is cfr periode 1&2 (!! op plotniveau, maar zou eigenlijk op reservaatsniveau moeten zijn). -->
-<!-- MAAR: NA's worden opgevangen in de dataverwerking, omdat het teveel werk vraagt om op terrein elke keer "geen vraatschade aan te vinken" -->
-<!-- => is het geen optie om dat standaard in te stellen in FM-DC?  -->
+Wat overblijft zijn    
 
-<!-- Hier dit ook overrulen -->
-<!-- Els stelt voor om extra velden toe te voegen die zeggen dat fout OK is,  -->
-<!-- maar evenveel werk om dit veld in te vullen, als het kost om ontbrekende waardes aan te vullen -->
-<!-- Ik denk dat het logischer is om - al zeker voor missing values - deze tot strikte  -->
-<!-- minimum te beperken bij de datacontrole. -->
+- decaystage deadwood missing periode 1 (3 records)   
+- fieldteam   
+- sommige covers
+- intact_snag
 
-Eerder andersom checken: als er in plotdetails staat dat browsen opgenomen is, maar er is geen enkele schade genoteerd, dan mogelijks iets fout!!!!
-Dit moet op niveau van plotdetails gecheckt worden: is het OK dat game_impact genoteerd werd? (GameImpactVeg/RegObserved = 10)
+=> nog nut om dat weer te geven voor periode 1 en 2?
 
-Idem voor game_impact_reg_observed in tabel regspecies
+Tijdelijk nog wel, in aparte sheet opslaan en zo aan Peter geven.
 
-Tijdelijk hier opvangen
-
-```{r tmp_correct_missing}
+```{r }
 # table(incorrect_data$aberrant_field)
 # table(incorrect_data$anomaly)
 
 missing <- incorrect_data_ %>% 
-  filter(anomaly == "missing") %>% 
-  filter(aberrant_field != "area_ha") %>% 
-  filter(!(str_detect(aberrant_field, "iufro") & anomaly == "missing" & alive_dead == 12)) %>% 
-  filter(!(aberrant_field == "decay_stage" & anomaly == "missing" & ind_sht_cop == 12)) %>% 
-  filter(!(aberrant_field == "browse_index" & anomaly == "missing")) %>% 
-  filter(!(aberrant_field == "game_damage_number" & anomaly == "missing")) %>% 
-  filter(!(str_detect(aberrant_field, "number") & anomaly == "missing" & period != 3)) 
+  filter(anomaly == "missing") # 23
+  
+  
+#   
+#   filter(aberrant_field != "area_ha") %>% 
+#   filter(!(str_detect(aberrant_field, "iufro") & anomaly == "missing" & alive_dead == 12)) %>% 
+#   filter(!(aberrant_field == "decay_stage" & anomaly == "missing" & ind_sht_cop == 12)) %>% 
+#   filter(!(aberrant_field == "browse_index" & anomaly == "missing")) %>% 
+#   filter(!(aberrant_field == "game_damage_number" & anomaly == "missing")) %>% 
+#   filter(!(str_detect(aberrant_field, "number") & anomaly == "missing" & period != 3)) 
+# missing_ %>% anti_join(missing)
+
 ```
 
 Exporteren naar excel-file "missing_data"
@@ -241,6 +305,18 @@ missing_p12 <- missing %>%
 table(missing_p12$aberrant_field)
 ```
 
+
+
+```{r}
+missing %>% 
+  group_by(period, layer, ind_sht_cop, aberrant_field, anomaly) %>% 
+  summarize(n = n()) %>% 
+  ungroup() %>% 
+  DT :: datatable(options = list(pageLength = 10), rownames = FALSE, filter = "top")
+```
+
+
+
 ```{r export_missing, eval = FALSE}
 write.xlsx(missing_p3
            , paste0(path_to_datacontrol, "missing.xlsx")
@@ -259,11 +335,12 @@ write.xlsx(missing_p12
 
 ## Not in lookuplist 
 
-In `r forestreserve` gaat het enkel over iufro-klasses waar er een waarde 0 gegeven werd.
+In eerder gecheckte bosreservaten ging het enkel over iufro-klasses waar er 
+een waarde 0 gegeven werd.
 Vooral 1ste decade (layer trees en shoots), maar ook 2de decade (layer shoots).
 Allemaal levend.
 
-Deze zouden beter gecorrigeerd worden in FM met een updatequery.
+Deze werden gecorrigeerd in moederdb met een updatequery.
 
 ```{r results = 'hide'}
 incorrect_not_in_lkp <- incorrect_data_ %>% 
@@ -288,50 +365,30 @@ incorrect_not_in_lkp %>%
 
 
 ```{r export_lkp_iufro, eval = FALSE}
-write.xlsx(incorrect_not_in_lkp
-           , paste0(path_to_datacontrol, "incorrect.xlsx")
-           , sheetName = "iufro_0"
-           , showNA = FALSE
-           , append = FALSE) 
+# write.xlsx(incorrect_not_in_lkp
+#            , paste0(path_to_datacontrol, "incorrect.xlsx")
+#            , sheetName = "iufro_0"
+#            , showNA = FALSE
+#            , append = FALSE) 
 
 
 ```
 
 
 
-## Decaystage   
+## Incorrect decaystage   
 
-Voor `r forestreserve` gaat het om   
-
-- tree not alive en code 16 (NVT - levend) = fout  
-- tree alive en code 17 (NVT - stoof) = geen echte fout én overload om 
-dat te corrigeren
-
+In `r forestreserve` geen onlogische decaystages.
 
 ```{r results = 'hide'}
 incorrect_decay <- incorrect_data_ %>% 
-  filter(str_detect(aberrant_field, "decay") & 
-           !anomaly %in% c("missing", "not in lookuplist"))
+  filter(str_detect(aberrant_field, "decay") & anomaly != "missing")
 
-# table(incorrect_decay$anomaly)
-# table(incorrect_decay$period, incorrect_decay$aberrant_field)
-# table(incorrect_decay$anomaly, incorrect_decay$aberrant_field)
 ```
 
-Veel "tree alive" en code 17 (NVT - stoof): dit is eigenlijk OK, code 16 (NVT - levend) 
-was misschien beter geweest.
-
-Aanpassing reeds doorgevoerd in forrescalc (branch testdb_checks_AL)  
-
-Tijdelijk hier opvangen
-
-```{r tmp_correct_decay}
-# table(incorrect_data$aberrant_field)
-# table(incorrect_data$anomaly)
-
-incorrect_decay <- incorrect_decay %>% 
-  filter(anomaly != "tree alive") 
-```
+<!-- "tree alive" en code 17 (NVT - stoof): dit is eigenlijk OK, code 16 (NVT - levend)  -->
+<!-- was misschien beter geweest. -->
+<!-- Aanpassing doorgevoerd in forrescalc (branch testdb_checks_AL).  -->
 
 
 ```{r}
@@ -352,7 +409,7 @@ write.xlsx(incorrect_decay
            , paste0(path_to_datacontrol, "incorrect.xlsx")
            , sheetName = "decaystage"
            , showNA = FALSE
-           , append = TRUE) 
+           , append = FALSE)
 
 
 ```
@@ -361,12 +418,13 @@ write.xlsx(incorrect_decay
 
 ## Iufro-klasses - tree (not) alive
 
-Voor `r forestreserve` gaat het om   
+Voor `r forestreserve` gaat het om 2 records: alive en code 40 (NVT - dood) 
 
-- iufro-klasses: tree not alive en code 50 (NVT - stoof) = geen echte fout én 
-overload om dat te corrigeren (code 40 (NVT - dood) was misschien beter geweest)
-<!-- - iufro-klasses: tree alive en code 40 (NVT - dood) = wél fout -->
-
+<!-- - iufro-klasses: tree not alive en code 50 (NVT - stoof) = 
+geen echte fout én  -->
+<!-- overload om dat te corrigeren (code 40 (NVT - dood) was 
+misschien beter geweest) -->
+<!-- Aanpassing doorgevoerd in forrescalc (branch testdb_checks_AL).-->
 
 
 ```{r}
@@ -376,19 +434,6 @@ incorrect_iufro <- incorrect_data_ %>%
 # table(incorrect_decay$anomaly)
 # table(incorrect_decay$period, incorrect_decay$aberrant_field)
 # table(incorrect_decay$anomaly, incorrect_decay$aberrant_field)
-```
-
-Aanpassing doorgevoerd in forrescalc (branch testdb_checks_AL).   
-Tijdelijk hier opvangen zdd dit niet in output komt als fout.
-
-```{r tmp_correct_iufro}
-# table(incorrect_data$aberrant_field)
-# table(incorrect_data$anomaly)
-
-incorrect_iufro <- incorrect_iufro %>% 
-  filter(!(anomaly == "tree not alive" & aberrant_value == 50 & ind_sht_cop == 12)) 
-
-
 ```
 
 
@@ -403,7 +448,7 @@ incorrect_iufro %>%
 ```
 
 ```{r}
-unique(incorrect_iufro$aberrant_value) == 50
+unique(incorrect_iufro$aberrant_value) == 40
 ```
 
 ```{r export_iufro_dead, eval = FALSE}
@@ -422,52 +467,50 @@ write.xlsx(incorrect_iufro
 
 Voor `r forestreserve` gaat het om   
 
-- cover_id = 20 - Niet beschikbaar
+- total_xxxx_cover_id = 20 --> ""Niet beschikbaar"
+(wordt in forrescalc als een NA beschouwd)
 - enkel 1ste en 2de decade
 
-Er was hiet wat verwarring over: gaat het om een vegetatielaag die niet beschikbaar is,
-of om de data die niet beschikbaar is (dus NA)?
-Met Marc en Peter teruggekoppeld, en is eigenlijk een NA.
-Vanaf nu (16/5/2024) wordt dat niet meer gebruikt.
+Er was hier wat verwarring over: gaat het om een vegetatielaag die niet 
+beschikbaar is, of om de data die niet beschikbaar is (dus NA)?
 
-Mail Peter (21/2/2024):
-"zou als volgt willen voorstellen om indien er plots/bosreservaat een ingeschatte bedekking voor waterlaag hebben gekregen de overige plots <1% te geven.
-Bij geen enkel plot met ingeschatte waterlaag voor mij gelijk of we dan achteraf kiezen voor NA of <1%.
-Sluit best aan bij hoe we werken, omdat aanwezige waterlaag eerder uitzonderlijk is, wordt het dan pas ingevuld..."
+Vanaf nu (16/5/2024) wordt dat niet meer gebruikt 
+(Peter heeft dit uit de lookuplijst gehaald, kan niet meer aangeduid worden)
 
+Was initieel bedoeld om aan te geven dat er niet gekeken was naar die cover 
+(bv. soil disturbance pas vanaf 20014 opgenomen)
+MAAR door sommigen soms gebruikt om < 1% aan te duiden 
+(< overleg met Peter op 30/5/2024)
+
+In package forrescalc wordt deze '20' als een NA beschouwd, maar toch handig dat 
+dat opgekuist wordt in moederdb, blijft anders voor verwarring zorgen.
+Gevraagd aan Peter in mail van 10/6/2024:    
+
+- in moederdb reeds OK voor **waterlayer cover**: '20' én NA's gewijzigd in < 1%, 
+met als voorwaardes "TreeCover is not null", "Waterlayercover is null or 20"
+(voor de drie vegetation layers)
+
+- in forrescalc wordt NIET getest op een '20' bij **soildist_game**
+vóór 2014: `check_data_vegetation()` aangepast zdd '20' enkel als incorrect 
+opgegeven wordt, indien na 2014 opgemeten! 
+
+(eventueel toch in moederdb `total_soildisturbance_game` aanpassen:    
+  * indien '20', veranderen naar NULL (NA)     
+  * dit voor vegetation_1eSET en vegetation_2eSET    
+  * (in 3e SET komt 20 daar (nog) niet voor))        
+  
 
 ```{r results = 'hide'}
 incorrect_invalid <- incorrect_data_ %>% 
   filter(anomaly == "invalid value") 
 
-table(incorrect_invalid$aberrant_field)
 table(incorrect_invalid$period)
 table(incorrect_invalid$anomaly, incorrect_invalid$aberrant_field)
 ```
 
-
 ```{r results = 'hide'}
 unique(incorrect_invalid$aberrant_value) == 20
 ```
-
-
-? wat doen we hiermee ?????
-Laten corrigeren éénmalig in moederdatabank? of toch al opvangen in datacontrole? 
-
-
-```{r tmp_correct_xxx, eval = FALSE}
-# table(incorrect_data$aberrant_field)
-# table(incorrect_data$anomaly)
-
-incorrect_invalid_ <- incorrect_invalid %>% 
-  filter(!(anomaly == "invalid value" & 
-           aberrant_field %in% c("total_soildisturbance_game_id", "waterlayer_cover_id") &
-           aberrant_value == 20)) 
-
-nrow(incorrect_invalid_)
-
-```
-
 
 ```{r}
 incorrect_invalid %>% 
@@ -480,7 +523,7 @@ incorrect_invalid %>%
 
 
 ```{r }
-unique(incorrect_invalid$aberrant_value)
+unique(incorrect_invalid$aberrant_value) == 20
 ```
 
 ```{r export_invalid, eval = FALSE}
@@ -520,6 +563,8 @@ incorrect_diff %>%
 
 ```
 
+In `r forestreserve` gaat het vooral om walkers, een species shifter en een 
+decaystage shifter.
 
 ```{r export_diff, eval = FALSE}
 write.xlsx(incorrect_diff
@@ -536,12 +581,22 @@ write.xlsx(incorrect_diff
 
 De datacontrole checkt ook of diameter- of hoogteaangroei niet uitzonderlijk hoog of laag is.
 
-- outlier_diameter/height_species: enkel een outlier binnen zijn eigen soort 
+- **outlier_diameter/height_species**: enkel een outlier binnen zijn eigen soort 
 <!-- reframe(dbh_mm_diff = (boxplot(.data$dbh_mm_diff, plot = FALSE))$out -->
-- outlier_diameter/height_total: enkel een outlier als we met alle soorten 
+- **outlier_diameter/height_total**: enkel een outlier als we met alle soorten 
 behalve populier vergelijken (species 51) *?? nog andere soorten uitsluiten? *
-- outlier_diameter/height: als het een outlier is tov alle soorten én binnen de eigen soort
+- **outlier_diameter/height**: als het een outlier is tov alle soorten én binnen de eigen soort
 
+
+Indien we hier alle bosreservaten samen nemen, zal er minder snel een outlier gedetecteerd worden, hier te beperkt.
+Laten we Heirnisse er bij nemen.
+
+
+```{r}
+incorrect_trees_evolution_all <- check_trees_evolution(database = path_to_fieldmap_db) %>% 
+  filter(str_detect(anomaly, "outlier"))
+
+```
 
 ```{r results = 'hide'}
 incorrect_growth <- incorrect_data_ %>% 
@@ -599,28 +654,6 @@ table(incorrect_rest$period, incorrect_rest$aberrant_field)
 ```{r}
 incorrect_rest %>% 
   group_by(period, layer, aberrant_field, anomaly, alive_dead, ind_sht_cop) %>% 
-  summarize(n = n()) %>% 
-  ungroup() %>% 
-  DT :: datatable(options = list(pageLength = 10), rownames = FALSE, filter = "top")
-
-```
-
-
-! aberrant_field = ratio_dbh_height: enkel van toepassing bij individuele bomen, niet bij snags 
-Is aangepast in forrescalc (branc hxxx_AL)
-Hier tijdelijk opvangen.
-
-```{r tmp_correct_ratio}
-incorrect_rest_ <- incorrect_rest %>% 
-  filter(!(aberrant_field == "ratio_dbh_height" & intact_snag == 10))
-
-incorrect_rest <- incorrect_rest_
-
-```
-
-```{r}
-incorrect_rest %>% 
-  group_by(period, layer, aberrant_field, anomaly, alive_dead, ind_sht_cop, intact_snag) %>% 
   summarize(n = n()) %>% 
   ungroup() %>% 
   DT :: datatable(options = list(pageLength = 10), rownames = FALSE, filter = "top")
@@ -709,13 +742,18 @@ view(incorrect_herblayer)
 
 ```{r check_plots, eval = FALSE}
 # plots
-incorrect_plots <- check_data_plots(database = path_to_fieldmap_db, forest_reserve = forestreserve)  
+incorrect_plots <- check_data_plots(database = path_to_fieldmap_db)
+
+
+, forest_reserve = forestreserve)  
 
 nrow(incorrect_plots)
 view(incorrect_plots)
 
 # plotdetails
-incorrect_plotdetails <- check_data_plotdetails(database = path_to_fieldmap_db, forest_reserve = forestreserve)  
+incorrect_plotdetails <- check_data_plotdetails(database = path_to_fieldmap_db)
+
+, forest_reserve = forestreserve)  
 
 nrow(incorrect_plotdetails)
 view(incorrect_plotdetails)
@@ -734,20 +772,16 @@ view(incorrect_plotdetails)
 
 We controleren of er nog plots "not processed" zijn.
 
-```{r plotinfo_load, eval = FALSE}
-plotinfo <- load_plotinfo(database = path_to_fieldmap_db) %>% 
-  filter(forest_reserve == forestreserve)
-names(plotinfo)
-```
-
+In `r forestreserve` zijn plotdetails van 3eSET nog niet aangevuld! 
 
 ```{r check_processed, results='hide', eval = FALSE}
+plotinfo <- data_plots
 # enkel checken bij deze waar er een dendro-opname gebeurd is
 # anders ook deze van vorige decades mee, die niet kunne processed zijn
 check_processed <- plotinfo %>% 
   filter(survey_trees == TRUE)
 
-table(check_processed$forest_reserve, check_processed$data_processed)
+table(check_processed$period, check_processed$data_processed)
 # table(plotinfo$forest_reserve, plotinfo$data_processed)
 ```
 
@@ -758,12 +792,13 @@ plotinfo_check <- plotinfo %>%
   ungroup()
 
 plotinfo_check %>% 
-  filter(survey_trees == TRUE & data_processed == FALSE)
+  filter((survey_trees == TRUE & data_processed == FALSE) |
+           (survey_trees == FALSE & data_processed == FALSE))
 
 # omgekeerd geen plots die processed zijn, en géén survey_trees
-plotinfo %>%  filter(data_processed & !survey_trees) %>% nrow() == 0
-```
+plotinfo %>%  filter(!data_processed & !survey_trees) %>% nrow()
 
+```
 
 **!! OPGEPAST:** nadat de data gecontroleerd zijn door Peter, moet veld `processed` aangepast worden.
 
@@ -793,32 +828,40 @@ odbcClose(con)
 ```
 
 
-```{r plotinfo_load2, eval=FALSE}
-plotinfo <- load_plotinfo(database = path_to_fieldmap_db) %>% 
-  filter(forest_reserve == forestreserve)
-names(plotinfo)
-```
+# Aandachtspunten
 
-In het geval van `r forestreserve` gaat het om volgende plots die na de eerste decade niet 
-meer heropgemeten werden:     
+Datacontrole kijkt NIET naar missing values van     
 
-```{r eval = FALSE}
-plotinfo %>% filter(survey_trees == FALSE) %>% distinct(plot_id)
-```
+- waterlayer_cover    
+- total_soildisturbance_game    
+- browse_index: enkel check voor 'not in lookuplist' als `!is.na(.data$browse_index)`
+- game_damage_number: enkel check voor        
+    * 'higher than total number' indien game_impact_reg = TRUE en 
+    * 'unexpected (not missing)' als game_impact_reg = FALSE 
 
+(er is geen veld in layer plotdetails die zegt 
+of er wel of niet naar soildisturbance gegeken werd)
+
+<!-- Mail Peter (21/2/2024): -->
+<!-- "zou als volgt willen voorstellen om indien er plots/bosreservaat een ingeschatte bedekking voor waterlaag hebben gekregen de overige plots <1% te geven. -->
+<!-- Bij geen enkel plot met ingeschatte waterlaag voor mij gelijk of we dan achteraf kiezen voor NA of <1%. -->
+<!-- Sluit best aan bij hoe we werken, omdat aanwezige waterlaag eerder uitzonderlijk is, wordt het dan pas ingevuld..." -->
+
+Bij de berekeningen (`load_data_vegetation()`) worden de missing values van `waterlayer_cover` en `total_soildisturbance_game` omgezet naar < 1% 
+als er ergens in het bosreservaat 
+een waarde genoteerd werd (CP's en KV's samen genomen).
 
 
 # Export
 
-Resultaten worden opgeslagen als csv op onze teamdrive:
+Resultaten worden opgeslagen als excel-files op onze teamdrive:
 
 ```{r}
 path_to_datacontrol
 
 ```
 
-
-```{r eval = FALSE}
+```{r add_date, eval = FALSE}
 # copy met datum van vandaag, zdd dit niet overschreven wordt 
 
 # Specify the path of the file you want to copy

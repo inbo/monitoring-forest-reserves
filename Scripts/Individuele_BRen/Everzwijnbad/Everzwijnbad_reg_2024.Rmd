@@ -628,7 +628,11 @@ Lijkt OK
 # Aandachtspunten       
 
 Everzwijnbad cirkelplots: in 1e decade enkel 0-50 cm en 50-200 cm (qHeightclass = 3000 en 5000)     
-Everzwijnbad kernvlakte: wel alle decades de 4 standaard hoogteklasses (0-30, 30-50, 50-200, >200 cm; qHeightclass 1000 tem 4000)     
+Everzwijnbad kernvlakte: wel alle decades de 4 standaard hoogteklasses (0-30, 30-50, 50-200, >200 cm; qHeightclass 1000 tem 4000)    
+
+Plot 112: dendro 3x opgemeten, MAAR reg en veg enkel decade 2 en 3, niet opgemeten
+in de 1ste decade
+
 
 <!-- table(regeneration_by_plot_height$period, regeneration_by_plot_height$height_class, regeneration_by_plot_height$plottype) -->
 <!-- , ,  = CA -->
