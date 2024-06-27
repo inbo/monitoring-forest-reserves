@@ -56,9 +56,11 @@ path_to_datacontrol <- paste0(path_to_project, "/datacontrole/")
 Brondata Fieldmap: `path_to_fieldmap_db` aanpassen
 
 ```{r Path_tmp}
-path_to_fieldmap_db <-
-  "C:/03_BR/3_AanvraagGegevens/FOURCAST/BF_inbo23/FieldMapData_BF_inbo23.accdb"
+# path_to_fieldmap_db <-
+#   "C:/03_BR/3_AanvraagGegevens/FOURCAST/BF_inbo23/FieldMapData_BF_inbo23.accdb"
 
+path_to_fieldmap_db <-
+  "C:/03_BR/3_AanvraagGegevens/FOURCAST/FOURCAST_inbo24/FieldMapData_FOURCAST_inbo24.accdb"
 ```
 
 
@@ -195,7 +197,7 @@ write.xlsx(shoots_decaystage
 ```
 
 Enkel hoogtes van snags werden opgemeten, maar in database staan deze bomen 
-niet steeds als snag aangeduid:
+niet steeds als snag aangeduid - OPGELOST 27/6/2024
 
 ```{r snags}
 snags_error <- data_dendro %>% 
@@ -249,8 +251,11 @@ names(plotinfo)
 
 # plotinfo %>% filter(data_processed == FALSE) %>% nrow()
 table(plotinfo$data_processed)
-
+table(plotinfo$survey_trees)
 # not-processed = navigatieplot
+# FALSE  TRUE 
+#     1    57 
+# FALSE: = navigatieplot!! (forest_reesrve = NA)
 ```
 
 ## Load dendro data
