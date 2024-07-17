@@ -1,0 +1,804 @@
+---
+title: "Remote sensing INBO"
+subtitle: "Boomgegevens cirkelplots"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: TRUE
+      smooth_scroll: TRUE
+---
+
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 7,
+  fig.height = 3,
+  fig.align = TRUE)
+
+library(here)
+library(writexl)
+library(scales)
+library(sf)
+
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+
+```
+
+
+```{r Setup2}
+path_to_project <- "C:/03_BR/3_AanvraagGegevens/INBO_RemoteSensingData"
+path_to_project_teamdrive <- paste0(path_to_output_gdrive, "INBO_RemoteSensingData")
+
+path_to_datarequest <- paste0(path_to_project, "/output/")
+path_to_datarequest_teamdrive <- paste0(path_to_project_teamdrive, "/output/")
+path_to_html_teamdrive <- path_to_datarequest_teamdrive
+path_to_html <- path_to_datarequest
+
+path_to_datacontrol <- paste0(path_to_project_teamdrive, "/datacontrole/")
+
+```
+
+
+# Vraagstelling
+
+Testdata om boomsoortensamenstelling via remote sensing te bepalen.
+Vraag van luc DK ism Myrte Matthijs.
+
+Vraag vergelijkbaar met deze van [Digitaal Vlaanderen](https://drive.google.com/open?id=1UGECdg5Au7wzaFcoexkNqdCtubwXHxOf&usp=drive_fs). 
+
+
+**Concreet:**    
+
+- bomen uit alle CP’s - 1 tabel
+- dood en levend, op spilniveau (stems)
+- height en calc_height; snag; alive_dead; soort; diameter; jaartal
+- XY-coord Lambert 72 (positie) + link naar CP (shapefile)
+- bomen van opname die nauwste aansluit bij 2013-2015
+- shapefile met alle cirkelplots (perimeter van de proefvlakken)
+
+**Extra**
+
+- shapefile liggend dood hout
+- diameter en lengte liggend dood hout
+
+
+```{r results='hold', eval=TRUE}
+path_to_fieldmap_db
+path_to_datarequest
+path_to_datarequest_teamdrive
+
+```
+
+# Invoer gegevens
+
+## Load lookuplijsten
+
+```{r load_lkp}
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+
+  qIndShootCop <- sqlFetch(con, "qIndShootCop", stringsAsFactors = FALSE)
+  # deadw_test <- sqlFetch(con, "Deadwood_3eSET", stringsAsFactors = FALSE)
+  qAliveDead <- sqlFetch(con, "qAliveDead", stringsAsFactors = FALSE)
+  qSpecies <- sqlFetch(con, "qSpecies", stringsAsFactors = FALSE)
+  qDecaystage <- sqlFetch(con, "qdecaystage", stringsAsFactors = FALSE)
+  qIntactSnag <- sqlFetch(con, "qIntactSnag", stringsAsFactors = FALSE)
+
+  qcommonremark <- sqlFetch(con, "qcommonremark", stringsAsFactors = FALSE)
+  
+odbcClose(con)
+
+# 
+qIndShootCop <- qIndShootCop %>% select(ID, ind_sht_cop_txt = Value1)
+qIntactSnag <- qIntactSnag %>% select(ID, intact_snag_txt = Value1)
+qAliveDead <- qAliveDead %>% select(ID, alive_dead_txt = Value1)
+qSpecies <- qSpecies %>% select(ID, name_nl = Value1, name_sc = Value2)
+qDecaystage <- qDecaystage %>% select(ID, decaystage_txt = Value1)
+```
+
+## Load plotinfo
+
+Plotinfo samenstellen, zijnde plottype, naam forest_reserve en info over survey en data al dan niet processed.
+Bijkomend ook afmetingen cirkelplots uit plotdetails.
+
+Alle bosreservaten hebben een opname in periode 2, die loopt van 2010 tot 2018.
+
+```{r plotinfo, results = 'hide'}
+plotinfo_ <- load_plotinfo(database = path_to_fieldmap_db, 
+                          processed = FALSE, plottype = "CP")
+names(plotinfo_)
+table(plotinfo_$period, plotinfo_$year_dendro)
+table(plotinfo_$period, plotinfo_$forest_reserve)
+table(plotinfo_$forest_reserve, plotinfo_$period)
+# alle bosreservaten hebben een opname in periode 2
+# loopt van 2010 tot 2018
+
+```
+
+```{r}
+
+plotinfo_ %>% 
+  filter(data_processed == FALSE & survey_trees == TRUE & period == 2) %>% 
+  nrow() == 0
+
+plotinfo_ %>% 
+  filter(data_processed == TRUE& survey_trees == TRUE & period == 2) %>%
+  nrow()
+# 881
+```
+We selecteren de opnameperiode die het nauwste aansluit bij 2013-2015.
+Dat blijkt overal periode 2 te zijn.
+
+Alle cirkelplots uit periode 2 zijn processed.
+
+```{r}
+plotinfo <- plotinfo_ %>% 
+  filter(survey_trees & data_processed & period == 2)
+```
+
+We  voegen hier info mbt straal A3 en A4 aan toe.
+
+```{r plotdetails}
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+  plotdetails_ <- sqlFetch(con, "PlotDetails_2eSET", stringsAsFactors = FALSE)
+odbcClose(con)
+
+# names(plotdetails_)
+
+plotdetails <- plotdetails_ %>% 
+  mutate(period = 2) %>% 
+  select(plot_id = IDPlots, period, 
+         contains(c("rA")),
+         TresHoldDBH_Trees_A3_alive,
+         TresHoldDBH_Trees_A4_alive,
+         TresHoldDBH_Trees_A3_dead,
+         TresHoldDBH_Trees_A4_dead
+         ) 
+
+nrow(plotdetails)
+# 17
+table(plotdetails$rA4, plotdetails$rA3)
+  #     9  12  15  20
+  # 15   0   0  30   0
+  # 18 762   0   0   0
+  # 20   0   0   0  25
+  # 30   0  64   0   0
+
+```
+
+
+```{r combine}
+plotinfo <- plotinfo %>% 
+  inner_join(plotdetails, by = c("plot_id", "period"))
+
+n_distinct(plotinfo$plot_id) == nrow(plotinfo)
+```
+
+
+
+```{r table_A3A4}
+plotinfo %>% group_by(rA3, rA4) %>% 
+  summarize(n_plots = n()) %>% 
+  ungroup %>% 
+  select("aantal plots" = n_plots, 
+         "straal A3 (m)" = rA3,
+         "straal A4 (m)" = rA4,
+         ) %>% 
+  DT::datatable(filter = "none", selection = "none", rownames = FALSE, 
+                options = list(dom = 'tip'))
+
+```
+
+
+
+
+## Load XY
+
+Globale XY-coördinaten van centrum cirkelplots inladen:      
+
+- uit tabel `GPSReferencePoints` fieldmap    
+- uit shapefile voor Kluisbos   
+
+
+```{r xy_FM}
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+  xy_FM <- sqlFetch(con, "GPSReferencePoints", stringsAsFactors = FALSE)
+odbcClose(con)
+
+```
+
+
+```{r xy_shape, results= 'hide'}
+# shp_monitoring_CP <- paste0(path_to_shp, "alle_cirkelplots/Bosreservaten_allecirkels.shp")
+# shp_monitoring_all <- paste0(path_to_shp, "alle_proefvlakken_gecombineerd/boseco_alleproefvlakken_lam72_basisversie.shp")
+shp_pt_path <- paste0(path_to_shp, "alle_proefvlakken_gecombineerd/boseco_alleproefvlakken_centraalpunt_lam72_metinfo.shp")
+
+shp_pt <- sf::st_read(shp_pt_path) 
+
+class(shp_pt)
+# [1] "sf"         "data.frame"
+names(shp_pt)
+unique(shp_pt$PlotType)
+
+# check: 1 coordinaat per CP
+shp_pt %>% st_drop_geometry() %>%
+  filter(PlotType %in% c("circular nested plots", "circular plot")) %>% 
+  group_by(PlotID) %>% 
+  summarize(n = n()) %>% 
+  ungroup() %>% 
+  filter(n > 1) %>% nrow() == 0
+
+# dataframe met globale coördinaten
+xy_shp <- shp_pt %>% 
+  st_drop_geometry() %>% 
+  filter(PlotType %in% c("circular nested plots", "circular plot")) %>% 
+  select(plot_id = PlotID, x_shp = XLambert72, y_shp = YLambert72)
+
+names(xy_shp)
+summary(xy_shp)
+
+# xy_shp %>% filter(str_detect(Bos, "luisbos"))
+
+```
+
+Beide samenvoegen tot `xy_all`.
+
+```{r results='hide'}
+# unieke plotids < plotinfo
+names(plotinfo)
+names(xy_FM)
+nrow(plotinfo)
+range(plotinfo$plot_id) #[1]  101 2065
+
+# 
+xy_all <- plotinfo %>% 
+  dplyr::select(forest_reserve, plot_id) %>% 
+  left_join(xy_FM %>% select(plot_id = IDPlots, Xproj_m, Yproj_m))
+
+xy_all %>% filter(is.na(Xproj_m)) %>% select(forest_reserve) %>% unique()
+# => enkel Kluisbos ontbreekt
+xy_missing <- xy_all %>% filter(is.na(Xproj_m))
+xy_kluisbos <- xy_shp %>% 
+  filter(plot_id %in% xy_missing$plot_id)
+
+xy_all_ <- xy_all %>% 
+  left_join(xy_kluisbos) %>% 
+  mutate(Xproj_m = ifelse(is.na(Xproj_m), x_shp, Xproj_m)
+         , Yproj_m = ifelse(is.na(Yproj_m), y_shp, Yproj_m)
+  ) %>% 
+  select(-x_shp, -y_shp)
+xy_all_ %>% filter(is.na(Xproj_m)) %>% nrow() == 0
+
+xy_all <- xy_all_
+```
+
+```{r}
+names(xy_all)
+```
+
+## Load dendro data
+
+Standaard worden enkel de "processed" data ingeladen mbv de load-functies.
+
+```{r load_data, results='hide'}
+data_dendro <- load_data_dendrometry(database = path_to_fieldmap_db
+                                     , processed = TRUE 
+                                     , plottype = "CP"
+                                     , extra_variables = TRUE)
+
+data_shoots <- load_data_shoots(database = path_to_fieldmap_db
+                                , extra_variables = TRUE)
+
+```
+
+
+
+# Datacontrole
+
+Controle op trees en shoots, enkel deze behouden in CP's én juiste periode (mbv plotinfo).
+
+```{r check_trees, results='hide'}
+# trees
+incorrect_trees_ <- check_data_trees(database = path_to_fieldmap_db) 
+incorrect_trees <- incorrect_trees_ %>% 
+  inner_join(plotinfo %>% select(plot_id, period, forest_reserve)
+             , by = c("plot_id", "period"))
+
+nrow(incorrect_trees) # 286
+# view(incorrect_trees)
+
+incorrect_trees <- incorrect_trees %>% 
+  filter(!str_detect(aberrant_field, "iufro"))
+table(incorrect_trees$anomaly)
+# 2 times the same coppice_id                     missing 
+#                           6                           2 
+#     shifter in coppice tree             tree no coppice 
+#                           9                           1 
+#              tree not alive      walker in coppice tree 
+#                           4                           9 
+```
+
+```{r check_shoots, results='hide'}
+incorrect_shoots_ <- check_data_shoots(database = path_to_fieldmap_db)  
+
+incorrect_shoots <- incorrect_shoots_ %>% 
+  inner_join(plotinfo %>% select(plot_id, period, forest_reserve)
+             , by = c("plot_id", "period"))
+
+nrow(incorrect_shoots) # 77
+# view(incorrect_shoots)
+
+incorrect_shoots <- incorrect_shoots %>% 
+  filter(!str_detect(aberrant_field, "iufro"))
+
+table(incorrect_shoots$anomaly)
+table(incorrect_shoots$aberrant_field)
+```
+Incorrect
+
+```{r coppice, eval = FALSE}
+coppice <- incorrect_trees %>%
+  filter(str_detect(aberrant_field, "coppice") |
+           str_detect(anomaly, "coppice")) %>% 
+  filter(aberrant_field != "decay_stage")
+# 24
+
+write.xlsx(coppice
+           , paste0(path_to_datacontrol, "incorrect.xlsx")
+           , sheetName = "coppice"
+           , showNA = FALSE
+           , append = FALSE)
+```
+
+
+```{r not_alive, eval = FALSE}
+not_alive <- incorrect_trees %>% 
+  filter(str_detect(anomaly, "not alive")) %>% 
+  mutate(reden = "dode liggende boom moet bij deadwood, niet bij trees")
+# 4
+
+write.xlsx(not_alive
+           , paste0(path_to_datacontrol, "incorrect.xlsx")
+           , sheetName = "liggend_dood"
+           , showNA = FALSE
+           , append = TRUE) 
+```
+
+
+
+```{r snags, eval = FALSE}
+snags_intact <- incorrect_trees %>% 
+   filter(str_detect(aberrant_field, "ratio"))
+
+write.xlsx(snags_intact
+           , paste0(path_to_datacontrol, "incorrect.xlsx")
+           , sheetName = "snags_intact"
+           , showNA = FALSE
+           , append = TRUE) 
+```
+
+
+
+```{r link_to_layer_trees, eval = FALSE}
+link_to_layer_trees <- incorrect_shoots %>%
+  filter(str_detect(aberrant_field, "link_to_layer_trees"))
+
+write.xlsx(link_to_layer_trees
+           , paste0(path_to_datacontrol, "incorrect.xlsx")
+           , sheetName = "link_to_layer_trees"
+           , showNA = FALSE
+           , append = TRUE)
+```
+
+
+```{r link_to_layer_shoots, eval = FALSE}
+# link_to_layer_shoots <- incorrect_trees %>% 
+#   filter(str_detect(aberrant_field, "link_to_layer_shoots"))
+# 
+# write.xlsx(link_to_layer_shoots
+#            , paste0(path_to_datacontrol, "incorrect.xlsx")
+#            , sheetName = "link_to_layer_shoots"
+#            , showNA = FALSE
+#            , append = TRUE) 
+```
+
+Missing 
+
+```{r decay, eval = FALSE}
+decaystage <- incorrect_trees %>%
+  filter(str_detect(aberrant_field, "decay"))
+
+write.xlsx(decaystage
+           , paste0(path_to_datacontrol, "missing.xlsx")
+           , sheetName = "decaystage"
+           , showNA = FALSE
+           , append = FALSE)
+```
+
+```{r intact_snag, eval = FALSE}
+intact_snag <- incorrect_shoots %>%
+  filter(str_detect(aberrant_field, "intact_snag"))
+
+write.xlsx(intact_snag
+           , paste0(path_to_datacontrol, "missing.xlsx")
+           , sheetName = "intact_snag"
+           , showNA = FALSE
+           , append = TRUE)
+```
+
+```{r eval = FALSE}
+nrow(incorrect_trees) == nrow(decaystage) + nrow(snags_intact) +
+  nrow(coppice) + nrow(not_alive)
+
+nrow(incorrect_shoots) == nrow(intact_snag) + nrow(link_to_layer_trees)
+```
+
+
+
+# Herinvoer gegevens
+
+## Load dendro data
+
+Enkel data in CP's, periode 2 én processed: selectie mbv plotinfo (inner_join).
+
+```{r load_data2, results='hide'}
+# Standaard worden enkel de "processed" data ingeladen mbv de load-functies.
+data_dendro <- load_data_dendrometry(database = path_to_fieldmap_db
+                                     , plottype = "CP"
+                                     , extra_variables = TRUE) %>% 
+  inner_join(plotinfo %>% select(plot_id, period)
+             , by = c("plot_id", "period"))
+
+data_shoots <- load_data_shoots(database = path_to_fieldmap_db
+                                , extra_variables = TRUE)
+
+# door shoots en trees te combineren,  blijft enkel gewenst BR over
+data_stems  <- compose_stem_data(data_dendro, data_shoots
+                                 , extra_variables = TRUE)
+
+height_model <- load_height_models()
+
+# data deadwood hier niet nodig, maar wel om functies te kunnen runnen
+data_deadwood <- load_data_deadwood(database = path_to_fieldmap_db
+                                    , processed = TRUE) %>% 
+  inner_join(plotinfo %>% select(plot_id, period)
+             , by = c("plot_id", "period"))
+
+nrow(data_deadwood)
+```
+
+# Berekenen basisvariabelen
+
+Met behulp van het R-package `forrescalc` worden extra basisgegevens berekend, zoals:
+
+- calc_height
+
+Volgende functies worden gebruikt:   
+
+- `calc_variables_stem_level()` 
+- `calc_variables_tree_level()`
+
+
+```{r calc_stems_trees, results='hide'}
+data_stems_calc <- calc_variables_stem_level(data_stems, height_model)
+names(data_stems_calc)
+nrow(data_stems_calc) # 30184
+table(data_stems_calc$year)
+
+data_dendro_calc <- calc_variables_tree_level(data_dendro, data_stems_calc)
+names(data_dendro_calc)
+table(data_dendro_calc$year)
+
+```
+
+```{r calc_plot_level}
+# als referentie: totalen per KV
+dendro_by_plot  <- calculate_dendro_plot(data_dendro_calc, data_deadwood, plotinfo)
+table(dendro_by_plot$year)
+
+dendro_by_plot_species <- calculate_dendro_plot_species(data_dendro_calc, data_deadwood, plotinfo)
+# dendro <- calculate_dendrometry(data_dendro, data_deadwood, data_shoots, height_model, plotinfo)
+# waar survey_trees = TRUE, wordt een '0' toegekend, als er geen andere metingen zijn
+# DUS: als ik wegfilter obv data_processed, worden data NIET ingeladen,
+# MAAR omdat survey_trees = TRUE, wordt er in functie "calc_dendro_plot()" een '0' 
+# toegekend aan die non-processed plots ( 400, ...°)
+# DAAROM: hoger in chunck 'load_data' het argument processed = FALSE zetten
+# zdd dat deze toch meegenomen worden, en géén "0" toegekend krijgen.
+# OPGEPAST: er bij statistische verwerking wél voor zorgen dat deze plots niet meegenomen worden
+# ev. mbv lijstje "plots_to_exclude" obv processed = TRUE
+
+
+dendro <- list(dendro_by_plot = dendro_by_plot, dendro_by_plot_species = dendro_by_plot_species)
+
+```
+
+
+Info mbt enkel bole verwijderen uit de plot-level-resultaten.
+
+```{r results='hide'}
+names(dendro_by_plot)
+dendro_ <- lapply(dendro, 
+                  function(x) select(x, -contains(c("vol_deadw", "bole"))))
+```
+
+
+Plotinfo (`forest_reserve`) toevoegen aan de resultaten.
+
+```{r join_plottype_BR}
+dendro_plotinfo <- lapply(dendro_, function(x) 
+  left_join(x, plotinfo %>% select(plot_id, forest_reserve, period)
+            , by = c("plot_id", "period")))
+# lapply: same function over all elements of the list
+```
+
+
+```{r CreateSeparateDataframesDendro}
+for (tablename in names(dendro_plotinfo)) {
+     assign(tablename, dendro_plotinfo[[tablename]])
+} 
+
+```
+
+
+
+
+# Controle op NA's
+
+```{r results='hide'}
+names(data_dendro_calc)
+```
+
+```{r data_dendro_calc, results='hide'}
+col <- c("basal_area_alive_m2_ha","basal_area_dead_m2_ha", 
+         "vol_alive_m3_ha", "vol_dead_standing_m3_ha",
+         "vol_bole_alive_m3_ha","vol_bole_dead_m3_ha",
+         "number_of_trees_alive_ha", "number_of_trees_dead_ha")
+
+data_dendro_calc %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+
+```
+
+```{r dendro_by_plot, results='hide'}
+names(dendro_by_plot)
+col <- c("basal_area_alive_m2_ha","basal_area_dead_m2_ha", 
+         "number_of_tree_species", 
+         # "stems_per_tree", # wordt NA bij Ename: plots zonder trees
+         "vol_alive_m3_ha", "vol_dead_standing_m3_ha",
+         # "vol_bole_alive_m3_ha","vol_bole_dead_m3_ha",
+         "number_of_trees_ha", "stem_number_ha")
+
+dendro_by_plot %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+```
+
+# Coördinaten
+
+XY-coördinaten Lambert 72 (positie) : lokale coördinaten uit FM omzetten naar globale coördinaten
+
+```{r results='hide'}
+names(data_stems_calc)
+
+result_stems <- data_stems_calc %>% 
+  left_join(qSpecies, by = c("species" = "ID")) %>% 
+  left_join(qAliveDead, by = c("alive_dead" = "ID")) %>% 
+  left_join(qIntactSnag, by = c("intact_snag" = "ID")) %>% 
+  left_join(qIndShootCop, by = c("ind_sht_cop" = "ID")) %>%
+  left_join(qDecaystage, by = c("decaystage" = "ID")) %>% 
+  select(forest_reserve, plot_id, period, year, date_dendro
+         , plotarea_ha = totalplotarea_ha
+         , tree_measure_id, shoot_measure_id
+         , species, name_nl, name_sc
+         , alive_dead, alive_dead_txt
+         , intact_snag, intact_snag_txt
+         , ind_sht_cop, ind_sht_cop_txt
+         , dbh_mm, dbh_class_5cm,
+         , height_measured = height_m, height_modeled = calc_height_m
+         , decaystage, decaystage_txt
+         , x_local, y_local
+         ) %>% 
+  mutate(height_measured = round(height_measured, 1)
+         , height_modeled = round(height_modeled, 1))
+
+names(result_stems)
+summary(result_stems)
+```
+
+Toevoegen van globale XY-coördinaten van de kernvlaktes.
+Berekening van globale coördinaten obv lokale coördinaten. 
+
+```{r }
+XY_global <- xy_FM %>% 
+  select(plot_id = IDPlots, x_global_plot = Xproj_m, y_global_plot = Yproj_m) %>% # , Altitude_m
+  inner_join(plotinfo %>% select(plot_id))
+# geen periode: één plot doorheen de periodes ...
+
+```
+
+## TEMP - check coordinaten
+
+Zijn er van elke cirkelplot coördinaten?
+
+```{r}
+plotinfo_xy_global <- plotinfo %>% 
+  left_join(xy_FM %>% 
+              select(plot_id = IDPlots
+                     , x_global_plot = Xproj_m, y_global_plot = Yproj_m)) 
+
+no_xy <- plotinfo_xy_global %>% 
+  filter(is.na(x_global_plot) | is.na(y_global_plot))
+```
+
+XY ontbreekt voor Kluisbos, maar is wel beschikbaar in de shapefile.
+
+Zijn de coördinaten van de shapefile dezelfde als deze in FieldMap?
+
+NEE
+
+```{r vgl_xy_shp_fm}
+vgl <- plotinfo_xy_global %>% 
+  select(plot_id, forest_reserve, x_global_plot, y_global_plot) %>% 
+  left_join(xy_shp, by = c("plot_id"))
+
+names(vgl)
+
+t <- vgl %>% filter((abs(x_global_plot - x_shp) > 2) | 
+                      (abs(y_global_plot - y_shp) > 2))
+
+```
+
+
+## Toevoegen globale coördinaten plot
+
+Toevoegen coördinaten aan "dendro_by_plot".    
+
+We nemen de globale coördinaten over van de `GPSReferencePoints` uit Fieldmap.
+
+(Marc E., 16/7/24: *We hebben inderdaad plots heringemeten met FM. Zo was bv. het oorspronkelijke raster in de kernvlakte Kersselaerspleyn het theoretische rooster uit ArcGis (ArcView) en hebben we veel later enkele punten ge-gps't en van daaruit de feno's opnieuw ingemeten (en nu ligt het raster dan wel nogal scheef hé).*)
+
+> !! deze van Kluisbos zitten niet in tabel Fieldmap => moeten uit shp gehaald worden
+
+
+```{r}
+dendro_by_plot_ <- dendro_by_plot %>% 
+  left_join(XY_global, by = c("plot_id"))
+
+dendro_by_plot_ %>% filter(is.na(x_global_plot) | is.na(y_global_plot)) %>% nrow() == 0
+names(dendro_by_plot_)  
+
+dendro_by_plot <- dendro_by_plot_
+
+```
+
+
+
+## Berekenen globale coördinaten stems
+
+Obv plot-coördinaten:   
+
+- tabel `GPSReferencePoints` uit Fieldmap
+- shapefile voor Kluisbos
+
+
+
+```{r}
+result_stems_ <- result_stems %>% 
+  left_join(XY_global, by = c("plot_id")) %>% 
+  mutate(x_global = x_local + x_global_plot,
+         y_global = y_local + x_global_plot) %>% 
+  select(-x_global_plot, -x_global_plot)
+
+result_stems_ %>% filter(is.na(x_global) | is.na(y_global)) %>% nrow() == 0
+names(result_stems_)  
+  
+result_stems <- result_stems_
+  
+```
+
+# Export
+
+De gegegevens op spilniveau - "result_stems.csv" - worden weggeschreven naar de c-schijf en de teamdrive.
+
+De shapefile met de perimeters van de kernvlaktes staat op dezelfde plaats (als zip). 
+
+
+**Enkele verduidelijkingen:**    
+
+* "plot_id" = link naar de shapefile van de kernvlaktes (IDPlots)    
+* height_measured = effectief gemeten    
+* height_modeled = op basis van dh-curves   
+* x_global & y_global: Lambert 72   
+* x_local & y_local: coördinaten ten opzichte van een centraal punt in de kernvlakte   
+
+
+```{r}
+path_to_datarequest
+path_to_datarequest_teamdrive
+
+```
+
+
+
+```{r save, eval=FALSE}
+write.csv2(result_stems
+           , paste0(path_to_datarequest,
+                    "result_stems_cirkelplots.csv")
+           , na = "")
+
+
+# write.xlsx(result_stems
+#            , paste0(path_to_datarequest, "result_stems_cirkelplots.xlsx")
+#            , sheetName = "stems"
+#            , showNA = FALSE
+#            , append = FALSE) 
+
+```
+
+
+```{r save_teamdrive, eval=FALSE}
+write.csv2(result_stems
+           , paste0(path_to_datarequest_teamdrive,
+                    "result_stems_cirkelplots.csv")
+           , na = "")
+
+# write.xlsx(result_stems
+#            , paste0(path_to_datarequest_teamdrive,
+#                     "result_stems_cirkelplots.xlsx")
+#            , sheetName = "stems"
+#            , showNA = FALSE
+#            , append = FALSE) 
+
+```
+
+
+Ter aanvulling ook de data op plotniveau exporteren.
+XY-coordinaten kunnen uit de shapefile gehaald worden
+
+```{r save2, eval=FALSE}
+write.xlsx(dendro_by_plot
+           , paste0(path_to_datarequest, "dendro_by_plot.xlsx")
+           , sheetName = "dendro"
+           , showNA = FALSE
+           , append = FALSE) 
+
+```
+
+```{r save_teamdrive2, eval=FALSE}
+write.xlsx(dendro_by_plot
+           , paste0(path_to_datarequest_teamdrive,
+                    "dendro_by_plot.xlsx")
+           , sheetName = "dendro"
+           , showNA = FALSE
+           , append = FALSE) 
+
+```
+
+# Copy html to teamdrive
+
+Na knitting - manueel
+
+```{r eval = FALSE}
+# Specify the path of the file you want to copy
+source_file <- here::here(paste0("Scripts/AanvraagGegevens/INBO_RemoteSensingData/RemoteSensing_trees_cirkelplots.html"))
+
+# Specify the destination directory where you want to copy the file
+destination_dir <- path_to_html_teamdrive
+
+# Copy the file to the destination directory
+file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
+# ? file.copy
+```
