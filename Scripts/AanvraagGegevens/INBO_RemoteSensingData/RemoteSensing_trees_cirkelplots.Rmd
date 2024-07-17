@@ -259,7 +259,7 @@ summary(xy_shp)
 
 Beide samenvoegen tot `xy_all`.
 
-```{r results='hide'}
+```{r xy_all, results='hide'}
 # unieke plotids < plotinfo
 names(plotinfo)
 names(xy_FM)
@@ -279,13 +279,14 @@ xy_kluisbos <- xy_shp %>%
 
 xy_all_ <- xy_all %>% 
   left_join(xy_kluisbos) %>% 
-  mutate(Xproj_m = ifelse(is.na(Xproj_m), x_shp, Xproj_m)
-         , Yproj_m = ifelse(is.na(Yproj_m), y_shp, Yproj_m)
+  mutate(x_global_plot = ifelse(is.na(Xproj_m), x_shp, Xproj_m)
+         , y_global_plot = ifelse(is.na(Yproj_m), y_shp, Yproj_m)
   ) %>% 
-  select(-x_shp, -y_shp)
-xy_all_ %>% filter(is.na(Xproj_m)) %>% nrow() == 0
+  select(-x_shp, -y_shp, -Xproj_m, -Yproj_m)
+xy_all_ %>% filter(is.na(x_global_plot)) %>% nrow() == 0
 
 xy_all <- xy_all_
+
 ```
 
 ```{r}
@@ -513,19 +514,8 @@ dendro_by_plot  <- calculate_dendro_plot(data_dendro_calc, data_deadwood, plotin
 table(dendro_by_plot$year)
 
 dendro_by_plot_species <- calculate_dendro_plot_species(data_dendro_calc, data_deadwood, plotinfo)
-# dendro <- calculate_dendrometry(data_dendro, data_deadwood, data_shoots, height_model, plotinfo)
-# waar survey_trees = TRUE, wordt een '0' toegekend, als er geen andere metingen zijn
-# DUS: als ik wegfilter obv data_processed, worden data NIET ingeladen,
-# MAAR omdat survey_trees = TRUE, wordt er in functie "calc_dendro_plot()" een '0' 
-# toegekend aan die non-processed plots ( 400, ...°)
-# DAAROM: hoger in chunck 'load_data' het argument processed = FALSE zetten
-# zdd dat deze toch meegenomen worden, en géén "0" toegekend krijgen.
-# OPGEPAST: er bij statistische verwerking wél voor zorgen dat deze plots niet meegenomen worden
-# ev. mbv lijstje "plots_to_exclude" obv processed = TRUE
-
 
 dendro <- list(dendro_by_plot = dendro_by_plot, dendro_by_plot_species = dendro_by_plot_species)
-
 ```
 
 
@@ -567,7 +557,7 @@ names(data_dendro_calc)
 ```{r data_dendro_calc, results='hide'}
 col <- c("basal_area_alive_m2_ha","basal_area_dead_m2_ha", 
          "vol_alive_m3_ha", "vol_dead_standing_m3_ha",
-         "vol_bole_alive_m3_ha","vol_bole_dead_m3_ha",
+         # "vol_bole_alive_m3_ha","vol_bole_dead_m3_ha",
          "number_of_trees_alive_ha", "number_of_trees_dead_ha")
 
 data_dendro_calc %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
@@ -586,9 +576,83 @@ col <- c("basal_area_alive_m2_ha","basal_area_dead_m2_ha",
 dendro_by_plot %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
 ```
 
-# Coördinaten
+# Coördinaten toevoegen
 
 XY-coördinaten Lambert 72 (positie) : lokale coördinaten uit FM omzetten naar globale coördinaten
+
+## Check coordinaten - TEMP
+
+Zijn de coördinaten van de shapefile dezelfde als deze in FieldMap? NEE
+
+```{r eval = FALSE}
+plotinfo_xy_global <- plotinfo %>% 
+  left_join(xy_FM %>% 
+              select(plot_id = IDPlots
+                     , x_global_plot = Xproj_m, y_global_plot = Yproj_m)) 
+
+```
+
+```{r vgl_xy_shp_fm, eval = FALSE}
+vgl <- plotinfo_xy_global %>% 
+  select(plot_id, forest_reserve, x_global_plot, y_global_plot) %>% 
+  left_join(xy_shp, by = c("plot_id"))
+
+names(vgl)
+
+t <- vgl %>% filter((abs(x_global_plot - x_shp) > 2) | 
+                      (abs(y_global_plot - y_shp) > 2))
+t$plot_id 
+# 3 records: 2x ename, 1x kerss: 1305 1308 2025
+```
+
+## Berekenen globale coördinaten
+
+We nemen de globale coördinaten voor het centraal punt over van 
+
+- shapefile `boseco_alleproefvlakken_centraalpunt_lam72_metinfo.shp` voor Kluisbos    
+- tabel `GPSReferencePoints` uit Fieldmap voor de overige bosreservaten     
+
+(Marc E., 16/7/24: *We hebben inderdaad plots heringemeten met FM. Zo was bv. het oorspronkelijke raster in de kernvlakte Kersselaerspleyn het theoretische rooster uit ArcGis (ArcView) en hebben we veel later enkele punten ge-gps't en van daaruit de feno's opnieuw ingemeten (en nu ligt het raster dan wel nogal scheef hé).*)
+
+De globale coördinaten op boomniveau worden berekend obv hun lokale coördinaten in 
+combinatie met de globale coördinaten van het centrale punt.
+
+
+### Op plotniveau
+
+Toevoegen aan `dendro_by_plot`.
+
+```{r}
+dendro_by_plot_ <- dendro_by_plot %>% 
+  left_join(xy_all, by = c("plot_id", "forest_reserve"))
+
+dendro_by_plot_ %>% filter(is.na(x_global_plot) | is.na(y_global_plot)) %>% nrow() == 0
+names(dendro_by_plot_)  
+
+dendro_by_plot <- dendro_by_plot_
+
+```
+
+
+### Op spilniveau
+
+Toevoegen aan `data_stems`.
+
+```{r}
+data_stems_calc_ <- data_stems_calc %>% 
+  left_join(xy_all, by = c("plot_id", "forest_reserve")) %>% 
+  mutate(x_global = x_local + x_global_plot,
+         y_global = y_local + x_global_plot) %>% 
+  select(-x_global_plot, -x_global_plot)
+
+data_stems_calc_ %>% filter(is.na(x_global) | is.na(y_global)) %>% nrow() == 0
+# names(data_stems_calc_)  
+  
+data_stems_calc <- data_stems_calc_
+  
+```
+
+# Variabelen output
 
 ```{r results='hide'}
 names(data_stems_calc)
@@ -610,6 +674,7 @@ result_stems <- data_stems_calc %>%
          , height_measured = height_m, height_modeled = calc_height_m
          , decaystage, decaystage_txt
          , x_local, y_local
+         , x_global, y_global
          ) %>% 
   mutate(height_measured = round(height_measured, 1)
          , height_modeled = round(height_modeled, 1))
@@ -618,100 +683,11 @@ names(result_stems)
 summary(result_stems)
 ```
 
-Toevoegen van globale XY-coördinaten van de kernvlaktes.
-Berekening van globale coördinaten obv lokale coördinaten. 
-
-```{r }
-XY_global <- xy_FM %>% 
-  select(plot_id = IDPlots, x_global_plot = Xproj_m, y_global_plot = Yproj_m) %>% # , Altitude_m
-  inner_join(plotinfo %>% select(plot_id))
-# geen periode: één plot doorheen de periodes ...
-
-```
-
-## TEMP - check coordinaten
-
-Zijn er van elke cirkelplot coördinaten?
-
-```{r}
-plotinfo_xy_global <- plotinfo %>% 
-  left_join(xy_FM %>% 
-              select(plot_id = IDPlots
-                     , x_global_plot = Xproj_m, y_global_plot = Yproj_m)) 
-
-no_xy <- plotinfo_xy_global %>% 
-  filter(is.na(x_global_plot) | is.na(y_global_plot))
-```
-
-XY ontbreekt voor Kluisbos, maar is wel beschikbaar in de shapefile.
-
-Zijn de coördinaten van de shapefile dezelfde als deze in FieldMap?
-
-NEE
-
-```{r vgl_xy_shp_fm}
-vgl <- plotinfo_xy_global %>% 
-  select(plot_id, forest_reserve, x_global_plot, y_global_plot) %>% 
-  left_join(xy_shp, by = c("plot_id"))
-
-names(vgl)
-
-t <- vgl %>% filter((abs(x_global_plot - x_shp) > 2) | 
-                      (abs(y_global_plot - y_shp) > 2))
-
-```
-
-
-## Toevoegen globale coördinaten plot
-
-Toevoegen coördinaten aan "dendro_by_plot".    
-
-We nemen de globale coördinaten over van de `GPSReferencePoints` uit Fieldmap.
-
-(Marc E., 16/7/24: *We hebben inderdaad plots heringemeten met FM. Zo was bv. het oorspronkelijke raster in de kernvlakte Kersselaerspleyn het theoretische rooster uit ArcGis (ArcView) en hebben we veel later enkele punten ge-gps't en van daaruit de feno's opnieuw ingemeten (en nu ligt het raster dan wel nogal scheef hé).*)
-
-> !! deze van Kluisbos zitten niet in tabel Fieldmap => moeten uit shp gehaald worden
-
-
-```{r}
-dendro_by_plot_ <- dendro_by_plot %>% 
-  left_join(XY_global, by = c("plot_id"))
-
-dendro_by_plot_ %>% filter(is.na(x_global_plot) | is.na(y_global_plot)) %>% nrow() == 0
-names(dendro_by_plot_)  
-
-dendro_by_plot <- dendro_by_plot_
-
-```
-
-
-
-## Berekenen globale coördinaten stems
-
-Obv plot-coördinaten:   
-
-- tabel `GPSReferencePoints` uit Fieldmap
-- shapefile voor Kluisbos
-
-
-
-```{r}
-result_stems_ <- result_stems %>% 
-  left_join(XY_global, by = c("plot_id")) %>% 
-  mutate(x_global = x_local + x_global_plot,
-         y_global = y_local + x_global_plot) %>% 
-  select(-x_global_plot, -x_global_plot)
-
-result_stems_ %>% filter(is.na(x_global) | is.na(y_global)) %>% nrow() == 0
-names(result_stems_)  
-  
-result_stems <- result_stems_
-  
-```
 
 # Export
 
-De gegegevens op spilniveau - "result_stems.csv" - worden weggeschreven naar de c-schijf en de teamdrive.
+De gegegevens op spilniveau - "result_stems.csv" - worden weggeschreven naar de 
+c-schijf en de teamdrive.
 
 De shapefile met de perimeters van de kernvlaktes staat op dezelfde plaats (als zip). 
 
@@ -722,7 +698,7 @@ De shapefile met de perimeters van de kernvlaktes staat op dezelfde plaats (als 
 * height_measured = effectief gemeten    
 * height_modeled = op basis van dh-curves   
 * x_global & y_global: Lambert 72   
-* x_local & y_local: coördinaten ten opzichte van een centraal punt in de kernvlakte   
+* x_local & y_local: coördinaten ten opzichte van centrum cirkelplot   
 
 
 ```{r}
@@ -739,13 +715,6 @@ write.csv2(result_stems
                     "result_stems_cirkelplots.csv")
            , na = "")
 
-
-# write.xlsx(result_stems
-#            , paste0(path_to_datarequest, "result_stems_cirkelplots.xlsx")
-#            , sheetName = "stems"
-#            , showNA = FALSE
-#            , append = FALSE) 
-
 ```
 
 
@@ -755,18 +724,10 @@ write.csv2(result_stems
                     "result_stems_cirkelplots.csv")
            , na = "")
 
-# write.xlsx(result_stems
-#            , paste0(path_to_datarequest_teamdrive,
-#                     "result_stems_cirkelplots.xlsx")
-#            , sheetName = "stems"
-#            , showNA = FALSE
-#            , append = FALSE) 
-
 ```
 
 
 Ter aanvulling ook de data op plotniveau exporteren.
-XY-coordinaten kunnen uit de shapefile gehaald worden
 
 ```{r save2, eval=FALSE}
 write.xlsx(dendro_by_plot
@@ -775,6 +736,11 @@ write.xlsx(dendro_by_plot
            , showNA = FALSE
            , append = FALSE) 
 
+write.xlsx(dendro_by_plot_species
+           , paste0(path_to_datarequest, "dendro_by_plot.xlsx")
+           , sheetName = "dendro_by_species"
+           , showNA = FALSE
+           , append = TRUE) 
 ```
 
 ```{r save_teamdrive2, eval=FALSE}
@@ -785,7 +751,14 @@ write.xlsx(dendro_by_plot
            , showNA = FALSE
            , append = FALSE) 
 
+write.xlsx(dendro_by_plot_species
+           , paste0(path_to_datarequest_teamdrive, 
+                    "dendro_by_plot.xlsx")
+           , sheetName = "dendro_by_species"
+           , showNA = FALSE
+           , append = TRUE) 
 ```
+
 
 # Copy html to teamdrive
 
