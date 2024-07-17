@@ -39,6 +39,7 @@ path_to_forresdat_data <- paste0(path_to_git_forresdat, "data/") # tsv
 path_to_data <- paste0(path_to_dataverwerking, "Data/") 
 path_to_RData <- paste0(path_to_dataverwerking, "RData/")
 
+
 # Output ----
 path_to_plotlevel_csv <- paste0(path_to_dataverwerking, "Output/_plot-level-data/") 
 path_to_lulists_csv <- paste0(path_to_dataverwerking, "Output/_qXX_lookuplijsten/") 
@@ -86,6 +87,12 @@ path_to_heightmodels_teamdrive <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverw
 # Data-aanvragen ------
 path_to_datarequests <- "C:/03_BR/3_Aanvraag_gegevens/"
 path_to_datarequests_gdrive <- path_to_output_gdrive
+
+
+
+# Shapefiles intensieve monitoring ---------
+path_to_shp <- paste0(path_to_datarequests_gdrive, "00_METADATA-ALL_PLOTS/GIS-lagen_bosreservaten/")
+
 
 
 # Oude Paths --------
