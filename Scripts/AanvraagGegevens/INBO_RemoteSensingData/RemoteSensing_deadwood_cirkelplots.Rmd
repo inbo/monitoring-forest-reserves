@@ -58,24 +58,19 @@ path_to_datacontrol <- paste0(path_to_project_teamdrive, "/datacontrole/")
 
 # Vraagstelling
 
-> TO DO: enkel weten welke XY: van shp of van tbl Fieldmap
-shp sowieso voor Kluisbos
+Testdata om hoeveelheid dood hout via remote sensing te bepalen.    
 
-> ook nog XY start en einde van elke cfr mail van Peter: via accesdb met X en Y voor start en einde
-dan met Chatgpt er een lijn van maken
-zie "## Load XY deadwood"
+Vraag van luc DK ism Myrte Matthijs:     
 
-> Enkel nodig voor cirkelplots (samen met deadwood volume per plot (zie script staande bomen)
+ - shapefile met lijnen liggend dood hout voor controle op scherm (enkel CP's)
+ - volume logs per plot ter validatie
 
->Volgens Luc eerder voor controle op scherm, en volume logs per plot ter validatie
+Zie ook script "RemoteSensing_trees_cirkelplots.Rmd" voor:    
 
+- staand dood hout (samen met levende bomen): op spilniveau    
+- volume logs op plotniveau (`dendro_by_plot`)     
 
-Testdata om hoeveelheid dood hout via remote sensing te bepalen.
-Vraag van luc DK ism Myrte Matthijs.
-
-Staand dood hout samen met levende bomen aangeleverd mbv script "RemoteSensing_trees_cirkelplots.Rmd". 
-
-Dit script focust op liggend dood hout.
+Onderstaand script focust op individuele elementen liggend dood hout.
 
 **Concreet:**    
 
@@ -207,19 +202,89 @@ plotinfo %>% group_by(rA3, rA4) %>%
 ```
 
 
-
-
 ## Load XY
 
-Globale XY-coördinaten van centrum cirkelplots inladen.
+Globale XY-coördinaten van centrum cirkelplots inladen:      
 
-> mogelijks moeten we deze van de shapefile gebruiken, zie ander script staande bomen
+- uit tabel `GPSReferencePoints` fieldmap    
+- uit shapefile voor Kluisbos   
 
-```{r}
+
+```{r xy_FM}
 con <- odbcConnectAccess2007(path_to_fieldmap_db)
-  GPSReferencePoints <- sqlFetch(con, "GPSReferencePoints", stringsAsFactors = FALSE)
+  xy_FM <- sqlFetch(con, "GPSReferencePoints", stringsAsFactors = FALSE)
 odbcClose(con)
 
+```
+
+
+```{r xy_shape, results= 'hide'}
+# shp_monitoring_CP <- paste0(path_to_shp, "alle_cirkelplots/Bosreservaten_allecirkels.shp")
+# shp_monitoring_all <- paste0(path_to_shp, "alle_proefvlakken_gecombineerd/boseco_alleproefvlakken_lam72_basisversie.shp")
+shp_pt_path <- paste0(path_to_shp, "alle_proefvlakken_gecombineerd/boseco_alleproefvlakken_centraalpunt_lam72_metinfo.shp")
+
+shp_pt <- sf::st_read(shp_pt_path) 
+
+class(shp_pt)
+# [1] "sf"         "data.frame"
+names(shp_pt)
+unique(shp_pt$PlotType)
+
+# check: 1 coordinaat per CP
+shp_pt %>% st_drop_geometry() %>%
+  filter(PlotType %in% c("circular nested plots", "circular plot")) %>% 
+  group_by(PlotID) %>% 
+  summarize(n = n()) %>% 
+  ungroup() %>% 
+  filter(n > 1) %>% nrow() == 0
+
+# dataframe met globale coördinaten
+xy_shp <- shp_pt %>% 
+  st_drop_geometry() %>% 
+  filter(PlotType %in% c("circular nested plots", "circular plot")) %>% 
+  select(plot_id = PlotID, x_shp = XLambert72, y_shp = YLambert72)
+
+names(xy_shp)
+summary(xy_shp)
+
+# xy_shp %>% filter(str_detect(Bos, "luisbos"))
+
+```
+
+Beide samenvoegen tot `xy_all`.
+
+```{r xy_all, results='hide'}
+# unieke plotids < plotinfo
+names(plotinfo)
+names(xy_FM)
+nrow(plotinfo)
+range(plotinfo$plot_id) #[1]  101 2065
+
+# 
+xy_all <- plotinfo %>% 
+  dplyr::select(forest_reserve, plot_id) %>% 
+  left_join(xy_FM %>% select(plot_id = IDPlots, Xproj_m, Yproj_m))
+
+xy_all %>% filter(is.na(Xproj_m)) %>% select(forest_reserve) %>% unique()
+# => enkel Kluisbos ontbreekt
+xy_missing <- xy_all %>% filter(is.na(Xproj_m))
+xy_kluisbos <- xy_shp %>% 
+  filter(plot_id %in% xy_missing$plot_id)
+
+xy_all_ <- xy_all %>% 
+  left_join(xy_kluisbos) %>% 
+  mutate(x_global_plot = ifelse(is.na(Xproj_m), x_shp, Xproj_m)
+         , y_global_plot = ifelse(is.na(Yproj_m), y_shp, Yproj_m)
+  ) %>% 
+  select(-x_shp, -y_shp, -Xproj_m, -Yproj_m)
+xy_all_ %>% filter(is.na(x_global_plot)) %>% nrow() == 0
+
+xy_all <- xy_all_
+
+```
+
+```{r}
+names(xy_all)
 ```
 
 ## Load dendro data
@@ -243,6 +308,11 @@ data_deadwood <- load_data_deadwood(database = path_to_fieldmap_db
 
 
 ## Load XY deadwood
+
+
+> ook nog XY start en einde van elke cfr mail van Peter: via accesdb met X en Y voor start en einde
+dan met Chatgpt er een lijn van maken
+zie "## Load XY deadwood"
 
 > cfr Peter: 
 hierbij de Deadwood_data van alle cirkels ingemeten in de 3 meetperiodes (bron dBEls) in 3 xls files !
