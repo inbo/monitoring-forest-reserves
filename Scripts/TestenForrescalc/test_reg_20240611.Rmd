@@ -1,0 +1,418 @@
+---
+title: "Dataverwerking - regeneration"
+subtitle: "Wijnendale - cirkelplots & kernvlakte"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: TRUE
+      smooth_scroll: TRUE
+---
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 7,
+  fig.height = 3,
+  fig.align = TRUE)
+
+library(here)
+library(writexl)
+library(scales)
+
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+
+```
+
+
+```{r Setup2, eval = FALSE}
+forestreserve <- "Wijnendalebos"
+forestreserve_short <- forestreserve
+forestreserve_short <- "Wijnendale"
+# plot_type <- "CA"
+# plot_type <- "CP"
+
+forestreserve_folder <- paste0(path_to_reserves, "4b_Wijnendale")
+
+path_to_datarequest <- paste0(forestreserve_folder, "/verwerking_2024_1e2e3eSET/output_forrescalc/")
+path_to_datarequest_teamdrive <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverwerking/per_gebied/2024_", forestreserve_short, "/03_output_R_plotlevel/")
+path_to_html_teamdrive <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverwerking/per_gebied/2024_", forestreserve_short, "/")
+
+# plots_to_exclude <- c(701, 707, 709, 727, 728, 738, 739, 740, 759, 760)
+
+path_to_datacontrol <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverwerking/per_gebied/2024_", forestreserve_short, "/datacontrole/")
+
+```
+
+
+TIJDELIJK `path_to_fieldmap_db` aanpassen naar export van wijnendale en everzwijnbad uit moederdb (4/3/2024)
+
+```{r Path_tmp}
+path_to_fieldmap_db <- "C:/03_BR_db_monitoring/3_db_Els_deel2_Wijn_Ever/FieldMapData_3_db_Els_deel2_Wijn_Ever.accdb"
+```
+
+
+
+
+
+# Vraagstelling
+
+Aanpassing reg testen zoals voorgesteld door Els L. 
+
+      plotarea_a1_ha = min(.data$plotarea_ha),
+      plotarea_a2_ha = max(.data$plotarea_ha),
+      
+ipv
+      
+      plotarea_a1_ha = max(.data$plotarea_ha *
+                             (.data$subcircle == "A1" | is.na(subcircle))),
+      # "or is.na(subcircle)": to account for plots with no regeneration at all
+      plotarea_a2_ha = max(.data$plotarea_ha *
+                             (.data$subcircle == "A2"| is.na(subcircle))),
+
+      established_interval = sum_intervals(
+          var_min = .data$min_number_established,
+          var_max = .data$max_number_established,
+          transformation = "log", na_rm = TRUE
+        ),
+      seedlings_interval =
+        sum_intervals(
+          var_min = .data$min_number_seedlings,
+          var_max = .data$max_number_seedlings,
+          transformation = "log", na_rm = TRUE
+        ),
+      rubbing_damage_nr_established =
+        sum(.data$rubbing_damage_established, na.rm = TRUE),
+      not_na_rubbing_established =
+        sum(!is.na(.data$rubbing_damage_established)),
+      rubbing_damage_nr_seedlings =
+        sum(.data$rubbing_damage_seedlings, na.rm = TRUE),
+      not_na_rubbing_seedlings = sum(!is.na(.data$rubbing_damage_seedlings)),
+      approx_nr_established =
+        sum(.data$approx_nr_established, na.rm = TRUE),
+      approx_nr_seedlings = sum(.data$approx_nr_seedlings, na.rm = TRUE)
+    ) %>%
+    ungroup() %>%
+    mutate(
+      plotarea_a1_ha = ifelse(plotarea_a1_ha == 0,
+                              plotarea_a2_ha,
+                              plotarea_a1_ha),
+      # to account for plots with established regeneration, but no seedlings
+      plotarea_a2_ha = ifelse(plotarea_a2_ha == 0,
+                              plotarea_a1_ha,
+                              plotarea_a2_ha),
+      # to account for plots with seedlings, but no established regeneration
+
+<br>
+
+
+```{r results='hold', eval=TRUE}
+path_to_forresdat_data
+path_to_analysis_set_db
+path_to_plotlevel_csv
+path_to_treelevel_csv
+path_to_output_gdrive
+path_to_meetgegevens
+
+```
+
+# Load plotinfo
+
+Plotinfo samenstellen, zijnde plottype, naam forest_reserve en info over survey en data al dan niet processed.
+Wegschrijven naar git, access en opslaan als csv
+
+```{r plotinfo_load}
+plotinfo <- load_plotinfo(database = path_to_fieldmap_db) 
+names(plotinfo)
+```
+# Load lookuplijsten
+
+```{r load_lkp}
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+
+  qSpecies <- sqlFetch(con, "qSpecies", stringsAsFactors = FALSE)
+
+  qHeightClass_regeneration <- sqlFetch(con, "qHeightClass_regeneration", stringsAsFactors = FALSE)
+  qnumber_regeneration_classes <- sqlFetch(con, "qnumber_regeneration_classes", stringsAsFactors = FALSE)
+  
+  qcommonremark <- sqlFetch(con, "qcommonremark", stringsAsFactors = FALSE)
+  
+odbcClose(con)
+
+```
+
+# Load regeneration
+
+```{r load_reg}
+data_regeneration <-
+  load_data_regeneration(
+    database = path_to_fieldmap_db,
+    processed = TRUE
+  ) 
+# %>% 
+#   filter(forest_reserve == forestreserve)
+
+data_regeneration_CP <- data_regeneration %>% filter(plottype == "CP")
+data_regeneration_CA <- data_regeneration %>% filter(plottype == "CA")
+
+data_regeneration_testarea <- data_regeneration %>% filter(is.na(plotarea_ha))
+
+```
+
+
+Velden `data_regeneration`:  
+
+- number_class: 1 tem 1001 (LU-list)
+(1, 2-5, 6-10, 11-20, 21-40, 41-60,61-100, >100, >1000 --> 1,3,8,15,30,50,80,101,1001)    
+
+- nr_of_regeneration: exact aantal    
+
+- rubbing_damage_number    
+
+- rubbing_damage_perc: procentueel tov totaal aantal 
+
+- approx_nr_regeneration: mid-waarde cfr Kris van interval    
+
+- min_number_of_regeneration: exacte waarde OF min-waarde interval   
+
+- max_number_of_regeneration: exacte waarde OF max-waarde interval    
+
+- subcircle: A1 of A2: seedlings vs established   
+
+- subcirclearea_ha: enkel berekend bij CP's (als `r_A1` & `r_A2` bestaa,); NA bij KV's    
+
+- plotarea_ha:     
+
+  * CP's: steeds gelijk aan subcirclearea_ha    
+  * KV's (als (1) niet kan, dan (2) en dan pas (3)):   
+      (1) length_core_area_m * width_core_area_m OF    
+      (2) core_area_ha < Area_ha uit Plotdetails OF    
+      (3) totalplotarea_ha < Area_ha of Area_m2 uit layer Plots    
+           
+
+
+```{r}
+select_colnames_reg <- data_regeneration %>% 
+  select(plot_id, subplot_id, plottype, forest_reserve
+         , period, year
+         , plotarea_ha, totalplotarea_ha
+         , subcircle, subcirclearea_ha, r_A1, r_A2
+         , height_class, species, number_class, nr_of_regeneration
+         , approx_nr_regeneration
+         , min_number_of_regeneration, max_number_of_regeneration
+         , rubbing_damage_number, rubbing_damage_perc
+         ) %>% 
+  colnames()
+
+```
+
+
+```{r}
+data_regeneration_CP <- data_regeneration_CP %>% 
+  select(all_of(select_colnames_reg))
+
+data_regeneration_CA <- data_regeneration_CA %>% 
+  select(all_of(select_colnames_reg))
+
+```
+
+# Calculate regeneration 
+
+```{r calc_reg}
+regeneration <- calculate_regeneration(data_regeneration)
+
+```
+
+
+```{r CreateSeparateDataframesReg}
+for (tablename in names(regeneration)) {
+     assign(tablename, regeneration[[tablename]])
+} 
+
+```
+
+
+```{r}
+names(regeneration_by_plot)
+
+
+select_colnames_reg_calc <- regeneration_by_plot %>% 
+  select(plot_id, subplot_id, plottype, 
+         , period, year
+         , number_of_tree_species, nr_of_tree_species_established
+         , approx_nr_established_ha, approx_nr_seedlings_ha 
+         , rubbing_damage_nr_established_ha
+         , rubbing_damage_nr_seedlings_ha
+         , approx_rubbing_damage_perc_established
+         ) %>% 
+  colnames()
+```
+
+
+# Check subcircle_area
+
+Code Els ok?
+
+JA, antwoord github:
+
+"Is inderdaad OK zo (denk ik toch).
+Ik dacht dat - indien er geen verjonging was (geen seedlings én geen established) - `plotarea_ha` dan NA zou zijn bij de CP's, net als `subcircle` en `subcirclearea_ha`.
+Maar blijkbaar is dat toch niet het geval, vroeger reeds aangepast in `load_data_regeneration()`.
+Stom, wellicht overzicht wat verloren, bij 't stap voor stap foutjes oplossen.
+En iedereen heeft zijn eigen logica waar de ander dan soms wat verloren in loopt ...
+We vullen elkaar goed aan ;-)"
+
+```{r CP}
+t <- data_regeneration_CP %>% 
+  filter(period == 2 & plot_id %in% c(111, 135, 130, 112))
+t6 <- data_regeneration_CP %>% 
+  filter(period == 3 & plot_id %in% c(112))
+
+t_calc <- regeneration_by_plot %>% 
+  filter(period == 2 & plot_id %in% c(111, 135, 130)) %>% 
+  select(all_of(select_colnames_reg_calc))
+t6_calc <- regeneration_by_plot %>% 
+  filter(period == 3 & plot_id %in% c(112)) %>% 
+  select(all_of(select_colnames_reg_calc))
+
+```
+
+```{r CP}
+t <- data_regeneration_CP %>% 
+  filter(period == 2 & plot_id %in% c(111, 135, 130, 112))
+t6 <- data_regeneration_CP %>% 
+  filter(period == 3 & plot_id %in% c(112))
+
+t_calc2 <- regeneration_by_plot_species %>% 
+  filter(period == 2 & plot_id %in% c(111, 135, 130))
+t6_calc2 <- regeneration_by_plot_species %>% 
+  filter(period == 3 & plot_id %in% c(112))
+
+```
+
+```{r CA}
+t2 <- data_regeneration_CA %>% 
+  filter(period == 2 & plot_id %in% c(81000))
+t2_calc <- regeneration_by_plot_species %>% 
+  filter(period == 2 & plot_id %in% c(81000)) 
+
+t3_calc <- regeneration_by_core_area_species %>% 
+  filter(period == 2 & plot_id %in% c(81000))
+t4_calc <- regeneration_by_core_area_height_species %>% 
+  filter(period == 2 & plot_id %in% c(81000))
+```
+
+
+```{r}
+t <- data_regeneration_CP %>% 
+  filter(period == 2 & plot_id %in% c(111, 135, 130, 112))
+t <- data_regeneration_CP %>% 
+  filter(period == 2 & plot_id %in% c(112))
+
+t_calc <- regeneration_by_plot %>% 
+  filter(period == 2 & plot_id %in% c(111, 135, 130)) %>% 
+  select(all_of(select_colnames_reg_calc))
+t_calc <- regeneration_by_plot %>% 
+  filter(period == 2 & plot_id %in% c(112)) %>% 
+  select(all_of(select_colnames_reg_calc))
+```
+
+```{r}
+# period 1, 710000: subplots zonder enige verjonging
+# subplot_id == 62
+
+t2 <- data_regeneration_CA %>% 
+  filter(period == 1 & plot_id %in% c(71000))
+t2_calc <- regeneration_by_plot %>% 
+  filter(period == 1 & plot_id %in% c(71000)) 
+t2_calc2 <- regeneration_by_plot_species %>% 
+  filter(period == 1 & plot_id %in% c(71000)) 
+```
+
+
+
+# Check NA's plot-level-resultaten
+
+```{r}
+names(regeneration_by_plot)
+```
+
+```{r}
+col <- c("number_of_tree_species", "approx_nr_established_ha", "approx_nr_seedlings_ha",
+         "mean_number_established_ha", "lci_number_established_ha", "uci_number_established_ha",
+         "mean_number_seedlings_ha" , "lci_number_seedlings_ha", "uci_number_seedlings_ha")
+
+regeneration_by_plot %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+
+```
+
+```{r}
+col <- c("number_of_tree_species", "approx_nr_regeneration_ha",
+         "mean_number_of_regeneration_ha", 
+         "lci_number_of_regeneration_ha", "uci_number_of_regeneration_ha")
+
+regeneration_by_plot_height %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+
+```
+
+
+```{r}
+col <- c("approx_nr_established_ha", "approx_nr_seedlings_ha",
+         "mean_number_established_ha", "lci_number_established_ha", "uci_number_established_ha",
+         "mean_number_seedlings_ha" , "lci_number_seedlings_ha", "uci_number_seedlings_ha")
+
+regeneration_by_plot_species %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+
+```
+
+
+```{r}
+col <- c("approx_nr_regeneration_ha",
+         "mean_number_of_regeneration_ha", 
+         "lci_number_of_regeneration_ha", "uci_number_of_regeneration_ha")
+
+regeneration_by_plot_height_species %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+
+```
+
+```{r}
+col <- c("nr_of_subplots_with_regeneration", "perc_subplots_with_regeneration", 
+         "approx_nr_established_ha", "approx_nr_seedlings_ha",
+         "mean_number_established_ha", "lci_number_established_ha", "uci_number_established_ha",
+         "mean_number_seedlings_ha" , "lci_number_seedlings_ha", "uci_number_seedlings_ha")
+
+regeneration_by_core_area_species %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+
+```
+
+
+```{r}
+col <- c("nr_of_subplots_with_regeneration", "perc_subplots_with_regeneration", 
+         "approx_nr_regeneration_ha",
+         "mean_number_of_regeneration_ha", 
+         "lci_number_of_regeneration_ha", "uci_number_of_regeneration_ha")
+
+regeneration_by_core_area_height_species %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+
+```
+
+# Aandachtspunten       
+
+Wijnendale cirkelplots: in 1e decade enkel 0-50 cm en 50-200 cm (qHeightclass = 3000 en 5000)     
+Wijnendale kernvlakte: wel alle decades de 4 standaard hoogteklasses (0-30, 30-50, 50-200, >200 cm; qHeightclass 1000 tem 4000)     
+
