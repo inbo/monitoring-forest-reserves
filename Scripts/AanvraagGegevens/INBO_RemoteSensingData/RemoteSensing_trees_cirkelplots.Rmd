@@ -643,7 +643,7 @@ data_stems_calc_ <- data_stems_calc %>%
   left_join(xy_all, by = c("plot_id", "forest_reserve")) %>% 
   mutate(x_global = x_local + x_global_plot,
          y_global = y_local + x_global_plot) %>% 
-  select(-x_global_plot, -x_global_plot)
+  select(-x_global_plot, -y_global_plot)
 
 data_stems_calc_ %>% filter(is.na(x_global) | is.na(y_global)) %>% nrow() == 0
 # names(data_stems_calc_)  
@@ -694,7 +694,7 @@ De shapefile met de perimeters van de kernvlaktes staat op dezelfde plaats (als 
 
 **Enkele verduidelijkingen:**    
 
-* "plot_id" = link naar de shapefile van de kernvlaktes (IDPlots)    
+* "plot_id" = link naar de shapefile van de cirkelplots (IDPlots)    
 * height_measured = effectief gemeten    
 * height_modeled = op basis van dh-curves   
 * x_global & y_global: Lambert 72   
