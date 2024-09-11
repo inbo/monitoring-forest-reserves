@@ -64,7 +64,8 @@ path_to_treelevel_gdrive <- paste0(path_to_output_gdrive, "00_METADATA-ALL_PLOTS
 # Strata, Externe data, .... ------
 dbExterneData <- paste0(path_to_data, "ExterneData/BR_ExterneData.accdb")
 
-dbStrata <- "BR_Strata_2024-02-22.accdb"
+dbStrata <- "BR_Strata_2024-09-11.accdb"
+# dbStrata <- "BR_Strata_2024-02-22.accdb"
 # dbStrata <- "BR_Strata_2023-05-15.accdb"
 # dbStrata <- "BR_Strata_2022-11-30.accdb"
 # dbStrata <- "BR_Strata_2022-11-07.accdb"
@@ -85,7 +86,7 @@ path_to_heightmodels_teamdrive <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverw
 
 
 # Data-aanvragen ------
-path_to_datarequests <- "C:/03_BR/3_Aanvraag_gegevens/"
+path_to_datarequests <- "C:/03_BR/3_AanvraagGegevens/"
 path_to_datarequests_gdrive <- path_to_output_gdrive
 
 
