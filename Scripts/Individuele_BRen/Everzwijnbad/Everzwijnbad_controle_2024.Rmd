@@ -772,8 +772,10 @@ Met behulp van een updatequery voor een vooraf geselecteerde decade, plottype en
 ```{r update_processed, eval = FALSE}
 # Predefined strings
 decade <- "3" 
-# plot_type <- "CP"
-# forestreserve <- "Meerdaalwoud"
+plot_type <- "CP"
+# plot_type <- "CA"
+forestreserve <- "Everzwijnbad"
+# forestreserve <- "Wijnendalebos"
 
 # Construct the query string using sprintf
 query_update <- paste0(sprintf("UPDATE (PlotDetails_%seSET pd 
