@@ -1,0 +1,291 @@
+---
+title: "Shapefiles intensieve monitoring"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: TRUE
+      smooth_scroll: TRUE
+---
+
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 7,
+  fig.height = 3,
+  fig.align = TRUE)
+
+library(here)
+library(writexl)
+library(scales)
+library(sf)
+# install.packages(
+#   c("sf", "terra", "maptiles", "leaflet", "leafem", "mapview",
+#     "htmltools", "htmlwidgets", "crosstalk", "DT"
+#   )
+# )
+# 
+# install.packages("maptiles")
+  
+library(tidyverse)
+library(sf)
+library(terra)
+library(maptiles)
+library(mapview)
+library(leaflet)
+library(htmltools)
+library(htmlwidgets)
+library(leafem)
+library(crosstalk)
+library(DT)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+
+```
+
+
+```{r Setup2}
+# path_to_project <- "C:/03_BR/3_AanvraagGegevens/INBO_DigitaalVlaanderen"
+# path_to_project_teamdrive <- paste0(path_to_output_gdrive, "INBO_DigitaalVlaanderen")
+# 
+# path_to_datarequest <- paste0(path_to_project, "/output/")
+# path_to_datarequest_teamdrive <- paste0(path_to_project_teamdrive, "/output/")
+# path_to_html_teamdrive <- path_to_datarequest_teamdrive
+# path_to_html <- path_to_datarequest
+# 
+# path_to_datacontrol <- paste0(path_to_project_teamdrive, "/datacontrole/")
+
+```
+
+
+# Vraagstelling
+
+Nalv een vraag naar shapefile met de kernvlaktes (perimeter van de proefvlakken)
+
+
+```{r results='hold', eval=TRUE}
+path_to_fieldmap_db
+# path_to_datarequest
+# path_to_datarequest_teamdrive
+path_to_shp
+```
+
+# Invoer gegevens
+
+## Load plotinfo
+
+Plotinfo samenstellen, zijnde plottype, naam forest_reserve en info over survey en data al dan niet processed.
+Wegschrijven naar git, access en opslaan als csv
+
+```{r plotinfo_load}
+plotinfo_ <- load_plotinfo(database = path_to_fieldmap_db, 
+                          processed = FALSE, plottype = "CA")
+names(plotinfo_)
+
+plotinfo_ %>% filter(data_processed == FALSE)
+table(plotinfo_$data_processed)
+```
+
+
+## Load globale coördinaten
+
+Berekening van globale coördinaten op bomniveau obv      
+
+- globale coördinaten van de plots    
+- lokale coördinaten van de bomen     
+ 
+
+```{r load_XY_CA}
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+  GPSReferencePoints <- sqlFetch(con, "GPSReferencePoints", stringsAsFactors = FALSE)
+odbcClose(con)
+
+XY_CA <- GPSReferencePoints %>% 
+  select(plot_id = IDPlots, Xproj_m, Yproj_m, Altitude_m)
+# geen periode: één plot doorheen de periodes ...
+
+```
+
+# Shapefiles
+
+## Import
+
+De meest recente shapefiles staan op onze teamdrive.
+
+Er staat nog een oudere/andere versie op de gisserver van het INBO 
+(folder "zzz_gisserver_monitoring_kopie").
+
+```{r}
+shp_monitoring_all <- paste0(path_to_shp, "alle_proefvlakken_gecombineerd/boseco_alleproefvlakken_lam72_basisversie.shp")
+shp_monitoring_point <- paste0(path_to_shp, "alle_proefvlakken_gecombineerd/boseco_alleproefvlakken_centraalpunt_lam72_metinfo.shp")
+
+shp_monitoring_CP <- paste0(path_to_shp, "alle_cirkelplots/Bosreservaten_allecirkels.shp")
+
+shp_monitoring_CA <- paste0(path_to_shp, "alle_kernvlaktes/Bosreservaten_KernvlaktesTransecten.shp")
+# bestaat nog niet => aanmaken
+```
+
+
+```{r all}
+shp_all <- sf::st_read(shp_monitoring_all)   # aangemaakt door M.Esprit
+class(shp_all)
+# [1] "sf"         "data.frame"
+names(shp_all)
+unique(shp_all$PlotYype)
+
+shp_all_plotids <- shp_all %>% 
+  st_drop_geometry() %>%
+  group_by(PlotID) %>% 
+  summarize(n = n()) %>% 
+  ungroup()
+
+# punt
+shp_pt <- sf::st_read(shp_monitoring_point)   # aangemaakt door M.Esprit
+class(shp_pt)
+
+```
+
+```{r CA}
+shp_all_CA <- shp_all %>% 
+  filter(PlotYype %in% c("core area", "transect"))
+```
+
+
+
+```{r CP}
+shp_CP <- sf::st_read(shp_monitoring_CP)   # aangemaakt door M.Esprit
+class(shp_CP)
+# [1] "sf"         "data.frame"
+names(shp_CP)
+unique(shp_CP$PlotType)
+# één record per PlotID?
+length(unique(shp_CP$PlotID)) == nrow(shp_CP)
+
+```
+
+De shapefile met enkel cirkelplots heeft één cirkelplot minder dan de shapefile met alle plots.
+Zie code hierna.
+Het gaat om plot 2052, Kersselaerspleyn.
+Deze plot 2052 zit niet in shapefile CP's, niet in "strata_static_remaining_2023-05-15.xlsx",
+niet in dataverwerking 2010 en niet in de moederdb.
+Dus geen probleem.
+
+```{r}
+shp_all_CP <- shp_all %>% 
+  filter(!PlotYype %in% c("core area", "transect"))
+unique(shp_all_CP$PlotYype)
+# [1] "circular nested plots" "PQ with subplots"      "circular plot"  
+nrow(shp_all_CP) == nrow(shp_CP) + nrow(shp_all_CP %>% filter(PlotYype == "PQ with subplots"))
+
+
+shp_all_CP <- shp_all %>% 
+  filter(str_detect(PlotYype, "circular"))
+
+t <- shp_CP %>% 
+  st_drop_geometry() %>% 
+  anti_join(shp_all_CP %>% st_drop_geometry(),by = c("PlotID"))
+t
+
+```
+
+
+## Visualisatie
+
+```{r}
+shp_all %>% 
+  ggplot(aes(fill = PlotYype)) +
+  geom_sf() 
+
+ggplot2::ggplot(shp_all) +
+  ggplot2::geom_sf(aes(fill = PlotYype), color = "black")
+
+# OpenStreetMaps tiles as background
+
+# Dowload tiles and compose raster (SpatRaster)
+shp_all_osm <- maptiles::get_tiles(shp_all, zoom = 9)
+
+# Display map
+maptiles::plot_tiles(shp_all_osm); plot(st_geometry(shp_all), col = NA, add = TRUE)
+```
+
+```{r}
+shp_pt %>% 
+  ggplot(aes(fill = PlotType)) +
+  geom_sf() 
+
+ggplot2::ggplot(shp_pt) +
+  ggplot2::geom_sf(aes(color = PlotType), color = "black")
+
+# OpenStreetMaps tiles as background
+
+# Dowload tiles and compose raster (SpatRaster)
+shp_pt_osm <- maptiles::get_tiles(shp_pt, zoom = 9)
+
+# Display map
+maptiles::plot_tiles(shp_pt_osm); plot(st_geometry(shp_pt), col = NA, add = TRUE)
+```
+
+
+```{r}
+shp_CA %>% 
+  ggplot(aes(fill = PlotSize)) +
+  geom_sf() +
+  scale_fill_viridis_c()
+
+
+ggplot2::ggplot(shp_CP) +
+  ggplot2::geom_sf(aes(fill = PlotSize), color = "black")
+
+# OpenStreetMaps tiles as background
+
+# Dowload tiles and compose raster (SpatRaster)
+shp_CP_osm <- maptiles::get_tiles(shp_CP, zoom = 9)
+
+# Display map
+maptiles::plot_tiles(shp_CP_osm); plot(st_geometry(shp_CP), col = NA, add = TRUE)
+```
+
+# Export
+
+Shapefile met enkel de kernvlaktes en transecten wordt opgeslagen op de teamdrive:     
+
+`r shp_monitoring_CA`
+
+```{r}
+path_to_datarequest
+path_to_datarequest_teamdrive
+
+```
+
+
+
+# Copy html to teamdrive
+
+Na knitting - manueel
+
+```{r eval = FALSE}
+# Specify the path of the file you want to copy
+source_file <- here::here(paste0("Scripts/AanvraagGegevens/shapefiles_int_monitoring.html"))
+
+# Specify the destination directory where you want to copy the file
+destination_dir <- path_to_shp
+
+# Copy the file to the destination directory
+file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
+# ? file.copy
+```
