@@ -247,13 +247,15 @@ SPI_ID	Plot ID in Sampling plot inventory (SPI) grid within the site (reserve).
 
 ```{r results = 'hide'}
 names(info_survey)
+info_survey <- info_survey %>% 
+  rename(forest_reserve_fieldmap = forest_reserve)
 
 # tijdelijk nog geen link leggen - mogelijks aan Yannick overlaten
 plotdata0 <- info_survey %>%
   # enkel plots waar XY van berekend is => inner_join
   # (niet 52000 en 61000: immers enkel 1eSet een opname, dan niet meer)
   inner_join(info_XY %>% select(Unieknr, XLon_wgs84, YLat_wgs84, Z_m_TAW), by = c("Unieknr")) %>% 
-  # left_join(link_WC_FM, by = c("forest_reserve" = "forest_reserve_fieldmap", plottype))
+  # left_join(link_WC_FM, by = c(forest_reserve_fieldmap", plottype))
   mutate(SITE_ID = NA, SITE_NAME = NA, WILDCARD_sub_ID = NA
          , INVENTORY_YEAR = year_dendro
          , LPI_ID = ifelse(plottype == "CA", plot_id, NA)
@@ -283,13 +285,13 @@ Ontdubbelen van cirkelplots (A3 en A4)
 Ook bewaren van STANDING_ALIVE_THRESHOLD	STANDING_DEAD_THRESHOLD	LYING_ALIVE_THRESHOLD	LYING_DEAD_THRESHOLD
 voor aanmaak "design_data" (zie verder)
 
-```{r circle_radii}
+```{r tresholds}
 names(info_survey)
 # add extra rows per subcircle
-CP_radii <- info_survey %>% 
-  filter(plottype == "CP") %>% 
-  group_by(forest_reserve, plottype, period
-           , rA3_m, rA4_m
+tresholds_ <- info_survey %>% 
+  # filter(plottype == "CP") %>% 
+  group_by(forest_reserve_fieldmap, plottype, period
+           , rA3_m, rA4_m, CoreArea_ha
            # STANDING_ALIVE_THRESHOLD
            , TresHoldDBH_A3_alive_mm, TresHoldDBH_A4_alive_mm, TresHoldDBH_CoreArea_alive_mm
            # STANDING_DEAD_THRESHOLD
@@ -310,47 +312,83 @@ Ontdubbelen van cirkelplots (A3 en A4), met uitz van deze waar rA3 = rA4
 (Liedekerke en Withoefse heide)
 
 ```{r results = 'hide'}
-names(CP_radii)
+names(tresholds_)
 names(plotdata0)
 
-# lang formaat maken van CP_radii
-CP_radii2 <- CP_radii %>% 
+# lang formaat maken van de cirkelplots binnen tresholds_
+CP_tresholds <- tresholds_ %>% 
+  filter(plottype == "CP") %>% 
   pivot_longer(cols = c("rA3_m", "rA4_m")) %>% 
-  mutate(CIRCLE_NO = ifelse(name == "rA4_m", 1, 2),
-         plottype = "CP") %>% 
-  select(forest_reserve, period, plottype,
-         CIRCLE_NO,
-         CIRCLE_RADIUS = value)
+  mutate(CIRCLE_NO = ifelse(name == "rA4_m", 1, 
+                            ifelse(name == "rA3_m", 2, NA))
+         , STANDING_ALIVE_THRESHOLD = ifelse(name == "rA4_m", TresHoldDBH_A4_alive_mm, 
+                            ifelse(name == "rA3_m", TresHoldDBH_A3_alive_mm, NA))
+         , STANDING_DEAD_THRESHOLD =  ifelse(name == "rA4_m", TresHoldDBH_A4_dead_mm, 
+                            ifelse(name == "rA3_m", TresHoldDBH_A3_dead_mm, NA))
+         , LYING_DEAD_THRESHOLD = TresHoldDiam_Deadw_A4_mm
+         , LYING_ALIVE_THRESHOLD = LYING_DEAD_THRESHOLD
+           ) %>% 
+  select(forest_reserve_fieldmap, period, plottype,
+         CIRCLE_NO, CIRCLE_RADIUS = value,
+         STANDING_ALIVE_THRESHOLD, STANDING_DEAD_THRESHOLD,
+         STANDING_DEAD_THRESHOLD, LYING_DEAD_THRESHOLD, LYING_ALIVE_THRESHOLD
+         )
+
+# CA's selecteren
+CA_tresholds <- tresholds_ %>% 
+  filter(plottype == "CA") %>% 
+  mutate(CIRCLE_NO = NA, CIRCLE_RADIUS = NA
+         , STANDING_ALIVE_THRESHOLD = TresHoldDBH_CoreArea_alive_mm
+         , STANDING_DEAD_THRESHOLD =  TresHoldDBH_CoreArea_dead_mm
+         , LYING_DEAD_THRESHOLD = TresHoldDiam_Deadw_CoreArea_mm
+         , LYING_ALIVE_THRESHOLD = LYING_DEAD_THRESHOLD) %>% 
+  select(forest_reserve_fieldmap, period, plottype, 
+         CIRCLE_NO, CIRCLE_RADIUS,
+         STANDING_ALIVE_THRESHOLD, STANDING_DEAD_THRESHOLD,
+         STANDING_DEAD_THRESHOLD, LYING_DEAD_THRESHOLD, LYING_ALIVE_THRESHOLD
+         )
+
+# samenvoegen
+CP_CA_tresholds <- rbind(CA_tresholds, CP_tresholds)
+
   
 # wegfilteren van deze waar rA3 = rA4
-check_rA3A4gelijk <- CP_radii2 %>% 
-  group_by(forest_reserve, CIRCLE_RADIUS) %>% 
+check_rA3A4gelijk <- CP_CA_tresholds %>% 
+  filter(plottype == "CP") %>% 
+  group_by(forest_reserve_fieldmap, period, CIRCLE_RADIUS) %>% 
   summarize(n= n()) %>% 
   ungroup() %>% 
   filter(n > 1)
-# Kerss wegens andere rA3 doorheen de tijd
-# Liedekerke en Withoefse heide effectief rA3 = rA4
-CP_radii3 <- CP_radii2 %>% 
-  filter(!(forest_reserve %in% c("Liedekerke", "Withoefse heide") & CIRCLE_NO == 2))
 
-# enkel aan de CP's koppelen
-CP_radii4 <- info_survey %>% 
-  filter(plottype == "CP") %>% 
-  select(forest_reserve, period, plot_id) %>%    #1680
-  full_join(CP_radii3)
+# Liedekerke en Withoefse heide effectief rA3 = rA4
+CP_CA_tresholds <- CP_CA_tresholds %>% 
+  filter(!(forest_reserve_fieldmap %in% c("Liedekerke", "Withoefse heide") & CIRCLE_NO == 2))
+
 
 ```
 
 
+```{r}
+
+# enkel aan de CP's koppelen
+# CP_radii4 <- info_survey %>% 
+#   filter(plottype == "CP") %>% 
+#   select(forest_reserve_fieldmap, period, plot_id) %>%    #1680
+#   full_join(CP_radii3)
+```
+
+
+
 ```{r combine_radii, results = 'hide'}
 names(plotdata0)
-names(CP_radii3)
+names(CP_CA_tresholds)
 # groeperen per plot-id (geen)
 plotdata <- plotdata0 %>% 
-  left_join(CP_radii4, by = c("forest_reserve", "period", "plottype", "plot_id"))
+  left_join(CP_CA_tresholds, by = c("forest_reserve_fieldmap", "period", "plottype"))
 
-# check
-nrow(plotdata) == nrow(CP_radii4) + nrow(plotdata0 %>% filter(plottype == "CA"))
+plotdata %>% filter(plot_id == 11000)
+plotdata %>% filter(plot_id == 205)
+plotdata %>% filter(plot_id == 101)
 ```
 CONSISTENT_ID_STANDING: aanpassen voor Kerss, CP's survey 2: niet gekoppeld, want de straal van de A3 werd veranderd
 tussen decade 1 en 2
@@ -358,7 +396,7 @@ tussen decade 1 en 2
 ```{r}
 plotdata <- plotdata %>% 
   mutate(CONSISTENT_ID_STANDING = 
-           ifelse(forest_reserve == "Kersselaerspleyn" & period == 2 & plottype == "CP"
+           ifelse(forest_reserve_fieldmap == "Kersselaerspleyn" & period == 2 & plottype == "CP"
                   , NA
                   , CONSISTENT_ID_STANDING)
   )
@@ -383,14 +421,14 @@ plotdata_def <- plotdata %>%
          , CONSISTENT_ID_STANDING, CONSISTENT_ID_LYING, OTHER
          , X, Y, Z
          # extra vars
-         , forest_reserve_fieldmap = forest_reserve
+         , forest_reserve_fieldmap
          , plot_id, plottype, period
          )
 
 
 #check
 plotdata_def %>% filter(plot_id == 101)
-plotdata_def %>% filter(plot_id == 2001)
+plotdata_def %>% filter(plot_id == 205)
 plotdata_def %>% filter(plot_id == 11000)
 ```
 
@@ -403,15 +441,15 @@ names(plotdata_def)
 # Overzicht bosreservaten
 
 ```{r }
-# unique(plotdata_def$forest_reserve)
+# unique(plotdata_def$forest_reserve_fieldmap)
 # names(plotdata_def)
 
-plotdata_def %>% group_by(forest_reserve = forest_reserve_fieldmap, plottype, LPI_ID) %>% 
+plotdata_def %>% group_by(forest_reserve_fieldmap, plottype, LPI_ID) %>% 
   summarize(n_surveys = n_distinct(INVENTORY_YEAR)
             , min_year = min(INVENTORY_YEAR)
             , max_year = max(INVENTORY_YEAR)) %>% 
   ungroup() %>% 
-  dplyr::select(forest_reserve, plottype, n_surveys, min_year, max_year) %>%  
+  dplyr::select(forest_reserve_fieldmap, plottype, n_surveys, min_year, max_year) %>%  
     DT :: datatable(filter = 'top', options = list(dom = 'rt'), rownames = FALSE)  
 
 ```
@@ -507,7 +545,7 @@ list_BR <- plotdata_def %>%
 standing0 <- data_stems_calc %>% 
   inner_join(list_BR, by = c("plot_id", "period", "plottype"))
 
-t <- standing0 %>% group_by(forest_reserve, plottype, year) %>% 
+t <- standing0 %>% group_by(forest_reserve_fieldmap, plottype, year) %>% 
   summarise(n_trees = n(), n_plots = n_distinct(plot_id)) %>% ungroup()
 
 # check - niet opgenomen
@@ -639,7 +677,7 @@ names(list_BR)
 lying0 <- data_deadwood %>% 
   inner_join(list_BR, by = c("plot_id", "period", "plottype"))
 
-t <- lying0 %>% group_by(forest_reserve, plottype, year) %>% 
+t <- lying0 %>% group_by(forest_reserve_fieldmap, plottype, year) %>% 
   summarise(n_trees = n(), n_plots = n_distinct(plot_id)) %>% ungroup()
 
 # check - niet opgenomen
@@ -904,20 +942,26 @@ Coordinate system (epsg code) used is specified in DESIGN sheet. If using WSG 84
 SITE_ID	SITE_NAME	WILDCARD_sub_ID	INVENTORY_YEAR	
 INVENTORY_TYPE	PLOTS_LIST	CIRCLE_NO	CIRCLE_RADIUS	CIRCLE_AZIMUTH	CIRCLE_DISTANCE	POM_MARK	STANDING_ALIVE_THRESHOLD	STANDING_DEAD_THRESHOLD	LYING_ALIVE_THRESHOLD	LYING_DEAD_THRESHOLD	SPECIES_POOL	LIS_CWD	BOUNDARY	STEM_COORD_REF_POINT	EPSG_CODE
 
-```{r}
-names(plotdata_def)
 
-design_ <- plotdata_def %>%
+ > nog PLOTS_LIST
+ 
+ 
+```{r}
+names(plotdata)
+
+design_ <- plotdata %>%
   group_by(SITE_ID, SITE_NAME, WILDCARD_sub_ID, INVENTORY_YEAR
            , forest_reserve_fieldmap, plottype, period
-           , CIRCLE_NO, CIRCLE_RADIUS) %>% 
+           , CIRCLE_NO, CIRCLE_RADIUS
+           , STANDING_ALIVE_THRESHOLD, STANDING_DEAD_THRESHOLD
+           , LYING_DEAD_THRESHOLD, LYING_ALIVE_THRESHOLD) %>% 
   summarize(n_plots = n()) %>% 
   ungroup() %>% 
   left_join(cwd %>% group_by(forest_reserve_fieldmap, period, plottype) %>% 
               summarize() %>% ungroup() %>% 
               mutate(cwd_survey = TRUE)
             , by = c("forest_reserve_fieldmap", "plottype", "period")) %>% 
-  # left_join(link_WC_FM, by = c("forest_reserve" = "forest_reserve_fieldmap", plottype))
+  # left_join(link_WC_FM, by = c("forest_reserve_fieldmap", plottype))
   mutate(INVENTORY_TYPE = ifelse(plottype == "CA", "LPI", 
                                    ifelse(plottype == "CP", "SPI", NA))
          # , PLOTS_LIST
@@ -928,7 +972,8 @@ design_ <- plotdata_def %>%
          , SPECIES_POOL = "AWS"
          # LIS enkel bij Wijnendale en Everzwijnbad, CP's, decade3
          , LIS_CWD = ifelse(cwd_survey & !is.na(cwd_survey), "Y", "N")
-
+         , STEM_COORD_REF_POINT = "BHC"
+         , EPSG_CODE = "4326"  # GCS_WGS_1984 - EPSG:4326
          ) 
 
 names(design_)
@@ -946,9 +991,13 @@ design_def <- design_ %>%
          , CIRCLE_NO, CIRCLE_RADIUS
          
          , CIRCLE_AZIMUTH, CIRCLE_DISTANCE, 
-         , POM_MARK, SPECIES_POOL 
-         
+         , POM_MARK
+         , STANDING_ALIVE_THRESHOLD, STANDING_DEAD_THRESHOLD
+         , LYING_ALIVE_THRESHOLD, LYING_DEAD_THRESHOLD
+         , SPECIES_POOL 
          , LIS_CWD
+         # , BOUNDARY: NIET, shapefiles te bezorgen
+         , STEM_COORD_REF_POINT, EPSG_CODE
          # extra vars
          , forest_reserve_fieldmap, plottype, period
          )
@@ -977,6 +1026,17 @@ Daarnaast ook volgende lookuplijsten:
 - qSpecies.txt   
 - qDecaystage.txt   
 - qVitality.txt  
+
+
+> Ook de shapefiles bezorgen van de CA-plots en de grens van het reservaat (voor de CP's)
+ipv veld "BOUNDARY" in DESIGN.txt
+
+It defines the geometry of *site boundaries* and *LPI plot boundaries*. 
+Site boundary is indicated by the black line in Fig. 1A. 
+If possible fill in as a well-known text geometry (WKT).
+e.g. type Polygon for site boundary or one LPI plot, MultiPolygon for site boundary + one or multiple LIP plots. 
+
+Alternatively please provide shapefiles.
 
 
 ```{r WegschrijvenOutput}
