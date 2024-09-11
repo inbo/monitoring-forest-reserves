@@ -1044,7 +1044,7 @@ Alternatively please provide shapefiles.
 # extra_vars
 
 
-write.table(design_def %>% select(-all_of(extra_vars))
+write.table(design_def %>% select(-forest_reserve_fieldmap, plottype, period)
             , paste0(path_to_datarequest_teamdrive, "INBO_Design.txt")
             , sep = " ", dec = ".")
 
