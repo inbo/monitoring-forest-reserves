@@ -50,11 +50,18 @@ knitr::opts_chunk$set(
   fig.align = TRUE)
 
 library(here)
+library(sf)
 
 # libraries & invoergegevens
 source(here::here("scripts/Setup.R"))
 
 ```
+
+
+# SVZ
+
+11/9/2024: Wijnendale en Everzwijnbad 3de decade in info_survey, maar nog niet bij dominant tree
+
 
 # Import data
 
@@ -175,7 +182,7 @@ Info mbt surveys
 
 ```{r plotinfo_load}
 plotinfo <- load_plotinfo(database = path_to_fieldmap_db)
-# ! enkel de processed data
+# ! enkel de processed data - dd 11/9/2024: nu ook Wijnendale en Everzwijnbad 3de decade erbij
 names(plotinfo)
 
 ```
@@ -490,6 +497,7 @@ Velden zoals
 names(df_strata_shp[1:18])
 names(input_gsheet[1:4])
 names(management_monitoringrapport)
+
 ```
 
 **"Unmanaged_since" uit monitoringrapport is verschillend van info uit gsheet**
@@ -932,19 +940,11 @@ Voor later gebruik makkelijker om dit in één tabel te combineren: info_survey,
 
 **OPGEPAST:** 
 Date_Dendro (< plotdetails FM) wijkt soms af van year (< forresdat, berekend door Els package).  
-Dat komt omdat er beslist is om naar groeiseizoen te kijken voor de bepaling van `year` en dus af te ronden naar beneden (niet jaar van dendro, want soms in dec én jan opgemeten, dan jaar van dec nemen).  
-
-Vanaf 3 juli horen de opnames bij het huidige jaar.
-Alles vroeger dan 3 juli hoort bij het voorgaande jaar.
-
+Dat komt omdat er beslist is om naar groeiseizoen te kijken voor de bepaling van `year`:
+alles voor 1 mei hoort bij het voorgaande jaar, vanaf 1 mei bij het huidige jaar. 
 (functie `load_plotinfo` uit package `forrescalc`)
 
 Ook tov Survey_Y1/2/3/4/5 van Marcs shapefile soms een verschil.
-
-
-**MOET NOG AANGEPAST WORDEN in forrescalc**
-Ik wacht nog op input van team over vanaf welke maand naar voorgaande jaar afronden (mails 14/2/2022)
-
 
 ```{r compare_variables}
 # library(forrescalc)
@@ -953,21 +953,24 @@ names(plotinfo)
 names(plotdetails2)
 names(plotinfo_shp)
 
-nrow(plotdetails2) == 2250
-nrow(plotinfo) == 2250
+nrow(plotdetails2) == 2563 #2250
 nrow(plotinfo_shp) == 1063  # want geen onderscheid in periodes
 
+# 5/9/2024 - rechtstreeks data uit moederdb
+nrow(plotdetails2 %>% filter(data_processed)) == nrow(plotinfo)
+nrow(plotinfo) == 1894 # 1725
+nrow(plotdetails2 %>% filter(survey_trees)) # 2039  ? 1934
 ```
 
 ```{r combine_plotdetails_plotinfo}
 
-plotdetails2 %>% filter(!is.na(Date_Dendro)) %>% nrow() == 1748
-plotinfo %>% filter(!is.na(survey_number)) %>% nrow() == 1748
+plotdetails2 %>% filter(data_processed) %>% nrow() == 1894 # 1725
+plotinfo %>% filter(!is.na(survey_number)) %>% nrow() == 1894 # 1725
 
 plotinfo2 <- plotinfo %>% 
   select(-forest_reserve, -year_dendro, -survey_trees, -survey_deadw, -survey_veg, -survey_reg, -data_processed) %>% 
   filter(!is.na(survey_number)) %>% # is na indien nog niet uitgevoerd
-  full_join(plotdetails2 %>% filter(!is.na(Date_Dendro)), by = c("plot_id", "period")) %>% 
+  full_join(plotdetails2 %>% filter(data_processed), by = c("plot_id", "period")) %>% 
   select(plot_id, plottype, everything())
 
 # Vgl DateDendro en year
@@ -1000,14 +1003,23 @@ plotinfo_def <- plotinfo2 %>%
          plottype, plottype_txt,
          survey_trees, survey_deadw, survey_reg, survey_veg, data_processed,
          period, survey_number, year_dendro = year, date_dendro = Date_Dendro,
-         rA1_m, rA2_m, rA3_m, rA4_m, 
+         rA1_m, rA2_m, rA3_m, rA4_m,
+         LengthCoreArea_m, WidthCoreArea_m, CoreArea_ha,
          TresHoldDBH_A3_alive_mm, TresHoldDBH_A3_dead_mm, 
          TresHoldDBH_A4_alive_mm, TresHoldDBH_A4_dead_mm, 
          TresHoldDBH_CoreArea_dead_mm, TresHoldDBH_CoreArea_alive_mm, 
          TresHoldDiam_Deadw_A4_mm, TresHoldDiam_Deadw_CoreArea_mm,
-         plotsize_dendro, plotsize_veg) %>% 
+         plotsize_dendro, plotsize_veg
+         ) %>% 
   mutate(date_dendro = as.Date(date_dendro))
 # survey_Y1, survey_Y2, survey_Y3, survey_Y4, survey_Y5 toegevoegd aan strata_locatie
+
+# 1918 vs 1749 / 1894 vs 1725: zelfde verschil: te maken met shapefile die via unieknr 
+nrow(plotinfo_def %>% unique()) == nrow(plotinfo_def)
+
+plotinfo_def %>% group_by(plot_id, survey_number) %>% summarize(n = n()) %>% 
+  ungroup() %>% filter(n > 1)
+# enkel kerss - klopt
 
 ```
 
