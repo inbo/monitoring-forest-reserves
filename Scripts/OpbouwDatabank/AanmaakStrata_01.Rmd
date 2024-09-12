@@ -283,6 +283,16 @@ head(strata_bodem)
 
 ```
 
+Klein foutje in SubArea van KV's Sevendonck
+Gevraagd aan marc E. via mail op 12/9/2024
+=> hij ging aanpassen
+=> ik nu manueel aangepast in `strata_soil` in databank:
+plot_id	SiteName	     SubArea	            forest_reserve_fieldmap
+141200	Sevendonck	Oak forest SFR	          Sevendonck Q
+141100	Sevendonck	Alder forest SFR	        Sevendonck A
+
+
+
 
 ## Boshistoriek
 
@@ -845,7 +855,8 @@ names(plotDetails)
 # n_distinct(plotDetails$plot_id)
 
 plotdetails2 <- plotDetails %>% 
-  mutate(year = year(round_date(.data$Date_Dendro, "year")) - 1, 
+  mutate(year = as.integer(year(.data$Date_Dendro) - (month(.data$Date_Dendro) < 5)),
+         # year = year(round_date(.data$Date_Dendro, "year")) - 1, # oude code - fout!!
          survey_trees = ifelse(.data$Survey_Trees_YN == 10 & !is.na(.data$Survey_Trees_YN), TRUE, FALSE),
           survey_deadw = ifelse(.data$Survey_Deadwood_YN == 10 & !is.na(.data$Survey_Deadwood_YN), TRUE, FALSE),
           survey_veg = ifelse(.data$Survey_Vegetation_YN == 10 & !is.na(.data$Survey_Vegetation_YN), TRUE, FALSE),
