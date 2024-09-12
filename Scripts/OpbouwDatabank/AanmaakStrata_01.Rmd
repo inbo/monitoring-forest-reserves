@@ -292,8 +292,6 @@ plot_id	SiteName	     SubArea	            forest_reserve_fieldmap
 141100	Sevendonck	Alder forest SFR	        Sevendonck A
 
 
-
-
 ## Boshistoriek
 
 ### Detail obv meerdere historische kaarten 
