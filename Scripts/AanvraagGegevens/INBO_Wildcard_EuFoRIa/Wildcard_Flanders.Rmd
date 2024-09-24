@@ -1124,3 +1124,21 @@ write.table(cwd %>% select(-all_of(extra_vars))
             , paste0(path_to_datarequest_teamdrive, "INBO_CWD.txt")
             , sep = " ", dec = ".")
 ```
+
+
+
+# Copy html to teamdrive
+
+Na knitting - manueel
+
+```{r eval = FALSE}
+# Specify the path of the file you want to copy
+source_file <- here::here(paste0("Scripts/AanvraagGegevens/INBO_Wildcard_EuFoRIa/Wildcard_Flanders.html"))
+
+# Specify the destination directory where you want to copy the file
+destination_dir <- path_to_html_teamdrive
+
+# Copy the file to the destination directory
+file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
+# ? file.copy
+```
