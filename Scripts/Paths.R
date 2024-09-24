@@ -1,14 +1,17 @@
 
+## OPGEPAST: de basis-paden zijn opgenomen in .Renviron
+#       ENkel de afgeleide paths zijn hier opgenomen
+#######################################################
 
 ### ALGEMEEN ----
 
-path_to_dataverwerking <- "C:/03_BR/1_DataverwerkingBR/"
-path_to_forrescalc <- "C:/03_BR/2_Forrescalc/R/"
-path_to_git_forresdat <- "C:/03_BR/2_Forresdat/"
-path_to_metadata <- "G:/Gedeelde drives/Team_Boseco_BR/PRJ_BR_AanvraagGegevens/00_METADATA-ALL_PLOTS/_metadata/"
-path_to_forresheights <- "C:/03_BR/2_Forresheights/data/"   # csv, gitrepo
+path_to_dataverwerking <- Sys.getenv("path_to_dataverwerking") #C:/03_BR/1_DataverwerkingBR/"
+path_to_forrescalc <- Sys.getenv("path_to_forrescalc") #"C:/03_BR/2_Forrescalc/R/"
+path_to_git_forresdat <- Sys.getenv("path_to_git_forresdat") #"C:/03_BR/2_Forresdat/"
+path_to_metadata <- Sys.getenv("path_to_metadata") #"G:/Gedeelde drives/Team_Boseco_BR/PRJ_BR_AanvraagGegevens/00_METADATA-ALL_PLOTS/_metadata/"
+path_to_forresheights <- Sys.getenv("path_to_forresheights") #"C:/03_BR/2_Forresheights/data/"   # csv, gitrepo
 
-path_to_teamdrive <- "G:/Gedeelde drives/Team_Boseco_BR/"
+path_to_teamdrive <- Sys.getenv("path_to_teamdrive") #"G:/Gedeelde drives/Team_Boseco_BR/"
 path_to_dataverwerking_teamdrive <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverwerking")
 
 # zou ev. ook AWS kunnen worden, dan wel vpn opzetten als niet in VAC
@@ -19,12 +22,13 @@ path_to_dataverwerking_teamdrive <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensve
     # 
     # Qry_Plots_ICEpunten_Name <- dbGetQuery(myconn, "SELECT * FROM Qry_Plots_ICEpunten_Name")
 
-path_to_reserves <- "C:/03_BR_gebieden/"
+path_to_reserves <- Sys.getenv("path_to_reserves") #"C:/03_BR_gebieden/"
 
 
 # Fieldmap-db ------
 
-path_to_fieldmap <- "C:/03_BR_db_monitoring/MDB_BR_X8_inbo2020_20240613/"
+path_to_databases <- Sys.getenv("path_to_databases") #"C:/03_BR_db_monitoring/"
+path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_X8_inbo2020_20240613/")
 # path_to_fieldmap <- "C:/03_BR_db_monitoring/MDB_BR_X8_inbo2020_20240530/"
 # path_to_fieldmap <- "C:/03_BR_db_monitoring/3_dB_Els_deel2_vs20231012/"
 # path_to_fieldmap <- "C:/03_BR_db_monitoring/dB_Els_deel2_vs20220714/"
@@ -87,7 +91,7 @@ path_to_heightmodels_teamdrive <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverw
 
 
 # Data-aanvragen ------
-path_to_datarequests <- "C:/03_BR/3_AanvraagGegevens/"
+# path_to_datarequests <- "C:/03_BR/3_AanvraagGegevens/"
 path_to_datarequests_gdrive <- path_to_output_gdrive
 
 
