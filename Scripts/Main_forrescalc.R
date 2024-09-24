@@ -20,16 +20,19 @@ library(forrescalc)
 path_to_fieldmap <- Sys.getenv("path_to_fieldmap")
 path_to_git_forresdat <- Sys.getenv("path_to_git_forresdat")
 
-# only when q-tables in Fieldmap have changed
+# only when q-tables in Fieldmap have changed ---------
 # (and only mention the changed table)
-temp <- tempfile(fileext = ".xlsx")  # naam maken
+# download .xlsx with metadata of the lookuplists to (path) 'temp'
+temp <- tempfile(fileext = ".xlsx")  # een filenaam aanmaken, met pad
 dl <- googledrive::drive_download(
   googledrive::as_id("12x2H9lp86R-AFPdN2JXB9nqwJ2_A6PF6"),  
-  #verwijst naar metadata file "_metadata_lookuplists.xlsx"
+  #(c)A:verwijst naar de metadata file "_metadata_lookuplists.xlsx" op gdrve
   path = temp, overwrite = TRUE
 )
-# drive_download gaat downloaden van gdrive naar path "temp"
-# dl wordt zelf niet gebruikt, enkel nodig om te zorgen dat download gebeurt
+# (c)A: drive_download gaat de metadata file downloaden van gdrive naar path "temp"
+# "dl" wordt zelf niet gebruikt, enkel nodig om te zorgen dat download gebeurt
+# "temp" kan ook vervangen worden door een eigen path mee te geven
+# naar de metadata file
 
 from_access_to_forresdat(
   database = path_to_fieldmap,
@@ -38,12 +41,12 @@ from_access_to_forresdat(
   repo_path = path_to_git_forresdat,
   metadata_path = temp
 )
-# metadata_path: hier metadata van lookuplijsten
-# is om legende toe te kennen aan de lookuplijsten
-# variabele die nodig is bij 
+# (c)A: metadata_path: hier metadata van lookuplijsten
+# is om legende toe te kennen aan de lookuplijsten in de json
+# variabele die nodig is bij de fctie "from_access_to_forresdat"
 
 
-# download .xlsx with metadata of table plotinfo to (path) 'temp'
+# download .xlsx with metadata of table plotinfo to (path) 'temp' ---------
 temp <- tempfile(fileext = ".xlsx")
 dl <- googledrive::drive_download(
   googledrive::as_id("1tUNtlwcSnlVXnri235gqnhIHaBNf1Z2W"), path = temp,
@@ -58,7 +61,7 @@ save_results_forresdat(
   metadata_path = temp
 )
 
-# DENDROMETRY
+# DENDROMETRY ----------
 
 data_dendro <-
   load_data_dendrometry(
@@ -90,7 +93,7 @@ save_results_forresdat(
   metadata_path = temp
 )
 
-# REGENERATION
+# REGENERATION ---------
 
 data_regeneration <-
   load_data_regeneration(
@@ -112,7 +115,7 @@ save_results_forresdat(
   metadata_path = temp
 )
 
-# VEGETATION
+# VEGETATION -----------
 
 data_vegetation <-
   load_data_vegetation(
