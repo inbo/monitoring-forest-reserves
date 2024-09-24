@@ -1,4 +1,5 @@
-
+# install.packages("forrescalc") # samen met INBO universe: update packages dan wordt deze ook geupdate
+# enkel als nieuwe versie uitkomt ...
 
 library(forrescalc)
 # https://github.com/inbo/forresdat
