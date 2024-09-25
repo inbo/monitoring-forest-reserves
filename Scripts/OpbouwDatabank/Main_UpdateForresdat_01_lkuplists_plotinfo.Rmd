@@ -40,23 +40,47 @@ source(here::here("scripts/Setup.R"))
 DOEL van dit script is een update van forresdat gegevens naar 
 
 - forresdat-folder (nadien nog te pushen naar github)
-- BR_analysedb.accdb
-- output-folders "_plot-level-data" en "_tree-level-data"
-- gdrive-folders "_plot-level-data" en "_tree-level-data"
+- BR_analysedb.accdb op de c-schijf
+- output-folders op de c-schijf "_plot-level-data" en "_tree-level-data"
+- teamdrive-folders "_plot-level-data" en "_tree-level-data"
 
 Kersselaerspleyn blijkt op meerdere vlakken uitzonderingen te bevatten.
 Deze uitzonderingen worden na het inladen van de data gecorrigeerd. 
 
+<!-- - path_to_forresdat_data is "`r path_to_forresdat_data`"        -->
+
 ```{r results='hold', eval=TRUE}
-path_to_forresdat_data
-path_to_analysis_set_db
-path_to_plotlevel_csv
-path_to_lulists_csv
-path_to_treelevel_csv
-path_to_output_gdrive
-path_to_meetgegevens
-path_to_RData
+print(paste0("path_to_fieldmap is ", path_to_fieldmap))
+print(paste0("path_to_strata_db is ", path_to_strata_db))
+
+print(paste0("path_to_teamdrive is ", path_to_teamdrive))
+print(paste0("path_to_dataverwerking_teamdrive is ", path_to_dataverwerking_teamdrive))
+
+print(paste0("path_to_forresdat_data is ", path_to_forresdat_data))
+print(paste0("path_to_analysis_set_db is ", path_to_analysis_set_db))
+
+print(paste0("path_to_plotlevel_csv is ", path_to_plotlevel_csv))
+print(paste0("path_to_treelevel_csv is ", path_to_treelevel_csv))
+print(paste0("path_to_lulists_csv is ", path_to_lulists_csv))
+print(paste0("path_to_dbResults is ", path_to_dbResults))
+print(paste0("path_to_plotlevel_gdrive is ", path_to_plotlevel_gdrive))
+
+print(paste0("dbExterneData is ", dbExterneData))
+print(paste0("path_to_height_models is ", path_to_height_models))
+print(paste0("path_to_heightmodels_teamdrive is ", path_to_heightmodels_teamdrive))
+
+print(paste0("path_to_datarequests_gdrive is ", path_to_datarequests_gdrive))
+print(paste0("path_to_shp is ", path_to_shp))
+
 ```
+
+# SVZ
+
+- 25/9/2024: eerste keer op basis van een kopie van de volledige moederdatabank
+(te vinden als zip-file op citrix onder "...\Projects\PRJ_BosEco\PRJ_ALG_FIELDMAP\FM_MDB BOSRESERVATEN")    
+
+- 
+
 
 # Update lookuplijsten - INDIEN GEWIJZIGD
 
@@ -65,14 +89,14 @@ Enkel de gewijzigde tabellen vermelden.
 
 Forresdat opnieuw opgevuld op 24/9/2024
 
-## Rechtstreeks van fieldmap-db naar forresdat
+## Rechtstreeks van fieldmap-db naar forresdat - ok
 
 Sinds 2024 als csv en metadata in één grote json-file:   
 
 - Op c-schijf onder `r path_to_git_forresdat`.
 - Op github onder [https://github.com/inbo/forresdat](https://github.com/inbo/forresdat)
 
-```{r }
+```{r lkp_save_git, eval=FALSE}
 # remove_last_commit_forresdat(path_to_git_forresdat)  
 # als er iets fouts gebeurt, op deze manier laatste commit verwijderen 
 # !! voordat er gepusht is !!
@@ -128,7 +152,7 @@ er wordt telkens maar één tabel weggeschreven (de eerste uit de lijst)
 Enig idee?
 
 
-```{r }
+```{r eval = FALSE}
 # ?from_forresdat_to_access
 
 # file_names <- list.files(path = paste0(path_to_git_forresdat, "/data")
@@ -224,69 +248,96 @@ save_results_access(
 ```
 
 
-## Export naar teamdrive
+## Afzonderlijke files - ok
 
-Kopiëren naar teamdrive "PRJ_BR_AanvraagGegevens\00_METADATA-ALL_PLOTS\_qXX_lookuplijsten".
+Csv-files opslaan po c-schijf en in teamdrive `r path_to_lulists_gdrive` (zonder json).
 
 ```{r eval = FALSE}
-# save naar gdrive
-?save_results_csv
+path_to_lulists_gdrive
+path_to_lulists_csv
+
+save_results_csv(
+    results = list_lkp,
+    output_dir = path_to_lulists_csv)
+
+# gdrive
 save_results_csv(
     results = list_lkp,
     output_dir = path_to_lulists_gdrive)
-
 ```
 
 
-# Plotinfo - OK - 19/1/2023
+# Plotinfo 
 
 Plotinfo samenstellen, zijnde plottype, naam forest_reserve en info over survey en data al dan niet processed.
 Wegschrijven naar git, access en opslaan als csv
 
+- Enkel deze waar een dendro-opname gebeurd is (survey_trees = TRUE)
+- Zowel verwerkte als niet verwerkte plots (processed = TRUE/FALSE)
+
+
 ```{r plotinfo_load}
-plotinfo <- load_plotinfo(database = path_to_fieldmap_db)
+plotinfo <- load_plotinfo(database = path_to_fieldmap_db, processed = FALSE)
 names(plotinfo)
+
+plotinfo <- plotinfo %>% 
+  filter(survey_trees == TRUE & !is.na(survey_trees))
 ```
 
 ```{r check_processed}
-# enkel checken bij deze waar er een dendro-opname gebeurd is
-# anders ook deze van vorige decades mee, die niet kunne processed zijn
-check_processed <- plotinfo %>% 
-  filter(survey_trees == TRUE)
-
-table(check_processed$forest_reserve, check_processed$data_processed)
+table(plotinfo$forest_reserve, plotinfo$data_processed)
 # table(plotinfo$forest_reserve, plotinfo$data_processed)
+
+plotinfo %>% filter(data_processed==FALSE)
 ```
 
 ```{r check_not_processed}
-plotinfo_check <- plotinfo %>% 
+check_survey_trees_summ <- plotinfo %>% 
   group_by(forest_reserve, plottype, period, survey_trees, data_processed) %>% 
-  summarize(n_plots = n()) %>% 
+  summarize(n_plots = n(),
+            min_plotid = min(plot_id),
+            max_plotid = max(plot_id)) %>% 
   ungroup()
 
-plotinfo_check %>% 
+check_survey_trees_summ %>% 
   filter(survey_trees == TRUE & data_processed == FALSE)
+```
 
+Wijnendalebos: 4 plots uit periode 1 die niet verder meegenomen werden in de verwerking - ok
+Kersselaerspleyn: plot 1999: Rgister+: OK, niet mee te nemen
+Withoefse heide: 3eSET (dd 13/7/2022), verwerking is uitgesteld naar 2025
+
+forest_reserve = NA? : 10 plots 700-780, 3de decade: Heirnisse, nog niet verwerkt
+Deels wel al survey_trees ingevuld
+=> deze verwijderen om geen verwarring te creëren
+
+```{r}
+plotinfo %>% filter(is.na(forest_reserve))
+
+plotinfo %>% filter(is.na(forest_reserve)) %>% distinct(plot_id)
+```
+
+```{r}
 # omgekeerd geen plots die processed zijn, en géén survey_trees
 plotinfo %>%  filter(data_processed & !survey_trees) %>% nrow() == 0
 ```
 
-Enkel nog CP's derde set Withoefse heide (dd 13/7/2022), is gepland voor 2023.
+## Correctie niet volledig afgewerkte plots
 
-## Correctie year_dendro
+forest_reserve = NA: 10 plots 700-780, 3de decade: Heirnisse, nog niet verwerkt
+Deels wel al survey_trees ingevuld
+=> deze verwijderen om geen verwarring te creëren
+
+```{r}
+plotinfo <- plotinfo %>% filter(!is.na(forest_reserve))
+```
+
+
+## Year_dendro
 
 Year_dendro = jaar van groeiseizoen
-Grens was gelegd op 1/7, nu naar 1/5.
-Aangevraagd in issue # 114, nog niet geïmplementeerd (28/4/2023)
-
-Hier geen sluitende code, gewoon deze waarvan ik weet dat het niet klopt, die aanpassen: 
-
-- Bos Terrijst CA: OK
-- Heirnisse: 5 plots 9/2014: OK
-- enkel Kerss: alle 16 plots 2009 te wijzigen in 2010: CP's en CA
-
-- !! ook Withoefse heide
-(gecheckt in dbEls_deel2 op datum dendro in plotdetails en Kerss en With heide zijn enige reservaten in dit geval)
+Grens ligt op 1/5.
+Soms dendro effectief in twee verschillende groeiseizoenen opgemeten - OK
 
 ```{r check}
 names(plotinfo)
@@ -305,46 +356,21 @@ t_ <- t %>%
 
 ```
 
-Tijdelijk tot update forrescalc
-
-
-
-```{r correcte_year_dendro_TMP}
-plotinfo_ <- plotinfo %>% 
-  mutate(year_dendro = ifelse(year_dendro == 2009 & forest_reserve == "Kersselaerspleyn"
-    , year_dendro + 1
-    , year_dendro)
-  ) %>% 
-  mutate(year_dendro = ifelse(year_dendro == 1999 & forest_reserve == "Withoefse heide"
-    , year_dendro + 1
-    , year_dendro)
-  )   
-
-plotinfo <- plotinfo_
-
-# t <- plotinfo %>% 
-#   filter(year_dendro == 2009 & forest_reserve == "Kersselaerspleyn")
-
-```
-
-
-
-
 # Correctie Kersselaerspleyn
 
-Afwijking Kersselaerspleyn:
+## Survey_deadw - CP's 1eSET
 
-- CP's deadwood 1eSET (2000): uitgevoerd, maar niet geïmporteerd in FieldMap.
-Verwerkt door Luc DK ikv eerste monitoringrapport, en cijfers uit de bijlage manueel overgenomen
-
-## Survey_deadw = TRUE
+CP's deadwood 1eSET (2000): opname uitgevoerd, maar niet geïmporteerd in FieldMap.
+Verwerkt door Luc DK ikv eerste monitoringrapport, en gegevens uit het monitoringrapport
+("CP_Kerss_logs_2000.xlsx" in folder "C:/03_BR/1_DataVerwerkingBR/Data/Meetgegevens/logs_CPs_Kerss_2000")
+opgehaald mbv script "Main_UpdateForresdat_02_dendro.Rmd".
 
 ```{r CORR_survey_deadw_CP_Kerss}
 # plotinfo %>% filter(forest_reserve == "Kersselaerspleyn" & plottype == "CP" & period == 1) %>% nrow()
 # 64
 
 # plotinfo %>% filter(forest_reserve == "Kersselaerspleyn" & plottype == "CP" 
-                   # & period == 1 & survey_trees) %>% nrow()
+#                     & period == 1 & survey_trees) %>% nrow()
 # 53
 
 plotinfo_ <- plotinfo %>% 
@@ -364,20 +390,13 @@ plotinfo <- plotinfo_
 # Export plotinfo
 
 ```{r plotinfo_save_git, eval=FALSE}
-save_results_git(
+save_results_forresdat(
   results = list(plotinfo = plotinfo)
   , repo_path = path_to_git_forresdat
+  , metadata_path = paste0(path_to_metadata, "_metadata_plotinfo.xlsx")
   , strict = TRUE
   # , strict = FALSE
-)
-
-```
-
-```{r plotinfo_save_git_manueel, eval=FALSE}
-# manueel - eigen simpele functie - als save_results_git niet werkt
-save_results_tsv(list(plotinfo = plotinfo), 
-                 root = path_to_forresdat_data, 
-                 strict = TRUE)
+  )
 
 ```
 
@@ -395,20 +414,12 @@ save_results_csv(
     output_dir = path_to_plotlevel_csv
   )
 
-```
-
-Direct naar gdrive exporteren (csv): 
-naar **/PRJ_BOSECO_ALGEMEEN/PRJ_BR_AanvraagGegevens/!METADATA-ALL_PLOTS/_plot-level-data/**
-
-```{r plotinfo_save_gdrive, eval = FALSE}
-# naar gdrive
+# gdrive
 save_results_csv(
     results = list(plotinfo = plotinfo),
     output_dir = path_to_plotlevel_gdrive
   )
-
 ```
-
 
 **Na update van forresdat, project "forresdat" openen en alles naar de cloud pushen**
 **Eventueel ook access op gdrive plaatsen**
