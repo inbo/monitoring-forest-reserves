@@ -1299,12 +1299,12 @@ Daarnaast ook volgende lookuplijsten:
 En tenslotte de shapefiles van de CA-plots en de grens van het reservaat (voor de CP's)
 ipv veld "BOUNDARY" in DESIGN.txt (gevraagd aan Yannick (mail 25/9/2024)):   
 
-It defines the geometry of *site boundaries* and *LPI plot boundaries*. 
-Site boundary is indicated by the black line in Fig. 1A. 
-If possible fill in as a well-known text geometry (WKT).
-e.g. type Polygon for site boundary or one LPI plot, MultiPolygon for site boundary + one or multiple LIP plots. 
+- It defines the geometry of *site boundaries* and *LPI plot boundaries*. 
+  Site boundary is indicated by the black line in Fig. 1A. 
+  If possible fill in as a well-known text geometry (WKT).
+  e.g. type Polygon for site boundary or one LPI plot, MultiPolygon for site boundary + one or multiple LIP plots. 
 
-Alternatively please provide shapefiles.
+- Alternatively please provide shapefiles.
 
 ```{r final_check, eval = FALSE}
 #
@@ -1347,7 +1347,21 @@ design_def_link %>% filter(is.na(LYING_DEAD_THRESHOLD)) %>% distinct(SITE_NAME, 
 # OK, geen deadwood opname gebeurd
 ```
 
-```{r eenmalig_deadw_bijwerken, eval=FALSE}
+```{r}
+# check voor NA's site-id
+names(design_def_link)
+col <- c("SITE_ID", "SITE_NAME", "INVENTORY_YEAR")
+
+design_def_link %>% filter_at(col, any_vars(is.na(.)))
+plotdata_def_link %>% filter_at(col, any_vars(is.na(.)))
+standing_link %>% filter_at(col, any_vars(is.na(.)))
+lying_link %>% filter_at(col, any_vars(is.na(.)))
+cwd_link %>% filter_at(col, any_vars(is.na(.)))
+
+```
+
+
+```{r EENMALIG_deadw_bijwerken_moederdb, eval=FALSE}
 # enkel deadw_3eSET
 qry_update_calc_vol <- paste0("UPDATE Deadwood_3eSET SET Deadwood_3eSET.CalcVolume_m3 = Deadwood_3eSET.Volume_m3 WHERE ((Deadwood_3eSET.CalcVolume_m3 Is Null) AND (Deadwood_3eSET.IntactFragment=20))") %>%
            noquote()
