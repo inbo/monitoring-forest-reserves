@@ -578,6 +578,12 @@ for (tablename in names(dendro_plotinfo2)) {
 
 # Vergelijking met oude data
 
+!! # Functies `read_forresdat()` en `read_forresdat_table()` kunnen enkel data binnenhalen 
+van de main branch, niet de develop branch.
+Op termijn zou dat in orde moeten geraken (gevraagd via mail 26/9/24 aan Els): 
+optie om ook uit develop branch data binnen te kunnen halen.
+
+
 ```{r eval = FALSE}
 dendro_by_plot_git <- read_forresdat(tablename = "dendro_by_plot"
                                      , join_plotinfo = TRUE) %>% 
