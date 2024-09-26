@@ -140,16 +140,69 @@ Enkele makkelijke functies uit forrescalc:
 
 ## Vanuit forresdat naar analysedb - LUKT NIET
 
-24/9 mail naar ELs L.
+26/9 mail naar ELs L.
 
-Els, 
+Els, de functie "save_results_access" werkt nu, geen probleem. Bedankt.
 
-beide functies ("from_forresdat_to_access" & "save_results_access") werken niet bij mij:
-er wordt telkens maar één tabel weggeschreven (de eerste uit de lijst)
-én de foutmelding is twee keer dezelfde "Error: nanodbc/nanodbc.cpp:1777: HYC00
-[Microsoft][ODBC Microsoft Access-stuurprogramma]De optionele voorziening is niet geïmplementeerd"
+Maar de functie "from_forresdat_to_access" lukt nog niet 
 
-Enig idee?
+------------
+> from_forresdat_to_access(tables = c("qalive_dead", "qbranch_lenght_reduction",  
++                                     "qbrows_index", "qcommonremark", "qcover_herbs" , 
++                                     "qcrown_vol_redu", "qdecaystage", 
++                                     "qheight_class_regeneration", "qherb_species240810", 
++                                     "qind_shoot_cop", "qintact_snag", "qiufroheight",
++                                     "qiufroheight_shoots", "qiufrosocialstatus", 
++                                     "qiufrosocialstatus_shoots", "qiufrovitality", 
++                                     "qiufrovitality_shoots", "qnumber_regeneration_classes", 
++                                     "qplot_type", "qspecies" , "qvdagn_vfm"),
++                          database = path_to_analysis_set_db,
++                          remove_tables = TRUE,
++                          join_plotinfo = FALSE)
+Rows: 2 Columns: 6
+── Column specification ─────────────────────────────────────────────────────────────────────────────────────────────
+Delimiter: ","
+chr (2): Value1, Value2
+dbl (2): ID, Active
+lgl (2): Value3, OrderField
+
+ℹ Use `spec()` to retrieve the full column specification for this data.
+ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+Warning in read_forresdat_table(tablename, join_plotinfo = join_plotinfo,  :
+  The dataset only contains presence data and lacks zero observations (except for 1 observation per plot_id and period to indicate that observations are done).  Please use function add_zeros() to add zero observations when needed.
+Error: table qbranch_lenght_reduction is not present in forresdat
+------------
+
+Ik ben dan even gaan graven en ik denk dat het te maken heeft met functie "download_forresdat".
+
+In branch develop op git staat qbranch_lenght_reduction, ook in mijn forresdat-folder.
+Maar blijkbaar gaat de functie forresdat terug binnenhalen ...
+
+Ik heb ook "read_forresdat_table" (dat gebruikt wordt in "from_forresdat_to_access") eens getest, en enkel bij qalive_dead lukt het inlezen, 
+bij de andere LU-lists niet (staan wel op github onder branch develop)
+
+------------
+> read_forresdat_table(tablename = "qalive_dead", join_plotinfo = FALSE)
+Rows: 2 Columns: 6
+── Column specification ─────────────────────────────────────────────────────────────────────────────────────────────
+Delimiter: ","
+chr (2): Value1, Value2
+dbl (2): ID, Active
+lgl (2): Value3, OrderField
+
+ℹ Use `spec()` to retrieve the full column specification for this data.
+ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+Warning in read_forresdat_table(tablename = "qalive_dead", join_plotinfo = FALSE) :
+  As table 'qalive_dead' has no field 'plottype', the output table contains all records, not only those with plottype CP.
+Warning in read_forresdat_table(tablename = "qalive_dead", join_plotinfo = FALSE) :
+  The dataset only contains presence data and lacks zero observations (except for 1 observation per plot_id and period to indicate that observations are done).  Please use function add_zeros() to add zero observations when needed.
+> read_forresdat_table(tablename = "qcommonremark", join_plotinfo = FALSE)
+Error: table qcommonremark is not present in forresdat
+------------
+
+
+
+Is niet super dringend, want ik kan nu wel verder met "save_results_access", maar op termijn zou dat in orde moeten geraken ;-)
 
 
 ```{r eval = FALSE}
@@ -159,7 +212,7 @@ Enig idee?
 #                          , pattern = "\\.csv$") %>% 
 #   gsub("\\.csv$", "", .)
 # file_names
-from_forresdat_to_access(tables = c("qalive_dead", "qbranch_lenght_reduction", 
+from_forresdat_to_access(tables = c("qalive_dead", "qbranch_lenght_reduction",  
                                     "qbrows_index", "qcommonremark", "qcover_herbs" , 
                                     "qcrown_vol_redu", "qdecaystage", 
                                     "qheight_class_regeneration", "qherb_species240810", 
@@ -172,11 +225,21 @@ from_forresdat_to_access(tables = c("qalive_dead", "qbranch_lenght_reduction",
                          remove_tables = TRUE,
                          join_plotinfo = FALSE)
 
+read_forresdat_table(tablename = "qalive_dead", join_plotinfo = FALSE)
+read_forresdat_table(tablename = "qcommonremark", join_plotinfo = FALSE)
+
+library(frictionless)
+datapackage <- frictionless::read_package(file.path(path_to_forresdat_data, "datapackage.json"))
+resources(datapackage)
 ```
- Indien functie `from_forresdat_to_access` niet werkt, functie `save_results_access`
- proberen.
  
- Daarvoor is een list nodig van de weg te schrijven tabellen.
+ 
+## List met lkp-lists naar analysedb - ok 
+ 
+Indien functie `from_forresdat_to_access` niet werkt, functie `save_results_access`
+gebruiken.
+ 
+Daarvoor is een list nodig van de weg te schrijven tabellen.
  
 ```{r list_lkp}
 # inladen
@@ -227,7 +290,15 @@ list_lkp <- list(qIndShootCop = qIndShootCop, qAliveDead = qAliveDead, qSpecies 
                  qcommonremark = qcommonremark
                  )
 
-names(list_lkp)
+# Blijkbaar Value3 als logical geëxporteerd verderop
+# => all Value3 as character when it is logical (sometimes integer: qspecies, ...)
+# lapply: same function over all elements of the list
+list_lkp2 <- lapply(list_lkp, function(df) {
+  df %>%
+    mutate(Value3 = ifelse(is.logical(Value3), as.character(Value3), Value3))  # Modify Value3 field
+})
+
+list_lkp <- list_lkp2
 
 ```
  
@@ -244,13 +315,12 @@ save_results_access(
   remove_tables = TRUE
 )
 
-
 ```
 
 
 ## Afzonderlijke files - ok
 
-Csv-files opslaan po c-schijf en in teamdrive `r path_to_lulists_gdrive` (zonder json).
+Csv-files opslaan op c-schijf en in teamdrive `r path_to_lulists_gdrive` (zonder json).
 
 ```{r eval = FALSE}
 path_to_lulists_gdrive
