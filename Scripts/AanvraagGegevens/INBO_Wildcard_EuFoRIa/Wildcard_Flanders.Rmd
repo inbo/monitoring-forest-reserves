@@ -232,6 +232,10 @@ If necessary volume and species can be derived from old inventory report: "CP_Ke
 in 1986 only contains trees still standing in 2000
 **=> we nemen 1986 hier niet mee**
 
+! No (lying) deadwood measurements in 1986 and 2000 in plot 11000 (core area Kersselaerspleyn)    
+! In 2010 and 2020 treshold for lying deadwood measurements is 40 cm
+<!-- (51 intacte liggende dode bomen in KV Kerss) -->
+
 ```{r}
 info_survey <- info_survey_ %>% 
   filter(!(plot_id == 11000 & period == 0))
@@ -650,6 +654,7 @@ data_stems <- compose_stem_data(data_dendro, data_shoots, extra_variables = TRUE
 height_model <- load_height_models()
 
 data_deadwood <- load_data_deadwood(database = path_to_fieldmap_db, processed = TRUE)
+data_deadwood <- calc_intact_deadwood(data_deadwood)  # overschrijft calc_volume_m3 uit db met volume intacte boom
 
 data_stems_calc <- calc_variables_stem_level(data_stems, height_model)
 
@@ -660,6 +665,7 @@ data_stems_calc %>% filter(is.na(tree_id))
 # t <- data_stems_calc %>% group_by(tree_id, ind_sht_cop) %>% 
 #   summarise(n = n()) %>% ungroup()
 ```
+
 
 ## Select processed plots
 
@@ -1290,8 +1296,8 @@ Daarnaast ook volgende lookuplijsten:
 - qDecaystage.txt   
 - qVitality.txt  
 
-> Ook de shapefiles bezorgen van de CA-plots en de grens van het reservaat (voor de CP's)
-ipv veld "BOUNDARY" in DESIGN.txt - gevraagd aan Yannick (mail 25/9/2024)
+En tenslotte de shapefiles van de CA-plots en de grens van het reservaat (voor de CP's)
+ipv veld "BOUNDARY" in DESIGN.txt (gevraagd aan Yannick (mail 25/9/2024)):   
 
 It defines the geometry of *site boundaries* and *LPI plot boundaries*. 
 Site boundary is indicated by the black line in Fig. 1A. 
@@ -1301,7 +1307,10 @@ e.g. type Polygon for site boundary or one LPI plot, MultiPolygon for site bound
 Alternatively please provide shapefiles.
 
 ```{r final_check, eval = FALSE}
+#
 summary(lying_link)
+# 45 NA's voor D1/2: OK, want intacte bomen
+# 88 nA's voor decay - OK, kan
 names(lying)
 names(lying0)
 t <- lying0 %>% filter(is.na(calc_volume_m3)) %>% 
@@ -1309,14 +1318,15 @@ t <- lying0 %>% filter(is.na(calc_volume_m3)) %>%
          , plot_id, period, year, lying_deadw_id
          , intact_fragm
          , species
-         , contains(c("calc", "total", "diam")))
+         , contains(c("calc", "total", "diam", "vol")))
 t %>% distinct(forest_reserve, plottype)
 # period 3: nog niet bijgewerkt (calc_volume inside plot en bijwerken calc_volume)
-# tot nu toe heb ik dat gedaan met bijwerkquery in dbEls ...
+# ok 25/9/2024
 
-
+#
 summary(cwd_link)
 
+#
 summary(standing_link)
 standing_link %>% filter(is.na(VOLUME))
 standing0 %>% filter(is.na(vol_bole_m3)) %>% 
@@ -1324,16 +1334,36 @@ standing0 %>% filter(is.na(vol_bole_m3)) %>%
          , tree_id, tree_measure_id, old_id, coppice_id
          , ind_sht_cop, alive_dead, species, intact_snag
          , contains(c("m2", "m3")))
-# !! intact_snag = 12, maar geen hoogte - ok; (intact van gemaakt)
+# !! intact_snag = 12, maar geen hoogte - ok; (intact van gemaakt in moederdb)
 
+#
 summary(plotdata_def_link)
 plotdata_def_link %>% filter(is.na(SAMPLED_AREA))
 plotdata_def_link %>% filter(SITE_ID == 7) # OK, opgelost
 
+#
 summary(design_def_link)
 design_def_link %>% filter(is.na(LYING_DEAD_THRESHOLD)) %>% distinct(SITE_NAME, WILDCARD_sub_ID, period)
 # OK, geen deadwood opname gebeurd
 ```
+
+```{r eenmalig_deadw_bijwerken, eval=FALSE}
+# enkel deadw_3eSET
+qry_update_calc_vol <- paste0("UPDATE Deadwood_3eSET SET Deadwood_3eSET.CalcVolume_m3 = Deadwood_3eSET.Volume_m3 WHERE ((Deadwood_3eSET.CalcVolume_m3 Is Null) AND (Deadwood_3eSET.IntactFragment=20))") %>%
+           noquote()
+
+qry_update_calc_length <- "UPDATE Deadwood_3eSET SET Deadwood_3eSET.CalcLength_m = Deadwood_3eSET.Length_m WHERE ((Deadwood_3eSET.CalcLength_m) Is Null)" %>%
+           noquote()
+  
+conn <- odbcConnectAccess2007(path_to_fieldmap_db)
+
+sqlQuery(conn,qry_update_calc_vol)
+sqlQuery(conn,qry_update_calc_length)
+
+odbcClose(conn)
+```
+
+
 
 
 ```{r WegschrijvenOutput, eval = FALSE}
