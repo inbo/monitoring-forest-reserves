@@ -132,6 +132,7 @@ data_stems  <- compose_stem_data(data_dendro, data_shoots, extra_variables = TRU
 height_model <- load_height_models()
 
 data_deadwood <- load_data_deadwood(database = path_to_fieldmap_db, processed = TRUE)
+data_deadwood <- calc_intact_deadwood(data_deadwood)
 ```
 
 ```{r check_heightmodels}
@@ -591,6 +592,7 @@ data_stems_calc <- calc_variables_stem_level(data_stems, height_model)
 data_dendro_calc <- calc_variables_tree_level(data_dendro, data_stems_calc)
 
 # onderstaande functie bevat reeds berekening van data_stems_calc/data_trees_calc
+# en ook data_deadwood <- calc_intact_deadwood(data_deadwood)
 dendro <- calculate_dendrometry(data_dendro, data_deadwood, data_shoots, height_model, plotinfo)
 ```
 
