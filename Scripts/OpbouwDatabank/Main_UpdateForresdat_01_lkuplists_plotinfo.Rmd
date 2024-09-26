@@ -138,71 +138,14 @@ Enkele makkelijke functies uit forrescalc:
 
 
 
-## Vanuit forresdat naar analysedb - LUKT NIET
+## Vanuit forresdat naar analysedb
 
-26/9 mail naar ELs L.
+Functie `from_forresdat_to_access()` is gebaseerd op de functies `read_forresdat()` en `read_forresdat_table()`. 
+Deze kunnen enkel data binnenhalen van de main branch, niet de develop branch.
+Dus tijdelijk met `save_results_access()` werken.
 
-Els, de functie "save_results_access" werkt nu, geen probleem. Bedankt.
-
-Maar de functie "from_forresdat_to_access" lukt nog niet 
-
-------------
-> from_forresdat_to_access(tables = c("qalive_dead", "qbranch_lenght_reduction",  
-+                                     "qbrows_index", "qcommonremark", "qcover_herbs" , 
-+                                     "qcrown_vol_redu", "qdecaystage", 
-+                                     "qheight_class_regeneration", "qherb_species240810", 
-+                                     "qind_shoot_cop", "qintact_snag", "qiufroheight",
-+                                     "qiufroheight_shoots", "qiufrosocialstatus", 
-+                                     "qiufrosocialstatus_shoots", "qiufrovitality", 
-+                                     "qiufrovitality_shoots", "qnumber_regeneration_classes", 
-+                                     "qplot_type", "qspecies" , "qvdagn_vfm"),
-+                          database = path_to_analysis_set_db,
-+                          remove_tables = TRUE,
-+                          join_plotinfo = FALSE)
-Rows: 2 Columns: 6
-── Column specification ─────────────────────────────────────────────────────────────────────────────────────────────
-Delimiter: ","
-chr (2): Value1, Value2
-dbl (2): ID, Active
-lgl (2): Value3, OrderField
-
-ℹ Use `spec()` to retrieve the full column specification for this data.
-ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
-Warning in read_forresdat_table(tablename, join_plotinfo = join_plotinfo,  :
-  The dataset only contains presence data and lacks zero observations (except for 1 observation per plot_id and period to indicate that observations are done).  Please use function add_zeros() to add zero observations when needed.
-Error: table qbranch_lenght_reduction is not present in forresdat
-------------
-
-Ik ben dan even gaan graven en ik denk dat het te maken heeft met functie "download_forresdat".
-
-In branch develop op git staat qbranch_lenght_reduction, ook in mijn forresdat-folder.
-Maar blijkbaar gaat de functie forresdat terug binnenhalen ...
-
-Ik heb ook "read_forresdat_table" (dat gebruikt wordt in "from_forresdat_to_access") eens getest, en enkel bij qalive_dead lukt het inlezen, 
-bij de andere LU-lists niet (staan wel op github onder branch develop)
-
-------------
-> read_forresdat_table(tablename = "qalive_dead", join_plotinfo = FALSE)
-Rows: 2 Columns: 6
-── Column specification ─────────────────────────────────────────────────────────────────────────────────────────────
-Delimiter: ","
-chr (2): Value1, Value2
-dbl (2): ID, Active
-lgl (2): Value3, OrderField
-
-ℹ Use `spec()` to retrieve the full column specification for this data.
-ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
-Warning in read_forresdat_table(tablename = "qalive_dead", join_plotinfo = FALSE) :
-  As table 'qalive_dead' has no field 'plottype', the output table contains all records, not only those with plottype CP.
-Warning in read_forresdat_table(tablename = "qalive_dead", join_plotinfo = FALSE) :
-  The dataset only contains presence data and lacks zero observations (except for 1 observation per plot_id and period to indicate that observations are done).  Please use function add_zeros() to add zero observations when needed.
-> read_forresdat_table(tablename = "qcommonremark", join_plotinfo = FALSE)
-Error: table qcommonremark is not present in forresdat
-------------
-
-
-
-Is niet super dringend, want ik kan nu wel verder met "save_results_access", maar op termijn zou dat in orde moeten geraken ;-)
+Op termijn zou dat in orde moeten geraken (gevraagd via mail 26/9/24 aan Els): optie om ook uit develop branch 
+data binnen te kunnen halen.
 
 
 ```{r eval = FALSE}
