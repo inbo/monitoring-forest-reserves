@@ -41,7 +41,7 @@ source(here::here("scripts/Setup.R"))
 
 
 ```{r Setup2}
-path_to_project <- "C:/03_BR/3_AanvraagGegevens/FOURCAST"
+path_to_project <- "C:/03_BR/3_AanvraagGegevens/INBO_FOURCAST"
 path_to_project_teamdrive <- "G:/Gedeelde drives/PRJ_FOURCAST/Data/Dendrometrie"  
 
 path_to_datarequest <- paste0(path_to_project, "/output/")
@@ -197,17 +197,6 @@ Velden `data_regeneration`:
 
     - CP's: steeds gelijk aan subcirclearea_ha     
            
-
-```{r}
-select_colnames_reg <- data_regeneration %>% 
-  select(forest_reserve, plot_id, plottype
-         , period, year, subcircle, subcirclearea_ha
-         , height_class, species, nr_of_regeneration
-         ) %>% 
-  colnames()
-
-select_colnames_reg
-```
 
 # Analyse
 

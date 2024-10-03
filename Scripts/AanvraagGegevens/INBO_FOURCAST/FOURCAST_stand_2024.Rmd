@@ -41,7 +41,7 @@ source(here::here("scripts/Setup.R"))
 
 
 ```{r Setup2}
-path_to_project <- "C:/03_BR/3_AanvraagGegevens/FOURCAST"
+path_to_project <- "C:/03_BR/3_AanvraagGegevens/INBO_FOURCAST"
 path_to_project_teamdrive <- "G:/Gedeelde drives/PRJ_FOURCAST/Data/Dendrometrie"  
 
 path_to_datarequest <- paste0(path_to_project, "/output/")
