@@ -93,7 +93,7 @@ path_to_heightmodels_teamdrive <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverw
 
 
 # Data-aanvragen ------
-# path_to_datarequests <- "C:/03_BR/3_AanvraagGegevens/"
+path_to_datarequests <- Sys.getenv("path_to_datarequests")
 path_to_datarequests_gdrive <- path_to_output_gdrive
 
 
