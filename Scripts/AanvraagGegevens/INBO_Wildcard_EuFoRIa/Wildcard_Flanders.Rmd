@@ -63,8 +63,7 @@ Data is collected over the whole of Europe.
 
 The script below generates all info and data according to the guidelines stipulated in this document: [DTF_Tree-Data-Template_final.xlsx](https://docs.google.com/spreadsheets/d/1jV4II-uSDDKaNNWqeBIXi6IQ_BSK_LFr?rtpof=true&usp=drive_fs)
 
-<!-- Ik ga me niet bezig houden met link tss fieldmap-sites en euforia-sites. -->
-<!-- Ik maak de data voor de FM-sites (BR + CP vs CA) en Yannick kan dan verder veratel naar Euforia-sites. -->
+The managed plots in the mainly non-managed forest reserves (EUFORIA-sites) are removed prior to analysis.
 
 
 **Design  level data**
@@ -201,6 +200,7 @@ con <- odbcConnectAccess2007(path_to_strata_db)
   info_survey_ <- sqlFetch(con, "info_survey", stringsAsFactors = FALSE)
   info_XY <- sqlFetch(con, "strata_location", stringsAsFactors = FALSE)
   info_beheer <- sqlFetch(con, "strata_remaining", stringsAsFactors = FALSE)
+  dominant_tree <- sqlFetch(con, "dominant_tree", stringsAsFactors = FALSE)
   strata_soil <- sqlFetch(con, "strata_soil", stringsAsFactors = FALSE) %>% 
     select(Unieknr, plot_id, SiteName, SubArea, forest_reserve_fieldmap)
 odbcClose(con)
@@ -241,6 +241,58 @@ info_survey <- info_survey_ %>%
   filter(!(plot_id == 11000 & period == 0))
 ```
 
+## Strata
+
+### Only unmanaged plots
+
+f.e. Ename: grazing is a kind of management
+
+
+Veld `Management` is meest correcte hier.
+
+```{r check_management, eval=FALSE}
+names(info_beheer)
+
+unique(info_beheer$Management)
+unique(info_beheer$Management_type)
+
+
+beheer_check <- info_survey %>% 
+  left_join(info_beheer)
+
+table(beheer_check$Management, beheer_check$Management_type)
+table(beheer_check$Management)
+table(beheer_check$Management_type)
+
+unmanaged <- beheer_check %>% 
+  filter(Management == "unmanaged" | Management_type == "Non-intervention")
+table(unmanaged$Management, unmanaged$Management_type)
+
+t <- unmanaged %>% 
+  filter(Management == "managed forest" & Management_type == "Non-intervention") %>% 
+  select(forest_reserve_fieldmap, plot_id, Management, Management_type)
+
+
+```
+
+### Kluisbos: no Poplar
+
+11 plots with poplar 
+
+? ik vind er maar 6
+
+```{r}
+# names(info_survey)
+poplar_kluisbos <- info_survey %>% 
+  left_join(dominant_tree) %>% 
+  filter(forest_reserve == "Kluisbos" & MaxBasalAreaSpeciesName == "Populier species") %>% 
+  select(plot_id)
+
+unique(poplar_kluisbos$plot_id)
+```
+
+
+
 
 ## Variables
 
@@ -264,6 +316,9 @@ plotdata0 <- info_survey %>%
   # (niet 52000 en 61000: immers enkel 1eSet een opname, dan niet meer)
   inner_join(info_XY %>% select(Unieknr, XLon_wgs84, YLat_wgs84, Z_m_TAW), by = c("Unieknr")) %>% 
   # left_join(link_WC_FM, by = c(forest_reserve_fieldmap", plottype))
+  left_join(info_beheer) %>% 
+  filter(Management == "unmanaged") %>% 
+  anti_join(poplar_kluisbos) %>% 
   mutate(SITE_ID = NA, SITE_NAME = NA, WILDCARD_sub_ID = NA
          , INVENTORY_YEAR = year_dendro
          , LPI_ID = ifelse(plottype == "CA", plot_id, NA)
