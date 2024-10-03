@@ -109,7 +109,7 @@ from_access_to_forresdat(
              "qcommonremark", 
              "qiufrosocialstatus", "qiufroheight", "qiufrovitality", 
              "qiufrosocialstatus_shoots", "qiufroheight_shoots", "qiufrovitality_shoots",
-             "qBrowsIndex", "qCoverHerbs", 
+             "qtotalCover", "qBrowsIndex", "qCoverHerbs", 
              "qPlotType", 
              "qIntactSnag", "qIndShootCop", "qVdagnVfm",
              "qCrownVolRedu","qBranchLenghtReduction"),
@@ -195,7 +195,8 @@ con <- odbcConnectAccess2007(path_to_fieldmap_db)
   qDecaystage <- sqlFetch(con, "qdecaystage", stringsAsFactors = FALSE)
   qIntactSnag <- sqlFetch(con, "qIntactSnag", stringsAsFactors = FALSE)
   qVdagnVfm <- sqlFetch(con, "qVdagnVfm", stringsAsFactors = FALSE)
-    
+  
+  qtotalCover<- sqlFetch(con, "qtotalCover", stringsAsFactors = FALSE)
   qHerbSpecies240810<- sqlFetch(con, "qHerbSpecies240810", stringsAsFactors = FALSE)
   qCoverHerbs <- sqlFetch(con, "qCoverHerbs", stringsAsFactors = FALSE)
   qBrowsIndex <- sqlFetch(con, "qBrowsIndex", stringsAsFactors = FALSE)
@@ -226,6 +227,7 @@ list_lkp <- list(qIndShootCop = qIndShootCop, qAliveDead = qAliveDead, qSpecies 
                  qiufrosocialstatus_shoots = qiufrosocialstatus_shoots,
                  qiufrovitality = qiufrovitality, 
                  qiufrovitality_shoots = qiufrovitality_shoots,
+                 qtotalCover = qtotalCover,
                  qHerbSpecies240810 = qHerbSpecies240810, 
                  qCoverHerbs = qCoverHerbs, qBrowsIndex = qBrowsIndex, 
                  qHeightClass_regeneration = qHeightClass_regeneration, 
