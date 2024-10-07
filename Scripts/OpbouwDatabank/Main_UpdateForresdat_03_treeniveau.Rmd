@@ -34,6 +34,18 @@ source(here::here("scripts/Setup.R"))
 ```
 
 
+
+```{r juiste_forrescalc}
+# !!! eerst zeker 'install.packages("forrescalc")
+# zodat data goede release krijgt!
+# zie mail 7/10/24 van Els L.
+# soms een andere branch nodig als Els nog iets moet fixen, maar als ik naar forresdat 
+# wil wegschrijven, moet ik officiële versie van forresclac gebruiken
+
+install.packages("forrescalc")
+```
+
+
 # Vraagstelling
 DOEL van dit script is een update van forresdat gegevens naar 
 

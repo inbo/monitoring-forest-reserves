@@ -42,6 +42,19 @@ dbFactorsWallonia_path <- here::here(dbFactorsWallonia)
 ```
 
 
+
+```{r juiste_forrescalc}
+# !!! eerst zeker 'install.packages("forrescalc")
+# zodat data goede release krijgt!
+# zie mail 7/10/24 van Els L.
+# soms een andere branch nodig als Els nog iets moet fixen, maar als ik naar forresdat 
+# wil wegschrijven, moet ik officiële versie van forresclac gebruiken
+
+install.packages("forrescalc")
+```
+
+
+
 # Vraagstelling
 DOEL van dit script is om - naar analogie met LULUCF - een plot-level analyseset aan te maken, 
 met info over carbon stock.
