@@ -1,8 +1,8 @@
 ---
 title: "Dataverwerking - verjonging"
-subtitle: "Everzwijnbad - cirkelplots & kernvlakte"
+subtitle: "FOURCAST - cirkelplots"
 author: "Anja Leyman"
-date: "`r Sys.Date()`"
+date: "2024-06-27"
 output: 
   html_document:
     keep_md: FALSE
@@ -61,7 +61,7 @@ Brondata Fieldmap: `path_to_fieldmap_db` aanpassen
 #   "C:/03_BR/3_AanvraagGegevens/FOURCAST/BF_inbo23/FieldMapData_BF_inbo23.accdb"
 
 path_to_fieldmap_db <-
-  "C:/03_BR/3_AanvraagGegevens/FOURCAST/FOURCAST_inbo24/FieldMapData_FOURCAST_inbo24.accdb"
+  "C:/03_BR/3_AanvraagGegevens/INBO_FOURCAST/FOURCAST_inbo24/FieldMapData_FOURCAST_inbo24.accdb"
 ```
 
 
@@ -234,17 +234,17 @@ for (tablename in names(reg_plotinfo)) {
 ## Controle op NA's
 
 ```{r results = 'hide'}
-names(regeneration_by_plot_height_species)
+names(reg_by_plot_height_species)
 
-unique(regeneration_by_plot_height_species$height_class)
-unique(regeneration_by_plot_height_species$species)
+unique(reg_by_plot_height_species$height_class)
+unique(reg_by_plot_height_species$species)
 ```
 
 
 ```{r}
 col <- c("approx_nr_regeneration_ha")
 
-regeneration_by_plot_height_species %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+reg_by_plot_height_species %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
 
 ```
 ## Extra variabelen
@@ -255,7 +255,7 @@ boomsoort berekend worden.
 ```{r }
 # names(regeneration_by_plot_height_species)
 
-result_reg <- regeneration_by_plot_height_species %>% 
+result_reg <- reg_by_plot_height_species %>% 
   # exact aantal toevoegen
   left_join(data_regeneration %>% 
               select(plot_id, species, height_class, subcircle, nr_of_regeneration)

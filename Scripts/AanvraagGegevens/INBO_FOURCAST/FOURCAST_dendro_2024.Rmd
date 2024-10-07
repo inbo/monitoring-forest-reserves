@@ -2,7 +2,7 @@
 title: "Dataverwerking - dendro"
 subtitle: "FOURCAST - cirkelplots"
 author: "Anja Leyman"
-date: "`r Sys.Date()`"
+date: "2024-06-27"
 output: 
   html_document:
     keep_md: FALSE
@@ -60,7 +60,7 @@ Brondata Fieldmap: `path_to_fieldmap_db` aanpassen
 #   "C:/03_BR/3_AanvraagGegevens/FOURCAST/BF_inbo23/FieldMapData_BF_inbo23.accdb"
 
 path_to_fieldmap_db <-
-  "C:/03_BR/3_AanvraagGegevens/FOURCAST/FOURCAST_inbo24/FieldMapData_FOURCAST_inbo24.accdb"
+  "C:/03_BR/3_AanvraagGegevens/INBO_FOURCAST/FOURCAST_inbo24/FieldMapData_FOURCAST_inbo24.accdb"
 ```
 
 

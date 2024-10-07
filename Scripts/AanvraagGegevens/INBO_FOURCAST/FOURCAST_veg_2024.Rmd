@@ -1,6 +1,6 @@
 ---
-title: "Dataverwerking - verjonging"
-subtitle: "Everzwijnbad - cirkelplots & kernvlakte"
+title: "Dataverwerking - vegetatie"
+subtitle: "FOURCAST - cirkelplots"
 author: "Anja Leyman"
 date: "`r Sys.Date()`"
 output: 
@@ -61,7 +61,7 @@ Brondata Fieldmap: `path_to_fieldmap_db` aanpassen
 #   "C:/03_BR/3_AanvraagGegevens/FOURCAST/BF_inbo23/FieldMapData_BF_inbo23.accdb"
 
 path_to_fieldmap_db <-
-  "C:/03_BR/3_AanvraagGegevens/FOURCAST/FOURCAST_inbo24/FieldMapData_FOURCAST_inbo24.accdb"
+  "C:/03_BR/3_AanvraagGegevens/INBO_FOURCAST/FOURCAST_inbo24/FieldMapData_FOURCAST_inbo24.accdb"
 
 # < FOURCAST_inbo24_202410011516.zip
 ```
