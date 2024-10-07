@@ -165,6 +165,7 @@ data_vegetation %>% filter(is.na(total_herb_cover_id)) %>% nrow() # plots 1eSET
 Welke bosreservaten hebben vegetatiedata?
 Welke jaartallen werden er data verzameld?
 Aantal plots?
+Enkel KV of ook CP's en vice versa?
 
 
 ```{r}
@@ -185,12 +186,14 @@ survey_info0 <- plotinfo %>%
 ```{r}
 survey_info_ <- survey_info0 %>% 
   group_by(forest_reserve) %>% 
-  summarize(n_plots = n_CP + n_CA
+  summarize(n_plots = max(n_plots)
+            , CP = sum(n_CP > 0) > 0
+            , CA = sum(n_CA > 0) > 0
             , nb_resurveys = n_distinct(year_veg) - 1
             , years_survey = paste(year_veg, collapse = ",")
             , recent_survey = max(year_veg)
             ) %>% 
-  ungroup()
+  ungroup() 
 
 survey_info <- survey_info_
 ```
@@ -212,13 +215,18 @@ table(t$forest_reserve)
 
 ```{r dominant_tree}
 names(dominant_tree)
-dominant_tree_per_reserve <- dominant_tree %>% 
+dominant_tree_ <- dominant_tree %>% 
   left_join(plotinfo) %>% 
   group_by(forest_reserve, MaxBasalAreaSpeciesName) %>% 
   summarize(n_plots = n()) %>% 
   ungroup() %>% 
   arrange(forest_reserve, -n_plots)
 
+
+dominant_tree_per_reserve <- dominant_tree_ %>% 
+  group_by(forest_reserve) %>% 
+  summarize(dominant_tree = paste(MaxBasalAreaSpeciesName, collapse = ";")) %>% 
+  ungroup()
 ```
 
 
@@ -264,11 +272,10 @@ survey_info <- survey_info %>%
 ## Joined info
 
 ```{r}
-
+all_info <- survey_info %>% 
+  left_join(dominant_tree_per_reserve) %>% 
+  left_join(ferraris_per_reserve, by = c("forest_reserve" = "forest_reserve_fieldmap"))
 ```
-
-
-
 
 
 # Export
@@ -296,10 +303,24 @@ save_results_csv(
     results = list_overview,
     output_dir = path_to_datarequest)
 
+write.xlsx(all_info
+           , paste0(path_to_datarequest, "extra_info.xlsx")
+           , sheetName = "extra_info"
+           , showNA = FALSE
+           , append = FALSE) 
+
 # teamdrive
 save_results_csv(
     results = list_overview,
     output_dir = path_to_datarequest_teamdrive)
+
+write.xlsx(all_info
+           , paste0(path_to_datarequest_teamdrive, "extra_info.xlsx")
+           , sheetName = "extra_info"
+           , showNA = FALSE
+           , append = FALSE) 
+
+
 ```
 
 
