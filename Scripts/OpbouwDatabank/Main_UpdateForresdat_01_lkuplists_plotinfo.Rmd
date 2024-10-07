@@ -79,7 +79,7 @@ print(paste0("path_to_shp is ", path_to_shp))
 - 25/9/2024: eerste keer op basis van een kopie van de volledige moederdatabank
 (te vinden als zip-file op citrix onder "...\Projects\PRJ_BosEco\PRJ_ALG_FIELDMAP\FM_MDB BOSRESERVATEN")    
 
-- 
+- 7/10/2024: qTotalCover toegevoegd aan forresdat
 
 
 # Update lookuplijsten - INDIEN GEWIJZIGD
