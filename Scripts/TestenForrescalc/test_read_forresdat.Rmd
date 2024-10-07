@@ -1,0 +1,56 @@
+---
+title: "Check read_forresdat"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: yes
+      smooth_scroll: yes
+---
+
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = FALSE,  # FALSE: dan kan ik knitten zonder dat er iets gebeurt
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+
+```
+
+
+```{r}
+test <- read_forresdat_table(tablename = "qspecies", git_ref_type = "branch", git_reference = "develop", 
+                             join_plotinfo = FALSE)
+
+view(test)
+```
+
+
+```{r}
+datapackage <- read_forresdat(git_ref_type = "branch", git_reference = "develop")
+frictionless::resources(datapackage)
+attr(datapackage, "forresdat")
+
+test <- frictionless::read_resource(datapackage, "qind_shoot_cop")
+view(test)
+```
+
+
