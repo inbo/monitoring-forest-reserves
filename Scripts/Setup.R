@@ -70,7 +70,6 @@ library(googledrive)
 library(googlesheets4)
 
 library(usethis)
-library(forrescalc)
 
 # library(conflicted)  #ivm problemen unused argument bij "here", lukt ook door here::here te gebruiken
 
@@ -81,6 +80,7 @@ library(forrescalc)
 # bovenstaande libraries zitten allemaal vervat in package "forrescalc"
 # !! toch best inladen, want soms nodig voor eigen code (buiten de functies van forrescalc)
 library(forrescalc)
+library(frictionless)
 
 
 
