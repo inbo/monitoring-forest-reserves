@@ -1,0 +1,322 @@
+---
+title: "ForestREplot"
+subtitle: "Vegetatiegegevens intensieve monitoring bosreservaten"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: TRUE
+      smooth_scroll: TRUE
+---
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 7,
+  fig.height = 3,
+  fig.align = TRUE)
+
+library(here)
+library(writexl)
+library(scales)
+
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+
+```
+
+
+```{r Setup2}
+path_to_project <- "C:/03_BR/3_AanvraagGegevens/UGENT_ForestREplot"
+path_to_project_teamdrive <- "G:/Gedeelde drives/Team_Boseco_BR/PRJ_BR_AanvraagGegevens/UGENT_ForestREplot"  
+
+path_to_datarequest <- paste0(path_to_project, "/output_R/")
+path_to_datarequest_teamdrive <- paste0(path_to_project_teamdrive, "/output_R/")
+path_to_html_teamdrive <- path_to_datarequest_teamdrive
+path_to_html <- path_to_datarequest
+
+path_to_datacontrol <- paste0(path_to_project, "/datacontrole/")
+
+```
+
+
+# Vraagstelling
+
+Export vegetatiegegevens in kader van ForestREplot:
+
+- Alle vegetatiegegevens van plots waar 20 jaa tusGegevens op plotniveau mbt totale bedekking (enkel 2024)    
+- Gegevens op soortniveau (beide periodes beschikbaar in FieldMap)    
+
+**OPGEPAST**: bij de vorige opname werden geen houtige soorten genoteerd, nu wel.      
+Er werden ook geen kopgegevens zoals totale bedekking kruid-, struik- en boomlaag genoteerd.
+
+```{r results='hold', eval=TRUE}
+path_to_fieldmap_db
+path_to_datarequest
+path_to_datarequest_teamdrive
+
+```
+
+## Mail Pieter De Frenne
+
+dag Anja
+
+bedankt voor je vraag. Leuk dat deze data deel van forestREplot zouden worden.
+
+Het klopt inderdaad nog dat je de template kan invullen en dan naar Markus of mij opsturen. Ik kan zeker ook de eerste stappen doorlopen.
+
+Je kan inderdaad per bosreservaat verschillende proefvlakken allemaal oplijsten als verschillende plots. Ik zou alle Vlaamse bosreservaten wel allemaal samen behandelen als één regio. Lijkt me vreemd om die op te splitsen, aangezien ze niet zo ver van elkaar liggen en omdat de samenstelling qua soorten waarschijnlijk toch vrij veel zal overlappen.
+
+Dat sommige plots in oud vs jong bos liggen is geen probleem. Zolang deze info maar per plot gedocumenteerd wordt als de data worden doorgestuurd. Vroeger focusten we vnl op oud bos, maar jong bos mag nu zeker ook gesubmit worden.
+
+M.b.t. het aantal surveys: dit slaat echt op het aantal jaren dat er veldwerk is gedaan. Als de vegetatie opgenomen werd in bv. 1991, 2001 en 2021 is dat dus 3.
+
+Laat gerust weten als dit niet duidelijk is of als je nog vragen hebt.
+
+groeten,
+Pieter
+-- 
+Prof. Dr. Ir. Pieter De Frenne
+Ghent University | Faculty of Bioscience Engineering | Department of Environment
+Forest & Nature Lab  | Geraardsbergsesteenweg 267 | 9090 Gontrode (Belgium)
+T +32(0)9 264 90 36
+
+http://www.fornalab.ugent.be
+http://www.fleur.ugent.be
+http://www.forestreplot.ugent.be
+http://www.canopychange.ugent.be
+
+
+# Load data
+
+
+
+## Load plotinfo
+
+Plotinfo samenstellen, zijnde plottype, naam forest_reserve en info over survey en data al dan niet processed.
+Wegschrijven naar git, access en opslaan als csv
+
+```{r plotinfoload, results='hide'}
+plotinfo <- load_plotinfo(database = path_to_fieldmap_db, processed = FALSE) %>% 
+  filter(plottype %in% c("CP", "CA")) %>% 
+  filter(survey_veg == TRUE)
+names(plotinfo)
+
+# plotinfo %>% filter(data_processed == FALSE) %>% nrow()
+table(plotinfo$data_processed)
+```
+```{r strata}
+con <- odbcConnectAccess2007(path_to_strata_db)
+  info_survey_ <- sqlFetch(con, "info_survey", stringsAsFactors = FALSE)
+  info_XY <- sqlFetch(con, "strata_location", stringsAsFactors = FALSE)
+  info_beheer <- sqlFetch(con, "strata_remaining", stringsAsFactors = FALSE)
+  dominant_tree <- sqlFetch(con, "dominant_tree", stringsAsFactors = FALSE)
+  strata_soil <- sqlFetch(con, "strata_soil", stringsAsFactors = FALSE) %>% 
+    select(Unieknr, plot_id, SiteName, SubArea, forest_reserve_fieldmap)
+  strata_hist <- sqlFetch(con, "strata_history", stringsAsFactors = FALSE)
+odbcClose(con)
+
+# unieknr 11001 tem 11006 zijn delen van Kerss
+info_survey_ <- info_survey_ %>% 
+  filter(!Unieknr %in% c(11001, 11002, 11003, 11004, 11005, 11006))
+
+```
+
+
+## Load vegetation plot level data
+
+Withoefse heide: geen heropname in 2de decade
+
+```{r load_veg}
+data_vegetation <-
+  load_data_vegetation(
+    database = path_to_fieldmap_db,
+    processed = FALSE
+  )
+
+data_vegetation <- data_vegetation %>% 
+  filter(plottype %in% c("CP", "CA")) %>% 
+  mutate(year_veg = as.numeric(format(date_vegetation,'%Y')))
+
+data_vegetation %>% filter(is.na(plotarea_ha)) %>% nrow() == 0
+data_vegetation %>% filter(is.na(total_herb_cover_id)) %>% nrow() # plots 1eSET
+```
+
+
+
+# Info voor template 
+
+## Info mbt surveys
+
+Welke bosreservaten hebben vegetatiedata?
+Welke jaartallen werden er data verzameld?
+Aantal plots?
+
+
+```{r}
+# names(data_vegetation)
+survey_info0 <- plotinfo %>% 
+  left_join(data_vegetation %>% select(plot_id, subplot_id, period, year_veg, year_main_survey)) %>% 
+  group_by(forest_reserve, period) %>% 
+  summarize(year_veg = min(year_veg, na.rm = TRUE),   #uitz. eens een plot later opgemeten
+            n_CP = sum(plottype == "CP"),
+            n_CA = sum(plottype == "CA"),
+            n_plots = n_CP + n_CA
+            ) %>% 
+  ungroup()
+
+# view(survey_info0)
+```
+
+```{r}
+survey_info_ <- survey_info0 %>% 
+  group_by(forest_reserve) %>% 
+  summarize(n_plots = n_CP + n_CA
+            , nb_resurveys = n_distinct(year_veg) - 1
+            , years_survey = paste(year_veg, collapse = ",")
+            , recent_survey = max(year_veg)
+            ) %>% 
+  ungroup()
+
+survey_info <- survey_info_
+```
+
+
+
+```{r results = 'hide'}
+# zijn er zonder info over struik of boomlaag?
+t <- plotinfo %>% filter(survey_veg == TRUE & (survey_trees == FALSE | survey_reg == FALSE))
+
+table(t$forest_reserve)
+# uitzonderlijk, niet systematisch => OK
+```
+
+
+## Extra info
+
+**Dominant tree**
+
+```{r dominant_tree}
+names(dominant_tree)
+dominant_tree_per_reserve <- dominant_tree %>% 
+  left_join(plotinfo) %>% 
+  group_by(forest_reserve, MaxBasalAreaSpeciesName) %>% 
+  summarize(n_plots = n()) %>% 
+  ungroup() %>% 
+  arrange(forest_reserve, -n_plots)
+
+```
+
+
+**Ancient forest (partly)**
+
+```{r ancient_forest}
+names(strata_hist)
+hist_per_reserve <- strata_hist %>% 
+  group_by(forest_reserve_fieldmap, hist_beknopt, boslftd) %>% 
+  summarize(n_plots = n(),
+            CP = sum(plot_id < 10000) > 0,
+            CA = sum(plot_id > 10000) > 0,
+            plot_ids = paste(plot_id, collapse = ";"),
+            n_plots_ferraris = sum(hist_beknopt == "'1111"),
+            n_plots = n()
+             ) %>% 
+  ungroup() %>% 
+  arrange(forest_reserve_fieldmap, -n_plots)
+
+ferraris_per_reserve <- hist_per_reserve %>% 
+  group_by(forest_reserve_fieldmap) %>% 
+  summarize(n_plots_ferraris = sum(n_plots_ferraris)
+            , n_plots_all = sum(n_plots)
+            # , ferraris = sum(hist_beknopt == "'1111") > 0
+            ) %>% 
+  ungroup()
+
+```
+
+
+**Limitations**
+
+No cover of shrub and tree layer 
+(only number of regeneration and number of trees)
+
+```{r limitations}
+survey_info <- survey_info %>% 
+  mutate(limitations = "No cover of shrub and tree layer recorded")
+
+```
+
+
+## Joined info
+
+```{r}
+
+```
+
+
+
+
+
+# Export
+
+Resultaten worden opgeslagen als csv op c-schijf en in teamdrive:
+
+```{r}
+path_to_datarequest
+path_to_datarequest_teamdrive
+
+```
+
+
+```{r list}
+list_overview <- list(
+  survey_info = survey_info
+  , dominant_tree_per_reserve = dominant_tree_per_reserve
+  , ferraris_per_reserve = ferraris_per_reserve
+  , hist_per_reserve = hist_per_reserve
+  )
+```
+
+```{r save, eval=FALSE}
+save_results_csv(
+    results = list_overview,
+    output_dir = path_to_datarequest)
+
+# teamdrive
+save_results_csv(
+    results = list_overview,
+    output_dir = path_to_datarequest_teamdrive)
+```
+
+
+# Copy html
+
+Na knitting - manueel
+
+Naar `r path_to_html` (c-schijf)
+
+```{r eval = FALSE}
+# Specify the path of the file you want to copy
+source_file <- here::here(paste0("Scripts/AanvraagGegevens/INBO_FOURCAST/FOURCAST_reg_2024.html"))
+
+# Specify the destination directory where you want to copy the file
+destination_dir <- path_to_html
+
+# Copy the file to the destination directory
+file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
+# ? file.copy
+```
