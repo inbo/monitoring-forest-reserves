@@ -36,15 +36,20 @@ source(here::here("scripts/Setup.R"))
 ```
 
 
+> juiste forrescalc kiezen:   
+- om weg te schrijven naar forresdat => met juiste release: dan `install.packages("forrescalc")`  
+- laatste correcties van forrescalc => juiste branch selecteren in forrescalc en opnieuw builden
+(bv. branch 'bugfix' met corr van read_forresdat waarbij we de develop branch kunnen selecteren ipv main)
 
-```{r juiste_forrescalc}
+```{r juiste_forrescalc, eval = FALSE}
 # !!! eerst zeker 'install.packages("forrescalc")
 # zodat data goede release krijgt!
 # zie mail 7/10/24 van Els L.
 # soms een andere branch nodig als Els nog iets moet fixen, maar als ik naar forresdat 
-# wil wegschrijven, moet ik officiële versie van forresclac gebruiken
+# wil wegschrijven, moet ik officiële versie van forrescalc gebruiken
 
 install.packages("forrescalc")
+
 ```
 
 

@@ -54,27 +54,6 @@ Deze laten toe statistieken te berekenen per bosreservaat, en ook over alle bosr
 
 <!-- Onderstaande tabel geeft een overzicht van de gegevens die gebruikt worden voor de analyse.   -->
 
-```{r OverzichtInput, results="markup", include=FALSE}
-
-# data_overzicht <- data.frame(
-#   tabelnaam = c("FieldMapData_MDB_BOSRES_selectieEls.accdb", "tblTreeSpeciesCharacteristics_BR.csv"),
-#   locatie = c(path_to_fieldmap, paste (here("Data/ExterneData"))),
-#   md5 = c(md5(path_to_fieldmap), md5("tblTreeSpeciesCharacteristics_BR.csv"))
-# )
-
-data_overzicht <- data.frame(
-  tabelnaam = c("FieldMapData_MDB_BOSRES_selectieEls.accdb"),
-  locatie = c(path_to_fieldmap),
-  md5 = c(md5(path_to_fieldmap))
-)
-
-data_overzicht %>%
-  kable() %>%
-  kable_styling()
-
-```
-
-
 ```{r LoadLookuplists}
 con <- odbcConnectAccess2007(path_to_fieldmap_db)
   
