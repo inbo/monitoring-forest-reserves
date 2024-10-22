@@ -1,6 +1,7 @@
 http_proxy=
 
 path_to_dataverwerking="C:/03_BR/1_DataverwerkingBR/"
+path_to_dataverwerking_teamdrive="G:/Gedeelde drives/Team_Boseco_BR/PRJ_BR_Gegevensverwerking/"
 
 path_to_forrescalc="C:/03_BR/2_Forrescalc/R/"
 
