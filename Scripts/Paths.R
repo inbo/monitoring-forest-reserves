@@ -57,6 +57,8 @@ path_to_analysis_set_db <- paste0(path_to_dataverwerking, "Output/BR_analysedb.a
 path_to_dbResults <- paste0(path_to_dataverwerking, "Output/BR_resultaten.accdb")
 dbResults <- path_to_dbResults
 
+path_to_dataverwerking_teamdrive <- Sys.getenv("path_to_dataverwerking_teamdrive") # "G:/Gedeelde drives/Team_Boseco_BR/PRJ_BR_Gegevensverwerking/"
+
 
 # Output - gdrive (PRJ_BR_AanvraagGegevens) ----
 # path_to_output_gdrive <- "G:/.shortcut-targets-by-id/0B0xcP-eNvJ9dQ2w5ZFhSZEpCU0E/PRJ_BOSECO_ALGEMEEN/PRJ_BR_AanvraagGegevens/"   # oude drive
