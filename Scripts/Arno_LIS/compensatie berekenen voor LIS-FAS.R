@@ -44,7 +44,7 @@ plotliney <- plot
 plotline2 <- plot
 plotline3 <- plot
 
-plotliney$d2 <- -(plot$diamy/10)^2
+plotliney$d2 <- -(plot$diamy/10)^2  # (c)A: diameter in cm en in t kwadraat
 plotline2$d2 <- -(plot$diaml2/10)^2
 plotline3$d2 <- -(plot$diaml3/10)^2
 plotline <- rbind(plotliney, plotline2, plotline3)
