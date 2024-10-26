@@ -52,6 +52,18 @@ path_to_datacontrol <- paste0(path_to_project_teamdrive, "/datacontrole/")
 
 ```
 
+Tijdelijk verwijzen naar fieldmapdb van 13/6/2024, want daar is alles initieel op berekend
+
+```{r TEMP_db}
+path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_X8_inbo2020_20240613/")
+
+dbFieldmap <- "FieldMapData_MDB_BR_X8_inbo2020.accdb"
+path_to_fieldmap_db <- paste0(path_to_fieldmap, dbFieldmap)
+path_to_fieldmap_db_all <- paste0(path_to_fieldmap, dbFieldmap)
+```
+
+
+
 
 
 # Request
@@ -457,7 +469,7 @@ CONSISTENT_ID_STANDING: aanpassen voor Kerss, CP's survey 2: niet gekoppeld, wan
 rA3 gaat van 9m (survey 1) naar 12m (survey 2 en 3) 
 => "CONSISTENT_ID_STANDING": "NA" voor de 1ste periode (= standaard), én "N" voor de 2de periode
 
-```{r}
+```{r uitz_consistent_id_Kerss_CP}
 plotdata <- plotdata %>% 
   mutate(CONSISTENT_ID_STANDING = 
            ifelse(forest_reserve_fieldmap == "Kersselaerspleyn" & 
@@ -470,17 +482,26 @@ plotdata <- plotdata %>%
 
 
 
-CONSISTENT_ID_STANDING: ook aanpassen voor plot_id 11000 (oude kernvlakte Kerss):
+CONSISTENT_ID_STANDING/LYING: ook aanpassen voor plot_id 11000 (oude kernvlakte Kerss):
 survey 1 (1986) niet meegenomen => survey 2 moet ook nog NA zijn 
 => "CONSISTENT_ID_STANDING": "NA" voor 2000
+=> "CONSISTENT_ID_LYING": "NA" voor 2000
 
-```{r}
+> indien gevraagd kunnen we nog verder gaan en "CONSISTENT_ID_LYING" ook "NA" 
+zetten voor 2010, want dat is de eerste keer dat deadwood opgemeten werd in de KV
+
+```{r uitz_consistent_id_Kerss_OldCore}
 plotdata <- plotdata %>% 
   mutate(CONSISTENT_ID_STANDING = 
            ifelse(plot_id == 11000 & 
                     survey_number == 2
                   , NA
                   , CONSISTENT_ID_STANDING)
+         , CONSISTENT_ID_LYING = 
+           ifelse(plot_id == 11000 & 
+                    survey_number == 2
+                  , NA
+                  , CONSISTENT_ID_LYING)
   )
      
 ```

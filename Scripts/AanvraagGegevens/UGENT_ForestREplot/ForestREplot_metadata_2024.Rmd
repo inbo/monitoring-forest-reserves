@@ -1,6 +1,6 @@
 ---
 title: "ForestREplot"
-subtitle: "Vegetatiegegevens intensieve monitoring bosreservaten"
+subtitle: "Metadata intensieve monitoring bosreservaten"
 author: "Anja Leyman"
 date: "`r Sys.Date()`"
 output: 
@@ -56,13 +56,18 @@ path_to_datacontrol <- paste0(path_to_project, "/datacontrole/")
 
 # Vraagstelling
 
-Export vegetatiegegevens in kader van ForestREplot:
+Aanmaak metadata ivm vegetatiegegevens in kader van ForestREplot 
 
-- Alle vegetatiegegevens van plots waar 20 jaa tusGegevens op plotniveau mbt totale bedekking (enkel 2024)    
-- Gegevens op soortniveau (beide periodes beschikbaar in FieldMap)    
+- plots met opnames waar minimaal 20 jaar tussen zit
 
-**OPGEPAST**: bij de vorige opname werden geen houtige soorten genoteerd, nu wel.      
-Er werden ook geen kopgegevens zoals totale bedekking kruid-, struik- en boomlaag genoteerd.
+Arno Thomaes heeft in 2022 reeds een aanzet gedaan om hun template in te vullen:
+[NewDatasets_Arno_2022_old_version.xlsx](https://docs.google.com/spreadsheets/d/1oGfj6pMlpwSM37kSp698bvE5-kA51tb1?rtpof=true&usp=drive_fs)   
+
+Deze moet verder aangevuld worden mbv de in onderstaand script aangemaakte overzichten: zie [NewDatasets_INBO_forests_2024.xlsx](https://docs.google.com/spreadsheets/d/1-z9Gx5svz8xUZYkWZmLInHrUPoQSCWVQ?rtpof=true&usp=drive_fs)
+
+Metadata vervolgens aan veranwoordelijken ForestREplot (Markes en Pieter De Frenne) bezorgen, 
+en zij beslissen dan welke data ze in ForestREplot willen opnemen.
+
 
 ```{r results='hold', eval=TRUE}
 path_to_fieldmap_db
@@ -103,14 +108,11 @@ http://www.canopychange.ugent.be
 
 # Load data
 
-
-
 ## Load plotinfo
 
 Plotinfo samenstellen, zijnde plottype, naam forest_reserve en info over survey en data al dan niet processed.
-Wegschrijven naar git, access en opslaan als csv
 
-```{r plotinfoload, results='hide'}
+```{r load_plotinfo, results='hide'}
 plotinfo <- load_plotinfo(database = path_to_fieldmap_db, processed = FALSE) %>% 
   filter(plottype %in% c("CP", "CA")) %>% 
   filter(survey_veg == TRUE)
