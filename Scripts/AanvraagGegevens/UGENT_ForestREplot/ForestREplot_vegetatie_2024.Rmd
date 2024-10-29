@@ -66,6 +66,8 @@ Zie [NewDatasets_INBO_forests_2024.xlsx](https://docs.google.com/spreadsheets/d/
 Daaruit hebben zij 9 reservaten geselecteerd die voldoen om in ForestREplot opgenomen te worden.
 Voor elke van deze reservaten werd ons een afzonderlijke template bezorgd die wij moeten aanvullen.
 
+Ze vragen om enkel de eerste en laatste dataset aan te leveren, niet de tussenliggende opnames.
+
 
 ```{r results='hold', eval=TRUE}
 path_to_fieldmap_db
@@ -192,7 +194,7 @@ cover
 
 # Plot information
 
-## Load data
+## Load plot data
 
 ```{r load_plotinfo, results='hide'}
 plotinfo <- load_plotinfo(database = path_to_fieldmap_db, processed = FALSE) %>% 
@@ -257,14 +259,17 @@ maar niet van de subplots!!
 
 ```{r load_veg}
 # jaartal van vegetatie-opname
-data_vegetation <-
+data_vegetation_ <-
   load_data_vegetation(
     database = path_to_fieldmap_db,
     processed = FALSE
   )
 
-data_vegetation <- data_vegetation %>% 
-  mutate(year_veg = as.numeric(format(date_vegetation,'%Y')))
+data_vegetation <- data_vegetation_ %>% 
+  mutate(year_veg = as.numeric(format(date_vegetation,'%Y'))) %>% 
+  rename(name_fieldmap = forest_reserve) %>% 
+  inner_join(list_reserves %>% select(name_fieldmap), by = c("name_fieldmap")) %>% 
+  mutate(plot_origID = paste(plot_id, subplot_id, sep = "_"))
 
 data_vegetation %>% filter(is.na(plotarea_ha)) %>% nrow() == 0
 names(data_vegetation)
@@ -277,9 +282,6 @@ names(data_vegetation)
 # year_surveys < year vegetation 
 
 surveys <- data_vegetation %>% 
-  rename(name_fieldmap = forest_reserve) %>% 
-  inner_join(list_reserves %>% select(name_fieldmap), by = c("name_fieldmap")) %>% 
-  mutate(plot_origID = paste(plot_id, subplot_id, sep = "_")) %>% 
   select(name_fieldmap, plottype, plot_origID, plot_id, subplot_id, period, year_veg)
   
 unique(surveys$name_fieldmap)
@@ -324,7 +326,11 @@ surveys <- surveys_
 > de opname van 2024 van Jansheideberg en Heirnisse ontbreekt nog
 (daar moet nog datacontrole op gebeuren oa dendro, ik wacht op initiatief van Peter)
 
-
+> !! opnames 1991: in kleinere plots (volgens mij 2x2)? Dan misschien beter niet aanleverenen, 
+plotgrootte moet cte zijn anders niet te vergelijken
+Ook tss 1e en 2e set meer opgemeten, enkel het initiele transect behouden, rest is geen heropname
+Bv. Hannecart & Rodebos: maar 10 plots gemeten in 2001, pas in 2012 50 subplots, maar dus enkel in die 10 
+geïnteresseerd
 
 ## History
 
@@ -478,8 +484,19 @@ names(plotinformation_)
 
 ```{r}
 # 2) met date_veg erbij op subplotniveau 
+table(plotinformation_$VegePlot)
+
 plotinformation <- plotinformation_ %>% 
-  left_join(surveys)  
+  left_join(surveys)  %>% 
+  mutate(plot_size = ifelse(str_detect(VegePlot, "16 x 16 m")
+                           , 256
+                           , ifelse(str_detect(VegePlot, "10 x 10 m")
+                                    , 100
+                                    , ifelse(str_detect(VegePlot, "5 x 5 m")
+                                             , 25, NA)
+                           )
+  ))
+
 # surveys: meerdere subplots
 nrow(plotinformation)  # 2031
 
@@ -497,9 +514,44 @@ t <- plotinformation %>%
 # 2031
 ```
 
+```{r}
+names(plotinformation)
+
+plotinformation <- plotinformation %>% 
+  select(dataset_ID, name, name_fieldmap
+         , plotID = plot_id, plot_origID
+         , latitude = YLat_wgs84, longitude	= XLon_wgs84
+         , altitude = Z_m_TAW
+         , year_baseline_survey,	year_resurvey_R1, year_resurvey_R2	
+         , plot_size
+         , former_landuse,	year_afforestation)
+
+```
+
+Enkel de plots behouden waar er in periode 1 een veg-opname gebeurd is.
+Bij de andere plots immers geen 20 jaar tussen
+
+> ? Bauwensplots: baseline survey is eigenlijk 1954, maar welke plots werden daar bemonsterd? 
+Volgens Luc allemaal, maar toch best aan Arno en Yannick vragen, vooral om link te hebben,
+ook tss 2000 en 2014.
+Mogelijks fieldmap immers niet 100% correct, zeker te checken.
+Arno zou ook data van 1954 hebben volgens Luc.
+Misschien beter dat zij die data samenzetten? 
+
+> Gevraagd mail van 29/10/2024
+
+```{r filter}
+plotinfo_def <- plotinformation %>% 
+  filter(!is.na(year_baseline_survey))
+
+# i!! mogelijks niet correct voor Bauwensplots
+```
 
 
-# Load vegetation data
+
+# Vegetation_sampling
+
+## Load vegetation data
 
 
 ```{r load_lkp_veg}
@@ -514,163 +566,119 @@ qHerbSpecies <- qHerbSpecies %>% select(ID, name_sc = Value2)
 ```
 
 
-```{r load_veg_data}
-data_vegetation0 <-
-  load_data_vegetation(
-    database = path_to_fieldmap_db,
-    processed = FALSE
-  )
-
-data_vegetation <- data_vegetation0 %>% 
-  inner_join(list_plots) # `by = join_by(plot_id, plottype, period)
-nrow(data_vegetation) #5759
-
+```{r veg_data}
+# hoger reeds ingeladen
+nrow(data_vegetation) #4228
+table(data_vegetation$name_fieldmap)
 ```
 
 ```{r load_herblayer}
-data_herblayer0 <-
+data_herblayer_ <-
   load_data_herblayer(
     database = path_to_fieldmap_db,
     processed = FALSE
   )
 
-data_herblayer <- data_herblayer0 %>% 
-  inner_join(list_plots) # `by = join_by(plot_id, plottype, period)
-  
-nrow(data_herblayer) # 76131
+data_herblayer <- data_herblayer_ %>% 
+  rename(name_fieldmap = forest_reserve) %>% 
+  inner_join(list_reserves %>% select(dataset_ID, name_fieldmap), by = c("name_fieldmap")) %>% 
+  mutate(plot_origID = paste(plot_id, subplot_id, sep = "_")) %>% 
+  left_join(qHerbSpecies, by=c("species" = "ID"))
+
+nrow(data_herblayer)# 42203
 
 table(data_herblayer$period)
 #    1     2     3 
-# 33993 32178  9960
+# 16261 17539  8403 
 
 ```
 
+## Combine variables
 
-
-
-
-
-
-
-
-# Info voor template 
-
-## Info mbt surveys
-
-Welke bosreservaten hebben vegetatiedata?
-Welke jaartallen werden er data verzameld?
-Aantal plots?
-Enkel KV of ook CP's en vice versa?
+Species name	
+layer	
+plot_origID -->
+survey -->
 
 
 ```{r}
-# names(data_vegetation)
-survey_info0 <- plotinfo %>% 
-  left_join(data_vegetation %>% select(plot_id, subplot_id, period, year_veg, year_main_survey)) %>% 
-  group_by(forest_reserve, period) %>% 
-  summarize(year_veg = min(year_veg, na.rm = TRUE),   #uitz. eens een plot later opgemeten
-            n_CP = sum(plottype == "CP"),
-            n_CA = sum(plottype == "CA"),
-            n_plots = n_CP + n_CA
-            ) %>% 
-  ungroup()
+names(data_herblayer)
 
-# view(survey_info0)
+veg_sampling <- data_herblayer %>% 
+  mutate(layer = "herb") %>% 
+  select(dataset_ID, species
+         , name_sc, layer, plot_origID
+         , period, year
+         , cover = coverage_class_average_perc)
+names(veg_sampling)
+
 ```
+
+In tabblad "plot_information" moeten we aangeven welk jaartal elke survey is
+
+- year_baseline_survey     
+- year_resurvey_R1     
+- year_resurvey_R2     
+
+In tabblad "veg_sampling" moeten we bij survey aangeven welke survey het is:     
+
+- baseline: B
+- resurvey 1: R1
+- resurvey 2: R2
+
+Dat varieert van reservaat tot reservaat: 
+
+- baseline is overal periode 1 (!! wegfilteren waar year van periode 1 = NA) 
+- resurvey is overal periode 3 !! 
+
+Uitzondering zijn de Bauwenplots waar baseline 1954 is (zit al in databank en waar 2014 dus heropname is).
+Daar ga ik dus enkel de heropname van 2000 en 2014 aanleveren: R1 en R2
+
+Daarom splits ik beide datasets op:
+
+- dataset/veg_sampling intensieve monitoring   
+- dataset/veg_sampling Bauwensplots     
+  
 
 ```{r}
-survey_info_ <- survey_info0 %>% 
-  group_by(forest_reserve) %>% 
-  summarize(n_plots = max(n_plots)
-            , CP = sum(n_CP > 0) > 0
-            , CA = sum(n_CA > 0) > 0
-            , nb_resurveys = n_distinct(year_veg) - 1
-            , years_survey = paste(year_veg, collapse = ",")
-            , recent_survey = max(year_veg)
-            ) %>% 
-  ungroup() 
-
-survey_info <- survey_info_
+plots_resurveys <- plotinformation %>% 
+  filter(!is.na(year_baseline_survey))
 ```
 
+Bij intensieve monitoring sites is de tweede survey altijd periode 3
+Baseline survey altijd periode 1
 
+```{r only_int_monitoring}
+veg_sampling_int_monit <- veg_sampling %>% 
+  filter(dataset_ID != "EU_85") %>% 
+  select(-year) %>% 
+  # dplyr::select(variable, period, mean) %>% 
+  # rename(year_resurvey_R = period) %>% 
+  spread(period, cover, sep = "_") %>% 
+  select(dataset_ID, species
+         , name_sc, layer, plot_origID 
+         , B = period_1, R1 = period_3)
 
-```{r results = 'hide'}
-# zijn er zonder info over struik of boomlaag?
-t <- plotinfo %>% filter(survey_veg == TRUE & (survey_trees == FALSE | survey_reg == FALSE))
-
-table(t$forest_reserve)
-# uitzonderlijk, niet systematisch => OK
-```
-
-
-## Extra info
-
-**Dominant tree**
-
-```{r dominant_tree}
-names(dominant_tree)
-dominant_tree_ <- dominant_tree %>% 
-  left_join(plotinfo) %>% 
-  group_by(forest_reserve, MaxBasalAreaSpeciesName) %>% 
-  summarize(n_plots = n()) %>% 
-  ungroup() %>% 
-  arrange(forest_reserve, -n_plots)
-
-
-dominant_tree_per_reserve <- dominant_tree_ %>% 
-  group_by(forest_reserve) %>% 
-  summarize(dominant_tree = paste(MaxBasalAreaSpeciesName, collapse = ";")) %>% 
-  ungroup()
-```
-
-
-**Ancient forest (partly)**
-
-```{r ancient_forest}
-names(strata_hist)
-hist_per_reserve <- strata_hist %>% 
-  group_by(name_fieldmap, hist_beknopt, boslftd) %>% 
-  summarize(n_plots = n(),
-            CP = sum(plot_id < 10000) > 0,
-            CA = sum(plot_id > 10000) > 0,
-            plot_ids = paste(plot_id, collapse = ";"),
-            n_plots_ferraris = sum(hist_beknopt == "'1111"),
-            n_plots = n()
-             ) %>% 
-  ungroup() %>% 
-  arrange(name_fieldmap, -n_plots)
-
-ferraris_per_reserve <- hist_per_reserve %>% 
-  group_by(name_fieldmap) %>% 
-  summarize(n_plots_ferraris = sum(n_plots_ferraris)
-            , n_plots_all = sum(n_plots)
-            # , ferraris = sum(hist_beknopt == "'1111") > 0
-            ) %>% 
-  ungroup()
+head(veg_sampling_int_monit, 20)     
 
 ```
 
 
-**Limitations**
+```{r only_bauwens}
+veg_sampling_bauwens <- veg_sampling %>% 
+  filter(dataset_ID == "EU_85") %>% select(-year) %>% 
+  spread(period, cover, sep = "_") %>% 
+  select(dataset_ID, species
+         , name_sc, layer, plot_origID 
+         , R1 = period_1, R2 = period_2)
 
-No cover of shrub and tree layer 
-(only number of regeneration and number of trees)
-
-```{r limitations}
-survey_info <- survey_info %>% 
-  mutate(limitations = "No cover of shrub and tree layer recorded")
-
+head(veg_sampling_bauwens, 20)     
 ```
 
 
-## Joined info
+> ? wat met de NA's : die zouden allemaal "0" moeten worden
 
-```{r}
-all_info <- survey_info %>% 
-  left_join(dominant_tree_per_reserve) %>% 
-  left_join(ferraris_per_reserve, by = c("forest_reserve" = "name_fieldmap"))
-```
+
 
 
 # Export
