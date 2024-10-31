@@ -1062,7 +1062,7 @@ Per plot en per periode
 
 ## Info op niveau van bosreservaat 
 
-- forest_reserve_info_EUFORIA (opp_volledig reservaat, forest type, mean annual temp/precipitation)
+- forest_reserve_info_EUFORIA (opp. volledig reservaat, forest type, mean annual temp/precipitation)
 
 
 ## Export
