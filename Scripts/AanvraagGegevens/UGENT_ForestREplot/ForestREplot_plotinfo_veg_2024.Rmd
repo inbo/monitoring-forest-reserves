@@ -122,6 +122,9 @@ list_reserves <- data.frame(
 
 ```
 
+Sonian forest is enkel Kersselaerspleyn, want Zwaenepoel is nog maar één keer opgemeten in 2020
+en Harras enkel in 2009 en 2019.
+
 ```{r}
 list_reserves %>% select(dataset_ID, name, name_fieldmap, survey_1, plot_size_min) %>% DT::datatable()
 ```
@@ -827,6 +830,21 @@ veg_sampling_bauwens <- veg_sampling_bauwens %>%
 
 ## Site per site
 
+Een aantal zaken werden ingevuld door Arno obv methodiekrapport: 
+
+- altitude (min-max)
+- bodem
+- site area (wijkt soms licht af van opp. in strata-db die afgeleid is van Euforia input Kris)
+- ...
+
+<!-- Kris Vdk heeft allerlei data samen gezet voor Euforia, op niveau van het  -->
+<!-- volledige bosreservaat (CP vs KV):  -->
+<!-- EUFORIA_algemeen/enkel_INBO/INBO_link_forestreserve_EUFORIA_fieldmap.xlsx -->
+
+
+Ikzelf heb "forest reserve since xxxx" aangevuld en "dominant tree" 
+
+
 ### Wijnendale - EU_92
 
 **Plot information**
@@ -840,7 +858,6 @@ plotinfo_EU92 <- plotinfo_def %>%
 ```
 
 plotID	plot_origID	latitude	longitude	altitude	year_baseline_survey	year_resurvey_R1	plot_size	former_landuse	year_afforestation
-
 
 
 **Vegetation sampling**
@@ -900,10 +917,7 @@ veg_sampling_EU92_R1 <- veg_sampling_EU92_R1 %>%
   mutate(across(everything(), ~ replace_na(., 0)))
 ```
 
-
-
-
-# Export
+**Export**
 
 ```{r}
 path_to_datarequest
@@ -912,26 +926,202 @@ path_to_datarequest_teamdrive
 ```
 
 Site per site exporteren
-
-Starten met één site en bekijken of dat zo makkelijk kan overgebracht worden naar de templates.
-
 --> EU_92	Wijnendalebos	
 
-```{r EU_92, eval = FALSE}
+```{r export_EU_92, eval = FALSE}
 write.xlsx(plotinfo_EU92
-           , paste0(path_to_datarequest, "data_EU92.xlsx")
+           , paste0(path_to_datarequest, "EU_92_data.xlsx")
            , sheetName = "plotinfo"
            , showNA = FALSE
            , append = FALSE) 
 
 write.xlsx(veg_sampling_EU92_B
-           , paste0(path_to_datarequest, "data_EU92.xlsx")
+           , paste0(path_to_datarequest, "EU_92_data.xlsx")
            , sheetName = "veg_B"
            , showNA = FALSE
            , append = TRUE) 
 
 write.xlsx(veg_sampling_EU92_R1
-           , paste0(path_to_datarequest, "data_EU92.xlsx")
+           , paste0(path_to_datarequest, "EU_92_data.xlsx")
+           , sheetName = "veg_R1"
+           , showNA = FALSE
+           , append = TRUE) 
+
+# TEAMDRIVE---------
+write.xlsx(plotinfo_EU92
+           , paste0(path_to_datarequest_teamdrive, "EU_92_data.xlsx")
+           , sheetName = "plotinfo"
+           , showNA = FALSE
+           , append = FALSE) 
+
+write.xlsx(veg_sampling_EU92_B
+           , paste0(path_to_datarequest_teamdrive, "EU_92_data.xlsx")
+           , sheetName = "veg_B"
+           , showNA = FALSE
+           , append = TRUE) 
+
+write.xlsx(veg_sampling_EU92_R1
+           , paste0(path_to_datarequest_teamdrive, "EU_92_data.xlsx")
+           , sheetName = "veg_R1"
+           , showNA = FALSE
+           , append = TRUE) 
+```
+
+
+### Overige - EU_xx
+
+!! afwachten of Wijnendale OK is vooraleer ik begin met copy paste    
+
+Momenteel wel overal al tabblad "site info" aangevuld,
+behalve bij Jansheide en Heirnisse, omdat ik daar de data van 2024 nog niet heb
+
+
+Site per site exporteren: 
+
+- Rodebos      
+```{r Rodebos}
+EUxx <- "EU_90"
+```
+
+- Hannecart      
+```{r Hannecart}
+EUxx <- "EU_88"
+```
+
+- With_heide      
+```{r With_heide}
+EUxx <- "EU_93"
+```
+
+- Jansh      
+```{r Jansh}
+EUxx <- "EU_89"
+```
+!! Jansheideberg: nog geen export, want 2024 zit nog niet in de databank
+hoogte, aantal plots en year nog checken op tabblad "siteinfo"
+
+- Heirnisse      
+```{r Heirnisse}
+EUxx <- "EU_86"
+```
+!! Heirnisse: nog geen export, want 2024 zit nog niet in de databank
+hoogte, aantal plots en year nog checken op tabblad "siteinfo"
+
+- Everzw      
+```{r Everzw}
+EUxx <- "EU_87"
+```
+
+- Zonien      
+```{r Zonien}
+EUxx <- "EU_91"
+```
+
+- Bauwens
+```{r Bauwens}
+EUxx <- "EU_85"
+```
+!nog niet gedaan want niet zeker of het wel nodig is
+Ofwel 1954-2000: dat zit al in db
+Ofwel 1954-2014: maar heeft dat een grote meerwaarde??
+2000-2014 kan niet, want geen 20 jaar tussen
+
+
+
+**Plot information**
+
+```{r}
+plotinfo_EUxx <- plotinfo_def %>% 
+  filter(dataset_ID == EUxx) %>% 
+  select(-year_resurvey_R2)
+
+# names(plotinfo_EU92)
+```
+
+**Vegetation sampling**
+
+```{r results='hide'}
+# names(veg_sampling_int_monit)
+
+veg_sampling_EUxx <- veg_sampling_int_monit %>% 
+  filter(dataset_ID == EUxx)
+
+veg_sampling_EUxx %>% distinct(plot_origID) %>% nrow()  
+# 217 plots (ipv initieel 222)
+
+# base survey
+veg_sampling_EUxx_B <- veg_sampling_EUxx %>% 
+  select(-R1) %>% 
+  spread(plot_origID, B)
+  
+veg_sampling_EUxx_B %>% filter(is.na(species)) %>% nrow() == 0
+  
+# names(veg_sampling_EUxx_B)
+veg_sampling_EUxx_B %>% ncol() == nrow(veg_sampling_EUxx %>% distinct(plot_origID)) + 4
+
+```
+
+```{r eval = FALSE}
+# veg_sampling_EUxx_B <- veg_sampling_EUxx_B %>% 
+#   # NA moet "0" worden
+#   mutate(across(everything(), ~ replace_na(., 0)))
+
+```
+
+```{r results='hide'}
+veg_sampling_EUxx_R1 <- veg_sampling_EUxx %>% 
+  select(-B) %>% 
+  spread(plot_origID, R1) 
+  
+veg_sampling_EUxx_R1 %>% filter(is.na(species)) %>% nrow() == 0
+  
+names(veg_sampling_EUxx_R1)
+veg_sampling_EUxx_R1 %>% ncol() == nrow(veg_sampling_EUxx %>% distinct(plot_origID)) + 4
+
+```
+
+```{r eval = FALSE}
+# veg_sampling_EUxx_R1 <- veg_sampling_EUxx_R1 %>% 
+#   # NA moet "0" worden
+#   mutate(across(everything(), ~ replace_na(., 0)))
+```
+
+**Export**
+
+```{r export_EU_xx, eval = FALSE}
+write.xlsx(plotinfo_EUxx
+           , paste0(path_to_datarequest, EUxx, "_data.xlsx")
+           , sheetName = "plotinfo"
+           , showNA = FALSE
+           , append = FALSE) 
+
+write.xlsx(veg_sampling_EUxx_B
+           , paste0(path_to_datarequest, EUxx, "_data.xlsx")
+           , sheetName = "veg_B"
+           , showNA = FALSE
+           , append = TRUE) 
+
+write.xlsx(veg_sampling_EUxx_R1
+           , paste0(path_to_datarequest, EUxx, "_data.xlsx")
+           , sheetName = "veg_R1"
+           , showNA = FALSE
+           , append = TRUE) 
+
+# TEAMDRIVE---------
+write.xlsx(plotinfo_EUxx
+           , paste0(path_to_datarequest_teamdrive, EUxx, "_data.xlsx")
+           , sheetName = "plotinfo"
+           , showNA = FALSE
+           , append = FALSE) 
+
+write.xlsx(veg_sampling_EUxx_B
+           , paste0(path_to_datarequest_teamdrive, EUxx, "_data.xlsx")
+           , sheetName = "veg_B"
+           , showNA = FALSE
+           , append = TRUE) 
+
+write.xlsx(veg_sampling_EUxx_R1
+           , paste0(path_to_datarequest_teamdrive, EUxx, "_data.xlsx")
            , sheetName = "veg_R1"
            , showNA = FALSE
            , append = TRUE) 
@@ -955,4 +1145,13 @@ destination_dir <- path_to_html
 # Copy the file to the destination directory
 file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
 # ? file.copy
+
+# TEAMDRIVE ----------
+# Specify the destination directory where you want to copy the file
+destination_dir <- path_to_html_teamdrive
+
+# Copy the file to the destination directory
+file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
+# ? file.copy
+
 ```
