@@ -215,19 +215,29 @@ table(t$forest_reserve)
 
 **Dominant tree**
 
+In Latijnse namen
+
+```{r}
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+  qSpecies<- sqlFetch(con, "qSpecies", stringsAsFactors = FALSE)
+odbcClose(con)
+qSpecies <- qSpecies %>% select(ID, name_sc = Value2)
+```
+
+
 ```{r dominant_tree}
 names(dominant_tree)
 dominant_tree_ <- dominant_tree %>% 
   left_join(plotinfo) %>% 
-  group_by(forest_reserve, MaxBasalAreaSpeciesName) %>% 
+  left_join(qSpecies, by = c("MaxBasalAreaSpeciesID" = "ID")) %>% 
+  group_by(forest_reserve, MaxBasalAreaSpeciesName, name_sc) %>% 
   summarize(n_plots = n()) %>% 
   ungroup() %>% 
   arrange(forest_reserve, -n_plots)
 
-
 dominant_tree_per_reserve <- dominant_tree_ %>% 
   group_by(forest_reserve) %>% 
-  summarize(dominant_tree = paste(MaxBasalAreaSpeciesName, collapse = ";")) %>% 
+  summarize(dominant_tree = paste(name_sc, collapse = ";")) %>% 
   ungroup()
 ```
 
@@ -334,7 +344,7 @@ Naar `r path_to_html` (c-schijf)
 
 ```{r eval = FALSE}
 # Specify the path of the file you want to copy
-source_file <- here::here(paste0("Scripts/AanvraagGegevens/INBO_FOURCAST/FOURCAST_reg_2024.html"))
+source_file <- here::here(paste0("Scripts/AanvraagGegevens/UGENT_ForestREplot/ForestREplot_metadata_2024.html"))
 
 # Specify the destination directory where you want to copy the file
 destination_dir <- path_to_html
