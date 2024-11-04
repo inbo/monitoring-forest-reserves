@@ -82,6 +82,7 @@ path_to_project
 # Geselecteerde bosreservaten
 
 Volgende bosreservaten werden weerhouden
+(Bauwensplots na terugkoppeling met Pieter De Frenne toch niet, zie ook verder)
 
 ```{r}
 # library(datapasta)
@@ -131,8 +132,6 @@ list_reserves %>% select(dataset_ID, name, name_fieldmap, survey_1, plot_size_mi
 ```
 
 > OPGEPAST
-De *Bauwensplots* zijn iets moeilijker uit fieldmap te halen, aangezien er geen plotdetails ingevuld staan.
-Ev. laten invullen door Peter? 
 *Withoefse heide* nog niet verwerkt => strengere datacontrole
 *Jansheideberg en Heirnisse* 2024 zitten ook nog niet in moederdb
 
@@ -214,7 +213,6 @@ plotinfo %>% filter(data_processed == FALSE) %>% distinct(name_fieldmap)
 
 Withoefse heide en Bauwensplots nog niet verwerkt => strengere datacontrole
 Jansheideberg en Heirnisse 2024 zitten ook nog niet in moederdb
-
 
 Omdat info van de Bauwensplots niet in de strata-db van de monitoring zit, 
 vertrekken we hier van de originele shapefile aangemaakt door Marc Esprit, 
@@ -332,7 +330,7 @@ surveys_summ <- surveys %>%
 ```
 
 
-Overzicht:
+**Overzicht:**
 
 - Bauwensplots: maar 150 subplots twee keer heropgemeten (174 wél 2x gemeten)
 - Everzwijnbad: 1 plot niet opgemeten in periode 1
@@ -347,24 +345,25 @@ Overzicht:
 We filteren de plots weg waar geen 20 jr tussen twee opnames zit
 en hernoemen de periodes naar  `year_baseline_survey` en `year_resurvey_Rx`
 
-Bauwensplots wijken af van de rest: daar is period_1 = year_resurvey_R1 en 
-period_2 = year_resurvey_R2 (weliswaar maar 14 jaar tussen!)
-> ? Bauwensplots: baseline survey is eigenlijk 1954, maar welke plots werden daar bemonsterd? 
-Volgens Luc allemaal, maar toch best aan Arno en Yannick vragen, vooral om link te hebben,
-ook tss 2000 en 2014.
-Mogelijks fieldmap immers niet 100% correct, zeker te checken.
-Arno zou ook data van 1954 hebben volgens Luc.
-Misschien beter dat zij die data samenzetten? 
+<!-- Bauwensplots wijken af van de rest:     -->
 
-> Gevraagd mail van 29/10/2024 => beter laten vallen??
+<!-- - period_1 = year_resurvey_R1 -->
+<!-- - period_2 = year_resurvey_R2 (maar 14 jaar tussen!)    -->
+<!-- - Baseseline survey = 1954, maar welke plots werden daar bemonsterd?  -->
+<!-- Volgens Luc allemaal, maar toch best aan Arno en Yannick vragen, vooral om link te hebben, -->
+<!-- ook tss 2000 en 2014. Mogelijks fieldmap immers niet 100% correct, zeker te checken. -->
+<!-- Arno zou ook data van 1954 hebben volgens Luc. -->
+<!-- ==> Mailings van 29/10/2024 => we laten Bauwensplots (for now) vallen -->
 
 
-Bij de overige sites (muv With heide) geldt:    
+Bij de **overige sites** (muv With heide) geldt: 
+
 - year_baseline_survey = period_1    
 - year_resurvey_R1 = period_2
 - year_resurvey_R2 = period_3   
 
-With heide:
+**With heide**:    
+
 - year_baseline_survey = period_1    
 - year_resurvey_R1 = period_3
 
@@ -407,12 +406,12 @@ surveys_bauwens %>%
 surveys_def <- rbind(surveys_int_monit, surveys_bauwens)
 ```
 
-> !! opnames 1991: ? toevoegen én year_resurvey_Rxx daaraan aanpassen??
-in kleinere plots (volgens mij 2x2)? Dan misschien beter niet aanleverenen, 
-plotgrootte moet cte zijn anders niet te vergelijken
-Ook tss 1e en 2e set meer opgemeten, enkel het initiele transect behouden, rest is geen heropname
-Bv. Hannecart & Rodebos: maar 10 plots gemeten in 2001, pas in 2012 50 subplots, maar dus enkel in die 10 
-geïnteresseerd
+!! **opnames 1991 KV Rodebos en Hannecart**: leveren we niet aan
+Immers kleinere subplots (volgens mij 2x2), geen cte plotgrootte
+
+!! **opnames KV Rodebos en Hannecart**: in periode 2 meer subplots opgemeten
+Hier behouden we enkel de subplots die in periode 1 opgemeten werden (10 plots), dat is het 
+initiele transect. De overige 40 plots werden pas in 2012 en 2022 opgemeten.
 
 
 ## History
@@ -742,11 +741,7 @@ table(data_herblayer$period)
 ```
 
 We hebben enkel de plots weerhouden, waar een heropname gebeurd is.
-Hierna filteren we de overbodige periodes weg.
-We hebben immers enkel de resurvey na 20 jaar nodig.
-
-Voor de sites uit deintensieve monitoring moeten we peridoe 2 wegfilteren.
-Voor de Bauwensplots moeten we periode 3 wegfilteren.
+Hierna filteren we de periodes weg waar geen opnames gebeurd zijn.
 
 
 ```{r}
@@ -804,7 +799,7 @@ Dat varieert van reservaat tot reservaat:
 - resurvey is overal periode 2 en/of 3
 
 Uitzondering zijn de Bauwenplots waar baseline 1954 is (zit al in databank en waar 2014 dus heropname is).
-Daar ga ik dus enkel de heropname van 2000 en 2014 aanleveren: R1 en R2
+De opnames van 2000 en 2014 zijn dan R1 en R2
 
 Daarom splits ik beide datasets op:
 
@@ -1253,14 +1248,12 @@ EUxx <- "EU_87"
 EUxx <- "EU_91"
 ```
 
-- Bauwens
-```{r Bauwens}
-EUxx <- "EU_85"
+- Bauwens - toch niet, want 1954-2000 zit al in db
+1954-2014: geen grote meerwaarde, en zorgt voor verwarring => wachten tot ev. 2000-2028
+
+```{r Bauwens_NIET}
+# EUxx <- "EU_85"
 ```
-!nog niet gedaan want niet zeker of het wel nodig is
-Ofwel 1954-2000: dat zit al in db
-Ofwel 1954-2014: maar heeft dat een grote meerwaarde??
-2000-2014 kan niet, want geen 20 jaar tussen
 
 
 **Plot information**
