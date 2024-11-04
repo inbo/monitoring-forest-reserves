@@ -420,11 +420,9 @@ geïnteresseerd
 - **former_landuse**: If ancient forests: ancient; if no ancient forests: the nature of the land-use prior to afforestation (arable, grassland, heathland, other, not known)     
 
 - **year_afforestation**: If no ancient forests: The year on which afforestation took place  
-=> benaderen door gemiddeld tijdstip van twee kaartlagen te nemen (voor en na bebossing)
-
-Eventueel site per site bekijken in oude monitoringraporten of daar info te vinden is
-over bebossing.
-
+=> dat mag een range zijn voor Markus
+(initieel werd gemiddeld tijdstip van twee kaartlagen genomen (voor en na bebossing): 
+dat ook nog behouden)
 
 
 ```{r hist}
@@ -446,38 +444,50 @@ hist %>% group_by(name_fieldmap, ferraris) %>%
 hist1_ferraris <- hist %>% 
   filter(ferraris == "yes") %>% 
   mutate(former_landuse = "ancient",
-         year_afforestation = NA)
+         year_afforestation = NA,
+         year_mid = NA)
 
 hist2_with <- hist %>% 
   filter(str_detect(name_fieldmap, "With")) %>% 
-  mutate(former_landuse = "heathland",
-         year_afforestation = case_when(
+  mutate(former_landuse = "heathland"
+         , year_afforestation = case_when(
+           hist_uitgebreid %in% c("0000000011", "0000001011") ~ paste(NGI1_t, BSKT_t, sep="-"),
+           hist_uitgebreid == "0000000111" ~ paste(MGI_t, NGI1_t, sep="-"),
+           hist_uitgebreid == "0000001111" ~ paste(DG3_t, MGI_t, sep="-"),
+           hist_uitgebreid == "0000011111" ~ paste(DG2_t, DG3_t, sep="-"),
+           hist_uitgebreid == "0000111111"~ paste(DG1_t, DG2_t, sep="-"))
+         , year_mid = case_when(
            hist_uitgebreid %in% c("0000000011", "0000001011") ~ (NGI1_t + BSKT_t)/2,
            hist_uitgebreid == "0000000111" ~ (NGI1_t + MGI_t)/2,
            hist_uitgebreid == "0000001111" ~ (MGI_t + DG3_t)/2,
            hist_uitgebreid == "0000011111" ~ (DG3_t + DG2_t)/2,
-           hist_uitgebreid == "0000111111"~ (DG1_t + DG2_t)/2
-         ))
+           hist_uitgebreid == "0000111111"~ (DG1_t + DG2_t)/2)
+         )
 
 hist3_hannecart <- hist %>% 
   filter(str_detect(name_fieldmap, "Hannec")) %>% 
-  mutate(former_landuse = "grassland",
-         year_afforestation = case_when(
-           # hist_uitgebreid %in% c("11", "1011") ~ (NGI1_t + BSKT_t)/2,
-           # hist_uitgebreid == "111" ~ (NGI1_t + MGI_t)/2,
-           hist_uitgebreid == "0000001111" ~ (MGI_t + DG3_t)/2,
-           # hist_uitgebreid == "11111" ~ (DG3_t + DG2_t)/2
-  ))
+  mutate(former_landuse = "grassland"
+         , year_afforestation = case_when(
+           hist_uitgebreid == "0000001111" ~ paste(DG3_t, MGI_t, sep="-"))
+         , year_mid = case_when(
+           hist_uitgebreid == "0000001111" ~ (MGI_t + DG3_t)/2)
+         )
 
 hist4_wijn <- hist %>% 
   filter(str_detect(name_fieldmap, "Wijnend") & ferraris != "yes") %>% 
-  mutate(former_landuse = "arable",
-         year_afforestation = case_when(
-           # hist_uitgebreid %in% c("11", "1011") ~ (NGI1_t + BSKT_t)/2,
+  mutate(former_landuse = "arable"
+         , year_afforestation = case_when(
+           hist_uitgebreid == "1011111111" ~ paste(VDM_t, Gkad_t, sep="-"),
+           hist_uitgebreid == "1000111111" ~ paste(DG1_t, DG2_t, sep="-"),
+           hist_uitgebreid == "1110011111" ~ paste(DG2_t, DG3_t, sep="-"))
+         , year_mid = case_when(
            hist_uitgebreid == "1011111111" ~ (VDM_t + Gkad_t)/2,
            hist_uitgebreid == "1000111111" ~ (DG2_t + DG1_t)/2,
-           hist_uitgebreid == "1110011111" ~ (DG3_t + DG2_t)/2
-  ))
+           hist_uitgebreid == "1110011111" ~ (DG3_t + DG2_t)/2)
+         )
+
+# Heirnisse: plot 757 volgens topokaart 2009 op een weg (zie mail van 29/10/2024 van Marc Esprit)
+# hier toch als bos beschouwen, aangezien er in 2003 en 2014 een gewone kruidlaagbedekking is
 
 hist5_heirn <- hist %>% 
   filter(str_detect(name_fieldmap, "Heirnisse") & ferraris != "yes") %>% 
@@ -485,29 +495,36 @@ hist5_heirn <- hist %>%
            hist_uitgebreid == "0000001111" ~ "grassland",
            hist_uitgebreid %in% c("0000111111", "0000011111") ~ "arable",
            hist_uitgebreid == "0111111111" ~ "grassland",
-           #110011110: we veronderstellen dat dit 110011111 moet zijn - gevraagd Marc mail 25/10/2024
            hist_uitgebreid %in% c("0110111111") ~ "arable",
            hist_uitgebreid %in% c("0111011111", "0110011111", "0110011110", "1110011111") &
              DG2 == "A" ~ "arable",
+           #110011110: we veronderstellen dat dit 110011111 moet zijn
            hist_uitgebreid %in% c("111011111", "0110011111", "110011110", "1110011111") &
-             DG2 == "G" ~ "grassland"
-  )
+             DG2 == "G" ~ "grassland")
          , year_afforestation = case_when(
+           hist_uitgebreid == "0000001111" ~ paste(DG3_t, MGI_t, sep="-"),
+           #110011110: we veronderstellen dat dit 110011111 moet zijn
+           hist_uitgebreid %in% c("0000011111", "1110011111", "0111011111", "0110011111", "0110011110", "0110011111", "0111011111") ~ paste(DG2_t, DG3_t, sep="-"),
+           hist_uitgebreid %in% c("0000111111", "0110111111") ~ paste(DG1_t, DG2_t, sep="-"),
+           hist_uitgebreid == "0111111111" ~ paste(Ferr_t, VDM_t, sep="-"))
+         , year_mid = case_when(
            hist_uitgebreid == "0000001111" ~ (MGI_t + DG3_t)/2,
            #110011110: we veronderstellen dat dit 110011111 moet zijn
            hist_uitgebreid %in% c("0000011111", "1110011111", "0111011111", "0110011111", "0110011110", "0110011111", "0111011111") ~ (DG3_t + DG2_t)/2,
            hist_uitgebreid %in% c("0000111111", "0110111111") ~ (DG2_t + DG1_t)/2,
-           hist_uitgebreid == "0111111111" ~ (Ferr_t + VDM_t)/2
-  ))
+           hist_uitgebreid == "0111111111" ~ (Ferr_t + VDM_t)/2)
+         )
 
 hist6_bauw <- hist %>% 
   filter(str_detect(name_fieldmap, "Bauwens") & ferraris != "yes") %>%  
   mutate(former_landuse = "arable"
          , year_afforestation = case_when(
+           hist_uitgebreid %in% c("1110011111") ~ paste(DG2_t, DG3_t, sep="-"),
+           hist_uitgebreid %in% c("1110111111") ~ paste(DG1_t, DG2_t, sep="-"))
+         , year_mid = case_when(
            hist_uitgebreid %in% c("1110011111") ~ (DG3_t + DG2_t)/2,
            hist_uitgebreid %in% c("1110111111") ~ (DG2_t + DG1_t)/2
   )) 
-
 ```
 
 ```{r combine_hist}
@@ -517,11 +534,11 @@ nrow(hist_total) == nrow(hist)   # hist bevat ook bauwensplots
 
 #
 hist_total <- hist_total %>% 
-  mutate(year_afforestation = round(year_afforestation, 0)) %>% 
+  mutate(year_mid = round(year_mid, 0)) %>% 
   select(dataset_ID, name, name_fieldmap
          , plot_id
          , hist_uitgebreid
-         , former_landuse, year_afforestation) 
+         , former_landuse, year_afforestation, year_mid) 
 
 ```
 
@@ -678,7 +695,7 @@ plotinfo_def <- plotinfo_def %>%
          , altitude = Z_m_TAW
          , year_baseline_survey,	year_resurvey_R1, year_resurvey_R2	
          , plot_size
-         , former_landuse,	year_afforestation) %>% 
+         , former_landuse,	year_afforestation, year_mid) %>% 
   arrange(plot_id, subplot_id)
 
 ```
@@ -926,9 +943,7 @@ Ikzelf heb "forest reserve since xxxx" aangevuld en "dominant tree"
 
 ```{r}
 plotinfo_EU92 <- plotinfo_def %>% 
-  filter(dataset_ID == "EU_92") %>% 
-  select(-year_resurvey_R2)
-
+  filter(dataset_ID == "EU_92") 
 # names(plotinfo_EU92)
 ```
 
@@ -1078,73 +1093,21 @@ write.xlsx(veg_sampling_EU92_R2
 ```
 
 
-### Overige - EU_xx
+### Withoefse heide - EU_93
 
-!! afwachten of Wijnendale OK is vooraleer ik begin met copy paste    
+With heide is speciaal: enkel R1
 
-Momenteel wel overal al tabblad "site info" aangevuld,
-behalve bij Jansheide en Heirnisse, omdat ik daar de data van 2024 nog niet heb
-
-
-Site per site exporteren: 
-
-- Rodebos      
-```{r Rodebos}
-EUxx <- "EU_90"
-```
-
-- Hannecart      
-```{r Hannecart}
-EUxx <- "EU_88"
-```
-
-- With_heide      
+   
 ```{r With_heide}
 EUxx <- "EU_93"
 ```
-
-- Jansh      
-```{r Jansh}
-EUxx <- "EU_89"
-```
-!! Jansheideberg: nog geen export, want 2024 zit nog niet in de databank
-hoogte, aantal plots en year nog checken op tabblad "siteinfo"
-
-- Heirnisse      
-```{r Heirnisse}
-EUxx <- "EU_86"
-```
-!! Heirnisse: nog geen export, want 2024 zit nog niet in de databank
-hoogte, aantal plots en year nog checken op tabblad "siteinfo"
-
-- Everzw      
-```{r Everzw}
-EUxx <- "EU_87"
-```
-
-- Zonien      
-```{r Zonien}
-EUxx <- "EU_91"
-```
-
-- Bauwens
-```{r Bauwens}
-EUxx <- "EU_85"
-```
-!nog niet gedaan want niet zeker of het wel nodig is
-Ofwel 1954-2000: dat zit al in db
-Ofwel 1954-2014: maar heeft dat een grote meerwaarde??
-2000-2014 kan niet, want geen 20 jaar tussen
-
 
 
 **Plot information**
 
 ```{r}
 plotinfo_EUxx <- plotinfo_def %>% 
-  filter(dataset_ID == EUxx) %>% 
-  select(-year_resurvey_R2)
-
+  filter(dataset_ID == EUxx)
 # names(plotinfo_EU92)
 ```
 
@@ -1153,11 +1116,11 @@ plotinfo_EUxx <- plotinfo_def %>%
 ```{r results='hide'}
 # names(veg_sampling_int_monit)
 
-veg_sampling_EUxx <- veg_sampling_int_monit %>% 
+veg_sampling_EUxx <- veg_sampling_with %>% 
   filter(dataset_ID == EUxx)
 
 veg_sampling_EUxx %>% distinct(plot_origID) %>% nrow()  
-# 217 plots (ipv initieel 222)
+# 25
 
 # base survey
 veg_sampling_EUxx_B <- veg_sampling_EUxx %>% 
@@ -1196,9 +1159,15 @@ veg_sampling_EUxx_R1 %>% ncol() == nrow(veg_sampling_EUxx %>% distinct(plot_orig
 #   mutate(across(everything(), ~ replace_na(., 0)))
 ```
 
+
+```{r}
+veg_sampling %>% filter(dataset_ID == EUxx) %>% distinct(year)
+```
+
+
 **Export**
 
-```{r export_EU_xx, eval = FALSE}
+```{r export_EU_93, eval = FALSE}
 write.xlsx(plotinfo_EUxx
            , paste0(path_to_datarequest, EUxx, "_data.xlsx")
            , sheetName = "plotinfo"
@@ -1233,6 +1202,197 @@ write.xlsx(veg_sampling_EUxx_B
 write.xlsx(veg_sampling_EUxx_R1
            , paste0(path_to_datarequest_teamdrive, EUxx, "_data.xlsx")
            , sheetName = "veg_R1"
+           , showNA = FALSE
+           , append = TRUE) 
+
+```
+
+
+
+### Overige - EU_xx
+
+!! afwachten of Wijnendale OK is vooraleer ik begin met copy paste    
+
+Momenteel wel overal al tabblad "site info" aangevuld,
+behalve bij Jansheide en Heirnisse, omdat ik daar de data van 2024 nog niet heb
+
+
+Site per site exporteren: 
+
+- Rodebos      
+```{r Rodebos}
+EUxx <- "EU_90"
+```
+
+- Hannecart      
+```{r Hannecart}
+EUxx <- "EU_88"
+```
+
+- Jansh      
+```{r Jansh}
+EUxx <- "EU_89"
+```
+!! Jansheideberg: nog geen export, want 2024 zit nog niet in de databank
+hoogte, aantal plots en year nog checken op tabblad "siteinfo"
+
+- Heirnisse      
+```{r Heirnisse}
+EUxx <- "EU_86"
+```
+!! Heirnisse: nog geen export, want 2024 zit nog niet in de databank
+hoogte, aantal plots en year nog checken op tabblad "siteinfo"
+
+- Everzw      
+```{r Everzw}
+EUxx <- "EU_87"
+```
+
+- Zonien      
+```{r Zonien}
+EUxx <- "EU_91"
+```
+
+- Bauwens
+```{r Bauwens}
+EUxx <- "EU_85"
+```
+!nog niet gedaan want niet zeker of het wel nodig is
+Ofwel 1954-2000: dat zit al in db
+Ofwel 1954-2014: maar heeft dat een grote meerwaarde??
+2000-2014 kan niet, want geen 20 jaar tussen
+
+
+**Plot information**
+
+```{r}
+plotinfo_EUxx <- plotinfo_def %>% 
+  filter(dataset_ID == EUxx)
+# names(plotinfo_EU92)
+```
+
+**Vegetation sampling**
+
+```{r results='hide'}
+# names(veg_sampling_int_monit)
+
+veg_sampling_EUxx <- veg_sampling_int_monit %>% 
+  filter(dataset_ID == EUxx)
+
+veg_sampling_EUxx %>% distinct(plot_origID) %>% nrow()  
+# 217 plots (ipv initieel 222)
+
+# base survey
+veg_sampling_EUxx_B <- veg_sampling_EUxx %>% 
+  select(-R1, -R2) %>% 
+  spread(plot_origID, B)
+  
+veg_sampling_EUxx_B %>% filter(is.na(species)) %>% nrow() == 0
+  
+# names(veg_sampling_EUxx_B)
+veg_sampling_EUxx_B %>% ncol() == nrow(veg_sampling_EUxx %>% distinct(plot_origID)) + 4
+
+```
+
+```{r eval = FALSE}
+# veg_sampling_EUxx_B <- veg_sampling_EUxx_B %>% 
+#   # NA moet "0" worden
+#   mutate(across(everything(), ~ replace_na(., 0)))
+
+```
+
+```{r results='hide'}
+veg_sampling_EUxx_R1 <- veg_sampling_EUxx %>% 
+  select(-B, -R2) %>% 
+  spread(plot_origID, R1) 
+  
+veg_sampling_EUxx_R1 %>% filter(is.na(species)) %>% nrow() == 0
+  
+names(veg_sampling_EUxx_R1)
+veg_sampling_EUxx_R1 %>% ncol() == nrow(veg_sampling_EUxx %>% distinct(plot_origID)) + 4
+
+```
+
+```{r eval = FALSE}
+# veg_sampling_EUxx_R1 <- veg_sampling_EUxx_R1 %>% 
+#   # NA moet "0" worden
+#   mutate(across(everything(), ~ replace_na(., 0)))
+```
+
+
+```{r results='hide'}
+veg_sampling_EUxx_R2 <- veg_sampling_EUxx %>% 
+  select(-B, -R1) %>% 
+  spread(plot_origID, R2) 
+  
+veg_sampling_EUxx_R2 %>% filter(is.na(species)) %>% nrow() == 0
+  
+names(veg_sampling_EUxx_R2)
+veg_sampling_EUxx_R2 %>% ncol() == nrow(veg_sampling_EUxx %>% distinct(plot_origID)) + 4
+
+```
+
+```{r eval = FALSE}
+# veg_sampling_EUxx_R2 <- veg_sampling_EUxx_R2 %>% 
+#   # NA moet "0" worden
+#   mutate(across(everything(), ~ replace_na(., 0)))
+```
+
+
+```{r}
+veg_sampling %>% filter(dataset_ID == EUxx) %>% distinct(year)
+```
+
+
+**Export**
+
+```{r export_EU_xx, eval = FALSE}
+write.xlsx(plotinfo_EUxx
+           , paste0(path_to_datarequest, EUxx, "_data.xlsx")
+           , sheetName = "plotinfo"
+           , showNA = FALSE
+           , append = FALSE) 
+
+write.xlsx(veg_sampling_EUxx_B
+           , paste0(path_to_datarequest, EUxx, "_data.xlsx")
+           , sheetName = "veg_B"
+           , showNA = FALSE
+           , append = TRUE) 
+
+write.xlsx(veg_sampling_EUxx_R1
+           , paste0(path_to_datarequest, EUxx, "_data.xlsx")
+           , sheetName = "veg_R1"
+           , showNA = FALSE
+           , append = TRUE) 
+
+write.xlsx(veg_sampling_EUxx_R2
+           , paste0(path_to_datarequest, EUxx, "_data.xlsx")
+           , sheetName = "veg_R2"
+           , showNA = FALSE
+           , append = TRUE) 
+
+# TEAMDRIVE---------
+write.xlsx(plotinfo_EUxx
+           , paste0(path_to_datarequest_teamdrive, EUxx, "_data.xlsx")
+           , sheetName = "plotinfo"
+           , showNA = FALSE
+           , append = FALSE) 
+
+write.xlsx(veg_sampling_EUxx_B
+           , paste0(path_to_datarequest_teamdrive, EUxx, "_data.xlsx")
+           , sheetName = "veg_B"
+           , showNA = FALSE
+           , append = TRUE) 
+
+write.xlsx(veg_sampling_EUxx_R1
+           , paste0(path_to_datarequest_teamdrive, EUxx, "_data.xlsx")
+           , sheetName = "veg_R1"
+           , showNA = FALSE
+           , append = TRUE) 
+
+write.xlsx(veg_sampling_EUxx_R2
+           , paste0(path_to_datarequest_teamdrive, EUxx, "_data.xlsx")
+           , sheetName = "veg_R2"
            , showNA = FALSE
            , append = TRUE) 
 ```
