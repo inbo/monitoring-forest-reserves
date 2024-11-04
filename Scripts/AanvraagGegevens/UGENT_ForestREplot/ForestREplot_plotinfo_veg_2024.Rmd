@@ -66,7 +66,8 @@ Zie [NewDatasets_INBO_forests_2024.xlsx](https://docs.google.com/spreadsheets/d/
 Daaruit hebben zij 9 reservaten geselecteerd die voldoen om in ForestREplot opgenomen te worden.
 Voor elke van deze reservaten werd ons een afzonderlijke template bezorgd die wij moeten aanvullen.
 
-Ze vragen om enkel de eerste en laatste dataset aan te leveren, niet de tussenliggende opnames.
+Er wordt ook gevraagd om de tussenliggende datasets aan te leveren (mail van 1/11/2024)
+(eerst was sprake van enkel de eerste en laatste dataset, niet de tussenliggende opnames ...)
 
 
 ```{r results='hold', eval=TRUE}
@@ -216,7 +217,7 @@ Jansheideberg en Heirnisse 2024 zitten ook nog niet in moederdb
 
 
 Omdat info van de Bauwensplots niet in de strata-db van de monitoring zit, 
-vertrekken we hier van de originele shapefile aangemaakt door marc Esprit, 
+vertrekken we hier van de originele shapefile aangemaakt door Marc Esprit, 
 en kopie geplaatt op mijn c-schijf.
 
 ```{r load_strata_shapefile, results='hide'}
@@ -254,10 +255,6 @@ Deze shapefile bevat:
  
 - bodem
 - klimaat
-
-> we hebben XY van de cirkelplots en van centerpoint van de kernvlaktes, 
-maar niet van de subplots!!
-
 
 
 ```{r load_veg, results='hide'}
@@ -327,7 +324,27 @@ surveys <- surveys_
 ```
 
 
-We filteren de plots weg waar geen heropname gebeurd is
+```{r check_surveys}
+surveys_summ <- surveys %>% 
+  group_by(name_fieldmap, plottype, period_1, period_2, period_3) %>% 
+  summarise(n_plots = n()) %>% 
+  ungroup()
+```
+
+
+Overzicht:
+
+- Bauwensplots: maar 150 subplots twee keer heropgemeten (174 wél 2x gemeten)
+- Everzwijnbad: 1 plot niet opgemeten in periode 1
+- Hannecart: maar 10 subplots met 20 jr tussen (3x gemeten)
+- Kerss CA: 140 subplots 3x gemeten
+- Kerss CP: 52 plots 3x gemeten (13 plots 1 of 2 periodes niet gemeten: volgens mij deze in de CA)
+- Rodebos KV2: maar 10 subplots 3x gemeten en 20 jr tussen (40 2x gemeten)
+- Wijnendalebos CP: 5plots niet elke keer gemeten, 119 3x gemeten
+- With heide: 25 plots 2x gemeten met 20 jr tussen !! GEEN R2 (enkel R1)
+
+
+We filteren de plots weg waar geen 20 jr tussen twee opnames zit
 en hernoemen de periodes naar  `year_baseline_survey` en `year_resurvey_Rx`
 
 Bauwensplots wijken af van de rest: daar is period_1 = year_resurvey_R1 en 
@@ -342,9 +359,14 @@ Misschien beter dat zij die data samenzetten?
 > Gevraagd mail van 29/10/2024 => beter laten vallen??
 
 
-Bij de overige sites geldt:    
+Bij de overige sites (muv With heide) geldt:    
 - year_baseline_survey = period_1    
-- year_resurvey_R1 = period_3    
+- year_resurvey_R1 = period_2
+- year_resurvey_R2 = period_3   
+
+With heide:
+- year_baseline_survey = period_1    
+- year_resurvey_R1 = period_3
 
 > de opname van 2024 van Jansheideberg en Heirnisse ontbreekt nog
 (daar moet nog datacontrole op gebeuren oa dendro, ik wacht op initiatief van Peter)
@@ -354,10 +376,18 @@ names(surveys)
 
 surveys_int_monit <- surveys %>% 
   filter(!is.na(period_1) & !is.na(period_3)) %>% 
-  mutate(year_baseline_survey = period_1,
-         year_resurvey_R1 = period_3,
-         year_resurvey_R2 = NA) %>% 
+  mutate(year_baseline_survey = period_1
+         , year_resurvey_R1 = ifelse(name_fieldmap == "Withoefse heide"
+                                   , period_3, period_2)
+         , year_resurvey_R2 = ifelse(name_fieldmap == "Withoefse heide"
+                                   , NA, period_3)) %>% 
   select(-contains("period_"))
+
+surveys_int_monit %>% 
+  group_by(name_fieldmap, plottype
+           , year_baseline_survey, year_resurvey_R1, year_resurvey_R2) %>% 
+  summarise(n_plots = n()) %>% 
+  ungroup()
 
 #
 surveys_bauwens <- surveys %>% 
@@ -366,6 +396,12 @@ surveys_bauwens <- surveys %>%
          year_resurvey_R1 = period_1,
          year_resurvey_R2 = period_2) %>% 
   select(-contains("period_"))
+
+surveys_bauwens %>% 
+  group_by(name_fieldmap, plottype
+           , year_baseline_survey, year_resurvey_R1, year_resurvey_R2) %>% 
+  summarise(n_plots = n()) %>% 
+  ungroup()
 
 # 
 surveys_def <- rbind(surveys_int_monit, surveys_bauwens)
@@ -698,11 +734,14 @@ Voor de Bauwensplots moeten we periode 3 wegfilteren.
 
 ```{r}
 data_herblayer_def <- data_herblayer %>% 
-  filter((dataset_ID != "EU_85" & period %in% c(1, 3)) |
+  filter((dataset_ID != "EU_85" & period %in% c(1, 2, 3)) |
            (dataset_ID == "EU_85" & period %in% c(1, 2))
   )
 
-data_herblayer_def %>% filter(is.na(year)) %>% nrow() == 0
+data_herblayer_def %>% filter(is.na(year)) %>% nrow() == 25 # 25 plots With heide: geen opname in periode 2
+
+data_herblayer_def <- data_herblayer_def %>% 
+  filter(!is.na(year))
 ```
 
 
@@ -745,7 +784,7 @@ In tabblad "veg_sampling" moeten we bij survey aangeven welke survey het is:
 Dat varieert van reservaat tot reservaat: 
 
 - baseline is overal periode 1
-- resurvey is overal periode 3
+- resurvey is overal periode 2 en/of 3
 
 Uitzondering zijn de Bauwenplots waar baseline 1954 is (zit al in databank en waar 2014 dus heropname is).
 Daar ga ik dus enkel de heropname van 2000 en 2014 aanleveren: R1 en R2
@@ -756,19 +795,20 @@ Daarom splits ik beide datasets op:
 - dataset/veg_sampling Bauwensplots     
   
 
-Bij intensieve monitoring sites is de tweede survey altijd periode 3
-Baseline survey altijd periode 1
+Bij intensieve monitoring sites is de `baseline_survey` altijd periode 1
+resurvey_R1 altijd periode 2 (behalve With heide --> periode 3)
+resurvey_R2 altijd periode 3 (behalve With heide --> géén R2)
 
 ```{r only_int_monitoring, results='hide'}
 veg_sampling_int_monit <- veg_sampling %>% 
-  filter(dataset_ID != "EU_85") %>% 
+  filter(!dataset_ID %in% c("EU_85", "EU_93")) %>% 
   select(-year, -coverage_id, - coverage_class_average_perc) %>% 
   # dplyr::select(variable, period, mean) %>% 
   # rename(year_resurvey_R = period) %>% 
   spread(period, cover, sep = "_") %>% 
   select(dataset_ID, species
          , name_sc, layer, plot_origID 
-         , B = period_1, R1 = period_3)
+         , B = period_1, R1 = period_2, R2 = period_3)
 
 head(veg_sampling_int_monit, 20)     
 
@@ -787,9 +827,44 @@ veg_sampling_int_monit <- veg_sampling_int_monit %>%
 
 ```{r replace_zero, eval = FALSE}
 # enkel nodig indien we percentages aanleveren, in plaats van de londo schaal
-veg_sampling_int_monit <- veg_sampling_int_monit %>% 
-  # NA moet "0" worden
-  mutate(across(everything(), ~ replace_na(., 0)))
+
+# veg_sampling_int_monit <- veg_sampling_int_monit %>% 
+#   # NA moet "0" worden
+#   mutate(across(everything(), ~ replace_na(., 0)))
+```
+
+
+```{r only_with, results='hide'}
+veg_sampling_with <- veg_sampling %>% 
+  filter(dataset_ID == "EU_93") %>% 
+  select(-year, -coverage_id, - coverage_class_average_perc) %>% 
+  spread(period, cover, sep = "_") %>% 
+  select(dataset_ID, species
+         , name_sc, layer, plot_origID 
+         , B = period_1, R1 = period_3) 
+head(veg_sampling_with, 20)  
+
+# !! zijn er plots waar twee keer niks gemeten werd? NEE
+veg_sampling_with %>% 
+  group_by(plot_origID) %>% 
+  summarize(n_spec = sum(!is.na(species))) %>% 
+  ungroup() %>% 
+  filter(n_spec == 0) %>% 
+  nrow() == 0
+# OK (geen plots zonder soorten)
+
+veg_sampling_with <- veg_sampling_with %>% 
+  # species = NA wanneer er in één peridoe geen soorten genoteerd werden
+  filter(!is.na(species)) 
+
+```
+
+
+```{r replace_zero2, eval = FALSE}
+# enkel nodig indien we percentages aanleveren, in plaats van de londo schaal
+# veg_sampling_with <- veg_sampling_with %>% 
+#   # NA moet "0" worden
+#   mutate(across(everything(), ~ replace_na(., 0)))
 ```
 
 
@@ -819,11 +894,11 @@ veg_sampling_bauwens <- veg_sampling_bauwens %>%
 ```
 
 
-```{r replace_zero2, eval = FALSE}
+```{r replace_zero3, eval = FALSE}
 # enkel nodig indien we percentages aanleveren, in plaats van de londo schaal
-veg_sampling_bauwens <- veg_sampling_bauwens %>% 
-  # NA moet "0" worden
-  mutate(across(everything(), ~ replace_na(., 0)))
+# veg_sampling_bauwens <- veg_sampling_bauwens %>% 
+#   # NA moet "0" worden
+#   mutate(across(everything(), ~ replace_na(., 0)))
 ```
 
 
@@ -880,42 +955,65 @@ veg_sampling_EU92 %>% distinct(plot_origID) %>% nrow()
 
 # base survey
 veg_sampling_EU92_B <- veg_sampling_EU92 %>% 
-  select(-R1) %>% 
+  select(-R1, -R2) %>% 
   spread(plot_origID, B)
   
 veg_sampling_EU92_B %>% filter(is.na(species)) %>% nrow() == 0
   
-names(veg_sampling_EU92_B)
+head(names(veg_sampling_EU92_B), 30)
 veg_sampling_EU92_B %>% ncol() == nrow(veg_sampling_EU92 %>% distinct(plot_origID)) + 4
 
 ```
+```{r eval = FALSE}
+# replace zero's: ENKEL als we percentages willen aanleveren !!!
 
-
-```{r replace_zero3, eval = FALSE}
-veg_sampling_EU92_B <- veg_sampling_EU92_B %>% 
-  # NA moet "0" worden
-  mutate(across(everything(), ~ replace_na(., 0)))
+# veg_sampling_EU92_B <- veg_sampling_EU92_B %>% 
+#   # NA moet "0" worden
+#   mutate(across(everything(), ~ replace_na(., 0)))
 
 ```
 
 
 ```{r resurvey, results='hide'}
 veg_sampling_EU92_R1 <- veg_sampling_EU92 %>% 
-  select(-B) %>% 
+  select(-B, -R2) %>% 
   spread(plot_origID, R1) 
   
 veg_sampling_EU92_R1 %>% filter(is.na(species)) %>% nrow() == 0
   
-names(veg_sampling_EU92_R1)
+head(names(veg_sampling_EU92_R1), 30)
 veg_sampling_EU92_R1 %>% ncol() == nrow(veg_sampling_EU92 %>% distinct(plot_origID)) + 4
 
 ```
+```{r eval = FALSE}
+# replace zero's: ENKEL als we percentages willen aanleveren !!!
 
-```{r replace_zero4, eval = FALSE}
-veg_sampling_EU92_R1 <- veg_sampling_EU92_R1 %>% 
-  # NA moet "0" worden
-  mutate(across(everything(), ~ replace_na(., 0)))
+# veg_sampling_EU92_R1 <- veg_sampling_EU92_R1 %>% 
+#   # NA moet "0" worden
+#   mutate(across(everything(), ~ replace_na(., 0)))
+
 ```
+
+```{r resurvey_2, results='hide'}
+veg_sampling_EU92_R2 <- veg_sampling_EU92 %>% 
+  select(-B, -R1) %>% 
+  spread(plot_origID, R2) 
+  
+veg_sampling_EU92_R2 %>% filter(is.na(species)) %>% nrow() == 0
+  
+head(names(veg_sampling_EU92_R2), 30)
+veg_sampling_EU92_R2 %>% ncol() == nrow(veg_sampling_EU92 %>% distinct(plot_origID)) + 4
+
+```
+```{r eval = FALSE}
+# replace zero's: ENKEL als we percentages willen aanleveren !!!
+
+# veg_sampling_EU92_R2 <- veg_sampling_EU92_R2 %>% 
+#   # NA moet "0" worden
+#   mutate(across(everything(), ~ replace_na(., 0)))
+
+```
+
 
 **Export**
 
@@ -947,6 +1045,12 @@ write.xlsx(veg_sampling_EU92_R1
            , showNA = FALSE
            , append = TRUE) 
 
+write.xlsx(veg_sampling_EU92_R2
+           , paste0(path_to_datarequest, "EU_92_data.xlsx")
+           , sheetName = "veg_R2"
+           , showNA = FALSE
+           , append = TRUE) 
+
 # TEAMDRIVE---------
 write.xlsx(plotinfo_EU92
            , paste0(path_to_datarequest_teamdrive, "EU_92_data.xlsx")
@@ -963,6 +1067,12 @@ write.xlsx(veg_sampling_EU92_B
 write.xlsx(veg_sampling_EU92_R1
            , paste0(path_to_datarequest_teamdrive, "EU_92_data.xlsx")
            , sheetName = "veg_R1"
+           , showNA = FALSE
+           , append = TRUE) 
+
+write.xlsx(veg_sampling_EU92_R2
+           , paste0(path_to_datarequest_teamdrive, "EU_92_data.xlsx")
+           , sheetName = "veg_R2"
            , showNA = FALSE
            , append = TRUE) 
 ```
