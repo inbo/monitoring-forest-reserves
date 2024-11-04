@@ -807,9 +807,9 @@ Daarom splits ik beide datasets op:
 - dataset/veg_sampling Bauwensplots     
   
 
-Bij intensieve monitoring sites is de `baseline_survey` altijd periode 1
-resurvey_R1 altijd periode 2 (behalve With heide --> periode 3)
-resurvey_R2 altijd periode 3 (behalve With heide --> géén R2)
+Bij intensieve monitoring sites is de `baseline_survey` altijd periode 1    
+`resurvey_R1` altijd periode 2 (behalve With heide --> periode 3)    
+`resurvey_R2` altijd periode 3 (behalve With heide --> géén R2)     
 
 ```{r only_int_monitoring, results='hide'}
 veg_sampling_int_monit <- veg_sampling %>% 
