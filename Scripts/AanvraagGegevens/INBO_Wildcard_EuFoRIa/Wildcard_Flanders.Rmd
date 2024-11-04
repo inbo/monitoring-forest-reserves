@@ -1,7 +1,7 @@
 ---
 title: "Plot data from the Flemish forest reserve network - Wildcard"
 author: "Anja Leyman"
-date: "25/09/2024"  
+date: "4/11/2024"  
 output: 
   html_document:
     keep_md: FALSE
@@ -816,7 +816,7 @@ HOM_m	STATUS2	CAUSE_OF_DEATH	VOLUME	SUN_EXP	RED_FACTOR	HABITAT1	HABITAT2	HABITAT
 
 - in Zoniënwoud, 1stExtension zijn er soms NA trees in 2de periode (2010): dat zijn bomen in plots die 
 dan maar de eerste keer opgemeten werden. Bij de eerste opname werden de cirkelplots gelegen in de 
-kernvlakte niet afzonderlijk opgemeten
+kernvlakte niet afzonderlijk opgemeten.
 
 
 ```{r extra vars}
