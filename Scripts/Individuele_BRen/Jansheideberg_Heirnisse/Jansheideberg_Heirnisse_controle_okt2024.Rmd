@@ -178,6 +178,21 @@ for (tablename in names(vegetation)) {
 ```
 
 
+
+```{r reg}
+data_reg <-
+  load_data_regeneration(
+    database = path_to_fieldmap_db,
+    processed = FALSE
+  ) %>% 
+  filter(forest_reserve == forestreserve)
+
+data_reg_CP <- data_reg %>% filter(plottype == "CP")
+
+```
+
+
+
 # Check
 
 ## Overview

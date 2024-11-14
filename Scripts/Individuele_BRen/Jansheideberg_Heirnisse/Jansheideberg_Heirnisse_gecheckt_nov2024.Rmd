@@ -1,6 +1,6 @@
 ---
 title: "Dataverwerking - controle"
-subtitle: "Jansheideberg & Heirnisse  - cirkelplots & kernvlakte"
+subtitle: "Jansheideberg & Heirnisse & Withoefse heide - cirkelplots & kernvlakte"
 author: "Anja Leyman"
 date: "`r Sys.Date()`"
 output: 
@@ -41,7 +41,7 @@ source(here::here("scripts/Setup.R"))
 
 
 ```{r Setup2}
-forestreserve <- c("Jansheideberg", "Heirnisse")   # FM-project onder folder Jansheideberg geplaatst
+forestreserve <- c("Jansheideberg", "Heirnisse", "Withoefse heide")   # FM-project onder folder Jansheideberg geplaatst
 forestreserve_short <- "Jansheideberg" # om paths aan te maken naar specifieke folders
 # forestreserve_short <- "Wijnendale"
 plot_type <- "CA"
@@ -138,13 +138,13 @@ data_plots <- load_plotinfo(database = path_to_fieldmap_db, processed = FALSE)
 
 list_plots <- data_plots %>% 
   dplyr::filter(forest_reserve %in% forestreserve) %>% 
-  dplyr::select(plot_id) %>% 
-  unique() %>% 
-  dplyr::pull(plot_id)
-print(list_plots)
+  dplyr::select(forest_reserve, plot_id) %>% 
+  unique()
+print(list_plots$plot_id)
+unique(list_plots$forest_reserve)
 
 data_plots_ <- data_plots %>% 
-  filter(plot_id %in% list_plots)
+  filter(plot_id %in% list_plots$plot_id)
 
 data_plots <- data_plots_
 ```
@@ -152,7 +152,7 @@ data_plots <- data_plots_
 ```{r dendro}
 data_dendro <- load_data_dendrometry(database = path_to_fieldmap_db, 
                                      processed = FALSE) %>% 
-  filter(plot_id %in% list_plots)
+  filter(plot_id %in% list_plots$plot_id)
 
 data_dendro <- data_dendro %>% 
   mutate(tree_measure_id = as.character(tree_measure_id),
@@ -164,14 +164,14 @@ data_dendro <- data_dendro %>%
 ```{r veg}
 data_veg <- load_data_vegetation(database = path_to_fieldmap_db, 
                                      processed = FALSE) %>% 
-  filter(plot_id %in% list_plots)
+  filter(plot_id %in% list_plots$plot_id)
 # data_dendro <- data_dendro %>% 
 #   mutate(tree_measure_id = as.character(tree_measure_id),
 #          period = as.character(period))
 
 data_herbs <- load_data_herblayer(database = path_to_fieldmap_db, 
                                      processed = FALSE) %>% 
-  filter(plot_id %in% list_plots)
+  filter(plot_id %in% list_plots$plot_id)
 
 
 vegetation <- calc_veg_plot(data_veg, data_herbs)
@@ -182,6 +182,20 @@ for (tablename in names(vegetation)) {
 
 
 ```
+
+
+```{r reg}
+data_reg <-
+  load_data_regeneration(
+    database = path_to_fieldmap_db,
+    processed = FALSE
+  ) %>% 
+  filter(forest_reserve == forestreserve)
+
+data_reg_CP <- data_reg %>% filter(plottype == "CP")
+
+```
+
 
 
 # Check
@@ -199,7 +213,7 @@ incorrect_data <- check_data_fmdb(database = path_to_fieldmap_db)
 
 incorrect_data_ <- incorrect_data %>% 
   left_join(data_plots %>% select(forest_reserve, plot_id) %>% unique()) %>% 
-  filter(plot_id %in% list_plots)
+  filter(plot_id %in% list_plots$plot_id)
 
 nrow(incorrect_data_) # 425/294/515/vs okt2024: 11516
 # view(incorrect_data)
@@ -235,7 +249,7 @@ Uit bovenstaand overzicht blijkt dat de meeste afwijkingen zich situeren bij
 - missing coppice id
 
 
-Vorige controle juni 2024 (enkel Jansheideberg):
+Eerste controle juni 2024 (enkel Jansheideberg):
 
 - `total_soildisturbance_game`, `invalid value`, zijnde '20': 
 pas opgemeten vanaf 2014 
