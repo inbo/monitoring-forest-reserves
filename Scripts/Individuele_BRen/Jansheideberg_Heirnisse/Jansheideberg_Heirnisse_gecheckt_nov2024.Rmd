@@ -1,6 +1,6 @@
 ---
 title: "Dataverwerking - controle"
-subtitle: "Jansheideberg & Heirnisse & Withoefse heide - cirkelplots & kernvlakte"
+subtitle: "Jansheideberg & Heirnisse - cirkelplots & kernvlakte"
 author: "Anja Leyman"
 date: "`r Sys.Date()`"
 output: 
@@ -41,7 +41,7 @@ source(here::here("scripts/Setup.R"))
 
 
 ```{r Setup2}
-forestreserve <- c("Jansheideberg", "Heirnisse", "Withoefse heide")   # FM-project onder folder Jansheideberg geplaatst
+forestreserve <- c("Jansheideberg", "Heirnisse")   # FM-project onder folder Jansheideberg geplaatst
 forestreserve_short <- "Jansheideberg" # om paths aan te maken naar specifieke folders
 # forestreserve_short <- "Wijnendale"
 plot_type <- "CA"
@@ -80,9 +80,6 @@ path_to_fieldmap_db <- "C:/03_BR_gebieden/4b_Jansheide_DEELS/FMprojecten_2024/HR
 
 Datacontrole nalv opnames 3de decade, gebruik makend van (nieuwe) forrescalc.
 
-Peter heeft nog géén voorafgaande datacontrole gedaan.
-Dit moet zorgen dat Peter vanaf nu geen queries meer moet aflopen in access.
-
 <br>
 
 
@@ -91,6 +88,17 @@ path_to_datacontrol
 path_to_fieldmap_db
 path_to_html_teamdrive
 ```
+
+# Datacontrole door Peter VdK
+
+Zie files in folder [PRJ_BR_Gegevensverwerking/per_gebied/2024_Jansheideberg\01_datacontrole](https://drive.google.com/open?id=1O1wvjP4de65bKGLvMdnz6cuWnFQYX4FY&usp=drive_fs):
+
+- [missing_peter.xlsx](https://docs.google.com/spreadsheets/d/1J7dXzZDnJnMxO62slGhL3iffjPJoSrZG?rtpof=true&usp=drive_fs)- - [incorrect_peter.xlsx](https://docs.google.com/spreadsheets/d/1RyMhzzT23TEqbISxhJBTXNvK4is_Q2OK?rtpof=true&usp=drive_fs)     
+
+Alle "incorrecte" gegevens werden hetzij aangepast, hetzij als correct aangeduid.
+
+Zie ook [comments_PeterVdK.doc](https://docs.google.com/document/d/1r-cg7R9jIejwkA6NbmfWPWjDx5xBtfuT/edit?usp=drive_link&ouid=100892272654963827819&rtpof=true&sd=true).
+
 
 
 # Load lookuplijsten
@@ -301,7 +309,7 @@ missing <- incorrect_data_ %>%
   
 table(missing$forest_reserve)  
 # Heirnisse Jansheideberg 
-#           626            72
+# 626 / 245      72 / 17
    
 #   filter(aberrant_field != "area_ha") %>% 
 #   filter(!(str_detect(aberrant_field, "iufro") & anomaly == "missing" & alive_dead == 12)) %>% 
@@ -354,17 +362,46 @@ missing %>%
   DT :: datatable(options = list(pageLength = 10), rownames = FALSE, filter = "top")
 ```
 
+In Heirnisse werd in periode 1 in de kernvlakte nergens shrub_cover genoteerd.
+Daarnaast zijn er enkele ontbrekende covers en decaystages in periode 1 en 2.
+Deze niet mee exporteren.
+
+Enkel de missing link tussen trees en shoots is een probleem
+
+Periode3: wel meer missing fields, zowel Heirnisse als Jansheideberg.
+Nochtan heeft Peter alle "missings" opgelost in periode 3 (487 records in excel-file).
+??
+Nu nog 74 missings?
+
+> bij de vorige datacontrole waren er plotdetails die niet ingevuld waren, 
+die plots werden dan ook niet opgepikt ...
+bv. plot 726
+=> opnieuw bekijken "missing"
+
+
+> missing_link: op een of andere manier is er n u een andere XY bij trees en shoots,
+terwijl dat in vorige databank niet was??
+Bv. tree 4621 in plot 91000
+=> opnieuw bekijken "missing"
+
+
+
+```{r}
+table(missing_p3$aberrant_field)
+```
+
 
 
 ```{r export_missing, eval = FALSE}
 write.xlsx(missing_p3
-           , paste0(path_to_datacontrol, "missing.xlsx")
+           , paste0(path_to_datacontrol, "missing_na_datacontrole.xlsx")
            , sheetName = "3de_decade"
            , showNA = FALSE
            , append = FALSE) 
 
-write.xlsx(missing_p12
-           , paste0(path_to_datacontrol, "missing.xlsx")
+write.xlsx(missing_p12 %>% filter(!str_detect(aberrant_field, "cover") & 
+                                    !str_detect(aberrant_field, "decay"))
+           , paste0(path_to_datacontrol, "missing_na_datacontrole.xlsx")
            , sheetName = "1ste_2de_decade"
            , showNA = FALSE
            , append = TRUE) 
@@ -880,6 +917,15 @@ of er wel of niet naar soildisturbance gegeken werd)
 Bij de berekeningen (`load_data_vegetation()`) worden de missing values van `waterlayer_cover` en `total_soildisturbance_game` omgezet naar < 1% 
 als er ergens in het bosreservaat 
 een waarde genoteerd werd (CP's en KV's samen genomen).
+
+
+# TO DO
+
+- missing_na_datacontrole.xlsx opnieuw bekijken: bij de vorige datacontrole waren 
+er immers plotdetails_3eSET die niet ingevuld waren, die plots werden dan ook niet opgepikt ...
+bv. plot 726
+=> opnieuw bekijken "missing"
+
 
 
 # Export
