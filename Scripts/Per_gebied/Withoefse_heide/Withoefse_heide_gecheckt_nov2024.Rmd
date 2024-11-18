@@ -50,7 +50,7 @@ plot_type <- "CP"
 forestreserve_folder <- paste0(path_to_reserves, "5_With_heide_DEELS")
 
 path_to_datarequest <- paste0(forestreserve_folder, "/verwerking_2024_1e2e3eSET/output_forrescalc/")
-path_to_datarequest_teamdrive <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverwerking/per_gebied/2024_", forestreserve_short, "/01_datacontrole/")
+path_to_datarequest_teamdrive <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverwerking/20_Per_gebied/2024_", forestreserve_short, "/01_datacontrole/")
 path_to_html_teamdrive <- path_to_datarequest_teamdrive
 
 # plots_to_exclude <- c(701, 707, 709, 727, 728, 738, 739, 740, 759, 760)
@@ -87,7 +87,7 @@ path_to_html_teamdrive
 
 # Datacontrole door Peter VdK
 
-Zie files in folder [PRJ_BR_Gegevensverwerking/per_gebied/2024_Withoefse_heide/01_datacontrole](https://drive.google.com/drive/folders/1q3Esq8uBqLbIfIbkYv44Qlrrl22NzHhe?usp=drive_link):
+Zie files in folder [PRJ_BR_Gegevensverwerking/20_Per_gebied/2024_Withoefse_heide/01_datacontrole](https://drive.google.com/drive/folders/1q3Esq8uBqLbIfIbkYv44Qlrrl22NzHhe?usp=drive_link):
 
 - [missing_pvdk.xlsx](https://docs.google.com/spreadsheets/d/1JSsSIUCvr1PV-_DXky5yl6cm-Ozayegd/edit?usp=drive_link&ouid=100892272654963827819&rtpof=true&sd=true)  
 - [incorrect_pvdk.xlsx](https://docs.google.com/spreadsheets/d/1JE-Vj_ne-cF9_FvXwopYpaJudiAVJJCr/edit?usp=drive_link&ouid=100892272654963827819&rtpof=true&sd=true)     

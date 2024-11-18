@@ -834,7 +834,7 @@ Na knitting - manueel
 source_file <- here::here(paste0("Scripts/AanmaakHoogteCurves/aanmaak_virt_trees_", forestreserve_short, "_", plot_type, "_1e2e3eSET.html"))
 
 # Specify the destination directory where you want to copy the file
-destination_dir <- paste0(path_to_dataverwerking_teamdrive, "/per_gebied/2024_", forestreserve_short)
+destination_dir <- paste0(path_to_dataverwerking_teamdrive, "/20_Per_gebied/2024_", forestreserve_short)
 
 # Copy the file to the destination directory
 file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
