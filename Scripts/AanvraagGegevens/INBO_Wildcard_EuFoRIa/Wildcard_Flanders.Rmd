@@ -854,8 +854,8 @@ standing <- standing0 %>%
          , TREE_SPECIES_CODE = species	
          , DECAY_NUMERIC = ifelse(alive_dead == 12, decaystage, NA)
          , DECAY_TEXT = ifelse(alive_dead == 12, decaystage_txt, NA)
-         , X = X + x_local
-         , Y = Y + y_local	
+         # , X = X + x_local  # !! geldt niet bij WGS84 (Lat&Long), enkel bij Lambert
+         # , Y = Y + y_local	
          , HOM_m = 1.3
          , HEIGHT_model = ifelse(intact_snag == 11, round(calc_height_m, 1), NA)
          , VOLUME = round(vol_bole_m3, 2)
@@ -867,7 +867,7 @@ standing <- standing0 %>%
          , TREE_SPECIES_FULL_SCIENTIFIC, TREE_SPECIES_CODE
          , DBH_mm
          , DECAY_NUMERIC, DECAY_TEXT
-         , X,	Y
+         , x_local, y_local, 
          , HOM_m, HEIGHT_model, VOLUME, VITALITY
          , all_of(extra_vars)
          # , forest_reserve_fieldmap, plot_id, plottype, period
@@ -2005,7 +2005,7 @@ names(plots_check)
 standing_check <- read.table(paste0(path_to_datarequest_teamdrive, "INBO_Standing.txt")
                            , sep = " ", dec = ".")
 
-standing_check <- standing_link %>% select(-all_of(extra_vars), -tree_measure_id)
+# standing_check <- standing_link %>% select(-all_of(extra_vars), -tree_measure_id)
 head(standing_check)
 names(standing_check)
 
@@ -2030,8 +2030,39 @@ names(ground_veg_check)
 
 ```
 
+```{r error_coord_cfr_tomas, eval = FALSE}
+# local coordinates terug afleiden van XY
+         # , X = X_centre + x_local
+         # , Y = Y_centre + y_local
 
+XY_local <- standing_check %>% 
+  left_join(plots_check %>% 
+              select(contains(c("NAME", "ID", "YEAR")), X_centre = X, Y_centre = Y) %>% 
+              unique()) %>%  # ! 2 cirkesl A3 en A4
+  mutate(X_local = X - X_centre,
+         Y_local = Y - Y_centre)
 
+XY_local_CP <- XY_local %>% 
+  filter(!is.na(SPI_ID))
+
+range(XY_local_CP$X_local)
+range(XY_local_CP$Y_local)
+```
+
+```{r eval = FALSE}
+min(plots_check$X); max(plots_check$X)
+min(plots_check$Y); max(plots_check$Y)
+
+# all
+min(standing_check$x_local); max(standing_check$x_local)
+min(standing_check$y_local); max(standing_check$y_local)
+# only CP's / SPI's
+standing_check_CP <- standing_check %>% 
+  filter(!is.na(SPI_ID))
+min(standing_check_CP$x_local); max(standing_check_CP$x_local)
+min(standing_check_CP$y_local); max(standing_check_CP$y_local)
+
+```
 # Copy html to teamdrive
 
 Na knitting - manueel
