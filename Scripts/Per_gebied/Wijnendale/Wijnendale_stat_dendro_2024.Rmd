@@ -1063,7 +1063,7 @@ Na knitting - manueel
 
 ```{r eval = FALSE}
 # Specify the path of the file you want to copy
-source_file <- here::here("Scripts/Individuele_BRen/Wijnendale_stat_dendro_2024.html")
+source_file <- here::here("Scripts/Per_gebied/Wijnendale_stat_dendro_2024.html")
 
 # Specify the destination directory where you want to copy the file
 destination_dir <- path_to_datarequest_teamdrive
