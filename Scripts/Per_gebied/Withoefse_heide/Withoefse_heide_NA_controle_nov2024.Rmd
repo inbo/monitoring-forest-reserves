@@ -209,53 +209,50 @@ data_reg_CP <- data_reg %>% filter(plottype == "CP")
 Met behulp van de overkoepelende controlefunctie in package `forrescalc`.
 
 ! Withoefse heide: er werden géén vegetatie-opnames gedaan in tweede decade => 
-missing values mbt vegetation zijn irrelevant
+missing values mbt vegetation zijn irrelevant, maar werden wel nog gegenereerd in de datacontrole
+**Dit werd aangepast (nov 2024) in forrescalc: enkel missing values mogelijk waar een opname gebeurd is**
 
+**Volgende zaken worden niet als fout aanzien en worden hierna verwijderd uit **
+**`incorrect_data` vooraleer deze te exporteren:**     
 
-Decaystage werd niet genoteerd in de 1ste opname (trees en deadwood) => niet als fout genereren
-Iufro-klasses werden niet genoteerd in de 1ste opname, overal '0' (= not in lookuplist): geen echte fout 
+- **decaystage** werd niet genoteerd in de 1ste opname (trees en deadwood)    
+- **Iufro-klasses** werden niet genoteerd in de 1ste opname, overal '0' (= not in lookuplist)    
 
 
 ```{r check_fmdb}
 # missing data
-incorrect_data <- check_data_fmdb(database = path_to_fieldmap_db) 
+incorrect_data0 <- check_data_fmdb(database = path_to_fieldmap_db) 
 
-incorrect_data_ <- incorrect_data %>% 
+incorrect_data_ <- incorrect_data0 %>% 
   left_join(data_plots %>% select(forest_reserve, plot_id) %>% unique()) %>% 
   filter(plot_id %in% list_plots)
 
 nrow(incorrect_data_) # 425/294/515/vs okt2024: 11516
 # view(incorrect_data)
 names(incorrect_data_)
-
-incorrect_data <- incorrect_data_
-
-```
-```{r no_vegetation_2eSET, results = 'hide'}
-table(incorrect_data$layer, incorrect_data$period)
-incorrect_data_ <- incorrect_data %>% 
-  filter(!(layer =="Vegetation" & period == 2))
-
-table(incorrect_data_$layer, incorrect_data_$period)
-
 incorrect_data <- incorrect_data_
 ```
 
 ```{r no_decaystage_1eSET, results = 'hide'}
+table(incorrect_data$layer, incorrect_data$period)
+
 incorrect_data_ <- incorrect_data %>% 
   filter(!(aberrant_field =="decay_stage" & period == 1))
+table(incorrect_data_$layer, incorrect_data_$period)
 
 incorrect_data <- incorrect_data_
-table(incorrect_data$layer, incorrect_data$period)
+
 ```
 
-```{r trees_1eSET, results = 'hide'}
+```{r no_iufro_1eSET, results = 'hide'}
 table(incorrect_data$layer, incorrect_data$period)
-incorrect_data_trees_p1 <- incorrect_data %>% 
-  filter((layer =="Trees" & period == 1))
-table(incorrect_data_trees_p1$anomaly, incorrect_data_trees_p1$aberrant_field)
 
-# geen iufro-klasses toegekend
+incorrect_data_ <- incorrect_data %>% 
+  filter(!(str_detect(aberrant_field, "iufro") & period == 1))
+table(incorrect_data_$layer, incorrect_data_$period)
+
+incorrect_data <- incorrect_data_
+
 ```
 
 ```{r overview}
@@ -272,16 +269,11 @@ incorrect_overview %>% arrange(-n) %>%
 
 Uit bovenstaand overzicht blijkt dat de meeste afwijkingen zich situeren bij 
 
-- iufro-klasses waarde 0, niet in lookuplijst: 1817 x 3 records (periode 1)
-- mising number class: Regspecies 3e set (122 records)
-- mising decay stage: trees & deadwood (68 records)
-- missing vegetation covers (29)
-- ....
-
-
-- `walkers`: controle functies aangepast, zdd pas signaal 
-indien > 1 m afwijking vanaf 3de decade, 
-en > 1.5m voor decade 0, 1 en 2.
+- iufro-klasses waarde 0, niet in lookuplijst: 19 records, periode 2
+- outliers: welllicht ok, want gecheckt door Peter
+- enkele  niet ingevulde plotdetails
+- enkele aantallen vergeten noteren
+- ...
 
 
 ```{r }
@@ -293,7 +285,7 @@ incorrect_data_ <- incorrect_data %>%
 
 ## Missing values
 
-Onderscheid gemaakt periode 1&2 verus periode 3 --> aparte tabbladen
+Onderscheid gemaakt periode 1&2 versus periode 3 --> aparte tabbladen
 
 ```{r }
 # table(incorrect_data$aberrant_field)
@@ -304,23 +296,16 @@ missing <- incorrect_data_ %>%
   
 table(missing$forest_reserve)  
 # Withoefse heide 
-    # 450 / 132
+    # 450 / 132 / 10
 ```
 
-Exporteren naar excel-file "missing_data"
+Exporteren naar excel-file "missing_na_controle.xlsx"
 (folder `r path_to_datacontrol`)
 
 Onderscheid maken in   
 
-- wat ingevuld had moeten zijn        
   * oude data (decade 1 en 2): immers niks meer aan te doen    
   * nieuwe data (decade 3): mogelijks nog aan te vullen   
-
-- ontbrekend omdat er niks waargenomen is (komt niet voor bij `r forestreserve`)   
-
-
-
-
 
 
 ```{r}
@@ -370,7 +355,7 @@ write.xlsx(missing_p12
 ```
 
 
-## Not in lookuplist 
+## Not in lookuplist - updateqry in MDB!
 
 Gaat enkel over iufro-klasses waar er een waarde 0 gegeven werd.
 
@@ -418,7 +403,7 @@ write.xlsx(incorrect_not_in_lkp
 
 
 
-## Incorrect decaystage   
+## Incorrect decaystage - OK   
 
 ```{r results = 'hide'}
 incorrect_decay <- incorrect_data_ %>% 
@@ -456,7 +441,7 @@ unique(incorrect_decay$aberrant_value)
 
 
 
-## Iufro-klasses - tree (not) alive
+## Iufro-klasses - tree (not) alive - OK
 
 ```{r}
 incorrect_iufro <- incorrect_data_ %>% 
@@ -494,7 +479,7 @@ write.xlsx(incorrect_iufro
 ```
 
 
-## Invalid value
+## Invalid value - OK
 
 Komt niet voor bij `r forestreserve`.
 
@@ -536,7 +521,7 @@ write.xlsx(incorrect_invalid
 ```
 
 
-## Obv toestand twee periodes
+## Obv toestand twee periodes - OK
 
 De datacontrole checkt ook of status (zombie), soort (shifter) en locatie (walker) matcht met vorige periode. 
 
@@ -577,9 +562,10 @@ In `r forestreserve` gaat het om 2 walkers die OK bleken te zijn, 1 decaystage (
 
 
 
-## Obv evolutie dbh en hoogte
+## Obv evolutie dbh en hoogte - OK
 
-De datacontrole checkt ook of diameter- of hoogteaangroei niet uitzonderlijk hoog of laag is.
+De datacontrole checkt ook of diameter- of hoogteaangroei niet uitzonderlijk hoog of laag is
+(obv alle bosreservaten samen)
 
 - **outlier_diameter/height_species**: enkel een outlier binnen zijn eigen soort 
 <!-- reframe(dbh_mm_diff = (boxplot(.data$dbh_mm_diff, plot = FALSE))$out -->
@@ -587,8 +573,6 @@ De datacontrole checkt ook of diameter- of hoogteaangroei niet uitzonderlijk hoo
 behalve populier vergelijken (species 51) *?? nog andere soorten uitsluiten? *
 - **outlier_diameter/height**: als het een outlier is tov alle soorten én binnen de eigen soort
 
-
-We nemen hier reeds alle bosreservaten samen, dus er zal minder snel een outlier gedetecteerd worden.
 
 ```{r}
 incorrect_trees_evolution_all <- check_trees_evolution(database = path_to_fieldmap_db) %>% 
@@ -633,7 +617,7 @@ Deze zijn OK.
 ```
 
 
-## Overige anomalies
+## Overige anomalies - OK
 
 ```{r results = 'hide'}
 incorrect_rest <- incorrect_data_ %>% 
@@ -752,7 +736,7 @@ view(incorrect_plotdetails)
 ```
 
 
-# Processed
+# Processed - updateqry in MDB!
 
 We controleren of er nog plots "not processed" zijn.
 
@@ -847,7 +831,7 @@ Zie
 
 Eventueel:    
 
- - missing.xlsx - p12: rA1 en rA2 aanvulen in plotdetails_1eSET
+ - missing.xlsx - p12: rA1 en rA2 aanvullen in plotdetails_1eSET
 
  
 # Export
@@ -881,7 +865,7 @@ Na knitting - manueel
 
 ```{r eval = FALSE}
 # Specify the path of the file you want to copy
-source_file <- here::here(paste0("Scripts/Per_gebied/Withoefse_heide/", "Withoefse_heide_gecheckt_nov2024.html"))
+source_file <- here::here(paste0("Scripts/Per_gebied/Withoefse_heide/", "Withoefse_heide_NA_controle_nov2024.html"))
 
 # Specify the destination directory where you want to copy the file
 destination_dir <- path_to_html_teamdrive
