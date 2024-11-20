@@ -41,13 +41,13 @@ source(here::here("scripts/Setup.R"))
 
 
 ```{r Setup2}
-forestreserve <- c("Jansheideberg", "Heirnisse")   # FM-project onder folder Jansheideberg geplaatst
-forestreserve_short <- "Jansheideberg" # om paths aan te maken naar specifieke folders
+forestreserve <- c("Heirnisse")   # FM-project onder folder Jansheideberg geplaatst
+forestreserve_short <- "Heirnisse" # om paths aan te maken naar specifieke folders
 # forestreserve_short <- "Wijnendale"
 plot_type <- "CA"
 plot_type <- "CP"
 
-forestreserve_folder <- paste0(path_to_reserves, "4b_Jansheide_DEELS")
+forestreserve_folder <- paste0(path_to_reserves, "4_Heirnisse_DEELS")
 
 path_to_datarequest <- paste0(forestreserve_folder, "/verwerking_2024_1e2e3eSET/output_forrescalc/")
 path_to_datarequest_teamdrive <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverwerking/20_Per_gebied/2024_", forestreserve_short, "/01_datacontrole/")
@@ -93,7 +93,8 @@ path_to_html_teamdrive
 
 Zie files in folder [PRJ_BR_Gegevensverwerking/20_Per_gebied/2024_Jansheideberg\01_datacontrole](https://drive.google.com/open?id=1O1wvjP4de65bKGLvMdnz6cuWnFQYX4FY&usp=drive_fs):
 
-- [missing_peter.xlsx](https://docs.google.com/spreadsheets/d/1J7dXzZDnJnMxO62slGhL3iffjPJoSrZG?rtpof=true&usp=drive_fs)- - [incorrect_peter.xlsx](https://docs.google.com/spreadsheets/d/1RyMhzzT23TEqbISxhJBTXNvK4is_Q2OK?rtpof=true&usp=drive_fs)     
+- [missing_peter.xlsx](https://docs.google.com/spreadsheets/d/1J7dXzZDnJnMxO62slGhL3iffjPJoSrZG?rtpof=true&usp=drive_fs)     
+- [incorrect_peter.xlsx](https://docs.google.com/spreadsheets/d/1RyMhzzT23TEqbISxhJBTXNvK4is_Q2OK?rtpof=true&usp=drive_fs)     
 
 Alle "incorrecte" gegevens werden hetzij aangepast, hetzij als correct aangeduid.
 
@@ -217,7 +218,7 @@ Met behulp van de overkoepelende controlefunctie in package `forrescalc`.
 **`incorrect_data` vooraleer deze te exporteren:**     
 
 - **Iufro-klasses** werden niet genoteerd in de 1ste opname, overal '0' (= not in lookuplist)  
-- **shrub_cover_id** werd niet genoteerd in de 1ste opname avn de Heirnisse (layer "vegetation")    
+- **shrub_cover_id** werd niet genoteerd in de 1ste opname van de Heirnisse (layer "vegetation")    
 
 
 ```{r check_fmdb}
@@ -251,7 +252,6 @@ table(incorrect_data_$layer, incorrect_data_$period)
 incorrect_data <- incorrect_data_
 
 ```
-
 
 
 ```{r no_shrubcover_heirnisse_1eSET, results = 'hide'}
@@ -296,19 +296,34 @@ Uit bovenstaand overzicht blijkt dat de meeste afwijkingen zich situeren bij
 
 ## Missing values
 
-Onderscheid gemaakt periode 1&2 versus periode 3 --> aparte tabbladen
+Periode 1 en 2: 
+
+- in periode 1 in de kernvlakte nergens shrub_cover genoteerd - OK
+- daarnaast nog enkele ontbrekende covers en decaystages - geen probleem - OK 
+- **6 EXTRA (?) missing linken tussen trees en shoots --> nog op te lossen**
+> missing_link: op een of andere manier is er n u een andere XY bij trees en shoots,
+terwijl dat in vorige databank niet was??
+Bv. tree 4621 in plot 91000
+=> opnieuw bekijken "missing"
+
+
+Periode 3: 
+
+- 62 missing, nochtans had Peter alle "missings" opgelost??   
+
+> snelle check: bij de vorige datacontrole waren er plotdetails die niet ingevuld waren, 
+die plots werden dan ook niet opgepikt ...
+bv. plot 726
+=> opnieuw bekijken "missing"
+
 
 ```{r }
 # table(incorrect_data$aberrant_field)
 # table(incorrect_data$anomaly)
 
 missing <- incorrect_data_ %>% 
-  filter(anomaly == "missing") # 23
-  
-table(missing$forest_reserve)  
-# Heirnisse Jansheideberg 
-# 626 / 245      72 / 17
-   
+  filter(anomaly == "missing") # 79
+
 #   filter(aberrant_field != "area_ha") %>% 
 #   filter(!(str_detect(aberrant_field, "iufro") & anomaly == "missing" & alive_dead == 12)) %>% 
 #   filter(!(aberrant_field == "decay_stage" & anomaly == "missing" & ind_sht_cop == 12)) %>% 
@@ -317,16 +332,10 @@ table(missing$forest_reserve)
 #   filter(!(str_detect(aberrant_field, "number") & anomaly == "missing" & period != 3)) 
 # missing_ %>% anti_join(missing)
 
+table(missing$period)
+#  1  2  3 
+# 12  5 62
 ```
-
-Exporteren naar excel-file "missing_na_datacontrole"
-(folder `r path_to_datacontrol`)
-
-Onderscheid maken in   
-    
-  * oude data (decade 1 en 2): immers niks meer aan te doen    
-  * nieuwe data (decade 3): mogelijks nog aan te vullen   
-
 
 ```{r}
 path_to_datacontrol
@@ -347,8 +356,6 @@ missing_p12 <- missing %>%
 table(missing_p12$aberrant_field)
 ```
 
-
-
 ```{r}
 missing %>% 
   group_by(forest_reserve, period, layer, ind_sht_cop, aberrant_field, anomaly) %>% 
@@ -357,46 +364,31 @@ missing %>%
   DT :: datatable(options = list(pageLength = 10), rownames = FALSE, filter = "top")
 ```
 
-In Heirnisse werd in periode 1 in de kernvlakte nergens shrub_cover genoteerd.
-Daarnaast zijn er enkele ontbrekende covers en decaystages in periode 1 en 2.
-Deze niet mee exporteren.
-
-Enkel de missing link tussen trees en shoots is een probleem
-
-Periode3: wel meer missing fields, zowel Heirnisse als Jansheideberg.
-Nochtan heeft Peter alle "missings" opgelost in periode 3 (487 records in excel-file).
-??
-Nu nog 74 missings?
-
-> bij de vorige datacontrole waren er plotdetails die niet ingevuld waren, 
-die plots werden dan ook niet opgepikt ...
-bv. plot 726
-=> opnieuw bekijken "missing"
-
-
-> missing_link: op een of andere manier is er n u een andere XY bij trees en shoots,
-terwijl dat in vorige databank niet was??
-Bv. tree 4621 in plot 91000
-=> opnieuw bekijken "missing"
-
-
 
 ```{r}
 table(missing_p3$aberrant_field)
 ```
 
+Exporteren naar excel-file "missing_NA_controle.xlsx"
+(folder `r path_to_datacontrol`)
+
+Onderscheid maken in   
+    
+  * oude data (decade 1 en 2): missing link tss trees en shoots! (missing covers en decay is OK)
+  * nieuwe data (decade 3) 
 
 
 ```{r export_missing, eval = FALSE}
 write.xlsx(missing_p3
-           , paste0(path_to_datacontrol, "missing_na_datacontrole.xlsx")
+           , paste0(path_to_datacontrol, "missing_NA_controle.xlsx")
            , sheetName = "3de_decade"
            , showNA = FALSE
            , append = FALSE) 
 
+# hierna missing cover en decay weggefilterd
 write.xlsx(missing_p12 %>% filter(!str_detect(aberrant_field, "cover") & 
                                     !str_detect(aberrant_field, "decay"))
-           , paste0(path_to_datacontrol, "missing_na_datacontrole.xlsx")
+           , paste0(path_to_datacontrol, "missing_NA_controle.xlsx")
            , sheetName = "1ste_2de_decade"
            , showNA = FALSE
            , append = TRUE) 
@@ -404,18 +396,10 @@ write.xlsx(missing_p12 %>% filter(!str_detect(aberrant_field, "cover") &
 ```
 
 
-## Not in lookuplist 
 
-In eerder gecheckte bosreservaten ging het enkel over iufro-klasses waar er 
-een waarde 0 gegeven werd.
-Vooral 1ste decade (layer trees en shoots), maar ook 2de decade (layer shoots).
-Allemaal levend.
+## Not in lookuplist - OK
 
-Deze werden gecorrigeerd in moederdb met een updatequery.
-
-OPGEPAST: in Heirnisse - periode 1 - nog zeer veel voorkomend (9889 records).
-Slechts 7 in periode 2.
-
+Hoger reeds iufro_o weggefilterd, geen echte fout.
 
 ```{r results = 'hide'}
 incorrect_not_in_lkp <- incorrect_data_ %>% 
@@ -528,7 +512,7 @@ unique(incorrect_iufro$aberrant_value) == 40
 
 ```{r export_iufro_dead, eval = FALSE}
 write.xlsx(incorrect_iufro
-           , paste0(path_to_datacontrol, "incorrect.xlsx")
+           , paste0(path_to_datacontrol, "incorrect_NA_controle.xlsx")
            , sheetName = "iufro_dead"
            , showNA = FALSE
            , append = TRUE) 
@@ -607,7 +591,7 @@ unique(incorrect_invalid$aberrant_value) == 20
 
 ```{r export_invalid, eval = FALSE}
 write.xlsx(incorrect_invalid
-           , paste0(path_to_datacontrol, "incorrect.xlsx")
+           , paste0(path_to_datacontrol, "incorrect_NA_controle.xlsx")
            , sheetName = "invalid_coverid"
            , showNA = FALSE
            , append = TRUE) 
@@ -648,7 +632,7 @@ In `r forestreserve` gaat het vooral om walkers, species shifters en niet goed g
 
 ```{r export_diff, eval = FALSE}
 write.xlsx(incorrect_diff
-           , paste0(path_to_datacontrol, "incorrect.xlsx")
+           , paste0(path_to_datacontrol, "incorrect_NA_controle.xlsx")
            , sheetName = "zombie_walker_shifter"
            , showNA = FALSE
            , append = TRUE) 
@@ -704,7 +688,7 @@ incorrect_growth %>%
 
 ```{r export_growth, eval = FALSE}
 write.xlsx(incorrect_growth
-           , paste0(path_to_datacontrol, "incorrect.xlsx")
+           , paste0(path_to_datacontrol, "incorrect_NA_controle.xlsx")
            , sheetName = "growth"
            , showNA = FALSE
            , append = TRUE) 
@@ -744,91 +728,11 @@ incorrect_rest %>%
 
 ```{r export_rest, eval = FALSE}
 write.xlsx(incorrect_rest
-           , paste0(path_to_datacontrol, "incorrect.xlsx")
+           , paste0(path_to_datacontrol, "incorrect_NA_controle.xlsx")
            , sheetName = "rest"
            , showNA = FALSE
            , append = TRUE) 
 
-```
-
-
-# Check per layer
-
-Deze functies hoeven niet afzonderlijk gerund te worden, er bestaat één overkoepelende 
-functie die alles aggregeert (zie vorige paragraaf).
-
-```{r check_deadw, eval = FALSE}
-incorrect_deadwood <- check_data_deadwood(database = path_to_fieldmap_db)  
-
-nrow(incorrect_deadwood)
-view(incorrect_deadwood)
-
-```
-
-
-```{r check_dendro, eval = FALSE}
-# trees
-incorrect_trees <- check_data_trees(database = path_to_fieldmap_db)  
-
-nrow(incorrect_trees)
-view(incorrect_trees)
-
-# shoots
-incorrect_shoots <- check_data_shoots(database = path_to_fieldmap_db)  
-
-nrow(incorrect_shoots)
-view(incorrect_shoots)
-
-#trees evolution - ev. rbind met trees
-incorrect_trees_evolution <- check_trees_evolution(database = path_to_fieldmap_db)  
-
-nrow(incorrect_trees_evolution)
-view(incorrect_trees_evolution)
-incorrect_trees_evolution
-```
-
-
-```{r check_reg, eval = FALSE}
-# regeneration
-incorrect_regeneration <- check_data_regeneration(database = path_to_fieldmap_db, forest_reserve = forestreserve)  
-
-nrow(incorrect_regeneration)
-view(incorrect_regeneration)
-
-# regspecies
-incorrect_regspecies <- check_data_regspecies(database = path_to_fieldmap_db, forest_reserve = forestreserve)  
-
-nrow(incorrect_regspecies)
-view(incorrect_regspecies)
-```
-
-
-```{r check_veg, eval = FALSE}
-# vegetation
-incorrect_vegetation <- check_data_vegetation(database = path_to_fieldmap_db, forest_reserve = forestreserve)  
-
-nrow(incorrect_vegetation)
-view(incorrect_vegetation)
-
-# herblayer
-incorrect_herblayer <- check_data_herblayer(database = path_to_fieldmap_db, forest_reserve = forestreserve)  
-
-nrow(incorrect_herblayer)
-view(incorrect_herblayer)
-```
-
-```{r check_plots, eval = FALSE}
-# plots
-incorrect_plots <- check_data_plots(database = path_to_fieldmap_db)
-
-nrow(incorrect_plots)
-view(incorrect_plots)
-
-# plotdetails
-incorrect_plotdetails <- check_data_plotdetails(database = path_to_fieldmap_db)
-
-nrow(incorrect_plotdetails)
-view(incorrect_plotdetails)
 ```
 
 
@@ -890,30 +794,6 @@ odbcClose(con)
 ```
 
 
-# Aandachtspunten
-
-Datacontrole kijkt NIET naar missing values van     
-
-- waterlayer_cover    
-- total_soildisturbance_game    
-- browse_index: enkel check voor 'not in lookuplist' als `!is.na(.data$browse_index)`
-- game_damage_number: enkel check voor        
-    * 'higher than total number' indien game_impact_reg = TRUE en 
-    * 'unexpected (not missing)' als game_impact_reg = FALSE 
-
-(er is geen veld in layer plotdetails die zegt 
-of er wel of niet naar soildisturbance gegeken werd)
-
-<!-- Mail Peter (21/2/2024): -->
-<!-- "zou als volgt willen voorstellen om indien er plots/bosreservaat een ingeschatte bedekking voor waterlaag hebben gekregen de overige plots <1% te geven. -->
-<!-- Bij geen enkel plot met ingeschatte waterlaag voor mij gelijk of we dan achteraf kiezen voor NA of <1%. -->
-<!-- Sluit best aan bij hoe we werken, omdat aanwezige waterlaag eerder uitzonderlijk is, wordt het dan pas ingevuld..." -->
-
-Bij de berekeningen (`load_data_vegetation()`) worden de missing values van `waterlayer_cover` en `total_soildisturbance_game` omgezet naar < 1% 
-als er ergens in het bosreservaat 
-een waarde genoteerd werd (CP's en KV's samen genomen).
-
-
 # TO DO
 
 - missing_na_datacontrole.xlsx opnieuw bekijken: bij de vorige datacontrole waren 
@@ -954,7 +834,7 @@ Na knitting - manueel
 
 ```{r eval = FALSE}
 # Specify the path of the file you want to copy
-source_file <- here::here(paste0("Scripts/Per_gebied/Jansheideberg_Heirnisse/", "Jansheideberg_Heirnisse_controle_okt2024.html"))
+source_file <- here::here(paste0("Scripts/Per_gebied/Jansheideberg_Heirnisse/", "Heirnisse_NA_controle_nov2024.html"))
 
 # Specify the destination directory where you want to copy the file
 destination_dir <- path_to_html_teamdrive
