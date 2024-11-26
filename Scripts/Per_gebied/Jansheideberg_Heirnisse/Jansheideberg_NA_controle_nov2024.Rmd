@@ -1,6 +1,6 @@
 ---
 title: "Dataverwerking - controle"
-subtitle: "Jansheideberg & Heirnisse - cirkelplots & kernvlakte"
+subtitle: "Jansheideberg - cirkelplots & kernvlakte"
 author: "Anja Leyman"
 date: "`r Sys.Date()`"
 output: 
@@ -61,7 +61,7 @@ path_to_datacontrol <- path_to_datarequest_teamdrive
 
 TIJDELIJK `path_to_fieldmap_db` aanpassen naar de werkversie van Jansheideberg en Heirnisse
 
-```{r Path_tmp}
+```{r Path_tmp, eval = FALSE}
 # versie van 13/11/2024 - na datacontrole door Peter
 path_to_fieldmap_db <- "C:/03_BR_gebieden/4b_Jansheide_DEELS/FMprojecten_2024/HR_JHB_WH_inbo24_datacontrole_20241113/FieldMapData_HR_JHB_WH_inbo24.accdb"
 
@@ -228,7 +228,7 @@ incorrect_data_ <- incorrect_data0 %>%
   left_join(data_plots %>% select(forest_reserve, plot_id) %>% unique()) %>% 
   filter(plot_id %in% list_plots$plot_id)
 
-nrow(incorrect_data_) # 425/294/515/vs okt2024: 11516
+nrow(incorrect_data_) # 49
 # view(incorrect_data)
 names(incorrect_data_)
 
@@ -252,24 +252,11 @@ incorrect_data <- incorrect_data_
 
 ```
 
-
-
-```{r no_shrubcover_heirnisse_1eSET, results = 'hide'}
-table(incorrect_data$layer, incorrect_data$period)
-
-incorrect_data_ <- incorrect_data %>% 
-  filter(!(aberrant_field == "shrub_cover_id" & period == 1 & forest_reserve == "Heirnisse"))
-table(incorrect_data_$layer, incorrect_data_$period)
-
-incorrect_data <- incorrect_data_
-
-```
-
-
 ```{r }
 incorrect_data_ <- incorrect_data %>% 
   left_join(data_dendro %>% 
-              select(plot_id, period, tree_measure_id, alive_dead, ind_sht_cop, intact_snag)) 
+              select(plot_id, period, tree_measure_id, species
+                     , alive_dead, ind_sht_cop, intact_snag)) 
 ```
 
 ```{r overview}
@@ -292,14 +279,11 @@ Uit bovenstaand overzicht blijkt dat de meeste afwijkingen zich situeren bij
 - ...
 
 
-## Missing values
+## Missing values - OK
 
 Periode 1 en 2: nog enkele ontbrekende covers en decaystages - geen probleem - OK 
 
-Periode 3: beperkt (12 missings), nochtans had Peter alle "missings" opgelost??   
-
-> snelle check: plot 816, tree-id 19: zit niet in vorige databank, maar wel in de nieuwe?
-
+Periode 3: beperkt: 3 ontbrekende veg-covers en 1 decaystage - OK
 
 ```{r }
 # table(incorrect_data$aberrant_field)
@@ -309,8 +293,8 @@ missing <- incorrect_data_ %>%
   filter(anomaly == "missing") # 23
   
 table(missing$forest_reserve)  
-# Heirnisse Jansheideberg 
-# 626 / 245      72 / 17
+# Jansheideberg 
+# 17/9
    
 #   filter(aberrant_field != "area_ha") %>% 
 #   filter(!(str_detect(aberrant_field, "iufro") & anomaly == "missing" & alive_dead == 12)) %>% 
@@ -374,8 +358,7 @@ write.xlsx(missing_p3
            , append = FALSE) 
 
 # hierna missing cover en decay weggefilterd
-write.xlsx(missing_p12 %>% filter(!str_detect(aberrant_field, "cover") & 
-                                    !str_detect(aberrant_field, "decay"))
+write.xlsx(missing_p12
            , paste0(path_to_datacontrol, "missing_NA_controle.xlsx")
            , sheetName = "1ste_2de_decade"
            , showNA = FALSE
@@ -529,7 +512,7 @@ write.xlsx(incorrect_invalid
 ```
 
 
-## Obv toestand twee periodes
+## Obv toestand twee periodes - OK
 
 De datacontrole checkt ook of status (zombie), soort (shifter) en locatie (walker) matcht met vorige periode. 
 
@@ -547,16 +530,8 @@ table(incorrect_diff$aberrant_field, incorrect_diff$anomaly)
 In `r forestreserve` gaat het om 
 
 - 8 walkers op tree-niveau tussen periode 1 en 2: gecheckt en OK bevonden (alle op één na minder dan 2 m)     
-- 1 walker coppice-id: volgens Peter "verkeerd gekoppeld", maar blijkbaar nog niet opgelost    
-
-=> we behouden enkel die ene walker coppice-id nog
-
-```{r filter}
-incorrect_diff_ <- incorrect_diff %>% 
-  filter(anomaly == "walker coppice_id")
-
-incorrect_diff <- incorrect_diff_
-```
+- 1 walker coppice-id: was bij vorige control een  walker, is opgelost (was verkeerd gekoppeld)
+(komt nu wel naar voor als "walker coppice_id", maar is wél correct, heeft te maken met dood en levend deel coppice)    
 
 
 ```{r}
@@ -594,7 +569,6 @@ behalve populier vergelijken (species 51) *?? nog andere soorten uitsluiten? *
 
 
 Peter heeft deze allemaal gecheckt, we gaan ervan uit dat deze nu correct zijn.
-
 
 ```{r}
 incorrect_trees_evolution_all <- check_trees_evolution(database = path_to_fieldmap_db) %>% 
@@ -654,7 +628,7 @@ unique(incorrect_rest$anomaly)
 table(incorrect_rest$anomaly)
 table(incorrect_rest$period, incorrect_rest$aberrant_field)
 ```  
-Eén deviating date di evolgens Peter correct is.
+Eén deviating date die volgens Peter correct is.
 
 ```{r}
 incorrect_rest %>% 
@@ -731,21 +705,6 @@ con <- odbcConnectAccess2007(path_to_fieldmap_db)
 odbcClose(con)
 
 ```
-
-
-# TO DO
-
-- nog enkele "missings" in periode 3 ==> zie [missing_NA_controle.xlsx](https://docs.google.com/spreadsheets/d/1s6-K2N1zgOMwV2i_by034HEswKEDWe34?rtpof=true&usp=drive_fs)
-
-Nog 12 "missings", nochtans had Peter alle “missings” opgelost!
-**Snelle check: plot 816, tree-id 19: zit niet in vorige databank, maar wel in de nieuwe?**
-
-- één walker die niet opgelost is ==> zie [incorrect_NA_controle.xlsx](https://docs.google.com/spreadsheets/d/1t_yPupSo5LhAdXcmDOABe6rMunGtc8Di?rtpof=true&usp=drive_fs)
-
-
-- EVENTUEEL iufro_heights_0
-
-
 
 # Export
 
