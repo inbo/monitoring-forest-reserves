@@ -59,11 +59,11 @@ path_to_datacontrol <- path_to_datarequest_teamdrive
 ```
 
 
-Withoefse heide zit reeds in de moederdatabank
+Withoefse heide zit reeds in de moederdatabank (versie 20241119).
 
 ```{r Path_tmp}
-# path_to_fieldmap_db <- "C:/03_BR_gebieden/4b_Jansheide_DEELS/FMprojecten_2024/JHB_HR_inbo24_datacontrole/FieldMapData_JHB_HR_inbo24.accdb"
-# versie van 20/9/2024
+path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_X8_inbo2020_20241119/")
+# nu al een meer recente versie, na datacontrole
 ```
 
 
