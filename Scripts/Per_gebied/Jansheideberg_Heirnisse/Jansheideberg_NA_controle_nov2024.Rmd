@@ -59,7 +59,8 @@ path_to_datacontrol <- path_to_datarequest_teamdrive
 ```
 
 
-TIJDELIJK `path_to_fieldmap_db` aanpassen naar de werkversie van Jansheideberg en Heirnisse
+TIJDELIJK `path_to_fieldmap_db` aanpassen naar de werkversie van Jansheideberg en Heirnisse.
+(25/11/2024: aanpassingen al in moederdb opgenomen)
 
 ```{r Path_tmp, eval = FALSE}
 # versie van 13/11/2024 - na datacontrole door Peter
@@ -569,12 +570,6 @@ behalve populier vergelijken (species 51) *?? nog andere soorten uitsluiten? *
 
 
 Peter heeft deze allemaal gecheckt, we gaan ervan uit dat deze nu correct zijn.
-
-```{r}
-incorrect_trees_evolution_all <- check_trees_evolution(database = path_to_fieldmap_db) %>% 
-  filter(str_detect(anomaly, "outlier"))
-
-```
 
 ```{r results = 'hide'}
 incorrect_growth <- incorrect_data_ %>% 
