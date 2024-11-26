@@ -1,6 +1,6 @@
 ---
 title: "Dataverwerking - controle"
-subtitle: "Jansheideberg & Heirnisse - cirkelplots & kernvlakte"
+subtitle: "Heirnisse - cirkelplots & kernvlakte"
 author: "Anja Leyman"
 date: "`r Sys.Date()`"
 output: 
@@ -60,15 +60,14 @@ path_to_datacontrol <- path_to_datarequest_teamdrive
 
 
 TIJDELIJK `path_to_fieldmap_db` aanpassen naar de werkversie van Jansheideberg en Heirnisse
+(26/11/2024: aanpassingen al in moederdb opgenomen)
 
-```{r Path_tmp}
+```{r Path_tmp, eval = FALSE}
 # versie van 13/11/2024 - na datacontrole door Peter
 path_to_fieldmap_db <- "C:/03_BR_gebieden/4b_Jansheide_DEELS/FMprojecten_2024/HR_JHB_WH_inbo24_datacontrole_20241113/FieldMapData_HR_JHB_WH_inbo24.accdb"
 
 # eerste datacontrole uitgevoerd op versie van 20/9/2024:
 # path_to_fieldmap_db <- "C:/03_BR_gebieden/4b_Jansheide_DEELS/FMprojecten_2024/JHB_HR_inbo24_datacontrole_20240920/FieldMapData_JHB_HR_inbo24.accdb"
-
-
 
 ```
 
@@ -269,7 +268,8 @@ incorrect_data <- incorrect_data_
 ```{r }
 incorrect_data_ <- incorrect_data %>% 
   left_join(data_dendro %>% 
-              select(plot_id, period, tree_measure_id, alive_dead, ind_sht_cop, intact_snag)) 
+              select(plot_id, period, tree_measure_id, species
+                     , alive_dead, ind_sht_cop, intact_snag)) 
 ```
 
 ```{r overview}
@@ -288,10 +288,8 @@ Uit bovenstaand overzicht blijkt dat de meeste afwijkingen zich situeren bij
 
 - outliers: welllicht ok, want gecheckt door Peter
 - walkers
-- enkele missing dbh's
+- missing dbh's, decaystages, covers
 - ...
-
-**Vooral bij Heirnisse blijven er nog veel "incorrect" over ?**
 
 
 ## Missing values
@@ -300,21 +298,12 @@ Periode 1 en 2:
 
 - in periode 1 in de kernvlakte nergens shrub_cover genoteerd - OK
 - daarnaast nog enkele ontbrekende covers en decaystages - geen probleem - OK 
-- **6 EXTRA (?) missing linken tussen trees en shoots --> nog op te lossen**
-> missing_link: op een of andere manier is er n u een andere XY bij trees en shoots,
-terwijl dat in vorige databank niet was??
-Bv. tree 4621 in plot 91000
-=> opnieuw bekijken "missing"
-
+- nog 2 missing links tss trees en shoots: wellicht andere XY
 
 Periode 3: 
 
-- 62 missing, nochtans had Peter alle "missings" opgelost??   
-
-> snelle check: bij de vorige datacontrole waren er plotdetails die niet ingevuld waren, 
-die plots werden dan ook niet opgepikt ...
-bv. plot 726
-=> opnieuw bekijken "missing"
+- nog 2 missing species bij verjonging en één missing dbh
+- voor de rest ok nog decaystages, veg-covers en iufro-klasses: zo laten - OK
 
 
 ```{r }
@@ -376,20 +365,35 @@ Onderscheid maken in
     
   * oude data (decade 1 en 2): missing link tss trees en shoots! (missing covers en decay is OK)
   * nieuwe data (decade 3) 
+  
+  * STRIKT: op te lossen   
+  * ALL: enkel informatief     
 
 
 ```{r export_missing, eval = FALSE}
 write.xlsx(missing_p3
            , paste0(path_to_datacontrol, "missing_NA_controle.xlsx")
-           , sheetName = "3de_decade"
+           , sheetName = "3de_decade_ALL"
            , showNA = FALSE
            , append = FALSE) 
 
+write.xlsx(missing_p12
+           , paste0(path_to_datacontrol, "missing_NA_controle.xlsx")
+           , sheetName = "1ste_2de_decade_ALL"
+           , showNA = FALSE
+           , append = TRUE) 
+
 # hierna missing cover en decay weggefilterd
+write.xlsx(missing_p3 %>% filter(!str_detect(aberrant_field, "cover|decay|iufro"))
+           , paste0(path_to_datacontrol, "missing_NA_controle.xlsx")
+           , sheetName = "3de_decade_STRIKT"
+           , showNA = FALSE
+           , append = TRUE) 
+
 write.xlsx(missing_p12 %>% filter(!str_detect(aberrant_field, "cover") & 
                                     !str_detect(aberrant_field, "decay"))
            , paste0(path_to_datacontrol, "missing_NA_controle.xlsx")
-           , sheetName = "1ste_2de_decade"
+           , sheetName = "1ste_2de_decade_STRIKT"
            , showNA = FALSE
            , append = TRUE) 
 
@@ -399,7 +403,8 @@ write.xlsx(missing_p12 %>% filter(!str_detect(aberrant_field, "cover") &
 
 ## Not in lookuplist - OK
 
-Hoger reeds iufro_o weggefilterd, geen echte fout.
+Hoger reeds iufro = 0 in 1eSET al weggefilterd, geen echte fout.
+Er zijn er ook nog wat in 2de SET: ook niet als fout doorgeven - OK
 
 ```{r results = 'hide'}
 incorrect_not_in_lkp <- incorrect_data_ %>% 
@@ -425,7 +430,7 @@ incorrect_not_in_lkp %>%
 
 ```{r export_lkp_iufro, eval = FALSE}
 write.xlsx(incorrect_not_in_lkp
-           , paste0(path_to_datacontrol, "incorrect.xlsx")
+           , paste0(path_to_datacontrol, "incorrect_NA_controle.xlsx")
            , sheetName = "iufro_0"
            , showNA = FALSE
            , append = FALSE)
@@ -437,7 +442,7 @@ write.xlsx(incorrect_not_in_lkp
 
 ## Incorrect decaystage   
 
-In `r forestreserve` enkele onlogische decaystages.
+In `r forestreserve` nog één onlogische decaystage: 16 bij een dode boom => aan te passen.
 
 ```{r results = 'hide'}
 incorrect_decay <- incorrect_data_ %>% 
@@ -465,19 +470,21 @@ unique(incorrect_decay$aberrant_value)
 
 ```{r export_decay, eval = FALSE}
 write.xlsx(incorrect_decay
-           , paste0(path_to_datacontrol, "incorrect.xlsx")
+           , paste0(path_to_datacontrol, "incorrect_NA_controle.xlsx")
            , sheetName = "decaystage"
            , showNA = FALSE
-           , append = FALSE)
+           , append = FALSE
+           # , append = TRUE
+           )
 
 
 ```
 
 
 
-## Iufro-klasses - tree (not) alive
+## Iufro-klasses - tree (not) alive - OK
 
-Voor `r forestreserve` gaat het om 2 records: alive en code 40 (NVT - dood) 
+Voor `r forestreserve` gaat het om 0 records.
 
 <!-- - iufro-klasses: tree not alive en code 50 (NVT - stoof) = 
 geen echte fout én  -->
@@ -522,46 +529,9 @@ write.xlsx(incorrect_iufro
 
 
 
-## Invalid value
+## Invalid value - OK
 
 Komt niet voor bij `r forestreserve`.
-
-Bij de eerste datacontrole in juni 2024 van Jansheideberg kwam dit wel nog voor. 
-
-Het ging om   
-
-- total_xxxx_cover_id = 20 --> ""Niet beschikbaar"
-(wordt in forrescalc als een NA beschouwd)
-- enkel 1ste en 2de decade
-
-Er was hier wat verwarring over: gaat het om een vegetatielaag die niet 
-beschikbaar is, of om de data die niet beschikbaar is (dus NA)?
-
-Vanaf nu (16/5/2024) wordt dat niet meer gebruikt 
-(Peter heeft dit uit de lookuplijst gehaald, kan niet meer aangeduid worden)
-
-Was initieel bedoeld om aan te geven dat er niet gekeken was naar die cover 
-(bv. soil disturbance pas vanaf 20014 opgenomen)
-MAAR door sommigen soms gebruikt om < 1% aan te duiden 
-(< overleg met Peter op 30/5/2024)
-
-In package forrescalc wordt deze '20' als een NA beschouwd, maar toch handig dat 
-dat opgekuist wordt in moederdb, blijft anders voor verwarring zorgen.
-Gevraagd aan Peter in mail van 10/6/2024:    
-
-- in moederdb reeds OK voor **waterlayer cover**: '20' én NA's gewijzigd in < 1%, 
-met als voorwaardes "TreeCover is not null", "Waterlayercover is null or 20"
-(voor de drie vegetation layers)
-
-- in forrescalc wordt NIET getest op een '20' bij **soildist_game**
-vóór 2014: `check_data_vegetation()` aangepast zdd '20' enkel als incorrect 
-opgegeven wordt, indien na 2014 opgemeten! 
-
-(eventueel toch in moederdb `total_soildisturbance_game` aanpassen:    
-  * indien '20', veranderen naar NULL (NA)     
-  * dit voor vegetation_1eSET en vegetation_2eSET    
-  * (in 3e SET komt 20 daar (nog) niet voor))        
-  
 
 ```{r results = 'hide'}
 incorrect_invalid <- incorrect_data_ %>% 
@@ -627,8 +597,11 @@ incorrect_diff %>%
 
 ```
 
-In `r forestreserve` gaat het vooral om walkers, species shifters en niet goed gekoppelde bomen.
 
+In `r forestreserve` gaat het om 
+
+- 1 walker op tree-niveau tussen periode 1 en 2: gecheckt en OK bevonden (alle op één na minder dan 2 m)     
+- 11 on same place but not coupled (periode 2 en 3): is wél correct, heeft te maken met dood en levend deel coppice)    
 
 ```{r export_diff, eval = FALSE}
 write.xlsx(incorrect_diff
@@ -641,7 +614,7 @@ write.xlsx(incorrect_diff
 
 
 
-## Obv evolutie dbh en hoogte
+## Obv evolutie dbh en hoogte - OK
 
 De datacontrole checkt ook of diameter- of hoogteaangroei niet uitzonderlijk hoog of laag is.
 
@@ -652,15 +625,7 @@ behalve populier vergelijken (species 51) *?? nog andere soorten uitsluiten? *
 - **outlier_diameter/height**: als het een outlier is tov alle soorten én binnen de eigen soort
 
 
-Indien we hier alle bosreservaten samen nemen, zal er minder snel een outlier gedetecteerd worden, hier te beperkt.
-Laten we Heirnisse er bij nemen.
-
-
-```{r}
-incorrect_trees_evolution_all <- check_trees_evolution(database = path_to_fieldmap_db) %>% 
-  filter(str_detect(anomaly, "outlier"))
-
-```
+Peter heeft deze allemaal gecheckt, we gaan ervan uit dat deze nu correct zijn.
 
 ```{r results = 'hide'}
 incorrect_growth <- incorrect_data_ %>% 
@@ -699,6 +664,12 @@ write.xlsx(incorrect_growth
 
 ## Overige anomalies
 
+Wat nu nog in databank zit, is gecheckt en correct bevonden:
+- deviating "date_dendro"
+- anomaly == "walker in coppice tree" (< 2m)
+
+
+
 ```{r results = 'hide'}
 incorrect_rest <- incorrect_data_ %>% 
   filter(!anomaly %in% c("missing", "not in lookuplist", "invalid value") 
@@ -727,7 +698,7 @@ incorrect_rest %>%
 ```
 
 ```{r export_rest, eval = FALSE}
-write.xlsx(incorrect_rest
+write.xlsx(incorrect_rest %>% filter(anomaly != "walker in coppice tree")
            , paste0(path_to_datacontrol, "incorrect_NA_controle.xlsx")
            , sheetName = "rest"
            , showNA = FALSE
@@ -796,11 +767,26 @@ odbcClose(con)
 
 # TO DO
 
-- missing_na_datacontrole.xlsx opnieuw bekijken: bij de vorige datacontrole waren 
-er immers plotdetails_3eSET die niet ingevuld waren, die plots werden dan ook niet opgepikt ...
-bv. plot 726
-=> opnieuw bekijken "missing"
+Zie files op teamdrive:
 
+- "missing_NA_datacontrole.xlsx":
+
+  * missing periode 3: zie tabblad STRIKT   
+        - geen species, maar wel een aantal bij reg_3eSET   
+        - dbh trees   
+        
+  * missing periode 2: zie tabblad STRIKT      
+        - link tss shoots en trees missing: wellicht andere XY   
+
+- "incorrect_NA_datacontrole.xlsx": enkel naar deze in fluo geel kijken!!   
+
+  * decaystage 16 bij een dode boom: ! !! Enkel in achterliggende tabel in access, niet te zien in FM-DC => in tabel verwijderen of 17 van maken (hakhout)   
+
+  * 1 walker en 3 dode hakhoutspillen waar coppice-id volgens mij niet correct is (mag je gewoon overnemen van de excel, daar heb ik coppice-id van levend deel al bij gezet)   
+  
+  * typfout datum bij vegetatie periode 3   
+  
+  * twee keer foutief "aantal" bij trees   
 
 
 # Export
