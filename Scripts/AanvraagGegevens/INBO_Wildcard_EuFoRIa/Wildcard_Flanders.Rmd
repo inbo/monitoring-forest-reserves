@@ -1185,7 +1185,7 @@ names(lying)
 ```
 
 
-# CWD data
+# CWD data - NIET?
 
 Sheet "CWD_metadata" contains explanations of attributes of coarse woody debris (CWD data sheet) which is about plot level deadwood volume estimates, but unlike LYING data table does not include information on individual objects - dead stems and decaying logs. Please provide your methodology.													
 														
@@ -1198,6 +1198,16 @@ DECAY
 VOLUME
 
 **Wordt opgeslagen in `cwd`**
+
+26/11/2024: voorgesteld om dit NIET mee te nemen: "We stumbled upon another 'issue'. 
+For the line intersect method used for CWD, no upper diameter threshold was used. 
+As a consequence, there is some overlap between the measurements for CWD and 
+the trees measured in the LYING table, more specifically for dbh > 30 cm If this 
+is a problem we would suggest omitting the CWD table, as this only covers 2 sites 
+and one survey. Furthermore the line intersect sampling doesn't give accurate 
+information on plot level (designed for estimating deadwood on the level of 
+a reserve), and it only gives extra information on the fraction 10 to 30 cm diameter."
+
 
 ## Load LIS data
 
@@ -1987,7 +1997,7 @@ write.table(qHerbSpecies, paste0(path_to_datarequest_teamdrive, "qHerbSpecies.tx
 
 Checken of de geëxporteerde files goed in R ingelezen worden
 
-```{r results='hide'}
+```{r check_read, results='hide'}
 #
 design_check <- read.table(paste0(path_to_datarequest_teamdrive, "INBO_Design.txt")
                            , sep = " ", dec = ".")
@@ -2021,6 +2031,7 @@ cwd_check <- read.table(paste0(path_to_datarequest_teamdrive, "INBO_CWD.txt")
                            , sep = " ", dec = ".")
 head(cwd_check)
 names(cwd_check)
+table(cwd_check$SITE_NAME)
 
 #
 ground_veg_check <- read.table(paste0(path_to_datarequest_teamdrive, "INBO_ground_veg.txt")
@@ -2030,39 +2041,18 @@ names(ground_veg_check)
 
 ```
 
-```{r error_coord_cfr_tomas, eval = FALSE}
-# local coordinates terug afleiden van XY
-         # , X = X_centre + x_local
-         # , Y = Y_centre + y_local
+```{r txt_metadata_vs2_Yannick, eval = FALSE}
+# Yannick
+INBO_extended_Metadata_v2 <- read.table(paste0(path_to_datarequest_teamdrive, "INBO_extended_Metadata_v2.txt"), header = TRUE)
 
-XY_local <- standing_check %>% 
-  left_join(plots_check %>% 
-              select(contains(c("NAME", "ID", "YEAR")), X_centre = X, Y_centre = Y) %>% 
-              unique()) %>%  # ! 2 cirkesl A3 en A4
-  mutate(X_local = X - X_centre,
-         Y_local = Y - Y_centre)
+INBO_user_Metadata_v2 <- read.table(paste0(path_to_datarequest_teamdrive, "INBO_user_Metadata_v2.txt"), header = TRUE)
 
-XY_local_CP <- XY_local %>% 
-  filter(!is.na(SPI_ID))
-
-range(XY_local_CP$X_local)
-range(XY_local_CP$Y_local)
+# csv
+write.csv2(INBO_extended_Metadata_v2, paste0(path_to_datarequest_teamdrive, "INBO_extended_Metadata_v2.csv"))
+write.csv2(INBO_user_Metadata_v2, paste0(path_to_datarequest_teamdrive, "INBO_user_Metadata_v2.csv"))
 ```
 
-```{r eval = FALSE}
-min(plots_check$X); max(plots_check$X)
-min(plots_check$Y); max(plots_check$Y)
 
-# all
-min(standing_check$x_local); max(standing_check$x_local)
-min(standing_check$y_local); max(standing_check$y_local)
-# only CP's / SPI's
-standing_check_CP <- standing_check %>% 
-  filter(!is.na(SPI_ID))
-min(standing_check_CP$x_local); max(standing_check_CP$x_local)
-min(standing_check_CP$y_local); max(standing_check_CP$y_local)
-
-```
 # Copy html to teamdrive
 
 Na knitting - manueel
