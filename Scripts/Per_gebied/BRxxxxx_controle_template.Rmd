@@ -87,6 +87,36 @@ o	Negatieve groei en nu dood: dat is OK, zou niet als fout mogen aangeduid staan
 
 <br>
 
+Peter op 26/11/24 manuele datacheck oldschool op recente data Terrijst,
+na inmeten laatste cirkel daar, dan nog hoogtemetingen en check on the field,
+als ik klaar bent met aanpassingen geautomatiseerde datacontrole dan zou deze set een
+check kunnen zijn voor mijn scripts,
+bij deze zouden er  toch veel minder fouten moeten uitrollen hoopt Peter ....
+
+=> ik zou ook een deel van de "growth"-errors best al uitfilteren,
+bv. enkel de "outlier_diameter/height" (outliers van én soort én tov alle bomen),
+niet de _total en niet _species (! nog te bekijken)
+- outlier_diameter/height_species: enkel een outlier binnen zijn eigen soort 
+- outlier_diameter/height_total: enkel een outlier als we met alle soorten 
+behalve populier vergelijken (species 51) *?? nog andere soorten uitsluiten? *
+- outlier_diameter/height: als het een outlier is tov alle soorten én binnen de eigen soort
+
+Daarnaast ook **same place not coupled** zelf al bekijken: controlescript van Els
+kijkt enkel naar old_id, niet naar coppice_id
+Op termijn willen we af van die coppice-id, dus enerzijds moeten we ons er niet druk mer over maken, 
+maar anderzijds hebben we dat wel toch nodig om de overstap te zetten naar stoven met levend en dood deel,
+en dan zou 't fijn zijn als dat in orde staat.
+Bij Heirnise laatste check (26/11/2024) waren er toch nog drie dode stoven waar volgens mij
+de coppice-id niet OK was.
+Maar Heirnisse is wel heel veel hakhout ...
+
+Bij data-aanlevering zeg ik steeds dat er geen (goede) link is bij hakhout doorheen de tijd
+enkel een link bij individuele bomen.
+
+
+
+
+
 
 ```{r results='hold', eval=TRUE}
 path_to_datacontrol
