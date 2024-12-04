@@ -20,8 +20,8 @@ rm(list=ls())
 
 ```{r Setup, include = FALSE}
 knitr::opts_chunk$set(
-  echo = FALSE,
-  eval = FALSE,
+  echo = TRUE,
+  eval = TRUE,
   message = FALSE,
   warning = FALSE, 
   fig.width = 9,
@@ -33,7 +33,7 @@ source(here::here("scripts/Setup.R"))
 
 # paths ---- 
     ### eigen c-schijf
-path_to_c <- "C:/03_BR/1_DataVerwerkingBR/Aanvraag_gegevens/INBO_Prognoses/"
+path_to_c <- "C:/03_BR/3_AanvraagGegevens/INBO_Prognoses/"
 path_to_db <- paste0(path_to_c, "PROGNOSES_EDIT12m/FieldMapData_PROGNOSES_EDIT12m.accdb")
 path_to_output_c <- paste0(path_to_c, "Output/")
 
@@ -49,6 +49,9 @@ path_to_output_gdrive <- paste0(path_to_gdrive, "Dataverwerking-bovengronds/data
 
 # brondata -----
 gsheet_prognoses_input <- "https://docs.google.com/spreadsheets/d/1nuJsh_G_sRaJPTicRaWbBdvneVmruzMkxUURhwBYWog"
+
+gsheet_prognoses_input <- "https://docs.google.com/spreadsheets/d/1nuJsh_G_sRaJPTicRaWbBdvneVmruzMkxUURhwBYWog/edit?usp=sharing"
+
 # gsheet_prognoses_input <- paste0(path_to_gdrive, "Dataverwerking-bovengronds/PROGNOSES_data_trees.gsheet") # WERKT NIET
 # blijkbaar kan gewone "naam niet, moet zijn
         # Something that identifies a Google Sheet:
@@ -100,8 +103,8 @@ Nummering van de plots:
 
 data_overzicht <- data.frame(
   tabelnaam = c("FieldMapData_PROGNOSES_EDIT12m.accdb"),
-  locatie = c(path_to_db),
-  md5 = c(md5(path_to_db))
+  locatie = c(path_to_db)
+  # md5 = c(md5(path_to_db))
 )
 
 data_overzicht %>%
@@ -221,7 +224,6 @@ Speciescode prognoses toevoegen
 Zie [gdrive](https://docs.google.com/spreadsheets/d/1nuJsh_G_sRaJPTicRaWbBdvneVmruzMkxUURhwBYWog/edit#gid=339255930)
 
 ```{r}
-
 qSpecies_prognoses <- read_sheet(gsheet_prognoses_input, sheet = "species_list")
 names(qSpecies_prognoses)
 
@@ -397,6 +399,62 @@ nrow(data_dendro_calc  %>%
        filter_at(col, any_vars(is.na(.)))) == 0
 
 ```
+# Groot verschil kroonvolume - stamvolume
+
+Vraag van MArgot (4/12/2024):   
+
+- er zijn bomen met stamvolume = 0, maar toch een kroonvolume.   
+- de verhouding kroonvolume/stamvolume ligt tussen de 2% en >100%.    
+--> is daar een verklaring voor?
+
+Zijn twee onafhankelijke tarieven die gebruikt worden:   
+
+- stamvolume: tarief met twee ingangen, Dagnelie en Quataert obv gemodeleerde hoogte
+- kroonvolume: tarief met één ingang, Dagnelie
+
+Bij de kleine diameters (max. 70 mm) kan het voorkomen dat stamvolume nul is, en 
+kroonvolume groter dan nul.
+Tot 90 mm zien we ook dat kroonvolume dubbel zo groot of nog groter kan zijn dan het stamvolume.
+
+
+```{r}
+check_crown_volume <- trees_prognoses %>% 
+  select(-contains(c("r_", "dbh_min"))) %>% 
+  mutate(ration_crown_bole = 100*vol_crown_m3/vol_bole_m3)
+
+summary(check_crown_volume %>% filter(vol_bole_m3 != 0 & vol_crown_m3 != 0))
+```
+
+```{r vol_bole_zero}
+# welke soorten, diameters hebben een samvolume = 0, maar toch een kroonvolume
+
+check_bole_zero <- check_crown_volume %>% 
+  filter(vol_bole_m3 == 0 & vol_crown_m3 != 0)
+
+table(check_bole_zero$species)
+# enkel beuk en winterlinde (sp 81): ! ander tarief
+#   7  81 
+# 115   3
+table(check_bole_zero$dbh_mm)
+# 50 55 60 65 70 
+# 32 30 38  7 11 
+```
+
+
+```{r vol_crown_larger}
+# welke soorten, diameters hebben een samvolume = 0, maar toch een kroonvolume
+
+check_crown_larger <- check_crown_volume %>% 
+  filter(ration_crown_bole > 200) # kroon dubbel zoveel volume
+
+table(check_crown_larger$species)
+# enkel beuk en winterlinde (sp 81): ! ander tarief
+#  7  81 
+# 280  4
+table(check_crown_larger$dbh_mm)
+# 50 55 60 65 70 75 80 85 90 
+# 32 30 38 32 33 30 42 30 17
+```
 
 
 # Vgl met oude data 
@@ -453,12 +511,12 @@ write.csv2(trees_prognoses, paste0(path_to_output_c, "trees_prognoses.csv"))
 ```
 
 
-```{r WegschrijvenOutput_gdrive}
+```{r WegschrijvenOutput_gdrive, eval=FALSE}
 write.csv2(trees_prognoses, paste0(path_to_output_gdrive, "trees_prognoses.csv"))
 
 ```
 
-```{r write_gsheet_test, eval = False}
+```{r write_gsheet_test, eval = FALSE}
 
 # write googlesheet?
 # 
