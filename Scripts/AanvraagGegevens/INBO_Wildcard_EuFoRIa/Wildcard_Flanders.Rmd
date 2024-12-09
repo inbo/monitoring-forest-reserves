@@ -52,10 +52,13 @@ path_to_datacontrol <- paste0(path_to_project_teamdrive, "/datacontrole/")
 
 ```
 
-Tijdelijk verwijzen naar fieldmapdb van 13/6/2024, want daar is alles initieel op berekend
+De eerste analyse gebeurde op de fieldmapdb van 13/6/2024, 
+maar in db van 5/12/2024 zijn de 4 sites van Zoniën duidelijk afgelijnd, 
+dus moeten we toch van die meer recente db vertrekken.
 
 ```{r TEMP_db}
-path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_X8_inbo2020_20240613/")
+# path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_X8_inbo2020_20240613/")
+path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_X8_inbo2020_20241205/")
 
 dbFieldmap <- "FieldMapData_MDB_BR_X8_inbo2020.accdb"
 path_to_fieldmap_db <- paste0(path_to_fieldmap, dbFieldmap)

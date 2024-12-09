@@ -29,7 +29,8 @@ path_to_reserves <- Sys.getenv("path_to_reserves") #"C:/03_BR_gebieden/"
 
 path_to_databases <- Sys.getenv("path_to_databases") #"C:/03_BR_db_monitoring/"
 
-path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_X8_inbo2020_20241127/")
+path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_X8_inbo2020_20241205/")
+# path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_X8_inbo2020_20241127/")
 # path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_X8_inbo2020_20241119/")
 # path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_X8_inbo2020_20241030/")
 # path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_X8_inbo2020_20240930/")
