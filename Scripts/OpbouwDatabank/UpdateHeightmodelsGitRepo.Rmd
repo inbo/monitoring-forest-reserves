@@ -78,7 +78,8 @@ csv_files <- list.files(destination_dir, pattern = "\\.csv$", full.names = TRUE)
 
 head(csv_files)
 length(csv_files)
-# 67
+# 67  / 72
+
 ```
 
 **Na update van forresheights, project "forresheights.Rproj" openen en alles naar de cloud pushen**
