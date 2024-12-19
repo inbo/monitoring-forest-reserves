@@ -94,6 +94,14 @@ df_strata_shp <- fc_strata_shp %>% st_drop_geometry()  # cfr forresdat
 
 ```
 
+```{r import_data_shp_c_schijf, eval = FALSE}
+# c-schijf: net iets anders !!
+fc_strata_shp <-read_sf("C:/03_BR/1_DataVerwerkingBR/Data/GIS/boseco_alleproefvlakken_centraalpunt_lam72_metinfo.shp", crs = 31370) %>% rename(plot_id = PlotID)
+
+df_strata_shp <- fc_strata_shp %>% st_drop_geometry()  # cfr forresdat
+
+```
+
 `Unieknr` werd in de shapefile door Marc geïntroduceerd voor de transecten in de kernvlaktes.
 Bij alle andere plots is `plot_id` gelijk aan `Unieknr`.
 
@@ -174,6 +182,7 @@ forest_reserve_info_EUFORIA_ <- forest_reserve_info_EUFORIA %>%
   select(-institute, -res_ID_inst, -SiteID_EUFORIA)
 
 names(forest_reserve_info_EUFORIA_)
+forest_reserve_info_EUFORIA <- forest_reserve_info_EUFORIA_
 ```
 
 ### Monitoringrapport
@@ -512,6 +521,17 @@ Velden zoals
 - `last_commercial_intervention`: uit monitoringrapport op niveau van bosreservaat
 - unmanaged_since (wordt `reserve_unmanaged_since`): uit monitoringrapport op niveau van bosreservaat
 
+<!-- ! metadatatabel van Euforia echt verwarrend, want daar maar drie subsites: -->
+<!-- - Bosreservaat Joseph Zwaenepoel - Core Area -->
+<!-- - Bosreservaat Joseph Zwaenepoel - CPlots (dus Kerss en zwaenepoel en Harras) -->
+<!-- - Bosreservaat Joseph Zwaenepoel - Core Area Harras -->
+
+> Kris gaat `00_referentiefile-meestcompleet-Bosreservaten_allecirkels.gsheet` 
+corrigeren en beter afstemmen tss tabel (`plot_unmanaged_since`) en monitoringrapport (`reserve_unmanaged_since`) 
+(zie mail van 5/12/2024)
+Nu nog even verder doen met zoals nu is.
+Weliswaar nog fouten mbt "onbeheerd sinds" van o.a. Harras en CP's die in oude KV (1983) liggen 
+
 ```{r}
 names(df_strata_shp[1:18])
 names(input_gsheet[1:4])
@@ -536,6 +556,17 @@ En dat verschilt dan nog eens met de datum van de officiele instelling als reser
 Nog complexer voor Liedekerke: daar was in de bosbestanden sinds de jaren 50 geen ingreep meer gebeurd, enkel maaien van de paden, en wat hakhout waar geen meetpunten lagen tot rond 1970, maar dan in 2005 (?) is daar de vogelkers bestreden (ferm tegen mijn gedacht maar soit). Hoe steek je dat er dan in... Dus in de boomlaag is er niets meer gebeurd sinds 1950, behalve selectief kappen van vogelkers: uit de opnames van daarvoor zou je dus kunnen afleiden in welke plots er sinds 1950 niets meer is gebeurd en andere waar er begin jaren 2000 nog een ingreep was... Voor de bosstructuur en doodhoutvoorraad zal het cijfer 1950 meer relevant zijn, behalve in de plots waar er veel vogelkers stond. Moeilijk om al die interpretatie in één of twee cijfers te vatten.
 
 
+**Zoniën (mail van Yannick aan mij 2/12/2024)**
+
+(c) Kris: Voor zonien zijn de aparte stukken ook aparte 'sites' in de betekenis van Wildcard (andere boomsoortensamenstelling en TSA). De kernvlakte (= paarse polygoon met bufferzone (dus tot aan de grens en de paden) en de 11 plots die er in liggen zijn dus ook een aparte site. het roze driehoekje is twee jaar na het oorspronkelijke bosreservaat toegevoegd aan Kersselaerspleyn, maar naar TSA en beheer maakt dat geen verschil: dat mag dus mee met de zone eronder.
+Je hebt dus 4 'sites' :      
+
+- het oorspronkelijke reservaat (= TSA 40 jaar),    
+- het stuk links ervan en eronder (beide beukgedomineerd en TSA 28 jaar),    
+- het eikgedomineerde Harras (TSA ook 28 jaar) en    
+- het donkerbruine deel = uitbreiding 2010 (TSA ca 15j)   
+
+
 ### Eventueel nog toe te voegen
 
 ?? Surface area in monitoringrapport : total reserve : 48.98 ha	Monitored area = 38,40 ha	 
@@ -547,7 +578,6 @@ cfr monitoringrapport
 
 ? beheer: 3 klasses: zero management/startbeheer/exotenbeheer tss periode 1 en 2
 (zie plots_management_startbeheer_exotenbeheer.xlsx, ook geïmporteerd in db strata)
-
 
 
 ### Samenvoegen
@@ -570,7 +600,7 @@ Vervolgens data uit de gsheet:
 - PNV_Bohn  
 - Habtype  
 
-```{r strata_overige_gsheet}
+```{r strata_overige_gsheet, results='hide'}
 names(input_gsheet)
 
 strata_overige_gsheet <- input_gsheet %>% 
@@ -594,22 +624,24 @@ strata_overige_gsheet <- input_gsheet %>%
 # names(strata_overige_gsheet)
 unique(strata_overige_gsheet$Habtype)
 unique(strata_overige_gsheet$plot_unmanaged_since)
-unique(strata_overige_gsheet$Management_type)
 ```
 
 Soms verschillende info mbt beheer uit beide bronnen => beide info behouden.
 
 Maar één inconsistentie: Kluisbos:   
 - Management == "managed forest" (< shapefile)  
-- Management_type == "Non-intervention" (< gsheet)  
+- Management_type == "Non-intervention" (< gsheet Kris VdK)  
 
-```{r join_strata_shp_gsheet}
+```{r}
+table(strata_overige_gsheet$Management_type)
+table(strata_overige_shp$Management)
+# table(strata_overige_shp$Beheer)  # zelfde als "Management", maar nederlands
+
+```
+
+```{r join_strata_shp_gsheet, results='hide'}
 names(strata_overige_shp)
 names(strata_overige_gsheet)
-
-unique(strata_overige_shp$Management)
-# unique(strata_overige_shp$Beheer)  # zelfde als "Management", maar nederlands
-unique(strata_overige_gsheet$Management_type) 
 
 check_beheer <- strata_overige_shp %>% 
   left_join(strata_overige_gsheet %>% select(plot_id, Management_type),
@@ -619,7 +651,6 @@ table(check_beheer$Management, check_beheer$Management_type)
 # één inconsistentie
 check_beheer %>% filter(Management == "managed forest" & Management_type == "Non-intervention") %>% 
   dplyr::pull(plot_id)
-
 # Kluisbos: zowel managed forest als Non-intervention
 # beide behouden!!
 
@@ -665,9 +696,10 @@ Naast `MaxStamtal`, `MaxBasalArea` en `MaxStamtalSpeciesName`, `MaxBasalAreaSpec
 ook interessant om percentage te kennen: `Perc_MaxStamtal`, `Perc_MaxBasalArea` (22/2/2024 ingevoerd)
 
 ```{r bms_plotlevel_results}
-dendro_by_plot_species <- read_vc(file = "dendro_by_plot_species", root = path_to_forresdat_data)
+# dendro_by_plot_species <- read_vc(file = "dendro_by_plot_species", root = path_to_forresdat_data)
+dendro_by_plot_species <- read.csv2(paste0(path_to_plotlevel_gdrive, "dendro_by_plot_species.csv")) %>% 
+  select(-1)
 names(dendro_by_plot_species)
-
 
 dominant_tree <- dendro_by_plot_species %>% 
   arrange(desc(basal_area_alive_m2_ha)) %>% 
@@ -691,9 +723,10 @@ dominant_tree %>% filter(MaxStamtal == 0 & !is.na(MaxStamtalSpeciesID))
 ```
 
 ```{r link_species}
-qspecies <- read_vc(file = "qSpecies", root = path_to_forresdat_data) %>% 
+# qspecies <- read_vc(file = "qSpecies", root = path_to_forresdat_data) %>% 
+  # select(ID, Value1)
+qspecies <- read.csv2(paste0(path_to_lulists_gdrive, "qspecies.csv")) %>% 
   select(ID, Value1)
-
 # names(qspecies)
 # names(dominant_tree)
 
@@ -712,7 +745,7 @@ for (i in col){
 }
 
 # is aanpassing gelukt? 
-dominant_tree %>% filter(MaxStamtal == 0 & !is.na(MaxStamtalSpeciesID)) %>% nrow() == 0
+dominant_tree_ %>% filter(MaxStamtal == 0 & !is.na(MaxStamtalSpeciesID)) %>% nrow() == 0
 # JA
 
 dominant_tree <- dominant_tree_ %>% 
@@ -721,7 +754,9 @@ dominant_tree <- dominant_tree_ %>%
 
 
 ```{r perc_tov_totaal}
-dendro_by_plot <- read_vc(file = "dendro_by_plot", root = path_to_forresdat_data)
+# dendro_by_plot <- read_vc(file = "dendro_by_plot", root = path_to_forresdat_data)
+dendro_by_plot <- read.csv2(paste0(path_to_plotlevel_gdrive, "dendro_by_plot.csv")) %>% 
+  select(-1)
 names(dendro_by_plot)
 
 dominant_tree_ <- dominant_tree %>% 
@@ -729,7 +764,7 @@ dominant_tree_ <- dominant_tree %>%
               select(plot_id, period, number_of_trees_ha, basal_area_alive_m2_ha),
             by = c("plot_id", "period"))
 
-# check of BA van soort niet groter is dabn totaal BA
+# check of BA van soort niet groter is dan totaal BA
 dominant_tree_ %>% 
   mutate(check = round(basal_area_alive_m2_ha, 1) < MaxBasalArea) %>% 
   filter(check) %>% 
@@ -864,10 +899,12 @@ names(plotDetails)
 # n_distinct(plotDetails$plot_id)
 
 plotdetails2 <- plotDetails %>% 
+  filter(DataProcessed_YN == 10) %>% # e,nkel processed data
   mutate(year = as.integer(year(.data$Date_Dendro) - (month(.data$Date_Dendro) < 5)),
          # year = year(round_date(.data$Date_Dendro, "year")) - 1, # oude code - fout!!
          survey_trees = ifelse(.data$Survey_Trees_YN == 10 & !is.na(.data$Survey_Trees_YN), TRUE, FALSE),
           survey_deadw = ifelse(.data$Survey_Deadwood_YN == 10 & !is.na(.data$Survey_Deadwood_YN), TRUE, FALSE),
+          survey_lis = ifelse(.data$LineIntersect == 10 & !is.na(.data$LineIntersect), TRUE, FALSE),
           survey_veg = ifelse(.data$Survey_Vegetation_YN == 10 & !is.na(.data$Survey_Vegetation_YN), TRUE, FALSE),
           survey_reg = ifelse(.data$Survey_Regeneration_YN == 10 & !is.na(.data$Survey_Regeneration_YN), TRUE, FALSE),
           data_processed = ifelse(.data$DataProcessed_YN == 10 & !is.na(.data$DataProcessed_YN), TRUE, FALSE)
@@ -893,12 +930,33 @@ names(plotdetails2)
 
 ```
 
+### Check oppervlakte core area 
+
+Er waren CA's waar `CoreArea_ha` (< `Area_ha` in `plotdetails`) verschillend is van L x B 
+=> aangepast in Fieldmap
+
+```{r check_corearea, results = 'hide'}
+# check_CA_area <- plotdetails2 %>% 
+#   filter(!is.na(CoreArea_ha) | !is.na(LengthCoreArea_m))  # enkel Bauwensplots erbij
+
+error_CA_area <- plotdetails2 %>% 
+  filter(!is.na(CoreArea_ha) & !is.na(LengthCoreArea_m)) %>% 
+  mutate(area_LxB = LengthCoreArea_m * WidthCoreArea_m
+         , diff_CoreArea = CoreArea_ha - area_LxB/10000
+         ) %>% 
+  select(contains("CoreArea"), everything(), -contains("Treshold")) %>% 
+  filter(diff_CoreArea != 0)
+
+nrow(error_CA_area) == 0
+```
 
 ## Shapefile
 
-Uit de shapefile halen we textuele info over plottype, plotsize (dendro vs veg) en jaartal van de surveys.  
+Uit de shapefile halen we textuele info over plottype, plotsize (dendro vs veg), 
+jaartal van de surveys.
 
 Eén record per plot.
+
 
 ```{r select_plotinfo_shp}
 names(df_strata_shp)
@@ -915,48 +973,32 @@ names(plotinfo_shp)
 
 ## Gecombineerd
 
-Hoe gaan we info uit Fieldmap en uit de shapefile combineren, aangezien de info uit 
-fieldmap één record heeft per periode?  
-Treshold diameters kunnen immers (uitzonderlijk) veranderen van periode tot periode.
+Info uit Fieldmap geeft info per plot en periode, terwijl de shapefile maar 
+één record per plot bevat. 
 
-Maar blijkbaar is dat enkel zo voor Kersselaerspleyn, zie hierna:
+We maken een tabel `info_survey` aan met een record per plot en periode.
 
-```{r check_verschillende_tresholds_per_plot}
+We voegen `survey_Y1`, `survey_Y2`, `survey_Y3`, `survey_Y4`, `survey_Y5` toe aan `strata_locatie`
+(één record per plot, cte doorheen de tijd)
+
+
+```{r check_verschillende_tresholds_per_plot, eval = FALSE}
 names(plotdetails2)
 
-check_tresholds <- plotdetails2 %>% 
-  group_by(plot_id, TresHoldDBH_A3_alive_mm, TresHoldDBH_A3_dead_mm, TresHoldDBH_A4_alive_mm, TresHoldDBH_A4_dead_mm, TresHoldDBH_CoreArea_dead_mm, TresHoldDBH_CoreArea_alive_mm, TresHoldDiam_Deadw_A4_mm, TresHoldDiam_Deadw_CoreArea_mm) %>% 
-  summarize(aantal = n()) %>% 
+check_tresholds_CP <- plotdetails2 %>% 
+  group_by(forest_reserve, TresHoldDBH_A3_alive_mm, TresHoldDBH_A3_dead_mm, TresHoldDBH_A4_alive_mm, TresHoldDBH_A4_dead_mm, TresHoldDiam_Deadw_A4_mm) %>% 
+  summarize(range_period = paste0(min(period), "-", max(period))) %>% 
   ungroup() %>% 
   filter(!is.na(TresHoldDBH_A4_alive_mm) & !is.na(TresHoldDBH_A4_dead_mm))
 
-check_tresholds %>% group_by(plot_id) %>% summarize(aantal = n()) %>% filter(aantal > 1) %>% nrow() == 0
-
-# !! dat zijn enkel de cirkelplots, bij KV's soms wel verschil
-check_tresholds <- plotdetails2 %>% 
-  group_by(plot_id, TresHoldDBH_A3_alive_mm, TresHoldDBH_A3_dead_mm, TresHoldDBH_A4_alive_mm, TresHoldDBH_A4_dead_mm, TresHoldDBH_CoreArea_dead_mm, TresHoldDBH_CoreArea_alive_mm, TresHoldDiam_Deadw_A4_mm, TresHoldDiam_Deadw_CoreArea_mm) %>% 
-  summarize(aantal = n()) %>% 
+check_tresholds_CA <- plotdetails2 %>% 
+  group_by(forest_reserve, plot_id, TresHoldDBH_CoreArea_alive_mm, TresHoldDBH_CoreArea_dead_mm, 
+           TresHoldDiam_Deadw_CoreArea_mm) %>% 
+  summarize(range_period = paste0(min(period), "-", max(period))) %>% 
   ungroup() %>% 
   filter(!is.na(TresHoldDBH_CoreArea_alive_mm))
 
-check_tresholds %>% group_by(plot_id) %>% summarize(aantal = n()) %>% filter(aantal > 1) %>% nrow() 
-check_tresholds %>% group_by(plot_id) %>% summarize(aantal = n()) %>% filter(aantal > 1)
-#   plot_id aantal
-#     <int>  <int>
-# 1   11000      3
-
-# Enkel bij kersselaerspleyn een verschil
-# Geen probleem als we per periode info behouden
-
-plotdetails2 %>% filter(plot_id == 11000)
-
 ```
-
-Voor later gebruik makkelijker om dit in één tabel te combineren: info_survey, per plot en per periode.
-
-
-<!-- - plotinfo2 -->
-<!-- - info_opname_per_plot -->
 
 **OPGEPAST:** 
 Date_Dendro (< plotdetails FM) wijkt soms af van year (< forresdat, berekend door Els package).  
@@ -973,22 +1015,18 @@ names(plotinfo)
 names(plotdetails2)
 names(plotinfo_shp)
 
-nrow(plotdetails2) == 2563 #2250
+nrow(plotdetails2) == 1892 #2250
 nrow(plotinfo_shp) == 1063  # want geen onderscheid in periodes
-
-# 5/9/2024 - rechtstreeks data uit moederdb
-nrow(plotdetails2 %>% filter(data_processed)) == nrow(plotinfo)
-nrow(plotinfo) == 1894 # 1725
-nrow(plotdetails2 %>% filter(survey_trees)) # 2039  ? 1934
+nrow(plotdetails2) == nrow(plotinfo)   # beide enkel processed data
 ```
 
 ```{r combine_plotdetails_plotinfo}
-
-plotdetails2 %>% filter(data_processed) %>% nrow() == 1894 # 1725
-plotinfo %>% filter(!is.na(survey_number)) %>% nrow() == 1894 # 1725
+plotdetails2 %>% filter(data_processed) %>% nrow() == 1892 # 1725
+plotinfo %>% filter(!is.na(survey_number)) %>% nrow() == 1892 # 1725
 
 plotinfo2 <- plotinfo %>% 
-  select(-forest_reserve, -year_dendro, -survey_trees, -survey_deadw, -survey_veg, -survey_reg, -data_processed) %>% 
+  select(-forest_reserve, -year_dendro, -survey_trees, -survey_deadw, -survey_lis
+         , -survey_veg, -survey_reg, -data_processed) %>% 
   filter(!is.na(survey_number)) %>% # is na indien nog niet uitgevoerd
   full_join(plotdetails2 %>% filter(data_processed), by = c("plot_id", "period")) %>% 
   select(plot_id, plottype, everything())
@@ -1021,7 +1059,7 @@ plotinfo_def <- plotinfo2 %>%
   left_join(plotinfo_shp, by = c("plot_id")) %>% 
   select(Unieknr, plot_id, forest_reserve, 
          plottype, plottype_txt,
-         survey_trees, survey_deadw, survey_reg, survey_veg, data_processed,
+         survey_trees, survey_deadw, survey_lis, survey_reg, survey_veg, data_processed,
          period, survey_number, year_dendro = year, date_dendro = Date_Dendro,
          rA1_m, rA2_m, rA3_m, rA4_m,
          LengthCoreArea_m, WidthCoreArea_m, CoreArea_ha,
@@ -1085,22 +1123,32 @@ Kleine correcties rechtstreeks in access-db aangepast:
 
 
 ```{r save_strata, eval = FALSE}
+strata <- list(
+      qHistoriek = qHist,
+      strata_soil = strata_bodem,
+      strata_climate = strata_klimaat,
+      strata_history = strata_hist_def,
+      strata_location = strata_locatie,
+      dominant_tree = dominant_tree,
+      forest_reserve_info_EUFORIA = forest_reserve_info_EUFORIA
+    )
+
+save_results_access (
+  results = strata,
+  database = path_to_strata_db,
+  remove_tables = TRUE
+  )
+
+# probleemtabellen
 con <- odbcConnectAccess2007(path_to_strata_db)
 
-sqlSave(con, qHist, "qHistoriek")
-
-sqlSave(con, strata_bodem, "strata_soil")
-sqlSave(con, strata_klimaat, "strata_climate")
-sqlSave(con, strata_hist_def, "strata_history")
-sqlSave(con, strata_locatie, "strata_location")
+sqlDrop(con, "strata_remaining")
 sqlSave(con, strata_overige, "strata_remaining", varTypes = c(S1_fisheyedate="datetime"))
 
-sqlSave(con, dominant_tree, "dominant_tree")  # op termijn ev. als strata_dynamic?
-
+sqlDrop(con, "info_survey")
 sqlSave(con, plotinfo_def, "info_survey", varTypes = c(date_dendro="datetime"))
 
-sqlSave(con, forest_reserve_info_EUFORIA_, "info_forest_reserve_EUFORIA")
-
 odbcClose(con)
+
 ```
 
