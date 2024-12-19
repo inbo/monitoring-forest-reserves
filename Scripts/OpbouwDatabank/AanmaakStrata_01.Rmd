@@ -29,6 +29,9 @@ Brondata:
 (terug te vinden op Q:\Projects\PRJ_BosEco\PRJ_PERS_ME_GIS\00_alle_proefvlakken\def\metinfo)
 
 2) strata samengezet door Kris VdK: `00_referentiefile-meestcompleet-Bosreservaten_allecirkels.gsheet`
+> moet nog aangepast worden, TSA niet steeds correct 
+Kris gaat afstemmen tss tabel en monitoringrapport (zie mail van 5/12/2024)
+
 
 3) strata berekend obv de metingen, op dit moment enkel de hoofdboomsoort (dominant tree)
 Op termijn kunen ook kenmerken zoals standtype (LH, NH, gemengd LH, kapvlakte, open plek), foresttype (eiken-beuken..°), .... naar analogie met de VBI.
@@ -61,6 +64,17 @@ source(here::here("scripts/Setup.R"))
 # SVZ
 
 11/9/2024: Wijnendale en Everzwijnbad 3de decade in info_survey, maar nog niet bij dominant tree
+
+18/12/2024: er werd beslist (nalv Euforia) om **Zoniën** op te splitsen in **4 sites**
+(directere link met wanneer ingesteld als bosreservaat).
+Naam "forest_reserve" werd in moederdatabank aangepast: Kersselaerspleyn, Harras 
+en Zwaenepoel werden vervangen door     
+
+    - Zoniën KERN_1983: bevat KV en 11 CP's (voorheen "Kersselaerspleyn")     
+    - Zoniën UITBR_1995: bevat de CP's die NIET in de oude/eerste kernvlakte van 1983 
+    liggen (voorheen "Kersselaerspleyn")     
+    - Zoniën HARRAS_1995: bevat KV en CP (voorheen "Harras" voor KV en "Zwaenepoel" voor CP's)    
+    - Zoniën UITBR_2010: bevat enkel CP's (voorheen "Zwaenepoel", maar zonder deze die nu in "HARRAS_1995" liggen)
 
 
 # Import data
@@ -138,7 +152,7 @@ CP's en KV apart
 
 Door Kris VdK in kader van data-vraag EUFORIA: `INBO_info_forest_reserve.xlsx`
 
-```{r import_data_reserve_level}
+```{r import_data_forest_reserve}
 # Kris Vdk heeft allerlei data samen gezet voor Euforia, op niveau van het volledige bosreservaat (CP vs KV)
 path_to_EUFORIA_algemeen <- paste0(path_to_datarequests, "EUFORIA_algemeen/enkel_INBO/")
 
@@ -167,10 +181,10 @@ names(forest_reserve_info_EUFORIA_)
 Info overgenomen uit monitoringrapport.
 ! "unmanaged_since" soms aangepast aan shapefile Marc bij onduidelijkheid in rapport.
 
-```{r import_data_reserve_level2}
+```{r import_data_forest_reserve2}
 # uit monitoringrapport 
 con <- odbcConnectAccess2007(path_to_strata_db)
-  management_monitoringrapport <- sqlFetch(con, "info_forest_reserve_level_management", stringsAsFactors = FALSE)  # reserve establishment date
+  management_monitoringrapport <- sqlFetch(con, "info_forest_reserve_management", stringsAsFactors = FALSE)  # reserve establishment date
 odbcClose(con)
 
 names(management_monitoringrapport)
@@ -181,7 +195,11 @@ names(management_monitoringrapport)
 Info mbt surveys
 
 ```{r plotinfo_load}
-plotinfo <- load_plotinfo(database = path_to_fieldmap_db)
+# plotinfo <- load_plotinfo(database = path_to_fieldmap_db)
+# van gdrive (ipv forresdat)
+plotinfo <- read.csv2(paste0(path_to_plotlevel_gdrive, "plotinfo.csv")) %>% 
+  select(-1)
+
 # ! enkel de processed data - dd 11/9/2024: nu ook Wijnendale en Everzwijnbad 3de decade erbij
 names(plotinfo)
 
@@ -258,7 +276,8 @@ Referentie: Digitale bodemkaart van het Vlaams Gewest: bodemtypes, substraten, f
 names(df_strata_shp)
 strata_bodem <- df_strata_shp %>%
   left_join(list_reserves %>% select(-plottype)) %>%
-  select(basic_variables, 65:110) %>% 
+  select(basic_variables, 65:110) %>%    # shp via vpn
+  # select(basic_variables, 52:100) %>%     # shp c-schijf
   select(basic_variables,
          # international (WRB Soil Units 40k)
          soil_unit = Soil_unit,
@@ -282,14 +301,6 @@ names(strata_bodem)
 head(strata_bodem)
 
 ```
-
-Klein foutje in SubArea van KV's Sevendonck
-Gevraagd aan marc E. via mail op 12/9/2024
-=> hij ging aanpassen
-=> ik nu manueel aangepast in `strata_soil` in databank:
-plot_id	SiteName	     SubArea	            forest_reserve_fieldmap
-141200	Sevendonck	Oak forest SFR	          Sevendonck Q
-141100	Sevendonck	Alder forest SFR	        Sevendonck A
 
 
 ## Boshistoriek
