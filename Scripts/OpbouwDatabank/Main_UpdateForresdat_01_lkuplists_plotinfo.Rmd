@@ -41,6 +41,9 @@ source(here::here("scripts/Setup.R"))
 - laatste correcties van forrescalc => juiste branch selecteren in forrescalc en opnieuw builden
 (bv. branch 'bugfix' met corr van read_forresdat waarbij we de develop branch kunnen selecteren ipv main)
 
+**Update 18/12/2024: enkel naar csv lokaal en op gdrive, niet naar forresdat**
+
+
 ```{r juiste_forrescalc, eval = FALSE}
 # !!! eerst zeker 'install.packages("forrescalc")
 # zodat data goede release krijgt!
@@ -62,8 +65,12 @@ DOEL van dit script is een update van forresdat gegevens naar
 - output-folders op de c-schijf "_plot-level-data" en "_tree-level-data"
 - teamdrive-folders "_plot-level-data" en "_tree-level-data"
 
-Kersselaerspleyn blijkt op meerdere vlakken uitzonderingen te bevatten.
+Zoniënwoud blijkt op meerdere vlakken uitzonderingen te bevatten.
 Deze uitzonderingen worden na het inladen van de data gecorrigeerd. 
+
+We exporteren enkel info over processed plots, dus verwerkte data!    
+Als we info willen over nog niet verwrekte data, moeten we mbv `load_plotinfo()` 
+de databank rechtsreeks aanspreken.
 
 <!-- - path_to_forresdat_data is "`r path_to_forresdat_data`"        -->
 
@@ -95,9 +102,20 @@ print(paste0("path_to_shp is ", path_to_shp))
 # SVZ
 
 - 25/9/2024: eerste keer op basis van een kopie van de volledige moederdatabank
-(te vinden als zip-file op citrix onder "...\Projects\PRJ_BosEco\PRJ_ALG_FIELDMAP\FM_MDB BOSRESERVATEN")    
+(te vinden als zip-file op citrix onder "...\Projects\PRJ_BosEco\PRJ_ALG_FIELDMAP\FM_MDB BOSRESERVATEN")
 
 - 7/10/2024: qTotalCover toegevoegd aan forresdat
+
+- 18/12/2024: er werd beslist (nalv Euforia) om **Zoniën** op te splitsen in **4 sites**
+(directere link met wanneer ingesteld als bosreservaat).
+Naam "forest_reserve" werd in moederdatabank aangepast: Kersselaerspleyn, Harras 
+en Zwaenepoel werden vervangen door     
+
+    - Zoniën KERN_1983: bevat KV en 11 CP's (voorheen "Kersselaerspleyn")     
+    - Zoniën UITBR_1995: bevat de CP's die NIET in de oude/eerste kernvlakte van 1983 
+    liggen (voorheen "Kersselaerspleyn")     
+    - Zoniën HARRAS_1995: bevat KV en CP (voorheen "Harras" voor KV en "Zwaenepoel" voor CP's)    
+    - Zoniën UITBR_2010: bevat enkel CP's (voorheen "Zwaenepoel", maar zonder deze die nu in "HARRAS_1995" liggen)
 
 
 # Update lookuplijsten - INDIEN GEWIJZIGD
@@ -306,11 +324,14 @@ Plotinfo samenstellen, zijnde plottype, naam forest_reserve en info over survey 
 Wegschrijven naar git, access en opslaan als csv
 
 - Enkel deze waar een dendro-opname gebeurd is (survey_trees = TRUE)
-- Zowel verwerkte als niet verwerkte plots (processed = TRUE/FALSE)
+- Enkel de verwerkte plots (processed = TRUE)
 
+(we bekijken hierna ook kort de `non-processed` plots om te zien of we er geen 
+vergeten zijn op `processed` te zetten)
 
-```{r plotinfo_load}
-plotinfo <- load_plotinfo(database = path_to_fieldmap_db, processed = FALSE)
+```{r plotinfo_load_all}
+plotinfo <- load_plotinfo(database = path_to_fieldmap_db, processed = FALSE) %>% 
+  filter(plottype != "OTHER")
 names(plotinfo)
 
 plotinfo <- plotinfo %>% 
@@ -339,13 +360,10 @@ check_survey_trees_summ %>%
 Wijnendalebos: 4 plots uit periode 1 die niet verder meegenomen werden in de verwerking - ok
 Kersselaerspleyn: plot 1999: Rgister+: OK, niet mee te nemen
 Withoefse heide: 3eSET (dd 13/7/2022), verwerking is uitgesteld naar 2025
-
-forest_reserve = NA? : 10 plots 700-780, 3de decade: Heirnisse, nog niet verwerkt
-Deels wel al survey_trees ingevuld
-=> deze verwijderen om geen verwarring te creëren
+Ook nog Heirnisse en Jansheideberg (datacontrole reeds gedaan, maar dataverwerking nog niet)
 
 ```{r}
-plotinfo %>% filter(is.na(forest_reserve))
+plotinfo %>% filter(is.na(forest_reserve)) %>% nrow() == 0
 
 plotinfo %>% filter(is.na(forest_reserve)) %>% distinct(plot_id)
 ```
@@ -355,14 +373,11 @@ plotinfo %>% filter(is.na(forest_reserve)) %>% distinct(plot_id)
 plotinfo %>%  filter(data_processed & !survey_trees) %>% nrow() == 0
 ```
 
-## Correctie niet volledig afgewerkte plots
+We gaan verder met enkel de processed plots!!!!
 
-forest_reserve = NA: 10 plots 700-780, 3de decade: Heirnisse, nog niet verwerkt
-Deels wel al survey_trees ingevuld
-=> deze verwijderen om geen verwarring te creëren
-
-```{r}
-plotinfo <- plotinfo %>% filter(!is.na(forest_reserve))
+```{r processed_only}
+plotinfo <- plotinfo %>% filter(data_processed == TRUE)
+plotinfo %>% filter(is.na(forest_reserve)) %>% nrow() == 0
 ```
 
 
@@ -372,7 +387,7 @@ Year_dendro = jaar van groeiseizoen
 Grens ligt op 1/5.
 Soms dendro effectief in twee verschillende groeiseizoenen opgemeten - OK
 
-```{r check}
+```{r check, eval = FALSE}
 names(plotinfo)
 
 year_range <- plotinfo %>% 
@@ -398,7 +413,7 @@ Verwerkt door Luc DK ikv eerste monitoringrapport, en gegevens uit het monitorin
 ("CP_Kerss_logs_2000.xlsx" in folder "C:/03_BR/1_DataVerwerkingBR/Data/Meetgegevens/logs_CPs_Kerss_2000")
 opgehaald mbv script "Main_UpdateForresdat_02_dendro.Rmd".
 
-```{r CORR_survey_deadw_CP_Kerss}
+```{r CORR_survey_deadw_CP_Zoniën_UITBR_1995}
 # plotinfo %>% filter(forest_reserve == "Kersselaerspleyn" & plottype == "CP" & period == 1) %>% nrow()
 # 64
 
@@ -407,12 +422,12 @@ opgehaald mbv script "Main_UpdateForresdat_02_dendro.Rmd".
 # 53
 
 plotinfo_ <- plotinfo %>% 
-  dplyr::mutate(survey_deadw = ifelse(forest_reserve == "Kersselaerspleyn" & plottype == "CP" 
+  dplyr::mutate(survey_deadw = ifelse(forest_reserve == "Zoniën UITBR_1995" & plottype == "CP" 
                     & period == 1 & survey_trees
                     , TRUE
                     , survey_deadw))
 
-plotinfo_ %>% dplyr::filter(forest_reserve == "Kersselaerspleyn" & plottype == "CP" 
+plotinfo_ %>% dplyr::filter(forest_reserve == "Zoniën UITBR_1995" & plottype == "CP" 
                      & period == 1 & survey_trees) %>% head()
 
 plotinfo <- plotinfo_
