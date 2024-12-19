@@ -1099,7 +1099,7 @@ sqlSave(con, dominant_tree, "dominant_tree")  # op termijn ev. als strata_dynami
 
 sqlSave(con, plotinfo_def, "info_survey", varTypes = c(date_dendro="datetime"))
 
-sqlSave(con, forest_reserve_info_EUFORIA_, "info_forest_reserve_level_EUFORIA")
+sqlSave(con, forest_reserve_info_EUFORIA_, "info_forest_reserve_EUFORIA")
 
 odbcClose(con)
 ```
