@@ -23,7 +23,7 @@ rm(list=ls())
 ```{r Setup, include = FALSE}
 knitr::opts_chunk$set(
   echo = TRUE,
-  eval = FALSE,  # FALSE: dan kan ik knitten zonder dat er iets gebeurt
+  eval = TRUE,  # FALSE: dan kan ik knitten zonder dat er iets gebeurt
   message = FALSE,
   warning = FALSE, 
   fig.width = 9,
@@ -554,7 +554,7 @@ trees_standing1 %>% filter(is.na(eq_vef)) %>% nrow() == 0
 
 De VEF's zijn afhankelijk van diameter en hoogte.
 
-```{r }
+```{r results='hide'}
 names(trees_standing1)
 trees_standing2 <- trees_standing1 %>% 
   mutate(htot=calc_height_m,  # = height_modeled, belangrijk voor snags voor BGB 
@@ -951,7 +951,7 @@ Vertrekkende van *stems_calc*
 
 ### Onderscheid levende en dode biomassa
 
-```{r}
+```{r results='hide'}
 colnames(trees_standing6)
 summary(trees_standing6$plotarea_ha)
 table(trees_standing6$subcirclearea_ha, trees_standing6$plotarea_ha)
@@ -1136,18 +1136,18 @@ vanaf 30 cm opgemeten in 3de decade).
 
 ### Biomassa obv decay en species
 
-```{r}
-logs_by_decay_plot_species <- read.csv2(paste0(path_to_plotlevel_csv, "logs_by_decay_plot_species.csv")) %>% 
+```{r results='hide'}
+deadw_by_decay_plot_species <- read.csv2(paste0(path_to_plotlevel_csv, "deadw_by_decay_plot_species.csv")) %>% 
   select(-1, -vol_log_m3_ha_min40cm)
 
-names(logs_by_decay_plot_species)
+names(deadw_by_decay_plot_species)
 ```
 
-```{r}
-colnames(logs_by_decay_plot_species)
+```{r results='hide'}
+colnames(deadw_by_decay_plot_species)
 colnames(BiomassFactors4_FRL)
 
-logs1 <- logs_by_decay_plot_species %>% 
+logs1 <- deadw_by_decay_plot_species %>% 
   left_join(BiomassFactors4_FRL, by = c("species" = "IDTreeSp")) %>% 
   mutate(FC = FC_value)  
         # FC = 0.47 in access-txt van Sébastien, maar 0.5 algemener aanvaard 
@@ -1214,7 +1214,7 @@ We nemen deze cijders over en gebruiken een
 - gemiddelde decomposition van 0.75
 - WD van 0.52, zoals bij VBI voor ander loofhout (meeste bomen zijn LH in Zoniën)
 
-```{r extra_plot_level}
+```{r extra_plot_level, results='hide'}
 logs_per_plot2 <- dendro_by_plot %>% 
   filter(!is.na(vol_log_m3_ha)) %>% 
   select(plot_id, period, vol_log_m3_ha) %>% # waarde uit dendo_by_plot
@@ -1238,7 +1238,7 @@ logs_per_plot3 <- logs_per_plot2 %>%
 ```
 
 
-```{r}
+```{r results='hide'}
 t <- logs_per_plot3 %>% 
   anti_join(logs_per_plot1, by = c("plot_id", "period"))
 range(t$vol_log_m3_ha)
@@ -1247,7 +1247,7 @@ range(t$vol_log_m3_ha)
 ```
 
 
-```{r biomass_all}
+```{r biomass_all, results='hide'}
 names(logs_per_plot3)
 names(analyseSet_plot1)
 
