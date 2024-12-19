@@ -77,7 +77,8 @@ path_to_treelevel_gdrive <- paste0(path_to_output_gdrive, "00_METADATA-ALL_PLOTS
 # Strata, Externe data, .... ------
 dbExterneData <- paste0(path_to_data, "ExterneData/BR_ExterneData.accdb")
 
-dbStrata <- "BR_Strata_2024-09-11.accdb"
+dbStrata <- "BR_Strata_2024-12-18.accdb"
+# dbStrata <- "BR_Strata_2024-09-11.accdb"
 # dbStrata <- "BR_Strata_2024-02-22.accdb"
 # dbStrata <- "BR_Strata_2023-05-15.accdb"
 # dbStrata <- "BR_Strata_2022-11-30.accdb"
