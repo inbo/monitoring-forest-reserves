@@ -1,7 +1,7 @@
 ---
 title: "Plot data from the Flemish forest reserve network - Wildcard"
 author: "Anja Leyman"
-date: "4/11/2024"  
+date: "11/12/2024"  
 output: 
   html_document:
     keep_md: FALSE
@@ -62,11 +62,7 @@ path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_X8_inbo2020_20241205/")
 
 dbFieldmap <- "FieldMapData_MDB_BR_X8_inbo2020.accdb"
 path_to_fieldmap_db <- paste0(path_to_fieldmap, dbFieldmap)
-path_to_fieldmap_db_all <- paste0(path_to_fieldmap, dbFieldmap)
 ```
-
-
-
 
 
 # Request
@@ -161,11 +157,6 @@ In Flanders trees, not stems, are coupled through time.
 => STANDING: coppice => `CONSISTENT_ID` = N; individuel tree => CONSISTENT_ID = Y        
 
 
-
-
-
-
-
 # PLOTS data
 
 SITE_ID	SITE_NAME			LPI_ID	SPI_ID		SLOPE	TOPO	EXPO	ELEV_CENTER	ELEV_RANGE
@@ -180,35 +171,21 @@ SPI_ID	Plot ID in Sampling plot inventory (SPI) grid within the site (reserve).
 
 ## Load plotinfo
 
-Plotinfo samenstellen
+Plotinfo uit forresdat of gdrive
 
 ```{r processed_plots, results = 'hide', eval = FALSE}
-plotinfo_ <- load_plotinfo(database = path_to_fieldmap_db, 
-                          processed = FALSE)
-names(plotinfo_)
+# plotinfo <- load_plotinfo(database = path_to_fieldmap_db)
+# van gdrive (ipv forresdat)
+plotinfo <- read.csv2(paste0(path_to_plotlevel_gdrive, "plotinfo.csv")) %>% 
+  select(-1)
 
-plotinfo_ %>% filter(is.na(survey_number) & survey_trees == TRUE)
-table(plotinfo_$data_processed)
-
-plotinfo_ <- plotinfo_ %>% 
-  filter(survey_trees == TRUE)
-
-plotinfo_ %>% filter(data_processed == FALSE)
-
-non_processed <- plotinfo_ %>% 
-  filter(data_processed == FALSE)
-
-table(non_processed$forest_reserve, non_processed$period)
-table(non_processed$forest_reserve, non_processed$plottype)
+# ! enkel de processed data - dd 11/9/2024: nu ook Wijnendale en Everzwijnbad 3de decade erbij
+names(plotinfo)
 ```
 
-Twee bosreservaten nog niet (helemaal) processed:     
-
-- één kernvlaktes (Kerss: plot 1999 = Rogister+)    
-- één set van cirkelplots (With heide).  
-
 **We gaan enkel verder met de processed data.**   
-Vertrekken van info_survey uit strata-db
+
+Alternatief: vertrekken van info_survey uit strata-db (19/12/2024 bijgewerkt)
 
 ```{r plotinfo}
 con <- odbcConnectAccess2007(path_to_strata_db)
@@ -262,7 +239,6 @@ info_survey <- info_survey_ %>%
 
 f.e. Ename: grazing is a kind of management
 
-
 Veld `Management` is meest correcte hier.
 
 ```{r check_management, eval=FALSE}
@@ -292,9 +268,7 @@ t <- unmanaged %>%
 
 ### Kluisbos: no Poplar
 
-11 plots with poplar 
-
-? ik vind er maar 6
+6 plots with poplar 
 
 ```{r}
 # names(info_survey)
@@ -304,10 +278,8 @@ poplar_kluisbos <- info_survey %>%
   select(plot_id)
 
 unique(poplar_kluisbos$plot_id)
+# worden verderop weggfilterd (plotdata0: anti_join(poplar_kluisbos))
 ```
-
-
-
 
 ## Variables
 
@@ -394,8 +366,10 @@ tresholds_ <- info_survey %>%
 
 ```
 
-Enkel bij Kersselaersplein gaat rA3 van 9m (survey 1) naar 12m (survey 2 en 3) 
-=> rekening mee houden voor "CONSISTENT_ID_STANDING": wordt "NA" voor die 1ste periode én "N" voor de 2de periode
+Enkel bij Kersselaersplein ("Zoniën UITBR_1995" & "Zoniën KERN_1983") gaat 
+rA3 van 9m (survey 1) naar 12m (survey 2 en 3) 
+=> rekening mee houden voor "CONSISTENT_ID_STANDING": wordt "NA" voor die 1ste 
+periode én "N" voor de 2de periode
 
 Ontdubbelen van cirkelplots (A3 en A4), met uitz van deze waar rA3 = rA4
 (Liedekerke en Withoefse heide)
@@ -468,14 +442,14 @@ plotdata %>% filter(plot_id == 11000)
 plotdata %>% filter(plot_id == 205)
 plotdata %>% filter(plot_id == 101)
 ```
-CONSISTENT_ID_STANDING: aanpassen voor Kerss, CP's survey 2: niet gekoppeld, want 
-rA3 gaat van 9m (survey 1) naar 12m (survey 2 en 3) 
+CONSISTENT_ID_STANDING: aanpassen voor "Zoniën UITBR_1995" & "Zoniën KERN_1983", 
+CP's survey 2: niet gekoppeld, want rA3 gaat van 9m (survey 1) naar 12m (survey 2 en 3) 
 => "CONSISTENT_ID_STANDING": "NA" voor de 1ste periode (= standaard), én "N" voor de 2de periode
 
 ```{r uitz_consistent_id_Kerss_CP}
 plotdata <- plotdata %>% 
   mutate(CONSISTENT_ID_STANDING = 
-           ifelse(forest_reserve_fieldmap == "Kersselaerspleyn" & 
+           ifelse(forest_reserve_fieldmap %in% c("Zoniën UITBR_1995", "Zoniën KERN_1983") & 
                     survey_number == 2 & plottype == "CP"
                   , "N"
                   , CONSISTENT_ID_STANDING)
@@ -485,32 +459,46 @@ plotdata <- plotdata %>%
 
 
 
-CONSISTENT_ID_STANDING/LYING: ook aanpassen voor plot_id 11000 (oude kernvlakte Kerss):
-survey 1 (1986) niet meegenomen => survey 2 moet ook nog NA zijn 
-=> "CONSISTENT_ID_STANDING": "NA" voor 2000
-=> "CONSISTENT_ID_LYING": "NA" voor 2000
+CONSISTENT_ID_STANDING/LYING: aanpassen voor plot_id 11000 (oude kernvlakte Kerss):
+survey 1 (1986) niet meegenomen => survey 2 (2000) moet ook nog NA zijn 
+=> "CONSISTENT_ID_STANDING": "NA" voor 2000 (1e keer gemeten)
+=> "CONSISTENT_ID_LYING": "NA" voor 2000 (geen lying gemeten) en 2010 (1e keer lying gemeten)
 
-> indien gevraagd kunnen we nog verder gaan en "CONSISTENT_ID_LYING" ook "NA" 
-zetten voor 2010, want dat is de eerste keer dat deadwood opgemeten werd in de KV
+CONSISTENT_ID_STANDING: aanpassen voor CP's "Zoniën KERN_1983": in survey 1 niet opgemeten, 
+pas vanaf survey 2 opgemeten
 
 ```{r uitz_consistent_id_Kerss_OldCore}
 plotdata <- plotdata %>% 
-  mutate(CONSISTENT_ID_STANDING = 
-           ifelse(plot_id == 11000 & 
-                    survey_number == 2
-                  , NA
-                  , CONSISTENT_ID_STANDING)
-         , CONSISTENT_ID_LYING = 
-           ifelse(plot_id == 11000 & 
-                    survey_number == 2
-                  , NA
-                  , CONSISTENT_ID_LYING)
-  )
+  mutate(# Zoniën KERN_1983 - CA
+    CONSISTENT_ID_STANDING = 
+         ifelse(plot_id == 11000 & 
+                  survey_number == 2
+                , NA
+                , CONSISTENT_ID_STANDING)
+    , CONSISTENT_ID_LYING = 
+         ifelse(plot_id == 11000 & 
+                  survey_number == 2
+                , NA
+                , CONSISTENT_ID_LYING)
+    , CONSISTENT_ID_LYING = 
+         ifelse(plot_id == 11000 & 
+                  survey_number == 3
+                , NA
+                , CONSISTENT_ID_LYING)
+    # Zoniën KERN_1983 - CP
+    , CONSISTENT_ID_LYING = 
+         ifelse(forest_reserve_fieldmap == "Zoniën KERN_1983" & 
+                  plottype == "CP" &  survey_number == 2
+                , NA
+                , CONSISTENT_ID_LYING)
+    , CONSISTENT_ID_LYING = 
+         ifelse(forest_reserve_fieldmap == "Zoniën KERN_1983" & 
+                  plottype == "CP" &  survey_number == 2
+                , NA
+                , CONSISTENT_ID_LYING)
+    )
      
 ```
-
-
-
 
 
 SITE_ID	SITE_NAME			LPI_ID	SPI_ID		SLOPE	TOPO	EXPO	ELEV_CENTER	ELEV_RANGE
@@ -536,8 +524,8 @@ plotdata_def <- plotdata %>%
 
 
 #check
-plotdata_def %>% filter(plot_id == 101)
-plotdata_def %>% filter(plot_id == 205)
+plotdata_def %>% filter(plot_id == 101) # conc. cirkels
+plotdata_def %>% filter(plot_id == 205) # één cirkel A3 = A4
 plotdata_def %>% filter(plot_id == 1101)
 plotdata_def %>% filter(plot_id == 11000)
 plotdata_def %>% filter(plot_id == 41000)
@@ -614,7 +602,7 @@ list_BR %>% filter(str_detect(forest_reserve_fieldmap_new,"Everzw") & period == 
 ## Different inventory years, same period
 
 **Ter info**: sommige reservaten hebben per 
-opname-periode toch twee verschillende jaartallen voor `INVENTORY_yEAR`.
+opname-periode toch twee verschillende jaartallen voor `INVENTORY_YEAR`.
 Zo bv.Zwaenepoel 2nd extension: de dendro werd opgemeten tss 8/1/2020 en 15/5/2020
 => `INVENTORY_YEAR` is deels 2019 (voor 1/5/2020) en deels 2020 (na 1/5/2020), 
 aangezien er voor gekozen werd om alles wat voor 1 mei opgemeten wordt bij 
@@ -716,7 +704,9 @@ id's on **tree level** (based on old_id en coppice_id)
 NOT on stem level!
 
 => plotdata_def: CONSISTENT_ID_STANDING = P (see above)    
-=> standing_def: coppice => CONSISTENT_ID = N; individuel tree => CONSISTENT_ID = Y        
+=> standing_def: coppice => CONSISTENT_ID = N; individuel tree => CONSISTENT_ID = Y   
+(coppice trees don't have a unique tree-id, only the individual trees)
+
 
 ```{r create_unique_tree_id, results='hide'}
 # ?create_unique_tree_id
@@ -753,7 +743,10 @@ t <- data_dendro %>%
 ```{r results='hide'}
 data_stems <- compose_stem_data(data_dendro, data_shoots, extra_variables = TRUE)
 
-height_model <- load_height_models()
+# height_model <- load_height_models()
+# sneller en bij problemen met forresheights github, eigen functie gebruiken
+path_to_height_models <- "C:/03_BR/1_DataVerwerkingBR/Data/Hoogtemodellen/"
+height_model <- load_height_models_local(path_to_height_models)
 
 data_deadwood <- load_data_deadwood(database = path_to_fieldmap_db, processed = TRUE)
 data_deadwood <- calc_intact_deadwood(data_deadwood)  # overschrijft calc_volume_m3 uit db met volume intacte boom
@@ -763,7 +756,7 @@ data_stems_calc <- calc_variables_stem_level(data_stems, height_model)
 summary(data_stems_calc)
 
 # check tree_id
-data_stems_calc %>% filter(is.na(tree_id))
+data_stems_calc %>% filter(is.na(tree_id)) %>% nrow() == 0
 # t <- data_stems_calc %>% group_by(tree_id, ind_sht_cop) %>% 
 #   summarise(n = n()) %>% ungroup()
 ```
@@ -789,8 +782,14 @@ t2 <- not_included %>% group_by(forest_reserve, plottype, year) %>%
   summarise(n_trees = n(), n_plots = n_distinct(plot_id)) %>% ungroup()
 
 # nrows?
-nrow(standing0) == nrow(data_stems_calc) - t2$n_trees[1] - t2$n_trees[2]
-nrow(list_plots) == 1891
+nrow(standing0) == nrow(data_stems_calc) - sum(t2$n_trees)
+nrow(list_plots) == 1717
+
+info_survey %>% anti_join(list_plots) %>% nrow() == 174
+# table(t$forest_reserve_fieldmap)
+# De heide    Ename Kluisbos 
+#       52       55       67
+# dat zijn ename, kluisbos en de heide
 ```
 ## Variables
 
@@ -812,14 +811,10 @@ HOM_m	STATUS2	CAUSE_OF_DEATH	VOLUME	SUN_EXP	RED_FACTOR	HABITAT1	HABITAT2	HABITAT
 
 **Ter info mbt consistent_id:**
 
-- consistent_id wordt op pplotniveau bepaald:
+- consistent_id wordt op plotniveau bepaald:
     * voor 1ste survey steeds NA
     * voor 2de survey waar mogelijkheid is tot koppeling: bij hakhout "N" en bij individuele bomen "Y"
     * dus ook ingroei krijgt "Y"
-
-- in Zoniënwoud, 1stExtension zijn er soms NA trees in 2de periode (2010): dat zijn bomen in plots die 
-dan maar de eerste keer opgemeten werden. Bij de eerste opname werden de cirkelplots gelegen in de 
-kernvlakte niet afzonderlijk opgemeten.
 
 
 ```{r extra vars}
@@ -880,9 +875,9 @@ standing <- standing0 %>%
 #check
 standing %>% filter(plot_id == 101)
 t <- standing %>% filter(plot_id == 1101)
-standing %>% filter(plot_id == 2001)
-standing %>% filter(plot_id == 11000)
-
+t <- standing %>% filter(plot_id == 2001)  
+# uitbr_1995: andere straal dus CONSISTENT_ID_STANDING = N voor survey 2
+t <- standing %>% filter(plot_id == 11000)
 ```
 
 ```{r}
@@ -897,9 +892,6 @@ consist_summ <- standing %>%
   summarize(n = n()) %>% 
   ungroup()
 ```
-
-
-
 
 
 # LYING data
@@ -931,8 +923,8 @@ t2 <- not_included %>% group_by(forest_reserve, plottype, year) %>%
   summarise(n_trees = n(), n_plots = n_distinct(plot_id)) %>% ungroup()
 
 # nrows?
-nrow(lying0) == nrow(data_deadwood) - t2$n_trees[1]
-nrow(list_plots) == 1891
+nrow(lying0) == nrow(data_deadwood) - sum(t2$n_trees)
+nrow(list_plots) == 1717
 ```
 
 ## XY top and bottom - NIET
@@ -947,7 +939,7 @@ de tabellen Deadwood_details genereren (in access "MDB_deadw_details_20240613.ac
 > beter om dit nu niet aan te leveren, teveel onduidelijkheden
 
 
-```{r load_xy}
+```{r load_xy, eval = FALSE}
 # path_to_db_LISplots <-  "C:/03_BR_db_monitoring/LIS_plots_20240930/FieldMapData_LIS_plots_20240930.accdb"
 path_to_deadw_details <-  "C:/03_BR_db_monitoring/MDB_deadw_details_20240613.accdb"
 
@@ -993,7 +985,7 @@ data_xy <- rbind(data_xy_1, data_xy_2, data_xy_3)
 ```
 
 
-```{r}
+```{r eval = FALSE}
 names(data_xy)
 # names(data_FAS_xy)
 # names(data_FAS_diam)
@@ -1001,7 +993,7 @@ names(data_xy)
 ```
 
 
-```{r }
+```{r eval = FALSE}
 deadw_xy <- dplyr::select(data_xy, plot_id, lying_deadw_id, ID, period
                          , x_m, y_m, z_m, diam_mm) %>%
   group_by(plot_id, lying_deadw_id, period) %>%
@@ -1020,7 +1012,7 @@ Sommmige fragmenten hebben nog één of meer tussenliggende punten (naast top en
 Volume is dan wel correct, maar XY zegt weinig.
 (vooral periode 1 en 2)
 
-```{r}
+```{r eval = FALSE}
 ## basis (D1_mm) en top (D2_mm) toewijzen
 deadw_xy$D1_mm <-ifelse(deadw_xy$d1<deadw_xy$d2, deadw_xy$d2, deadw_xy$d1)
 deadw_xy$X_1 <-ifelse(deadw_xy$d1<deadw_xy$d2, deadw_xy$x2, deadw_xy$x1)
@@ -1037,9 +1029,11 @@ deadw_xy <- deadw_xy %>%
 ```
 
 
-```{r}
+```{r eval = FALSE}
 deadw_xy_ <- lying0 %>% 
   left_join(deadw_xy, by = c("plot_id", "period", "lying_deadw_id"))
+nrow(deadw_xy_);nrow(lying0)
+t <- deadw_xy_ %>% filter(is.na(X_1))
 ```
 
 Z-coord niet steeds correct.
@@ -1053,7 +1047,7 @@ is dat geen probleem voor de volumeberekening,
 maar als we zowel de z-coord van centrum plot als van dood hout aanleveren, moeten
 we wel zorgen dat dat overeenkomt.
 
-```{r check}
+```{r check, eval = FALSE}
 #  ev. z-waarde van plot overnemen
 deadw_xy_ <- deadw_xy_ %>% 
   mutate(Z_1 = ifelse(Z_1 <= 0 | Z_1 > 1000, Z, Z_1),
@@ -1062,7 +1056,7 @@ deadw_xy_ <- deadw_xy_ %>%
 t <- deadw_xy_ %>%
   filter(Z_1 > Z + 3 | Z_1 < Z - 3) %>% 
   select(1:5, 9, contains(c("X", "Y", "Z")))
-nrow(t) # 16196
+nrow(t) # 16196 / 9114
 
 ```
 
@@ -1095,7 +1089,7 @@ in WGS 84 uitgedrukt staan,
 terwijl er deadwood fragmenten zijn (vooral kernvlaktes) die exacte coördinaten hebben 
 (geen lokale) die in Lambert staan.
 Om de volledig databank om te zetten naar WGS 84 is geen optie.
-Het coödinatenstelsel wordt immers op plotniveau ingesteld.
+Het coördinatenstelsel wordt immers op plotniveau ingesteld.
 
 Alles in lokale coördinaten is zelfde probleem.
 
@@ -1180,7 +1174,6 @@ lying %>% filter(plot_id == 101)
 lying %>% filter(plot_id == 2001)
 lying %>% filter(plot_id == 11000)
 
-
 ```
 
 ```{r}
@@ -1188,7 +1181,7 @@ names(lying)
 ```
 
 
-# CWD data - NIET?
+# CWD data - NIET
 
 Sheet "CWD_metadata" contains explanations of attributes of coarse woody debris (CWD data sheet) which is about plot level deadwood volume estimates, but unlike LYING data table does not include information on individual objects - dead stems and decaying logs. Please provide your methodology.													
 														
@@ -1202,7 +1195,11 @@ VOLUME
 
 **Wordt opgeslagen in `cwd`**
 
-26/11/2024: voorgesteld om dit NIET mee te nemen: "We stumbled upon another 'issue'. 
+26/11/2024: afgesproken om dit NIET mee te nemen, gaat ook maar over beperkt 
+aantal reservaten, waar daarnaast wél een gewone deadwood opname gebeurd is,
+maar met een andere treshold (vanaf 30 cm, ipv 10 cm)
+
+"We stumbled upon another 'issue'. 
 For the line intersect method used for CWD, no upper diameter threshold was used. 
 As a consequence, there is some overlap between the measurements for CWD and 
 the trees measured in the LYING table, more specifically for dbh > 30 cm If this 
@@ -1221,14 +1218,14 @@ Enkel uitgevoerd bij
 - Everzwijnbad CP
 - Heirnisse CA: nog niet verwerkt
 
-```{r results='hide'}
+```{r results='hide', eval = FALSE}
 range(list_plots$INVENTORY_YEAR)
 BR_LIS <- list_plots %>% 
   filter(INVENTORY_YEAR >= 2021 & plot_id < 11000)
 unique(BR_LIS$forest_reserve_fieldmap)
 ```
 
-```{r load_LIS, results='hide'}
+```{r load_LIS, results='hide', eval = FALSE}
 # enkel bij 3eSET beschikbaar
 query_LIS <- 
     "SELECT lis.IDPlots AS plot_id, 
@@ -1253,7 +1250,7 @@ nrow(data_LIS_)  # 991
 range(data_LIS_$plot_id)
 unique(data_LIS_$AliveDead) == 12  # enkel dood
 ```
-```{r results='hide'}
+```{r results='hide', eval = FALSE}
 data_LIS <- data_LIS_ %>% 
   mutate(period = 3) %>% 
   inner_join(list_plots %>% select(plot_id, forest_reserve_fieldmap_new, period))
@@ -1271,7 +1268,7 @@ data_LIS <- data_LIS %>%
 ```
 
 
-```{r results='hide'}
+```{r results='hide', eval = FALSE}
 colnames(data_LIS)
 summary(data_LIS) # ok
 
@@ -1300,7 +1297,7 @@ DECAY
 VOLUME
 
 
-```{r cwd_vars, results='hide'}
+```{r cwd_vars, results='hide', eval = FALSE}
 ## Add variables from reserve
 cwd0 <- cwd_ %>% 
   inner_join(list_plots, by = c("plot_id", "period"))
@@ -1337,7 +1334,7 @@ cwd %>% filter(plot_id == 101)
 
 ```
 
-```{r}
+```{r, eval = FALSE}
 names(cwd)
 ```
 
@@ -1390,10 +1387,9 @@ sample plots. Most of them are included in the Bottoms-up data,
 so it might be better to wait for the data request there.
 
 
-
 ## Load ground vegetation
 
-In eerste instantie nkel vegetatie
+In eerste instantie enkel vegetatie
 Fungi enkel als er om gevraagd wordt (ik weet niet waar die data zit)
 
 SITE_ID, SITE_NAME, WILDCARD_sub_ID, INVENTORY_YEAR,  LPI_ID, SPI_ID, 
@@ -1413,36 +1409,56 @@ qHerbSpecies <- qHerbSpecies %>% select(ID, name_sc = Value2)
 ```
 
 
-```{r load_veg_data}
+```{r load_veg_data, results='hide'}
 data_vegetation0 <-
   load_data_vegetation(
     database = path_to_fieldmap_db,
-    processed = FALSE
+    processed = TRUE
   )
 
 data_vegetation <- data_vegetation0 %>% 
   inner_join(list_plots) # `by = join_by(plot_id, plottype, period)
-nrow(data_vegetation) #5759
+nrow(data_vegetation) #5731
 
+
+# verschil processed TRUE/FALSE: -----
+# als FALSE, dan worden NA's ingeladen => die meenemen? NEE
+# als ik die meeneen verschijnt er in "ground_veg" een extra record met jaartal=NA
+# en plot_smpled=NA => verwarrend, beter niet meenemen
+data_vegetation2 <- load_data_vegetation(
+    database = path_to_fieldmap_db,
+    processed = FALSE
+  ) %>% 
+  inner_join(list_plots)
+nrow(data_vegetation2) # 5759
+
+t <-  data_vegetation2 %>% 
+  anti_join(data_vegetation, by = c("plot_id", "plottype", "period"))
+# 28
+# With heide periode 2: geen veg-opname, wel dendro
+# plot 112, 946, 957: gevaarlijk, niet opgenomen maar wel <1% voor waterlayer-cover
+  
 ```
 
-```{r eval=FALSE}
+```{r results='hide'}
 data_vegetation %>% filter(is.na(plotarea_ha)) %>% nrow() == 0
-data_vegetation %>% filter(is.na(total_herb_cover_id)) %>% nrow() == 201 # vooral plots 1eSET
+data_vegetation %>% filter(is.na(total_herb_cover_id)) %>% nrow() == 171 # vooral plots 1eSET
 t <- data_vegetation %>% filter(is.na(total_herb_cover_id))
 table(t$period)
 #   1   2 
-# 170  31
+# 167  4
 
 t2 <- data_vegetation %>% filter(is.na(total_herb_cover_id) & is.na(total_tree_cover_id) &
                                    is.na(total_shrub_cover_id))
 table(t2$period)
+#   1   2 
+# 110  3
 
 # vaak ook geen datum
 t3 <- data_vegetation %>% filter(is.na(date_vegetation))
 table(t3$period)
-#  1  2 
-# 83 25 
+#  1
+# 80  
 ```
 
 
@@ -1454,21 +1470,21 @@ summary(data_vegetation)
 ```
 
 
-```{r load_herblayer}
+```{r load_herblayer, results='hide'}
 data_herblayer0 <-
   load_data_herblayer(
     database = path_to_fieldmap_db,
-    processed = FALSE
+    processed = TRUE
   )
 
 data_herblayer <- data_herblayer0 %>% 
   inner_join(list_plots) # `by = join_by(plot_id, plottype, period)
   
-nrow(data_herblayer) # 76131
+nrow(data_herblayer) # 76103
 
 table(data_herblayer$period)
-#    1     2     3 
-# 33993 32178  9960
+#     1     2     3 
+# 33990 32153  9960
 
 ```
 
@@ -1476,17 +1492,26 @@ table(data_herblayer$period)
 # NA's? 
 data_herblayer %>% filter(is.na(forest_reserve)) %>% nrow() == 0
 
-data_herblayer %>% filter(is.na(coverage_id)) %>% nrow() # 150
+data_herblayer %>% filter(is.na(coverage_id)) %>% nrow() == 122
 t <- data_herblayer %>% filter(is.na(coverage_id)) 
 table(t$period)
-#   1   2   3 
-# 124  25   1
+#   1    3 
+# 121    1
 
 data_herblayer %>% filter(is.na(coverage_id) & !is.na(species)) %>% nrow() == 0
 
-data_herblayer %>% filter(is.na(year)) %>% nrow()  # 108
+data_herblayer %>% filter(is.na(year)) %>% nrow() == 80
 data_herblayer %>% filter(is.na(year) & !is.na(species)) %>% nrow() == 0
 t <- data_herblayer %>% filter(is.na(year))
+table(t$forest_reserve)
+# Hannecart Rodebos KV2 
+#          40          40 
+# dat zijn twee kernvlaktes, die tss 1 en 2 groter geworden zijn
+# gaat allemaal over periode 1
+# Dit gaat om subplot die toen niet opgemeten zijn, in periode 1 is er enkel een 
+# transect opgemeten en niet de volledige kernvlakte.  
+# Deze subplots krijgen verderop `PLOT_SAMPLED = "N"` krijgen
+# `Survey_veg` wordt immers op niveau van de volledige kernvlakte bepaald
 ```
 
 ```{r results='hide'}
@@ -1501,6 +1526,11 @@ Zodra `date_vegetation` ingevuld is, weten we dat er een opname gebeurd is.
 
 Ter controle `survey_veg = T/F` uit plotinfo halen. 
 
+**Opgepast**: `survey_veg = T/F` wordt op niveau van de volledige plot bepaald,
+bij een KV kan het dus wel zijn dat bepaalde subplots NIET opgemeten werden.
+Zie ook verder.
+
+
 ```{r check_NA, results='hide'}
 data_herblayer_ <- data_herblayer %>% 
   left_join(data_vegetation %>% select(forest_reserve, plot_id, subplot_id
@@ -1512,44 +1542,48 @@ data_herblayer_ <- data_herblayer %>%
 t <- data_herblayer_ %>% 
   filter(survey_veg == TRUE & is.na(date_vegetation))
 table(t$plottype)
-# enkel geen jaar beschikbaar bij core area's?
+# enkel geen jaar beschikbaar bij twee core area's - periode 1
 table(t$forest_reserve)
+# Hannecart Rodebos KV2 
+#   40          40
 table(t$period)
+#  1 
+# 80 
 ```
-Het lijkt alsof bij twee kernvlaktes (periode 1) de `vegetation_date` ontbreekt, 
+
+Bij twee kernvlaktes (periode 1) ontbreekt de `vegetation_date`, 
 telkens bij 40 van de 50 subplots:     
 
  - Hannecart    31000 
  - Rodebos KV2  43000
 
-Dit gaat om subplot die toen niet opgemeten zijn, in periode 1 is er enkel een 
+Dit gaat om subplots die toen niet opgemeten zijn, in periode 1 is er enkel een 
 transect opgemeten en niet de volledige kernvlakte.  
 
 Deze subplots moeten `PLOT_SAMPLED = "N"` krijgen.
+`INVENTORY_YEAR` overnemen van rest van de kernvlakte:    
+- 2001 voor Hannecart - 31000
+- 2001 voor Rodebos KV2 - 43000
 
 `Survey_veg` wordt op niveau van de volledige kernvlakte bepaald.
 
 ```{r results='hide'}
 # survey_veg = FALSE
-t <- data_herblayer_ %>% 
-  filter(survey_veg == FALSE)
-table(t$plottype)
-# 28 CP's
-table(t$forest_reserve)
-   # Everzwijnbad    Pruikemakers Withoefse heide 
-   #            1               2              25
-table(t$period)
- # 1  2 
- # 3 25
+data_herblayer_ %>% filter(survey_veg == FALSE) %>% nrow() == 0
+# deze worden niet mee ingeladen als processed = TRUE staat
+    # processed = FALSE: 
+    # table(t$forest_reserve)
+    # Everzwijnbad    Pruikemakers Withoefse heide 
+    #            1               2              25
+    # table(t$period)
+    # 1  2 
+    # 3 25
 
 ```
-Daarnaast ook 28 cirkelplots waar geen veg-opname gebeurd is.
-Ook deze moeten `PLOT_SAMPLED = "N"` krijgen.
 
 ```{r}
 data_herblayer <- data_herblayer_
 ```
-
 
 ## Variables
 
@@ -1557,12 +1591,16 @@ SITE_ID, SITE_NAME, WILDCARD_sub_ID, INVENTORY_YEAR,  LPI_ID, SPI_ID,
 PLOT_SAMPLED, SAMPLED_AREA, LPI_sub_ID,
 SPECIES, COVER
 
-
 ```{r}
 names(data_herblayer)
 data_herblayer %>% filter(is.na(plottype)) %>% nrow() == 0
 data_herblayer %>% filter(is.na(survey_veg)) %>% nrow() == 0
 data_herblayer %>% filter(year(date_vegetation) != year) %>% nrow() == 0
+
+data_herblayer %>% filter(is.na(year)) %>% nrow() == 80 # 2 KV's - periode 1
+# `INVENTORY_YEAR` overnemen van rest van de kernvlakte:    
+# - 2001 voor Hannecart - 31000
+# - 2001 voor Rodebos KV2 - 43000
 
 ground_veg <- data_herblayer %>% 
   left_join(qHerbSpecies, by = c("species" = "ID")) %>% 
@@ -1571,9 +1609,12 @@ ground_veg <- data_herblayer %>%
                                  , ifelse(!is.na(date_vegetation), "Y", "N")
                                  , "N")
          , LPI_sub_ID = ifelse(plottype == "CA", subplot_id, NA)
+         , INVENTORY_YEAR = ifelse(is.na(year) & 
+                                     plot_id %in% c(31000, 43000)
+                                   , 2001, year)
          ) %>% 
   select(LPI_ID, SPI_ID, LPI_sub_ID
-         , INVENTORY_YEAR = year  # zelfde als jaartal van date_veg
+         , INVENTORY_YEAR 
          , PLOT_SAMPLED, SAMPLED_AREA
          , SPECIES_CODE = species
          , SPECIES_FULL_SCIENTIFIC = name_sc
@@ -1583,7 +1624,44 @@ ground_veg <- data_herblayer %>%
          )
 
 summary(ground_veg)
+ground_veg %>% filter(is.na(INVENTORY_YEAR)) %>% nrow() == 0
 ```
+
+**Info on large core area Zoniën (Zoniën KERN_1983 - CA)**
+Vegetation : standard relevé on 10x10m subplots: 
+
+- 750 plots, only summer survey in 2001     
+- 140 plots in 2011 and 2021 - spring and summer survey; additional survey in 
+spring 2015 (vernal flora)    
+
+Hier stelt zich het probleem van Hannecart en Rodebos zich niet, omdat de laag
+van de subplots verschillend is bij 1eSET enerzijds en 2e en 3eSET anderzijds. 
+Bij 2e en 3eSET zijn effectief maar 140 subplots opgenomen in die laag.
+Dus die extra subplots van 1eSET, zitten NIET in de data van 2de en 3deSET
+(dus geen `PLOT_SAMPLED = "N"`)
+
+> moeten die extra toegevoegd worden? 
+Ik (Anja) zou dat niet doen, is aan degene die alle data samenzetten om dat te doen,
+als ze dat opportuun achten.
+
+> ik stel voor om de subplots (`PLOT_SAMPLED = "N"`) van KV Rodebos 
+en Hannecart ook te verwijderen, eerder dan die te behouden in de dataset.
+Dan is alles conform.
+Zie hierna.
+
+```{r}
+#`PLOT_SAMPLED = "N"`
+ground_veg %>% filter(PLOT_SAMPLED == "N") %>% nrow == 80
+```
+
+```{r remove_subplots_not_sampled}
+ground_veg_ <- ground_veg %>% 
+  filter(PLOT_SAMPLED == "Y")
+nrow(ground_veg_) == nrow(ground_veg) - 80
+
+ground_veg <- ground_veg_
+```
+
 
 
 # DESIGN data
@@ -1623,10 +1701,11 @@ design_ <- plotdata %>%
            , LYING_DEAD_THRESHOLD, LYING_ALIVE_THRESHOLD) %>% 
   summarize(n_plots = n()) %>% 
   ungroup() %>% 
-  left_join(cwd %>% group_by(forest_reserve_fieldmap_new, period, plottype) %>% 
-              summarize() %>% ungroup() %>% 
-              mutate(cwd_survey = TRUE)
-            , by = c("forest_reserve_fieldmap_new", "plottype", "period")) %>% 
+  # beslist om geen CWD aan te leveren
+      # left_join(cwd %>% group_by(forest_reserve_fieldmap_new, period, plottype) %>% 
+      #             summarize() %>% ungroup() %>% 
+      #             mutate(cwd_survey = TRUE)
+      #           , by = c("forest_reserve_fieldmap_new", "plottype", "period")) %>% 
   # left_join(link_WC_FM, by = c("forest_reserve_fieldmap", plottype))
   mutate(INVENTORY_TYPE = ifelse(plottype == "CA", "LPI", 
                                    ifelse(plottype == "CP", "SPI", NA))
@@ -1636,15 +1715,18 @@ design_ <- plotdata %>%
          , POM_MARK = "N"
          , SPECIES_POOL = "AWS"  # all woody species
          # LIS enkel bij Wijnendale en Everzwijnbad, CP's, decade3
-         , LIS_CWD = ifelse(cwd_survey & !is.na(cwd_survey), "Y", "N")
+         # beslist om niet aan te leveren
+              # , LIS_CWD = ifelse(cwd_survey & !is.na(cwd_survey), "Y", "N")
+         , LIS_CWD = "N"
          , STEM_COORD_REF_POINT = "BHC"
          , EPSG_CODE = "4326"  # GCS_WGS_1984 - EPSG:4326
          ) 
 
 names(design_)
-nrow(design_)  # 108
+nrow(design_)  # 118
+
 t <- design_ %>% filter(str_detect(forest_reserve_fieldmap_new,"Sevendonck"))
-design_ %>% filter(str_detect(forest_reserve_fieldmap_new,"Kerss"))
+design_ %>% filter(str_detect(forest_reserve_fieldmap_new,"Zoni"))
 ```
 
 
@@ -1711,21 +1793,22 @@ design_def_link <- design_def %>%
 t <- design_def_link %>% filter(str_detect(forest_reserve_fieldmap_new, "Sevendonck"))
 names(list_BR)
 names(list_plots)
-t2 <- design_def_link %>% filter(forest_reserve_fieldmap_new == "Kersselaerspleyn")
+t2 <- design_def_link %>% filter(forest_reserve_fieldmap_new == "Zoniën UITBR_1995")
 t3 <- design_def_link %>% filter(str_detect(SITE_NAME, "Zoni"))
 
-# zonder link
-t <- design_def_link %>% filter(is.na(SITE_ID))
-t$forest_reserve_fieldmap_new # De Heide (Meerdaal) - managed site => ok!
+# overal link?
+design_def_link %>% filter(is.na(SITE_ID)) %>% nrow() == 0
 ```
 
-```{r results='hide'}
-design_def_link_ <- design_def_link %>% 
-  filter(!is.na(SITE_ID))
+```{r eval= FALSE, results='hide'}
+# records zonder link naar SITE_ID verwijderen - niet meer nodig
 
-nrow(design_def_link_) == nrow(design_def_link) - 2
-
-design_def_link <- design_def_link_
+# design_def_link_ <- design_def_link %>% 
+#   filter(!is.na(SITE_ID))
+# 
+# nrow(design_def_link_) == nrow(design_def_link) - 2
+# 
+# design_def_link <- design_def_link_
 ```
 
 ```{r link_PLOTS, results='hide'}
@@ -1750,20 +1833,9 @@ names(list_BR)
 names(list_plots)
 t2 <- plotdata_def_link %>% filter(forest_reserve_fieldmap_new == "Everzwijnbad")
 
-# zonder link
-t <- plotdata_def_link %>% filter(is.na(SITE_ID))
-range(t$SPI_ID, na.rm = T) # 1401 1452 - De Heide (Meerdaal) - managed site => ok!
+# overal link?
+plotdata_def_link %>% filter(is.na(SITE_ID)) %>% nrow() == 0
 ```
-
-```{r results='hide'}
-plotdata_def_link_ <- plotdata_def_link %>% 
-  filter(!is.na(SITE_ID))
-
-nrow(plotdata_def_link_) == nrow(plotdata_def_link) - nrow(t)
-
-plotdata_def_link <- plotdata_def_link_
-```
-
 
 ```{r link_STANDING, results='hide'}
 names(link_WC_FM)
@@ -1778,10 +1850,6 @@ standing_link <- standing %>%
          , everything())
 
 nrow(standing_link) == nrow(standing) 
-nrow(standing_link %>% filter(is.na(SITE_ID))) == nrow(standing_link %>% filter(forest_reserve_fieldmap_new == "De heide"))
-
-standing_link <- standing_link %>% 
-  filter(!is.na(SITE_ID))
 ```
 
 
@@ -1798,30 +1866,26 @@ lying_link <- lying %>%
          , everything())
 
 nrow(lying_link) == nrow(lying) 
-nrow(lying_link %>% filter(is.na(SITE_ID))) == nrow(lying_link %>% filter(forest_reserve_fieldmap_new == "De heide"))
-
-lying_link <- lying_link %>% 
-  filter(!is.na(SITE_ID))
 ```
 
 
-```{r link_CWD, results='hide'}
-names(link_WC_FM)
-names(cwd)
-
-cwd_link <- cwd %>% 
-  left_join(list_BR %>% select(forest_reserve_fieldmap_new, plottype
-                               , period, INVENTORY_YEAR)) %>% 
-  left_join(link_WC_FM %>% select(-comment, -subarea, -`LPI_ID / SPI_ID`)
-            , by = c("forest_reserve_fieldmap_new", "plottype")) %>% 
-  select(SITE_ID, SITE_NAME, WILDCARD_sub_ID
-         , everything())
-
-nrow(cwd_link) == nrow(cwd) 
-nrow(cwd_link %>% filter(is.na(SITE_ID))) == nrow(cwd_link %>% filter(forest_reserve_fieldmap_new == "De heide"))
-
-cwd_link <- cwd_link %>% 
-  filter(!is.na(SITE_ID))
+```{r link_CWD_NIET, results='hide', eval = FALSE}
+# names(link_WC_FM)
+# names(cwd)
+# 
+# cwd_link <- cwd %>% 
+#   left_join(list_BR %>% select(forest_reserve_fieldmap_new, plottype
+#                                , period, INVENTORY_YEAR)) %>% 
+#   left_join(link_WC_FM %>% select(-comment, -subarea, -`LPI_ID / SPI_ID`)
+#             , by = c("forest_reserve_fieldmap_new", "plottype")) %>% 
+#   select(SITE_ID, SITE_NAME, WILDCARD_sub_ID
+#          , everything())
+# 
+# nrow(cwd_link) == nrow(cwd) 
+# nrow(cwd_link %>% filter(is.na(SITE_ID))) == nrow(cwd_link %>% filter(forest_reserve_fieldmap_new == "De heide"))
+# 
+# cwd_link <- cwd_link %>% 
+#   filter(!is.na(SITE_ID))
 ```
 
 
@@ -1840,11 +1904,7 @@ ground_veg_link <- ground_veg %>%
          , everything())
 
 nrow(ground_veg_link) == nrow(ground_veg) 
-nrow(ground_veg_link %>% filter(is.na(SITE_ID))) == nrow(ground_veg_link %>% filter(forest_reserve_fieldmap_new == "De heide"))
 
-nrow(ground_veg_link %>% filter(is.na(SITE_ID)))  == 0
-ground_veg_link <- ground_veg_link %>% 
-  filter(!is.na(SITE_ID))
 ```
 
 
@@ -1856,7 +1916,7 @@ De resultaten worden weggeschreven naar txt (Separator = tab, Decimal =	.):
 - INBO_Plots.txt   
 - INBO_Standing.txt   
 - INBO_Lying.txt   
-- INBO_CWD.txt   
+<!-- - INBO_CWD.txt    -->
 - INBO_ground_veg.txt
 
 Daarnaast ook volgende lookuplijsten:   
@@ -1880,39 +1940,42 @@ ipv veld "BOUNDARY" in DESIGN.txt (gevraagd aan Yannick (mail 25/9/2024)):
 #
 summary(lying_link)
 # 45 NA's voor D1/2: OK, want intacte bomen
-# 88 nA's voor decay - OK, kan
+# 87 NA's voor decay - OK, kan
 names(lying)
 names(lying0)
-t <- lying0 %>% filter(is.na(calc_volume_m3)) %>% 
-  select(forest_reserve, plottype
-         , plot_id, period, year, lying_deadw_id
-         , intact_fragm
-         , species
-         , contains(c("calc", "total", "diam", "vol")))
-t %>% distinct(forest_reserve, plottype)
+lying0 %>% filter(is.na(calc_volume_m3)) %>% nrow() == 0
+# t <- lying0 %>% 
+#   filter(is.na(calc_volume_m3)) %>% 
+#   select(forest_reserve, plottype
+#          , plot_id, period, year, lying_deadw_id
+#          , intact_fragm
+#          , species
+#          , contains(c("calc", "total", "diam", "vol")))
+# t %>% distinct(forest_reserve, plottype)
 # period 3: nog niet bijgewerkt (calc_volume inside plot en bijwerken calc_volume)
 # ok 25/9/2024
 
 #
-summary(cwd_link)
+# summary(cwd_link)
 
 #
 summary(standing_link)
-standing_link %>% filter(is.na(VOLUME))
-standing0 %>% filter(is.na(vol_bole_m3)) %>% 
-  select(plot_id, period
-         , tree_id, tree_measure_id, old_id, coppice_id
-         , ind_sht_cop, alive_dead, species, intact_snag
-         , contains(c("m2", "m3")))
+standing_link %>% filter(is.na(VOLUME)) %>% nrow() == 0
+# standing0 %>% filter(is.na(vol_bole_m3)) %>% 
+#   select(plot_id, period
+#          , tree_id, tree_measure_id, old_id, coppice_id
+#          , ind_sht_cop, alive_dead, species, intact_snag
+#          , contains(c("m2", "m3")))
 # !! intact_snag = 12, maar geen hoogte - ok; (intact van gemaakt in moederdb)
 
 #
 summary(plotdata_def_link)
-plotdata_def_link %>% filter(is.na(SAMPLED_AREA))
-plotdata_def_link %>% filter(SITE_ID == 7) # OK, opgelost
+plotdata_def_link %>% filter(is.na(SAMPLED_AREA)) %>% nrow() == 0
+# plotdata_def_link %>% filter(SITE_ID == 7) # OK, opgelost
 
 #
 summary(design_def_link)
+design_def_link %>% filter(is.na(LYING_DEAD_THRESHOLD)) %>% nrow() 
 design_def_link %>% filter(is.na(LYING_DEAD_THRESHOLD)) %>% distinct(SITE_NAME, WILDCARD_sub_ID, period)
 # OK, geen deadwood opname gebeurd
 ```
@@ -1922,12 +1985,13 @@ design_def_link %>% filter(is.na(LYING_DEAD_THRESHOLD)) %>% distinct(SITE_NAME, 
 names(design_def_link)
 col <- c("SITE_ID", "SITE_NAME", "INVENTORY_YEAR")
 
-design_def_link %>% filter_at(col, any_vars(is.na(.)))
-plotdata_def_link %>% filter_at(col, any_vars(is.na(.)))
-standing_link %>% filter_at(col, any_vars(is.na(.)))
-lying_link %>% filter_at(col, any_vars(is.na(.)))
-cwd_link %>% filter_at(col, any_vars(is.na(.)))
-ground_veg_link %>% filter(PLOT_SAMPLED == "Y") %>% filter_at(col, any_vars(is.na(.)))
+design_def_link %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+plotdata_def_link %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+standing_link %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+lying_link %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+# cwd_link %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+ground_veg_link %>% filter(PLOT_SAMPLED == "Y") %>% 
+  filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
 
 ```
 
@@ -1982,9 +2046,9 @@ write.table(lying_link %>% select(-all_of(extra_vars))
             , paste0(path_to_datarequest_teamdrive, "INBO_Lying.txt")
             , sep = " ", dec = ".")
 
-write.table(cwd_link %>% select(-all_of(extra_vars))
-            , paste0(path_to_datarequest_teamdrive, "INBO_CWD.txt")
-            , sep = " ", dec = ".")
+# write.table(cwd_link %>% select(-all_of(extra_vars))
+#             , paste0(path_to_datarequest_teamdrive, "INBO_CWD.txt")
+#             , sep = " ", dec = ".")
 
 
 write.table(ground_veg_link %>% select(-all_of(extra_vars))
@@ -2000,7 +2064,7 @@ write.table(qHerbSpecies, paste0(path_to_datarequest_teamdrive, "qHerbSpecies.tx
 
 Checken of de geëxporteerde files goed in R ingelezen worden
 
-```{r check_read, results='hide'}
+```{r check_read, eval = FALSE, results='hide'}
 #
 design_check <- read.table(paste0(path_to_datarequest_teamdrive, "INBO_Design.txt")
                            , sep = " ", dec = ".")
@@ -2030,11 +2094,11 @@ head(lying_check)
 names(lying_check)
 
 #
-cwd_check <- read.table(paste0(path_to_datarequest_teamdrive, "INBO_CWD.txt")
-                           , sep = " ", dec = ".")
-head(cwd_check)
-names(cwd_check)
-table(cwd_check$SITE_NAME)
+# cwd_check <- read.table(paste0(path_to_datarequest_teamdrive, "INBO_CWD.txt")
+#                            , sep = " ", dec = ".")
+# head(cwd_check)
+# names(cwd_check)
+# table(cwd_check$SITE_NAME)
 
 #
 ground_veg_check <- read.table(paste0(path_to_datarequest_teamdrive, "INBO_ground_veg.txt")
