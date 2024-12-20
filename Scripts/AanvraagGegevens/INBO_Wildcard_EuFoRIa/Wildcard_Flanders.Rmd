@@ -1,7 +1,7 @@
 ---
 title: "Plot data from the Flemish forest reserve network - Wildcard"
 author: "Anja Leyman"
-date: "11/12/2024"  
+date: "20/12/2024"  
 output: 
   html_document:
     keep_md: FALSE
@@ -10,8 +10,8 @@ output:
     code_folding: hide
     toc: TRUE
     toc_float:
-      collapsed: FALSE
-      smooth_scroll: FALSE
+      collapsed: TRUE
+      smooth_scroll: TRUE
 ---
 
 ```{r Rm, eval = FALSE}
@@ -2109,12 +2109,12 @@ names(ground_veg_check)
 ```
 
 ```{r txt_metadata_vs2_Yannick, eval = FALSE}
-# Yannick
+# < Yannick als txt (op vraag van Thomas voor exrta info mbt onze methodiek)
 INBO_extended_Metadata_v2 <- read.table(paste0(path_to_datarequest_teamdrive, "INBO_extended_Metadata_v2.txt"), header = TRUE)
 
 INBO_user_Metadata_v2 <- read.table(paste0(path_to_datarequest_teamdrive, "INBO_user_Metadata_v2.txt"), header = TRUE)
 
-# csv
+# wegschrijven op zelfde plaats als csv
 write.csv2(INBO_extended_Metadata_v2, paste0(path_to_datarequest_teamdrive, "INBO_extended_Metadata_v2.csv"))
 write.csv2(INBO_user_Metadata_v2, paste0(path_to_datarequest_teamdrive, "INBO_user_Metadata_v2.csv"))
 ```
