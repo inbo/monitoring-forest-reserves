@@ -166,23 +166,25 @@ path_to_EUFORIA_algemeen <- paste0(path_to_datarequests, "EUFORIA_algemeen/enkel
 
 forest_reserve_list_EUFORIA <- read_xlsx(paste0(path_to_EUFORIA_algemeen, "INBO_link_forestreserve_EUFORIA_fieldmap.xlsx"))
 
-forest_reserve_info_EUFORIA <- read_xlsx(paste0(path_to_EUFORIA_algemeen, "INBO_info_forest_reserve.xlsx")) %>% 
-  select(2:12) %>% 
+info_forest_reserve_EUFORIA <- read_xlsx(paste0(path_to_EUFORIA_algemeen, "INBO_info_forest_reserve_ikv_EUFORIA.xlsx")) %>% 
+  select(1:13) %>% 
   rename(reserve_name_euforia = reserve_name,
          reserve_area_ha = reserve_area,
          primeval_YN = primeval) %>% 
   filter(!is.na(res_ID_inst))
 
+names(info_forest_reserve_EUFORIA)
 
-names(forest_reserve_info_EUFORIA)
+info_forest_reserve_EUFORIA_ <- info_forest_reserve_EUFORIA %>% 
+  left_join(forest_reserve_list_EUFORIA, 
+            by = c("reserve_name_euforia" = "reserve_name"
+                   , "res_ID_inst", "institute", "plottype")) %>% 
+  select(forest_reserve = forest_reserve_fieldmap, plottype
+         , updated_EUFORIA = Updated, everything()) %>% 
+  select(-SiteID_EUFORIA)
 
-forest_reserve_info_EUFORIA_ <- forest_reserve_info_EUFORIA %>% 
-  left_join(forest_reserve_list_EUFORIA, by = c("reserve_name_euforia" = "reserve_name", "res_ID_inst", "institute")) %>% 
-  select(forest_reserve = forest_reserve_fieldmap, plottype, everything()) %>% 
-  select(-institute, -res_ID_inst, -SiteID_EUFORIA)
-
-names(forest_reserve_info_EUFORIA_)
-forest_reserve_info_EUFORIA <- forest_reserve_info_EUFORIA_
+names(info_forest_reserve_EUFORIA_)
+info_forest_reserve_EUFORIA <- info_forest_reserve_EUFORIA_
 ```
 
 ### Monitoringrapport
@@ -1111,7 +1113,7 @@ Per plot en per periode
 
 ## Info op niveau van bosreservaat 
 
-- forest_reserve_info_EUFORIA (opp. volledig reservaat, forest type, mean annual temp/precipitation)
+- info_forest_reserve_EUFORIA (opp. volledig reservaat, forest type, mean annual temp/precipitation)
 
 
 ## Export
@@ -1130,7 +1132,11 @@ strata <- list(
       strata_history = strata_hist_def,
       strata_location = strata_locatie,
       dominant_tree = dominant_tree,
-      forest_reserve_info_EUFORIA = forest_reserve_info_EUFORIA
+      info_forest_reserve_EUFORIA = info_forest_reserve_EUFORIA
+    )
+
+strata <- list(
+      info_forest_reserve_EUFORIA = info_forest_reserve_EUFORIA
     )
 
 save_results_access (
