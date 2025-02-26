@@ -1,0 +1,582 @@
+---
+title: "Wildcard - Flemish forest reserve network"
+subtitle: "Queries"
+author: "Anja Leyman"
+date: "25/02/2025"  
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: TRUE
+      smooth_scroll: TRUE
+---
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 7,
+  fig.height = 3,
+  fig.align = TRUE)
+
+library(here)
+library(writexl)
+library(scales)
+library(sf)
+
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+```
+
+
+```{r Setup2}
+# path_to_project <- "C:/03_BR/3_AanvraagGegevens/INBO_DigitaalVlaanderen"
+path_to_project_teamdrive <- paste0(path_to_output_gdrive, "EUFORIA_WILDCARD_2024")
+
+# path_to_datarequest <- paste0(path_to_project, "/output/")
+path_to_datarequest_teamdrive <- paste0(path_to_project_teamdrive, "/output_R/")
+path_to_html_teamdrive <- path_to_datarequest_teamdrive
+# path_to_html <- path_to_datarequest
+
+path_to_datacontrol <- paste0(path_to_project_teamdrive, "/datacontrole/")
+
+```
+
+<!-- De eerste analyse gebeurde op de fieldmapdb van 13/6/2024,  -->
+<!-- maar in db van 5/12/2024 zijn de 4 sites van Zoniën duidelijk afgelijnd,  -->
+<!-- dus moeten we toch van de meest recente db vertrekken (MDB_BR_X8_inbo2020_20241205) -->
+
+```{r TEMP_db}
+# path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_X8_inbo2020_20240613/")
+path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_X8_inbo2020_20241205/")
+
+dbFieldmap <- "FieldMapData_MDB_BR_X8_inbo2020.accdb"
+path_to_fieldmap_db <- paste0(path_to_fieldmap, dbFieldmap)
+```
+
+
+# Request
+
+This script creates the data as requested by Yannick De Win as part of the 
+[Wildcard project](https://drive.google.com/drive/folders/0AHzOhlj-qFSnUk9PVA).
+
+Data is collected over the whole of Europe. 
+
+The script below generates all info and data according to the guidelines stipulated in this document: [DTF_Tree-Data-Template_final.xlsx](https://docs.google.com/spreadsheets/d/1jV4II-uSDDKaNNWqeBIXi6IQ_BSK_LFr?rtpof=true&usp=drive_fs)
+
+The managed plots in the mainly non-managed forest reserves (EUFORIA-sites) are removed prior to analysis.
+
+# Directories
+
+- path_to_fieldmap_db is "`r path_to_fieldmap_db`"      
+- path_to_project_teamdrive is "`r path_to_project_teamdrive`"      
+- path_to_datarequest_teamdrive is "`r path_to_datarequest_teamdrive`"      
+
+```{r results='hide', eval=TRUE}
+path_to_fieldmap_db
+# path_to_datarequest
+path_to_project_teamdrive
+path_to_datarequest_teamdrive
+
+```
+
+```{r load_data, results='hide'}
+#
+design <- read.table(paste0(path_to_datarequest_teamdrive, "INBO_Design.txt")
+                           , sep = " ", dec = ".")
+
+plots_ <- read.table(paste0(path_to_datarequest_teamdrive, "INBO_Plots.txt")
+                           , sep = " ", dec = ".")
+# only A4-circle + CA (no A3)
+plots <-  plots_ %>% filter(CIRCLE_NO == 1 | is.na(CIRCLE_NO))
+plots_LPI <- plots_ %>% filter(is.na(CIRCLE_NO))
+plots_A3 <-  plots_ %>% filter(CIRCLE_NO == 2)
+plots_A4 <-  plots_ %>% filter(CIRCLE_NO == 1)
+
+standing <- read.table(paste0(path_to_datarequest_teamdrive, "INBO_Standing.txt")
+                           , sep = " ", dec = ".")
+
+lying <- read.table(paste0(path_to_datarequest_teamdrive, "INBO_Lying.txt")
+                    , sep = " ", dec = ".")
+```
+
+<br>
+
+## Important information
+
+### Inventory year
+Attention for the fact that in some reserves the inventory was spread over two consecutive years. 
+So we sometimes see **two different INVENTORY YEAR's per period**.
+This gives strange results for statistics per site and inventory year.
+
+Better would be to make summary's per site and period or survey number.
+
+### LPI-plot 11000
+
+- Standing trees (L+D) in plot 11000 (Zonienwoud-Joseph Zwaenepoel reservaat - OldCore) 
+measured in 1986 and 2000 have a treshold of 30 cm DBH (instead of 5 cm)
+
+- In 2000 werd gebiedsdekkend gemeten vanaf 30 cm DBH, en twee groepen vanaf 5 cm.
+Daarnaast streeplijsten: samen met veg in 750 subsamples: 30-20, 20-10 en < 10 cm.
+Afzonderlijk verwerkt: zie `CA_Kerss_5_30_dendro_by_xxx`
+
+```{r 11000_treshold30cm}
+treshold_not_ok <- standing %>% 
+  filter(LPI_ID == 11000 & DBH_mm < 300 & INVENTORY_YEAR == 2000)
+
+```
+
+ 
+- Treshold for lying deadwood measurements in 2010 and 2020 is 40 cm
+- No (lying) deadwood measurements in 1986 and 2000 
+
+<br>
+
+# QUERIES
+
+QUERIES_metadata	
+
+describes basic summaries of standing, lying and CWD for each inventory year and site. 
+Basic summaries (attributes) are shown in blue. 
+Submit each table as a separate txt file following the same format instructions as 
+for dendrometric data deliveries (see DATA_FORMAT sheet for details). 
+For instance, the summaries of standing stems for the VUKOZ institute should be 
+delivered as VUKOZ_STANDING_QUERY.txt.												
+													
+TABLE	- Enter STANDING, LYING or CWD if your data delivery includes such data.	
+SITE_ID	
+SITE_NAME		
+WILDCARD_SUB_ID	
+INVENTORY_YEAR	
+INVENTORY_TYPE	Large plot inventory (LPI) or sampling plot inventory (SPI)
+
+STEM_DENSITY: The density of standing or lying stems per one hectare in a specific inventory year and site. 
+The density of standing and lying should include both living and dead stems if measured.
+For SPI plots with multiple sub-circles, please calculate the sampled area of all sub-circles.
+
+BASAL AREA: The basal area of standing stems  in m2 per one hectare in a specific inventory year and site. 
+The basal area should include both living and dead stems if measured.
+
+VOLUME_LYING: The volume of dead lying stems (deadwood) in m3 per one hectare in a specific inventory year and site.
+
+MAX_DBH: Maximum stem DBH in mm in a specific inventory year and site.
+MIN_DBH: 	Minimum stem DBH in mm in a specific inventory year and site.
+MEAN_DBH: Mean stem DBH in mm in a specific inventory year and site.
+
+MAX_D1:	Maximum D1 of lying stems in mm in a specific inventory year and site (see Lying_metadata sheet for the definition of D1).
+MIN_D1:	Minimum D1 of lying stems in mm in a specific inventory year and site.
+MEAN_D1:	Mean D1 of lying stems in mm in a specific inventory year and site.
+MAX_D2:	Maximum D2 of lying stems in mm in a specific inventory year and site (see Lying_metadata sheet for the definition of D2).
+MIN_D2:	Minimum D2 of lying stems in mm in a specific inventory year and site.
+MEAN_D2:	Mean D2 of lying stems in mm in a specific inventory year and site.
+
+CWD: NIET
+
+## Standing table
+
+- STEM_DENSITY (both living and dead)
+- BASAL_AREA (both living and dead)
+- MAX_DBH, MIN_DBH, MEAN_DBH
+
+### Summary on plot level
+
+STEM_DENSITY and VOLUME_HA for plots with trees
+
+**ATTENTION**
+We have to account for concentric circles and the difference between living or dead.
+<!-- OPGEPAST: bij vgl met resultaten van forrescalc rekening houden met feit dat stemnr hier ook dode  -->
+<!-- stammen bevat -->
+
+```{r}
+# density en volume per hectare per site, maar eerst per plot
+nrow(plots_LPI) + nrow(plots_A3) + nrow(plots_A4) == nrow(plots_)
+```
+
+```{r Fext_ha_LPI_SPI}
+# onderscheid A3 en AA4 circle en LPI ---------
+names(standing)
+
+## LPI
+standing_LPI <- standing %>% 
+  inner_join(plots_LPI, by = c("SITE_ID", "SITE_NAME", "WILDCARD_sub_ID"
+                          , "INVENTORY_YEAR", "LPI_ID", "SPI_ID")) %>% 
+  mutate(Fext_ha = 10000/SAMPLED_AREA) # area in m2 uitgedrukt
+
+## SPI - A3
+standing_A3 <- standing %>% 
+  filter((LIFE == "A" & DBH_mm < 400) | (LIFE == "D" & DBH_mm < 100)) %>% 
+  inner_join(plots_A3, by = c("SITE_ID", "SITE_NAME", "WILDCARD_sub_ID"
+                          , "INVENTORY_YEAR", "LPI_ID", "SPI_ID")) %>% 
+  mutate(Fext_ha = 10000/SAMPLED_AREA)
+
+## SPI - A4
+standing_A4 <- standing %>% 
+  filter((LIFE == "A" & DBH_mm >= 400) | (LIFE == "D" & DBH_mm >= 100) |
+           SITE_NAME %in% c("Liedekerke", "Withoefse heide")) %>% 
+  inner_join(plots_A4, by = c("SITE_ID", "SITE_NAME", "WILDCARD_sub_ID"
+                          , "INVENTORY_YEAR", "LPI_ID", "SPI_ID")) %>% 
+  mutate(Fext_ha = 10000/SAMPLED_AREA)
+  
+## COMBINE
+nrow(standing_LPI) + nrow(standing_A3) + nrow(standing_A4) == nrow(standing)
+
+standing_all <- rbind(standing_LPI, standing_A3, standing_A4)
+nrow(standing_all) == nrow(standing)
+
+```
+
+
+```{r}
+qry_standing_per_plot <- standing_all %>% 
+  mutate(stemnr_ha = Fext_ha  # !! STEMnr niet stamtal!! - ok
+         , basal_area_ha = Fext_ha*pi*DBH_mm^2/4000000) %>% 
+  dplyr::group_by(SITE_ID, SITE_NAME, WILDCARD_sub_ID
+                  , INVENTORY_YEAR, LPI_ID, SPI_ID) %>% 
+  dplyr::summarize(
+    STEM_DENSITY = sum(stemnr_ha)
+    , BASAL_AREA = sum(basal_area_ha)) %>% 
+  ungroup()
+    
+head(qry_standing_per_plot)
+qry_standing_per_plot %>% filter(SPI_ID == 204)
+qry_standing_per_plot %>% filter(LPI_ID == 11000)
+```
+
+
+There are no plots without any trees
+
+```{r eval = FALSE}
+# !! ook nulwaardes meenemen
+names(plots)
+names(qry_standing_per_plot)
+
+qry_standing_per_plot0 <- plots %>% 
+  anti_join(qry_lying_per_plot) 
+
+nrow(qry_standing_per_plot0) == 0
+
+```
+
+Calculate mean per site and inventory year
+
+```{r}
+# density en volume per hectare per site (niet per plot!
+qry_standing_per_site <- qry_standing_per_plot %>% 
+    mutate(INVENTORY_TYPE = ifelse(!is.na(LPI_ID), "LPI"
+                                 , ifelse(!is.na(SPI_ID), "SPI", NA)
+                                 )
+         ) %>%
+  dplyr::group_by(SITE_ID, SITE_NAME, WILDCARD_sub_ID
+                  , INVENTORY_YEAR, INVENTORY_TYPE) %>% 
+  dplyr::summarize(
+    n_plots = n()
+    , STEM_DENSITY = mean(STEM_DENSITY, na.rm = TRUE)
+    , BASAL_AREA = mean(BASAL_AREA, na.rm = TRUE)) %>% 
+  ungroup()
+    
+head(qry_standing_per_site)
+```
+
+### Overall summary of diameters
+
+```{r}
+qry_standing_diam <- standing %>% 
+  mutate(INVENTORY_TYPE = ifelse(!is.na(LPI_ID), "LPI"
+                                 , ifelse(!is.na(SPI_ID), "SPI", NA)
+                                 )) %>% 
+  group_by(SITE_ID, SITE_NAME, WILDCARD_sub_ID, INVENTORY_YEAR, INVENTORY_TYPE) %>% 
+  summarize(MAX_DBH = max(DBH_mm)
+            , MIN_DBH = min(DBH_mm)
+            , MEAN_DBH = mean(DBH_mm)) %>% 
+  ungroup()
+```
+
+
+### Combine
+
+```{r}
+names(qry_standing_per_site)
+names(qry_standing_diam)
+
+qry_standing_per_site <- qry_standing_per_site %>% 
+  left_join(qry_standing_diam, by = c("SITE_ID", "SITE_NAME", "WILDCARD_sub_ID"
+                                   , "INVENTORY_YEAR", "INVENTORY_TYPE")) %>% 
+  # wegfilteren van deze waar geen opname van liggend dood hout was (Zonien 1eSET)
+  filter(STEM_DENSITY != 0)  
+
+```
+
+
+##  Lying table
+
+- STEM_DENSITY (both living and dead)
+- VOLUME_LYING (dead)
+- MAX_D1, MIN_D1, MEAN_D1
+- MAX_D2, MIN_D2, MEAN_D2
+
+**Attention**
+Part of the lying dead wood is an "intact tree", so we only have "DBH_mm".
+Therefore we added MAX_DBH, MIN_DBH, MEAN_DBH.
+
+Another option would be to recalculate D1_mm = DBH_mm and D2_mm = 10 mm.
+I leave that to Wildcard 
+
+### Data control
+
+```{r}
+# check of D1 altijd kleiner is dan D2 - JA
+check_D1D2 <- lying %>% 
+  mutate(verschil_D1_D2 = D1_mm - D2_mm)
+  
+min(check_D1D2$verschil_D1_D2, na.rm = TRUE) == 0
+
+```
+
+```{r}
+# 9 records met diameter < 10 cm => laten checken door Peter
+error_D1D2 <- check_D1D2 %>% 
+  filter(D1_mm < 100) %>% 
+  select(SITE_ID, SITE_NAME, WILDCARD_sub_ID
+         , LPI_ID, SPI_ID, PIECE_ID
+         , INVENTORY_YEAR, TREE_SPECIES_CODE
+         , contains("_mm"), LENGTH, DECAY_NUMERIC
+         , verschil_D1_D2)
+
+write_xlsx(error_D1D2, "C:/03_BR/1_DataVerwerkingBR/Output/data-validation/error_D1D2.xlsx")
+
+```
+
+
+```{r}
+# tijdelijk deze records deleten
+# (ook in script plot_data)
+lying_ <- lying %>% 
+  filter(D1_mm >= 100 | D2_mm >= 100 | DBH_mm >= 100)
+
+nrow(lying_) == nrow(lying) - 9
+
+lying <- lying_
+
+```
+
+
+### Summary on plot level
+
+STEM_DENSITY and VOLUME_HA for plots with deadwood
+
+```{r }
+# density en volume per hectare per site (niet per plot!)
+qry_lying_per_plot <- lying %>% 
+  left_join(plots, by = c("SITE_ID", "SITE_NAME", "WILDCARD_sub_ID"
+                          , "INVENTORY_YEAR", "LPI_ID", "SPI_ID")) %>% 
+  mutate(stemnr_ha = 10000/SAMPLED_AREA
+         , volume_ha = 10000*VOLUME/SAMPLED_AREA) %>% 
+  dplyr::group_by(SITE_ID, SITE_NAME, WILDCARD_sub_ID
+                  , INVENTORY_YEAR, SAMPLED_AREA
+                  , LPI_ID, SPI_ID) %>% 
+  dplyr::summarize(
+    STEM_DENSITY = sum(stemnr_ha)
+    , VOLUME_LYING = sum(volume_ha)) %>% 
+  ungroup()
+    
+head(qry_lying_per_plot)
+```
+
+Add plots without deadwood
+
+```{r}
+# !! ook nulwaardes meenemen
+names(plots)
+names(qry_lying_per_plot)
+
+qry_lying_per_plot0 <- plots %>% 
+  anti_join(qry_lying_per_plot) %>% 
+  select(SITE_ID, SITE_NAME, WILDCARD_sub_ID
+                  , INVENTORY_YEAR, SAMPLED_AREA
+                  , LPI_ID, SPI_ID) %>% 
+  mutate(STEM_DENSITY = 0
+         , VOLUME_LYING = 0)
+
+
+nrow(qry_lying_per_plot) + nrow(qry_lying_per_plot0) == nrow(plots)
+
+# combine
+qry_lying_per_plot <- rbind(qry_lying_per_plot, qry_lying_per_plot0)
+nrow(qry_lying_per_plot) == nrow(plots)
+```
+
+Calculate mean per site and inventory year
+
+```{r}
+# density en volume per hectare per site (niet per plot!
+qry_lying_per_site <- qry_lying_per_plot %>% 
+    mutate(INVENTORY_TYPE = ifelse(!is.na(LPI_ID), "LPI"
+                                 , ifelse(!is.na(SPI_ID), "SPI", NA)
+                                 )
+         ) %>%
+  dplyr::group_by(SITE_ID, SITE_NAME, WILDCARD_sub_ID
+                  , INVENTORY_YEAR, INVENTORY_TYPE) %>% 
+  dplyr::summarize(
+    n_plots = n()
+    , STEM_DENSITY = mean(STEM_DENSITY, na.rm = TRUE)
+    , VOLUME_LYING = mean(VOLUME_LYING, na.rm = TRUE)) %>% 
+  ungroup()
+    
+head(qry_lying_per_site)
+```
+### Overall summary of diameters
+
+```{r}
+qry_lying_diam <- lying %>% 
+  mutate(TABLE = "LYING"
+         , INVENTORY_TYPE = ifelse(!is.na(LPI_ID), "LPI"
+                                 , ifelse(!is.na(SPI_ID), "SPI", NA)
+                                 )
+         ) %>% 
+  dplyr::group_by(TABLE, SITE_ID, SITE_NAME, WILDCARD_sub_ID
+                  , INVENTORY_YEAR, INVENTORY_TYPE) %>% 
+  dplyr::summarize(
+    MAX_D1 = max(D1_mm, na.rm = TRUE)
+    , MIN_D1 = min(D1_mm, na.rm = TRUE)
+    , MEAN_D1 = mean(D1_mm, na.rm = TRUE)
+    , MAX_D2 = max(D2_mm, na.rm = TRUE)
+    , MIN_D2 = min(D2_mm, na.rm = TRUE)
+    , MEAN_D2 = mean(D2_mm, na.rm = TRUE)
+    # intacte bomen
+    , MAX_DBH = max(DBH_mm, na.rm = TRUE)
+    , MIN_DBH = min(DBH_mm, na.rm = TRUE)
+    , MEAN_DBH = mean(DBH_mm, na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  mutate(MAX_DBH = ifelse(MAX_DBH == -Inf, NA, MAX_DBH)
+         , MIN_DBH = ifelse(MIN_DBH == Inf, NA, MIN_DBH)
+         , MEAN_DBH = ifelse(is.na(MEAN_DBH), NA, MEAN_DBH)) %>% 
+  mutate_at(vars(matches("_D")), round, 0)
+
+head(qry_lying_diam)
+```
+
+### Combine
+
+```{r}
+names(qry_lying_per_site)
+names(qry_lying_diam)
+
+qry_lying_per_site <- qry_lying_per_site %>% 
+  left_join(qry_lying_diam, by = c("SITE_ID", "SITE_NAME", "WILDCARD_sub_ID"
+                                   , "INVENTORY_YEAR", "INVENTORY_TYPE")) %>% 
+  # wegfilteren van deze waar geen opname van liggend dood hout was (Zonien 1eSET)
+  filter(STEM_DENSITY != 0)  
+
+```
+
+
+
+
+
+
+
+# Wegschrijven output
+
+De resultaten worden weggeschreven naar txt (Separator = tab, Decimal =	.) en xls: 
+
+- qry_lying_per_site.txt
+
+- INBO_Standing.txt   
+
+```{r final_check, eval = FALSE}
+#
+summary(qry_lying_per_site)
+
+names(qry_lying_per_site)
+names(qry_lying_per_site)
+
+qry_lying_per_site %>% filter(is.na(STEM_DENSITY)) %>% nrow() == 0
+
+
+
+```
+
+```{r results='hide'}
+# check voor NA's site-id
+names(qry_lying_per_site)
+col <- c("SITE_ID", "SITE_NAME", "INVENTORY_YEAR")
+
+qry_lying_per_site %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+
+qry_standing_per_site %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+
+```
+
+
+```{r WegschrijvenOutput, eval = FALSE}
+# zonder extra variables  "forest_reserve_fieldmap"  forest_reserve_FM_adjusted" "plot_id" "plottype" "period" 
+# extra_vars
+
+write.table(qry_lying_per_site %>% select(-forest_reserve_FM_adjusted, -plottype, -period)
+            , paste0(path_to_datarequest_teamdrive, "INBO_LYING_QUERY.txt")
+
+write.table(qry_standing_per_site %>% select(-forest_reserve_FM_adjusted, -plottype, -period)
+            , paste0(path_to_datarequest_teamdrive, "INBO_STANDING_QUERY.txt")
+```
+
+
+
+```{r WegschrijvenOutput_csv, eval = FALSE}
+# idem als txt, maar voor gemak ook naar xls
+
+write_csv2(qry_lying_per_site %>% select(-forest_reserve_FM_adjusted, -plottype, -period)
+            , paste0(path_to_datarequest_teamdrive, "csv/INBO_LYING_QUERY.csv"))
+
+write_csv2(qry_standing_per_site %>% select(-forest_reserve_FM_adjusted, -plottype, -period)
+            , paste0(path_to_datarequest_teamdrive, "csv/INBO_STANDING_QUERY.csv"))
+```
+
+<br>
+
+# Read
+
+Checken of de geëxporteerde files goed in R ingelezen worden
+
+```{r check_read, eval = FALSE, results='hide'}
+#
+qry_lying_check <- read.table(paste0(path_to_datarequest_teamdrive, "INBO_LYING_QUERY.txt")
+                           , sep = " ", dec = ".")
+head(qry_lying_check)
+names(qry_lying_check)
+
+#
+qry_standing_check <- read.table(paste0(path_to_datarequest_teamdrive, "INBO_STANDING_QUERY.txt")
+                           , sep = " ", dec = ".")
+head(qry_standing_check)
+names(qry_standing_check)
+
+```
+
+<br>
+
+# Copy html to teamdrive
+
+Na knitting - manueel
+
+```{r eval = FALSE}
+# Specify the path of the file you want to copy
+source_file <- here::here(paste0("Scripts/AanvraagGegevens/INBO_Wildcard_EuFoRIa/Wildcard_Flanders_queries.html"))
+
+# Specify the destination directory where you want to copy the file
+destination_dir <- path_to_html_teamdrive
+
+# Copy the file to the destination directory
+file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
+# ? file.copy
+```
