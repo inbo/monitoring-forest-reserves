@@ -503,24 +503,21 @@ qry_standing_per_site %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
 
 
 ```{r WegschrijvenOutput, eval = FALSE}
-# zonder extra variables  "forest_reserve_fieldmap"  forest_reserve_FM_adjusted" "plot_id" "plottype" "period" 
-# extra_vars
+write.table(qry_lying_per_site %>% select(-n_plots)
+            , paste0(path_to_datarequest_teamdrive, "INBO_LYING_QUERY.txt"))
 
-write.table(qry_lying_per_site %>% select(-forest_reserve_FM_adjusted, -plottype, -period)
-            , paste0(path_to_datarequest_teamdrive, "INBO_LYING_QUERY.txt")
-
-write.table(qry_standing_per_site %>% select(-forest_reserve_FM_adjusted, -plottype, -period)
-            , paste0(path_to_datarequest_teamdrive, "INBO_STANDING_QUERY.txt")
+write.table(qry_standing_per_site %>% select(-n_plots)
+            , paste0(path_to_datarequest_teamdrive, "INBO_STANDING_QUERY.txt"))
 ```
 
 
 ```{r WegschrijvenOutput_csv, eval = FALSE}
 # idem als txt, maar voor gemak ook naar xls
 
-write_csv2(qry_lying_per_site %>% select(-forest_reserve_FM_adjusted, -plottype, -period)
+write_csv2(qry_lying_per_site %>% select(-n_plots)
             , paste0(path_to_datarequest_teamdrive, "csv/INBO_LYING_QUERY.csv"))
 
-write_csv2(qry_standing_per_site %>% select(-forest_reserve_FM_adjusted, -plottype, -period)
+write_csv2(qry_standing_per_site %>% select(-n_plots)
             , paste0(path_to_datarequest_teamdrive, "csv/INBO_STANDING_QUERY.csv"))
 ```
 
