@@ -196,12 +196,28 @@ We baseren ons op de file "LINK_WILDCARD_fieldmap_Yannick_AL.xlsx", sheet "Link_
 Deze werd aangemaakt in kader van het Wildcard project en staat op onze teamdrive onder 
 "G:\Gedeelde drives\Team_Boseco_BR\PRJ_BR_AanvraagGegevens\EUFORIA_WILDCARD_2024".
 
+**OPGEPAST**
+De tabel bevat naast het veld "forest_reserve_fieldmap" (= veld `forest_reserve` uit fieldmap),
+ook nog een extra velde forest_reserve_FM_adjusted.
+Dit veld werd enkel aangemaakt voor Sevendonck cirkelplots, om daar een één op één link 
+te hebben met Wildcard, waar onderscheid gemaakt is tussen Q en A. 
+
+
 ```{r link_WC_FM, results = 'hide'}
 path_to_project_wildcard <-  paste0(path_to_datarequests_gdrive, "EUFORIA_WILDCARD_2024")
 
 link_WC_FM <- read_xlsx(paste0(path_to_project_wildcard, "/LINK_WILDCARD_fieldmap_Yannick_AL.xlsx")
                         , sheet = "Link_FM_vs2")
 
+names(link_WC_FM)
+```
+
+Als we deze tabel dus willen gebruiken, moeten we in onze code `forest_reserve`
+vervangen door `forest_reserve_FM_adjusted`, met behulp van "strata_soil".
+Zie onderstaande code (in comment) uit script "Wildcard_Flanders_plot_data.Rmd".
+
+
+```{r results = 'hide', eval = FALSE}
 names(link_WC_FM)
 # forest_reserve_FM_adjusted: werd aangemaakt om één op één link te hebben
 # als we deze tabel willen gebruiken, moeten we dus in onze code forest_reserve
