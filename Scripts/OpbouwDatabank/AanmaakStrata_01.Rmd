@@ -83,7 +83,7 @@ en Zwaenepoel werden vervangen door
 
 > VPN opstarten!
 
-```{r import_data_shp}
+```{r import_data_shp, eval = FALSE}
 # fc_strata_shp <-read_sf("C:/03_BR/1_Dataverwerking/Data/Strata/input/boseco_alleproefvlakken_centraalpunt_lam72_metinfo.shp", crs = 31370) %>% rename(plot_id = PlotID)
 
 # rechtstreeks van  Amazon, na opstarten van VPN
@@ -94,7 +94,7 @@ df_strata_shp <- fc_strata_shp %>% st_drop_geometry()  # cfr forresdat
 
 ```
 
-```{r import_data_shp_c_schijf, eval = FALSE}
+```{r import_data_shp_c_schijf}
 # c-schijf: net iets anders !!
 fc_strata_shp <-read_sf("C:/03_BR/1_DataVerwerkingBR/Data/GIS/boseco_alleproefvlakken_centraalpunt_lam72_metinfo.shp", crs = 31370) %>% rename(plot_id = PlotID)
 
@@ -186,6 +186,49 @@ info_forest_reserve_EUFORIA_ <- info_forest_reserve_EUFORIA %>%
 names(info_forest_reserve_EUFORIA_)
 info_forest_reserve_EUFORIA <- info_forest_reserve_EUFORIA_
 ```
+
+### Wildcard  
+
+Tabel die link weergeeft tussen de naamgeving in Wildcard en Fieldmap.
+
+We baseren ons op de file "LINK_WILDCARD_fieldmap_Yannick_AL.xlsx", sheet "Link_FM_vs2"
+
+Deze werd aangemaakt in kader van het Wildcard project en staat op onze teamdrive onder 
+"G:\Gedeelde drives\Team_Boseco_BR\PRJ_BR_AanvraagGegevens\EUFORIA_WILDCARD_2024".
+
+```{r link_WC_FM, results = 'hide'}
+path_to_project_wildcard <-  paste0(path_to_datarequests_gdrive, "EUFORIA_WILDCARD_2024")
+
+link_WC_FM <- read_xlsx(paste0(path_to_project_wildcard, "/LINK_WILDCARD_fieldmap_Yannick_AL.xlsx")
+                        , sheet = "Link_FM_vs2")
+
+names(link_WC_FM)
+# forest_reserve_FM_adjusted: werd aangemaakt om één op één link te hebben
+# als we deze tabel willen gebruiken, moeten we dus in onze code forest_reserve
+# vervangen door forest_reserve_FM_adjusted, met behulp van strata_soil
+# zie onderstaande code uit script "Wildcard_Flanders_plot_data.Rmd"
+
+    # subarea_sevendonck <- strata_soil %>% 
+    #   filter(forest_reserve_fieldmap == "Sevendonck") %>% 
+    #   select(plot_id, forest_reserve_fieldmap, subarea = SubArea)
+    # 
+    # plotdata0 <- info_survey %>%
+    #  left_join(subarea_sevendonck, by = c("forest_reserve_fieldmap", "plot_id")) %>% 
+    #   # forest_reserve_FM_adjusted aanmaken
+    #   # om verder te kunnen koppelen aan site-id's wildcard
+    #   mutate(forest_reserve_FM_adjusted = ifelse(!is.na(subarea) & subarea == "Alder forest SFR", "Sevendonck A",
+    #                                          ifelse(!is.na(subarea) & subarea == "Oak forest SFR", "Sevendonck Q",
+    #                                                 forest_reserve_fieldmap))
+    #          ) %>% 
+    #   select(-subarea)
+```
+
+
+```{r}
+
+```
+
+
 
 ### Monitoringrapport
 
@@ -1132,11 +1175,12 @@ strata <- list(
       strata_history = strata_hist_def,
       strata_location = strata_locatie,
       dominant_tree = dominant_tree,
-      info_forest_reserve_EUFORIA = info_forest_reserve_EUFORIA
+      info_forest_reserve_EUFORIA = info_forest_reserve_EUFORIA,
+      link_wildcard_fieldmap = link_WC_FM
     )
 
 strata <- list(
-      info_forest_reserve_EUFORIA = info_forest_reserve_EUFORIA
+      link_wildcard_fieldmap = link_WC_FM
     )
 
 save_results_access (
@@ -1153,6 +1197,10 @@ sqlSave(con, strata_overige, "strata_remaining", varTypes = c(S1_fisheyedate="da
 
 sqlDrop(con, "info_survey")
 sqlSave(con, plotinfo_def, "info_survey", varTypes = c(date_dendro="datetime"))
+
+# TEMP
+sqlDrop(con, "link_wildcard_fieldmap")
+sqlSave(con, link_WC_FM, "link_wildcard_fieldmap")
 
 odbcClose(con)
 
