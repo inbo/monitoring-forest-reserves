@@ -84,19 +84,19 @@ en Zwaenepoel werden vervangen door
 > VPN opstarten!
 
 ```{r import_data_shp, eval = FALSE}
-# fc_strata_shp <-read_sf("C:/03_BR/1_Dataverwerking/Data/Strata/input/boseco_alleproefvlakken_centraalpunt_lam72_metinfo.shp", crs = 31370) %>% rename(plot_id = PlotID)
-
 # rechtstreeks van  Amazon, na opstarten van VPN
 fc_strata_shp <-read_sf("Z:/Projects/PRJ_BosEco/PRJ_PERS_ME_GIS/00_alle_proefvlakken/def/metinfo/boseco_alleproefvlakken_centraalpunt_lam72_metinfo.shp", crs = 31370) %>% rename(plot_id = PlotID)
 
 
 df_strata_shp <- fc_strata_shp %>% st_drop_geometry()  # cfr forresdat
 
+# eenmalig export naar c-schijf (of bij elke wijziging)
+st_write(fc_strata_shp, "C:/03_BR/1_DataVerwerkingBR/Data/GIS/boseco_alleproefvlakken_centraalpunt_lam72_metinfo.shp"
+         , append=FALSE) 
 ```
 
-```{r import_data_shp_c_schijf}
-# c-schijf: net iets anders !!
-fc_strata_shp <-read_sf("C:/03_BR/1_DataVerwerkingBR/Data/GIS/boseco_alleproefvlakken_centraalpunt_lam72_metinfo.shp", crs = 31370) %>% rename(plot_id = PlotID)
+```{r import_data_shp_c_schijf, eval = TRUE}
+fc_strata_shp <-read_sf("C:/03_BR/1_DataVerwerkingBR/Data/GIS/boseco_alleproefvlakken_centraalpunt_lam72_metinfo.shp", crs = 31370) 
 
 df_strata_shp <- fc_strata_shp %>% st_drop_geometry()  # cfr forresdat
 
@@ -156,35 +156,50 @@ n_distinct(df_strata_shp$plot_id) == 1055
 
 CP's en KV apart
 
-### Euforia
+### EUFORIA
 
-Door Kris VdK in kader van data-vraag EUFORIA: `INBO_info_forest_reserve.xlsx`
+Kris Vdk heeft allerlei data samen gezet voor EUFORIA, op niveau van het volledige bosreservaat (CP vs KV).
 
-```{r import_data_forest_reserve}
+Zie gdrive, folder [Euforia](https://drive.google.com/drive/folders/1F4bmaNFoXNpvkiqYbn7Dmq9LlodjwQGa):
+gsheet "Metadata_Permanent_Plots", sheet "metadata_table".
+
+Kopie van enkel INBO-metadata (`EUFORIA2025_metadata_INBO.xlsx`) op mijn c-schijf geplaatst,
+in folder "C:/03_BR/3_AanvraagGegevens/EUFORIA_algemeen/enkel_INBO/".
+
+Manueel in excel een koppeling gemaakt tussen fieldmap naamgeving en EUFORIA-indeling (`EUFORIA2025_link_fieldmap.xlsx`) 
+op zelfde locatie.
+Extra ook `EUFORIA2025_link_wildcard.xlsx`.
+We schrijven beide file sweg naar de straat-db.
+
+
+```{r import_euforia}
 # Kris Vdk heeft allerlei data samen gezet voor Euforia, op niveau van het volledige bosreservaat (CP vs KV)
-path_to_EUFORIA_algemeen <- paste0(path_to_datarequests, "EUFORIA_algemeen/enkel_INBO/")
+path_to_EUFORIA_algemeen <- paste0(path_to_datarequests, "EUFORIA_algemeen/INBO/")
 
-forest_reserve_list_EUFORIA <- read_xlsx(paste0(path_to_EUFORIA_algemeen, "INBO_link_forestreserve_EUFORIA_fieldmap.xlsx"))
+LINK_EUFORIA_fieldmap <- read_xlsx(paste0(path_to_EUFORIA_algemeen, "EUFORIA2025_link_fieldmap.xlsx"))
+LINK_EUFORIA_wildcard <- read_xlsx(paste0(path_to_EUFORIA_algemeen, "EUFORIA2025_link_wildcard.xlsx"))
 
-info_forest_reserve_EUFORIA <- read_xlsx(paste0(path_to_EUFORIA_algemeen, "INBO_info_forest_reserve_ikv_EUFORIA.xlsx")) %>% 
-  select(1:13) %>% 
+info_EUFORIA <- read_xlsx(paste0(path_to_EUFORIA_algemeen, "EUFORIA2025_metadata_INBO.xlsx")) %>% 
+  select(1:15) %>% 
   rename(reserve_name_euforia = reserve_name,
          reserve_area_ha = reserve_area,
          primeval_YN = primeval) %>% 
   filter(!is.na(res_ID_inst))
 
-names(info_forest_reserve_EUFORIA)
+names(info_EUFORIA);names(LINK_EUFORIA_fieldmap)
 
-info_forest_reserve_EUFORIA_ <- info_forest_reserve_EUFORIA %>% 
-  left_join(forest_reserve_list_EUFORIA, 
+info_EUFORIA_ <- info_EUFORIA %>% 
+  left_join(LINK_EUFORIA_fieldmap, 
             by = c("reserve_name_euforia" = "reserve_name"
-                   , "res_ID_inst", "institute", "plottype")) %>% 
+                   , "res_ID_inst", "institute", "plottype"
+                   , "For_typ_1", "For_typ_2")) %>% 
   select(forest_reserve = forest_reserve_fieldmap, plottype
-         , updated_EUFORIA = Updated, everything()) %>% 
-  select(-SiteID_EUFORIA)
+         , updated_EUFORIA = Updated, everything())
 
-names(info_forest_reserve_EUFORIA_)
-info_forest_reserve_EUFORIA <- info_forest_reserve_EUFORIA_
+names(info_EUFORIA_)
+# info mbt 
+info_EUFORIA <- info_EUFORIA_ %>% 
+  select(forest_reserve_FM_adjusted, everything(), -`LPI_ID / SPI_ID`, -comment, -subarea)
 ```
 
 ### Wildcard  
@@ -196,9 +211,9 @@ We baseren ons op de file "LINK_WILDCARD_fieldmap_Yannick_AL.xlsx", sheet "Link_
 Deze werd aangemaakt in kader van het Wildcard project en staat op onze teamdrive onder 
 "G:\Gedeelde drives\Team_Boseco_BR\PRJ_BR_AanvraagGegevens\EUFORIA_WILDCARD_2024".
 
-**OPGEPAST**
-De tabel bevat naast het veld "forest_reserve_fieldmap" (= veld `forest_reserve` uit fieldmap),
-ook nog een extra velde forest_reserve_FM_adjusted.
+**OPGEPAST*
+De tabel bevat naast het veld `forest_reserve_fieldmap` (= veld `forest_reserve` uit fieldmap),
+ook nog een extra veld `forest_reserve_FM_adjusted`.
 Dit veld werd enkel aangemaakt voor Sevendonck cirkelplots, om daar een één op één link 
 te hebben met Wildcard, waar onderscheid gemaakt is tussen Q en A. 
 
@@ -213,7 +228,7 @@ names(link_WC_FM)
 ```
 
 Als we deze tabel dus willen gebruiken, moeten we in onze code `forest_reserve`
-vervangen door `forest_reserve_FM_adjusted`, met behulp van "strata_soil".
+vervangen door `forest_reserve_FM_adjusted`, met behulp van de tabel "strata_soil" uit de strata-db.
 Zie onderstaande code (in comment) uit script "Wildcard_Flanders_plot_data.Rmd".
 
 
@@ -316,7 +331,7 @@ names(list_reserves)
 
 strata_klimaat <- df_strata_shp %>%
   left_join(list_reserves) %>% 
-  select(basic_variables, contains(c("Regen", "Temp")))
+  select(all_of(basic_variables), contains(c("Regen", "Temp")))
 
 names(strata_klimaat)
 head(strata_klimaat)
@@ -592,6 +607,8 @@ corrigeren en beter afstemmen tss tabel (`plot_unmanaged_since`) en monitoringra
 (zie mail van 5/12/2024)
 Nu nog even verder doen met zoals nu is.
 Weliswaar nog fouten mbt "onbeheerd sinds" van o.a. Harras en CP's die in oude KV (1983) liggen 
+! op reservaatsniveau in tabel info_EUFORIA: year_reserve en year_abanonment
+moet ook eens afgeklopt worden => overleg op 6/3/25
 
 ```{r}
 names(df_strata_shp[1:18])
@@ -1172,8 +1189,13 @@ Per plot en per periode
 
 ## Info op niveau van bosreservaat 
 
-- info_forest_reserve_EUFORIA (opp. volledig reservaat, forest type, mean annual temp/precipitation)
+- info_EUFORIA (opp. volledig reservaat, forest type, mean annual temp/precipitation)
 
+## Linken
+
+- link_wildcard_fieldmap  
+- link_EUFORIA_fieldmap  
+- link_EUFORIA_wildcard   
 
 ## Export
 
@@ -1191,14 +1213,20 @@ strata <- list(
       strata_history = strata_hist_def,
       strata_location = strata_locatie,
       dominant_tree = dominant_tree,
-      info_forest_reserve_EUFORIA = info_forest_reserve_EUFORIA,
+      info_forest_reserve_EUFORIA = info_EUFORIA,
       link_wildcard_fieldmap = link_WC_FM
+      link_EUFORIA_fieldmap = LINK_EUFORIA_fieldmap
+      link_EUFORIA_wildcard = LINK_EUFORIA_wildcard
     )
 
+# snel - enkel gewijzigde tables
 strata <- list(
-      link_wildcard_fieldmap = link_WC_FM
+      link_EUFORIA_fieldmap = LINK_EUFORIA_fieldmap,
+      link_EUFORIA_wildcard = LINK_EUFORIA_wildcard,
+      info_forest_reserve_EUFORIA = info_EUFORIA
     )
 
+# save
 save_results_access (
   results = strata,
   database = path_to_strata_db,
@@ -1215,8 +1243,14 @@ sqlDrop(con, "info_survey")
 sqlSave(con, plotinfo_def, "info_survey", varTypes = c(date_dendro="datetime"))
 
 # TEMP
-sqlDrop(con, "link_wildcard_fieldmap")
-sqlSave(con, link_WC_FM, "link_wildcard_fieldmap")
+sqlDrop(con, "link_EUFORIA_fieldmap")
+sqlSave(con, LINK_EUFORIA_fieldmap, "link_EUFORIA_wildcard")
+
+sqlDrop(con, "link_EUFORIA_fieldmap")
+sqlSave(con, LINK_EUFORIA_wildcard, "link_EUFORIA_wildcard")
+
+sqlDrop(con, "info_forest_reserve_EUFORIA")
+sqlSave(con, LINK_EUFORIA_wildcard, "info_forest_reserve_EUFORIA")
 
 odbcClose(con)
 
