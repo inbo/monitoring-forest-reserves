@@ -1244,9 +1244,9 @@ sqlSave(con, plotinfo_def, "info_survey", varTypes = c(date_dendro="datetime"))
 
 # TEMP
 sqlDrop(con, "link_EUFORIA_fieldmap")
-sqlSave(con, LINK_EUFORIA_fieldmap, "link_EUFORIA_wildcard")
+sqlSave(con, LINK_EUFORIA_fieldmap, "link_EUFORIA_fieldmap")
 
-sqlDrop(con, "link_EUFORIA_fieldmap")
+sqlDrop(con, "link_EUFORIA_wildcard")
 sqlSave(con, LINK_EUFORIA_wildcard, "link_EUFORIA_wildcard")
 
 sqlDrop(con, "info_forest_reserve_EUFORIA")
