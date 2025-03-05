@@ -87,6 +87,7 @@ library(frictionless)
 ### Extra functies tov package forrescalc ----
 source(here::here("Scripts/functions.r"))
 source(here::here("Scripts/functions_volume.r"))
+source(here::here("Scripts/functions_dhcurves.r"))
 source(here::here("Scripts/functions_overall_statistics.r"))
 
 ### Load packages (na herinstallatie pc) -----

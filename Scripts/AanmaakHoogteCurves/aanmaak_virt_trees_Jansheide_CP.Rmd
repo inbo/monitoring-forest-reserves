@@ -1,7 +1,8 @@
 ---
 title: "Ophalen data voor aanmaak DH-curves in een virtuele plot mbv FM-IA"
+subtitle: "2025 - decade 3"
 author: "Anja Leyman"
-date: "20 juli 2020"
+date: "28 feb 2025"
 output: 
   html_document:
     keep_md: FALSE
@@ -32,17 +33,17 @@ library(writexl)
 
 
 # libraries & invoergegevens
-source(here::here("scripts/Setup_ForresCalc.R"))
+source(here::here("scripts/Setup.R"))
 
 ```
 
 
 ```{r Setup2}
 forestreserve <- "Jansheideberg"
-forestreserve_folder <- "Jansheide_DEELS"
+forestreserve_folder <- "1_Jansheide_DEELS"
 
-# plot_type <- "Core area"
-plot_type <- "Circular plot"
+# plot_type <- "CA"
+plot_type <- "CP"
 
 virt_plot <- 839
 
@@ -61,9 +62,11 @@ virt_plot <- 839
       # path_to_forrescalc <- "C:/3BR/2_VisualisatieDataBR/2Packages/forrescalc/R/"
 
 # resultaten
-path_to_datarequest <- paste0("C:/3BR/4b_", forestreserve_folder, "/2AanmaakDHcurves/VirtualTreesHeightCurves")
+path_to_datarequest <- paste0(path_to_reserves, forestreserve_folder, "/verwerking_2025_1e2e3eSET/2AanmaakDHcurves_1e2e3eSET/VirtualTreesHeightCurves")
 
+path_to_html <-  paste0(path_to_reserves, forestreserve_folder, "/verwerking_2025_1e2e3eSET/2AanmaakDHcurves_1e2e3eSET")
 ```
+
 # Vraagstelling
 
 Momenteel gebeurt de meeste dataverwerking in R, maar de aanmaak van DH-curves gebeurt nog steeds in FM-IA.
@@ -71,11 +74,41 @@ Daartoe wordt een virtuele plot aangemaakt waar alle boomhoogtes in opgenomen zi
 
 - alle hoogtes van intacte bomen
 - hoogtes van hakhout spillen, zeker als er te weinig metingen op boomniveau zijn (bv. Hazelaar)
-- hoogtes van 1e en 2eSET samen (soms hoogtecurves obv 1e en 2e SET afzonderlijk)
+- hoogtes van 1e, 2e en 3e SET samen (soms hoogtecurves obv elke decade afzonderlijk)
 
 Onderstaand script voegt al deze data samen, om vervolgens in FM in te laden mbv de Import2FM-tool.
 
 
+# Datacontrole
+
+Datacontrole dient vooraf te gebeuren, zie "...\Scripts\Per_gebied".
+
+Eens datacoontrole afgerond is, moet veld `processed` aangepast worden.
+
+Met behulp van een updatequery voor een vooraf geselecteerde decade, plottype en bosreservaat zetten we `DataProcessed_YN` op `10` (code 10 = 'ja'), indien `Survey_Trees_YN = 10`. 
+
+```{r update_processed, eval = FALSE}
+# Predefined strings
+decade <- "3" 
+# plot_type <- "CP"
+# forestreserve <- "Meerdaalwoud"
+
+# Construct the query string using sprintf
+query_update <- paste0(sprintf("UPDATE (PlotDetails_%seSET pd 
+                         INNER JOIN Plots p ON pd.IDPlots = p.ID) 
+                         INNER JOIN qPlotType q ON p.Plottype = q.ID 
+                         SET pd.DataProcessed_YN = 10 
+                         WHERE (pd.Survey_Trees_YN = 10) 
+                         AND (q.Value3 = '%s') 
+                         AND (pd.ForestReserve = '%s')",
+                         decade, plot_type, forestreserve)
+                       ) %>% noquote()
+
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+   sqlQuery(con,query_update)
+odbcClose(con)
+
+```
 
 
 # Data inladen
@@ -88,7 +121,7 @@ In dit script wordt data van het **bosreservaat `r forestreserve`** ingeladen, m
 
 
 ```{r overview_data}
-con <- odbcConnectAccess2007(path_to_fieldmap)
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
       dbtablesRaw_1eSET <- sqlTables(con) %>% 
                 filter(str_detect(TABLE_NAME, "MSys", negate = TRUE ))
                 # wegfilteren van records waar TABLE_NAME "MSys" bevat
@@ -96,7 +129,7 @@ odbcClose(con)
 ```
 
 ```{r load_lookuplists}
-con <- odbcConnectAccess2007(path_to_fieldmap)
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
 
 qspecies <- sqlFetch(con, "qSpecies")
 qalivedead <- sqlFetch(con, "qAliveDead")
@@ -112,12 +145,12 @@ odbcClose(con)
 # trees_tmp <- load_data_dendrometry(database = path_to_fieldmap, plottype = "Core area", forest_reserve = "Muizenbos", extra_variables = TRUE)
 
 # gaf foutmelding => achteraf gefilterd
-trees <- load_data_dendrometry(database = path_to_fieldmap, plottype = plot_type, extra_variables = TRUE) %>% 
+trees <- load_data_dendrometry(database = path_to_fieldmap_db, plottype = plot_type, extra_variables = TRUE) %>% 
   # filter(forest_reserve == forestreserve & !plot_id %in% plots_to_exclude) %>% 
   filter(forest_reserve == forestreserve) %>% 
   mutate(fperiod = as.factor(period))
 
-shoots <- load_data_shoots(database = path_to_fieldmap, extra_variables = TRUE)
+shoots <- load_data_shoots(database = path_to_fieldmap_db, extra_variables = TRUE)
 stems <- compose_stem_data(trees, shoots)
 
 ```
@@ -168,29 +201,33 @@ write.csv2(overview_HH_height, paste0(path_to_datarequest, "/overview_HH_height.
 (voor gemak dan direct voor alle soorten)
 
 
-# Periode 1 en/of periode 2 gebruiken?
+# Welke periodes gebruiken?
+
+Kunnen we alle hoogtemetingen uit de drie periodes samengooien?
 
 ## Tabel
 
 ```{r }
 n1_h <- stems %>% filter(period == 1 & alive_dead == 11 & !is.na(height_m)) %>% nrow()
 n2_h <- stems %>% filter(period == 2 & alive_dead == 11 & !is.na(height_m)) %>% nrow()
+n3_h <- stems %>% filter(period == 3 & alive_dead == 11 & !is.na(height_m)) %>% nrow()
 
 n1 <- stems %>% filter(period == 1) %>% nrow()
 n2 <- stems %>% filter(period == 2) %>% nrow()
+n3 <- stems %>% filter(period == 2) %>% nrow()
 
-periode <- c("periode 1", "periode 2")
-n_bomen <- c(n1, n2)
-n_hoogtes <- c(n1_h, n2_h)
+periode <- c("decade 1", "decade 2", "decade 3")
+n_bomen <- c(n1, n2, n3)
+n_hoogtes <- c(n1_h, n2_h, n3_h)
 dt <- data.frame(periode, n_bomen, n_hoogtes)
 dt %>% DT :: datatable(options = list(dom = 'rt'), rownames = FALSE) 
   
 ```
 
 
-## Grafiek
+## Grafiek 
 
-```{r vgl_all_1_vs_2_curve}
+```{r vgl_all_1_vs_2_curve, eval=FALSE}
 ggplot(stems_height, aes(dbh_mm, height_m)) + geom_point(aes(color = fperiod)) + geom_smooth(aes(color = fperiod)) 
 
 ggplot(stems_height, aes(dbh_mm, height_m)) + geom_point() + geom_smooth() + facet_wrap(~fperiod)
@@ -199,110 +236,273 @@ ggplot(stems_height, aes(dbh_mm, height_m)) + geom_point(aes(color = fperiod)) +
                                                   
 ```
 
-
 ## Besluit
 
 Op basis van bovenstaande grafieken:  
 
-- 1eSET: data 1e + 2eSET
-- 2eSET: data 1e + 2eSET
+- 1eSET: data 1e + 2e + 3eSET
+- 2eSET: data 1e + 2e + 3eSET
+- 3eSET: data 1e + 2e + 3eSET
 
-Eventueel hadden we voor 1eSET afzonderlijke curves kunnen opstellen, maar toch geopteerd om direct alle metingen samen te gooien en curves voor periode 1 en 2 samen op te stellen.
+Eventueel hadden we elke decade afzonderlijke curves kunnen opstellen, maar nu in eerste instantie nog
+alle metingen samen en curves voor alle periodes samen op te stellen.
+
+> toch eens voorleggen aan Kris: hij blijft maar zeggen dat curves NIET doorschuiven (want gemengd bos) .... 
 
 
-# Wat met Beuk?
+# Per boomsoort
 
-Kan het zijn dat er bij periode 1 een overschatting gebeurd is bij de metingen? 
+Met behulp van extra functies (zie `functions_dhcurves.R`) hierna heel eenvoudige 
+dh-curves gemaakt: kwadratische functie obv logOmtrek, naar analogie met project 
+dhcurves van ANB ikv de houtverkoop.
 
-```{r vgl_beuk_1_vs_2_mean, include=FALSE}
-stems_height_beuk <- stems_height %>% filter(name_nl == "Beuk")
+Alternatief is een eenvoudige smoother.
 
-stems_height_beuk_p1 <- stems_height_beuk %>% filter(period == 1)
-stems_height_beuk_p2 <- stems_height_beuk %>% filter(period == 2)
+Dit zijn niet dezelfde curves als aangemaakt in FieldMap-IA.
 
-mean(stems_height_beuk_p1$height_m)
-mean(stems_height_beuk_p2$height_m)
+```{r}
+# Vooraf Omtrek en logOmtrek berekenen
+stems_for_model <- stems_height %>%
+  mutate(
+    Omtrek = pi*.data$dbh_mm/1000,
+    logOmtrek = log(.data$Omtrek),
+    logOmtrek2 = .data$logOmtrek ^ 2)
 
 ```
 
-Mean_height verschilt `r mean(stems_height_beuk_p1$height_m) - mean(stems_height_beuk_p2$height_m)` m.
+```{r}
+# zie functions_dhcurves.R (afgeleid van code uit project dhcurves van ANB ikv houtverkoop)
 
-(periode 1 : `r mean(stems_height_beuk_p1$height_m)` m - 
-periode 2: `r mean(stems_height_beuk_p2$height_m)` m )
+models_per_period <- fit.period(stems_for_model)
+
+parameters_per_period <- modelparameters_per_period(models_per_period
+                                                    , Data = stems_for_model)
+
+stems_modeled_height <- stems_for_model %>% 
+  left_join(parameters_per_period, by = c("species", "forest_reserve", "period")) %>% 
+  mutate(height_per_period = Ad + Bd*logOmtrek + Cd*logOmtrek2)
+
+# names(stems_modeled_height)
+```
+
+## Beuk
+
+Kan het zijn dat er bij periode 1 een overschatting gebeurd is bij de metingen? 
+
+```{r include=FALSE}
+stems_height_beuk <- stems_modeled_height %>% filter(name_nl == "Beuk")
+
+stems_height_beuk_p1 <- stems_height_beuk %>% filter(period == 1)
+stems_height_beuk_p2 <- stems_height_beuk %>% filter(period == 2)
+stems_height_beuk_p3 <- stems_height_beuk %>% filter(period == 3)
 
 
-## Histogram
+mean(stems_height_beuk_p1$height_m)
+mean(stems_height_beuk_p2$height_m)
+mean(stems_height_beuk_p3$height_m)
+```
 
-```{r vgl_beuk_1_vs_2_histogram}
+
+```{r vgl_beuk}
+ggplot(stems_height_beuk, aes(dbh_mm, height_m)) + 
+  geom_point(aes(color = fperiod)) + 
+  geom_smooth(aes(y = height_per_period, group = fperiod, color = fperiod))  
+
+ggplot(stems_height_beuk, aes(dbh_mm, height_m)) +
+  geom_point(aes(color = fperiod)) +
+  geom_smooth(aes(y = height_per_period))
+
+ggplot(stems_height_beuk, aes(dbh_mm, height_m)) + 
+  geom_point() + geom_smooth(aes(y = height_per_period)) + 
+  facet_wrap(~fperiod)
+
+
+```
+
+```{r vgl_beuk_histo, eval = FALSE}
 # hoogtes
 h1 <- ggplot(stems_height_beuk_p1, aes(height_m)) + geom_histogram()
 h2 <- ggplot(stems_height_beuk_p2, aes(height_m)) + geom_histogram()
-grid.arrange(h1, h2)
+h3 <- ggplot(stems_height_beuk_p3, aes(height_m)) + geom_histogram()
+grid.arrange(h1, h2, h3)
 
 # diameters
 d1 <- ggplot(trees %>% filter(species == 7 & period == 1), aes(dbh_mm)) + geom_histogram()
 d2 <- ggplot(trees %>% filter(species == 7 & period == 2), aes(dbh_mm)) + geom_histogram()
-grid.arrange(d1, d2, nrow = 1)
+d3 <- ggplot(trees %>% filter(species == 7 & period == 3), aes(dbh_mm)) + geom_histogram()
+grid.arrange(d1, d2, d3, nrow = 1)
 
 ```
 
-## Curve
-
-```{r vgl_beuk_1_vs_2_curve}
-ggplot(stems_height_beuk, aes(dbh_mm, height_m)) + geom_point(aes(color = fperiod)) + geom_smooth(aes(color = fperiod)) 
-
-ggplot(stems_height_beuk, aes(dbh_mm, height_m)) + geom_point() + geom_smooth() + facet_wrap(~fperiod)
-
-ggplot(stems_height_beuk, aes(dbh_mm, height_m)) + geom_point(aes(color = fperiod)) + geom_smooth()
+```{r vgl_beuk_smoother, eval = FALSE}
+# ggplot(stems_height_beuk, aes(dbh_mm, height_m)) + 
+#   geom_point(aes(color = fperiod)) + 
+#   geom_smooth(aes(color = fperiod)) 
+# 
+# ggplot(stems_height_beuk, aes(dbh_mm, height_m)) + 
+#   geom_point() + 
+#   geom_smooth() + 
+#   facet_wrap(~fperiod)
+# 
+# ggplot(stems_height_beuk, aes(dbh_mm, height_m)) + 
+#   geom_point(aes(color = fperiod)) +
+#   geom_smooth()
 
 ```
 
 
-# Wat met Gewone es?
+## Gewone es
 
 Zit er verschil op de hoogtes van es?
 
-```{r vgl_es_1_vs_2_mean, include=FALSE}
-stems_height_es <- stems_height %>% filter(name_nl == "Es (gewone)")
+(c)A: ik heb wel indruk dat de curve van es doorgechoven is, en dat we andere curves zouden moeten gebruiken 
+voor de derde decade
+
+```{r include=FALSE}
+stems_height_es <- stems_modeled_height %>% filter(name_nl == "Es (gewone)")
 
 stems_height_es_p1 <- stems_height_es %>% filter(period == 1)
 stems_height_es_p2 <- stems_height_es %>% filter(period == 2)
+stems_height_es_p3 <- stems_height_es %>% filter(period == 3)
 
 mean(stems_height_es_p1$height_m)
 mean(stems_height_es_p2$height_m)
+mean(stems_height_es_p3$height_m)
 
 ```
 
-Nee: mean_height verschilt maar `r mean(stems_height_es_p1$height_m) - mean(stems_height_es_p2$height_m)` m.
+```{r vgl_es}
+ggplot(stems_height_es, aes(dbh_mm, height_m)) + 
+  geom_point(aes(color = fperiod)) + 
+  geom_smooth(aes(y = height_per_period, group = fperiod, color = fperiod))  
 
-(periode 1 : `r mean(stems_height_es_p1$height_m)` m - 
-periode 2: `r mean(stems_height_es_p2$height_m)` m )
+# eenv. smoother
+ggplot(stems_height_es, aes(dbh_mm, height_m)) +
+  geom_point(aes(color = fperiod)) +
+  geom_smooth(aes(color = fperiod))
 
+ggplot(stems_height_es, aes(dbh_mm, height_m)) +
+  geom_point(aes(color = fperiod)) +
+  geom_smooth(aes(y = height_per_period))
 
-## Histogram
-
-```{r vgl_es_1_vs_2_histogram}
-# hoogtes
-h1 <- ggplot(stems_height_es_p1, aes(height_m)) + geom_histogram()
-h2 <- ggplot(stems_height_es_p2, aes(height_m)) + geom_histogram()
-grid.arrange(h1, h2)
-
-# diameters
-d1 <- ggplot(trees %>% filter(species == 14 & period == 1), aes(dbh_mm)) + geom_histogram()
-d2 <- ggplot(trees %>% filter(species == 14 & period == 2), aes(dbh_mm)) + geom_histogram()
-grid.arrange(d1, d2, nrow = 1)
-
-```
-
-## Curve
-
-```{r vgl_es_1_vs_2_curve}
-ggplot(stems_height_es, aes(dbh_mm, height_m)) + geom_point(aes(color = fperiod)) + geom_smooth(aes(color = fperiod)) 
-
-ggplot(stems_height_es, aes(dbh_mm, height_m)) + geom_point() + geom_smooth() + facet_wrap(~fperiod)
+ggplot(stems_height_es, aes(dbh_mm, height_m)) + 
+  geom_point() + geom_smooth(aes(y = height_per_period)) + 
+  facet_wrap(~fperiod)
 
 ```
 
+## Zomereik
+
+Zit er verschil op de hoogtes van eik?
+
+
+```{r include=FALSE}
+stems_height_eik <- stems_modeled_height %>% filter(name_nl == "Zomereik")
+
+stems_height_eik_p1 <- stems_height_eik %>% filter(period == 1)
+stems_height_eik_p2 <- stems_height_eik %>% filter(period == 2)
+stems_height_eik_p3 <- stems_height_eik %>% filter(period == 3)
+
+mean(stems_height_eik_p1$height_m)
+mean(stems_height_eik_p2$height_m)
+mean(stems_height_eik_p3$height_m)
+
+```
+
+
+```{r vgl_eik}
+ggplot(stems_height_eik, aes(dbh_mm, height_m)) + 
+  geom_point(aes(color = fperiod)) + 
+  geom_smooth(aes(y = height_per_period, group = fperiod, color = fperiod))  
+
+# eenv. smoother
+ggplot(stems_height_eik, aes(dbh_mm, height_m)) +
+  geom_point(aes(color = fperiod)) +
+  geom_smooth(aes(color = fperiod))
+
+ggplot(stems_height_eik, aes(dbh_mm, height_m)) +
+  geom_point(aes(color = fperiod)) +
+  geom_smooth(aes(y = height_per_period))
+
+ggplot(stems_height_eik, aes(dbh_mm, height_m)) + 
+  geom_point() + geom_smooth(aes(y = height_per_period)) + 
+  facet_wrap(~fperiod)
+
+```
+
+
+## Lork
+
+Zit er verschil op de hoogtes van lork?
+
+```{r include=FALSE}
+stems_height_lork <- stems_modeled_height %>% filter(name_nl == "Europese lork")
+
+stems_height_lork_p1 <- stems_height_lork %>% filter(period == 1)
+stems_height_lork_p2 <- stems_height_lork %>% filter(period == 2)
+stems_height_lork_p3 <- stems_height_lork %>% filter(period == 3)
+
+mean(stems_height_lork_p1$height_m)
+mean(stems_height_lork_p2$height_m)
+mean(stems_height_lork_p3$height_m)
+
+```
+
+
+```{r vgl_lork}
+ggplot(stems_height_lork, aes(dbh_mm, height_m)) + 
+  geom_point(aes(color = fperiod)) + 
+  geom_smooth(aes(y = height_per_period, group = fperiod, color = fperiod))  
+
+# eenv. smoother
+ggplot(stems_height_lork, aes(dbh_mm, height_m)) +
+  geom_point(aes(color = fperiod)) +
+  geom_smooth(aes(color = fperiod))
+
+# facet_wrap
+ggplot(stems_height_lork, aes(dbh_mm, height_m)) +
+  geom_point(aes(color = fperiod)) +
+  geom_smooth(aes(y = height_per_period))
+
+ggplot(stems_height_lork, aes(dbh_mm, height_m)) + 
+  geom_point() + geom_smooth(aes(y = height_per_period)) + 
+  facet_wrap(~fperiod)
+
+```
+
+
+## Gewone esdoorn
+
+Zit er verschil op de hoogtes van esdoorn?
+
+```{r include=FALSE}
+stems_height_esd <- stems_modeled_height %>% filter(name_nl == "Esdoorn (gewone)")
+
+stems_height_esd_p1 <- stems_height_esd %>% filter(period == 1)
+stems_height_esd_p2 <- stems_height_esd %>% filter(period == 2)
+stems_height_esd_p3 <- stems_height_esd %>% filter(period == 3)
+
+mean(stems_height_esd_p1$height_m)
+mean(stems_height_esd_p2$height_m)
+mean(stems_height_esd_p3$height_m)
+
+```
+
+
+```{r vgl_esd}
+ggplot(stems_height_esd, aes(dbh_mm, height_m)) + 
+  geom_point(aes(color = fperiod)) + 
+  geom_smooth(aes(y = height_per_period, group = fperiod, color = fperiod))  
+
+ggplot(stems_height_esd, aes(dbh_mm, height_m)) +
+  geom_point(aes(color = fperiod)) +
+  geom_smooth(aes(y = height_per_period))
+
+ggplot(stems_height_esd, aes(dbh_mm, height_m)) + 
+  geom_point() + geom_smooth(aes(y = height_per_period)) + 
+  facet_wrap(~fperiod)
+
+```
 
 
 # Dataset aanmaken voor import mbv Import2FM
@@ -367,9 +567,27 @@ t <- unique(output$unique_ID)
 
 # Wegschrijven output
 
-De resultaten worden weggeschreven naar **TblVirtueleTrees_CP_1e2eSET.xlsx**
+De resultaten worden weggeschreven naar **TblVirtueleTrees_CP_1e2e3eSET.xlsx**
 
 ```{r WegschrijvenOutput}
-write_xlsx(output, paste0(path_to_datarequest, "/TblVirtueleTrees_CP_1e2eSET.xlsx"))
+write_xlsx(output, paste0(path_to_datarequest, "/TblVirtueleTrees_CP_1e2e3eSET.xlsx"))
 
 ```
+
+
+# Copy html to teamdrive
+
+Na knitting - manueel
+
+```{r eval = FALSE}
+# Specify the path of the file you want to copy
+source_file <- here::here(paste0("Scripts/AanmaakHoogteCurves/aanmaak_virt_trees_Jansheide_CP.html"))
+
+# Specify the destination directory where you want to copy the file
+destination_dir <- path_to_html
+
+# Copy the file to the destination directory
+file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
+# ? file.copy
+```
+

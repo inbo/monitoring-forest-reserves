@@ -2,7 +2,7 @@
 title: "Ophalen data voor aanmaak DH-curves in een virtuele plot mbv FM-IA"
 subtitle: "2025 - decade 3"
 author: "Anja Leyman"
-date: "5 maart 2025"
+date: "6 maart 2025"
 output: 
   html_document:
     keep_md: FALSE
@@ -14,6 +14,9 @@ output:
       collapsed: FALSE
       smooth_scroll: FALSE
 ---
+
+
+<!-- VERTROKKEN VAN CODE  JANSHEIDE -->
 
 ```{r Rm, eval = FALSE}
 rm(list=ls())
@@ -38,32 +41,21 @@ source(here::here("scripts/Setup.R"))
 ```
 
 ```{r Setup2}
-forestreserve <- "Heirnisse"
-forestreserve_folder <- "2_Heirnisse_DEELS"
+forestreserve <- "Withoefse heide"
+forestreserve_folder <- "3_With_heide_DEELS"
 
 # plot_type <- "CA"
 plot_type <- "CP"
 
-plots_to_exclude <- c(701, 707, 709, 727, 728, 738, 739, 740, 759, 760)
+virt_plot <- 839
 
-virt_plot <- 799
+# plots_to_exclude <- c(701, 707, 709, 727, 728, 738, 739, 740, 759, 760)
+
 ```
-
-
-# Vraagstelling
-
-Momenteel gebeurt de meeste dataverwerking in R, maar de aanmaak van DH-curves gebeurt nog steeds in FM-IA.
-Daartoe wordt een virtuele plot aangemaakt waar alle boomhoogtes in opgenomen zijn.
-
-- alle hoogtes van intacte bomen
-- hoogtes van hakhout spillen, zeker als er te weinig metingen op boomniveau zijn (bv. Hazelaar)
-- hoogtes van 1e, 2e en 3e SET samen (soms hoogtecurves obv 1e en 2e SET afzonderlijk)
-
-Onderstaand script voegt al deze data samen, om vervolgens in FM in te laden mbv de Import2FM-tool.
 
 ```{r Path}
 # deze worden ook in "Setup_ForresCalc.R" gedefinieerd, hier ev. extra "paths" toevoegen indien nodig voor huidig script
-      # path_to_fieldmap_db <- "C:/3BR/5_dB_Els_deel2/FieldMapData_dB_Els_deel2.accdb"
+      # path_to_fieldmap <- "C:/3BR/5_dB_Els_deel2/FieldMapData_dB_Els_deel2.accdb"
       # path_to_git_forresdat <- "C:/3BR/2_VisualisatieDataBR/2Packages/forresdat"
       # 
       # path_to_analysis_set <- "C:/3BR/2_VisualisatieDataBR/1DataVerwerkingBR/Output/BR_analysedb.accdb"
@@ -75,6 +67,17 @@ path_to_datarequest <- paste0(path_to_reserves, forestreserve_folder, "/verwerki
 
 path_to_html <-  paste0(path_to_reserves, forestreserve_folder, "/verwerking_2025_1e2e3eSET/2AanmaakDHcurves_1e2e3eSET")
 ```
+
+# Vraagstelling
+
+Momenteel gebeurt de meeste dataverwerking in R, maar de aanmaak van DH-curves gebeurt nog steeds in FM-IA.
+Daartoe wordt een virtuele plot aangemaakt waar alle boomhoogtes in opgenomen zijn.
+
+- alle hoogtes van intacte bomen
+- hoogtes van hakhout spillen, zeker als er te weinig metingen op boomniveau zijn (bv. Hazelaar)
+- hoogtes van 1e, 2e en 3e SET samen (soms hoogtecurves obv elke decade afzonderlijk)
+
+Onderstaand script voegt al deze data samen, om vervolgens in FM in te laden mbv de Import2FM-tool.
 
 
 # Datacontrole
@@ -113,9 +116,9 @@ odbcClose(con)
 
 In dit script wordt data van het **bosreservaat `r forestreserve`** ingeladen, met als **plottype `r plot_type`**.
 
-In het geval van `r forestreserve` dient ook rekening gehouden te worden met een aantal **verstoorde plots**.
-Deze worden niet meegenomen in de verdere dataverwerking.  
-Het gaat om volgende plots: **`r plots_to_exclude`**
+<!-- In het geval van `r forestreserve` dient ook rekening gehouden te worden met een aantal **verstoorde plots**. -->
+<!-- Deze worden niet meegenomen in de verdere dataverwerking.   -->
+
 
 
 ```{r overview_data}
@@ -139,12 +142,13 @@ odbcClose(con)
 ```
 
 ```{r load_data}
-# trees <- load_data_dendrometry(database = path_to_fieldmap_db, plottype = plot_type, forest_reserve = forest_reserve, extra_variables = TRUE)
-# trees_tmp <- load_data_dendrometry(database = path_to_fieldmap_db, plottype = "Core area", forest_reserve = "Muizenbos", extra_variables = TRUE)
+# trees <- load_data_dendrometry(database = path_to_fieldmap, plottype = plot_type, forest_reserve = forest_reserve, extra_variables = TRUE)
+# trees_tmp <- load_data_dendrometry(database = path_to_fieldmap, plottype = "Core area", forest_reserve = "Muizenbos", extra_variables = TRUE)
 
 # gaf foutmelding => achteraf gefilterd
 trees <- load_data_dendrometry(database = path_to_fieldmap_db, plottype = plot_type, extra_variables = TRUE) %>% 
-  filter(forest_reserve == forestreserve & !plot_id %in% plots_to_exclude) %>% 
+  # filter(forest_reserve == forestreserve & !plot_id %in% plots_to_exclude) %>% 
+  filter(forest_reserve == forestreserve) %>% 
   mutate(fperiod = as.factor(period))
 
 shoots <- load_data_shoots(database = path_to_fieldmap_db, extra_variables = TRUE)
@@ -180,22 +184,24 @@ table(stems_height$ind_sht_cop, stems_height$name_nl)
 
 ```
 
-```{r HH_overzich}
+```{r HH_overzicht}
 overview_HH_height <- stems_height %>% 
   group_by(ind_sht_cop, species, name_nl) %>% 
   summarize(aantal = n()) %>% 
   ungroup %>% 
   pivot_wider(names_from = ind_sht_cop, values_from = aantal) %>% 
-  rename(individual = "10", coppice = "12") %>% 
-  mutate(perc_hakhout = round(100*coppice/(individual + coppice), ))
+  rename(individual = "10") %>% 
+  mutate(perc_hakhout = 0)
+# geen coppice in With heide
+  # rename(individual = "10", coppice = "12") %>% 
+  # mutate(perc_hakhout = round(100*coppice/(individual + coppice), ))
 
-overview_HH_height %>% DT :: datatable(options = list(dom = 'rt'), rownames = FALSE, filter = "top") 
+overview_HH_height %>% arrange(desc(individual)) %>% DT :: datatable(options = list(dom = 'rt'), rownames = FALSE, filter = "top") 
 
 write.csv2(overview_HH_height, paste0(path_to_datarequest, "/overview_HH_height.csv"))
 ```
 
-**Besluit**: voor de meeste soorten meerwaarde om hoogtes van hakhout te betrekken bij opmaak curves!
-(voor gemak dan direct voor alle soorten)
+**Besluit**: Withoefse heide bevat geen hakhout, is dus geen issue hier. 
 
 
 # Welke periodes gebruiken?
@@ -222,9 +228,9 @@ dt %>% DT :: datatable(options = list(dom = 'rt'), rownames = FALSE)
 ```
 
 
-## Grafiek
+## Grafiek 
 
-```{r vgl_all_1_vs_2_curve}
+```{r vgl_all_1_vs_2_curve, eval=FALSE}
 ggplot(stems_height, aes(dbh_mm, height_m)) + geom_point(aes(color = fperiod)) + geom_smooth(aes(color = fperiod)) 
 
 ggplot(stems_height, aes(dbh_mm, height_m)) + geom_point() + geom_smooth() + facet_wrap(~fperiod)
@@ -232,7 +238,6 @@ ggplot(stems_height, aes(dbh_mm, height_m)) + geom_point() + geom_smooth() + fac
 ggplot(stems_height, aes(dbh_mm, height_m)) + geom_point(aes(color = fperiod)) + geom_smooth()
                                                   
 ```
-
 
 ## Besluit
 
@@ -242,9 +247,9 @@ Op basis van bovenstaande grafieken:
 - 2eSET: data 1e + 2e + 3eSET
 - 3eSET: data 1e + 2e + 3eSET
 
-Eventueel hadden we elke decade afzonderlijke curves kunnen opstellen, maar nu in eerste instantie nog
-alle metingen samen en curves voor alle periodes samen op te stellen.
+Immers maar weinig metingen in eerste decade en geen in tweede ...
 
+De vorige dh-curves werden aangemaakt op basis van metingen uit het transect (eerste decade).
 
 
 # Per boomsoort
@@ -282,45 +287,45 @@ stems_modeled_height <- stems_for_model %>%
 # names(stems_modeled_height)
 ```
 
-## Populier
+## Grove den
 
-Zit er verschil op de hoogtes van populier?
+Kan het zijn dat er bij periode 1 een overschatting gebeurd is bij de metingen? 
 
 ```{r include=FALSE}
-stems_height_pop <- stems_modeled_height %>% filter(name_nl == "Populier species")
+stems_height_gD <- stems_modeled_height %>% filter(name_nl == "Grove den")
 
-stems_height_pop_p1 <- stems_height_pop %>% filter(period == 1)
-stems_height_pop_p2 <- stems_height_pop %>% filter(period == 2)
-stems_height_pop_p3 <- stems_height_pop %>% filter(period == 3)
+stems_height_gD_p1 <- stems_height_gD %>% filter(period == 1)
+stems_height_gD_p2 <- stems_height_gD %>% filter(period == 2)
+stems_height_gD_p3 <- stems_height_gD %>% filter(period == 3)
 
 
-mean(stems_height_pop_p1$height_m)
-mean(stems_height_pop_p2$height_m)
-mean(stems_height_pop_p3$height_m)
+mean(stems_height_gD_p1$height_m)
+mean(stems_height_gD_p2$height_m)
+mean(stems_height_gD_p3$height_m)
 ```
 
 
-```{r vgl_pop}
-ggplot(stems_height_pop, aes(dbh_mm, height_m)) + 
+```{r vgl_beuk}
+ggplot(stems_height_gD, aes(dbh_mm, height_m)) + 
   geom_point(aes(color = fperiod)) + 
   geom_smooth(aes(y = height_per_period, group = fperiod, color = fperiod))  
 
-ggplot(stems_height_pop, aes(dbh_mm, height_m)) +
+ggplot(stems_height_gD, aes(dbh_mm, height_m)) +
   geom_point(aes(color = fperiod)) +
   geom_smooth(aes(y = height_per_period))
 
-ggplot(stems_height_pop, aes(dbh_mm, height_m)) + 
+ggplot(stems_height_gD, aes(dbh_mm, height_m)) + 
   geom_point() + geom_smooth(aes(y = height_per_period)) + 
   facet_wrap(~fperiod)
 
 
 ```
 
-```{r vgl_pop_histo, eval = FALSE}
+```{r vgl_beuk_histo, eval = FALSE}
 # hoogtes
-h1 <- ggplot(stems_height_pop_p1, aes(height_m)) + geom_histogram()
-h2 <- ggplot(stems_height_pop_p2, aes(height_m)) + geom_histogram()
-h3 <- ggplot(stems_height_pop_p3, aes(height_m)) + geom_histogram()
+h1 <- ggplot(stems_height_gD_p1, aes(height_m)) + geom_histogram()
+h2 <- ggplot(stems_height_gD_p2, aes(height_m)) + geom_histogram()
+h3 <- ggplot(stems_height_gD_p3, aes(height_m)) + geom_histogram()
 grid.arrange(h1, h2, h3)
 
 # diameters
@@ -331,21 +336,22 @@ grid.arrange(d1, d2, d3, nrow = 1)
 
 ```
 
-```{r vgl_pop_smoother, eval = FALSE}
-# ggplot(stems_height_pop, aes(dbh_mm, height_m)) + 
+```{r vgl_beuk_smoother, eval = FALSE}
+# ggplot(stems_height_gD, aes(dbh_mm, height_m)) + 
 #   geom_point(aes(color = fperiod)) + 
 #   geom_smooth(aes(color = fperiod)) 
 # 
-# ggplot(stems_height_pop, aes(dbh_mm, height_m)) + 
+# ggplot(stems_height_gD, aes(dbh_mm, height_m)) + 
 #   geom_point() + 
 #   geom_smooth() + 
 #   facet_wrap(~fperiod)
 # 
-# ggplot(stems_height_pop, aes(dbh_mm, height_m)) + 
+# ggplot(stems_height_gD, aes(dbh_mm, height_m)) + 
 #   geom_point(aes(color = fperiod)) +
 #   geom_smooth()
 
 ```
+
 
 
 ## Ruwe berk
@@ -384,6 +390,7 @@ ggplot(stems_height_berk, aes(dbh_mm, height_m)) +
   facet_wrap(~fperiod)
 
 ```
+
 
 ## Zomereik
 
@@ -424,50 +431,6 @@ ggplot(stems_height_eik, aes(dbh_mm, height_m)) +
 
 ```
 
-
-## Corsicaanse den
-
-Zit er verschil op de hoogtes van Corsicaanse den?
-
-JA, het lijkt toch of er een verschuiving van ca 2.5 m gebeurd is over de 20 jaar tussen de
-eerste en derde decade.
-
-> eens voorleggen aan rest van het team
-
-```{r include=FALSE}
-stems_height_cors <- stems_modeled_height %>% filter(name_nl == "Corsicaanse den")
-
-stems_height_cors_p1 <- stems_height_cors %>% filter(period == 1)
-stems_height_cors_p2 <- stems_height_cors %>% filter(period == 2)
-stems_height_cors_p3 <- stems_height_cors %>% filter(period == 3)
-
-mean(stems_height_cors_p1$height_m)
-mean(stems_height_cors_p2$height_m)
-mean(stems_height_cors_p3$height_m)
-
-```
-
-
-```{r vgl_lork}
-ggplot(stems_height_cors, aes(dbh_mm, height_m)) + 
-  geom_point(aes(color = fperiod)) + 
-  geom_smooth(aes(y = height_per_period, group = fperiod, color = fperiod))  
-
-# eenv. smoother
-ggplot(stems_height_cors, aes(dbh_mm, height_m)) +
-  geom_point(aes(color = fperiod)) +
-  geom_smooth(aes(color = fperiod))
-
-# facet_wrap
-ggplot(stems_height_cors, aes(dbh_mm, height_m)) +
-  geom_point(aes(color = fperiod)) +
-  geom_smooth(aes(y = height_per_period))
-
-ggplot(stems_height_cors, aes(dbh_mm, height_m)) + 
-  geom_point() + geom_smooth(aes(y = height_per_period)) + 
-  facet_wrap(~fperiod)
-
-```
 
 
 
@@ -547,7 +510,7 @@ Na knitting - manueel
 
 ```{r eval = FALSE}
 # Specify the path of the file you want to copy
-source_file <- here::here(paste0("Scripts/AanmaakHoogteCurves/aanmaak_virt_trees_Heirnisse_CP.html"))
+source_file <- here::here(paste0("Scripts/AanmaakHoogteCurves/aanmaak_virt_treesWithoefseHeide_CP.html"))
 
 # Specify the destination directory where you want to copy the file
 destination_dir <- path_to_html
@@ -556,4 +519,3 @@ destination_dir <- path_to_html
 file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
 # ? file.copy
 ```
-
