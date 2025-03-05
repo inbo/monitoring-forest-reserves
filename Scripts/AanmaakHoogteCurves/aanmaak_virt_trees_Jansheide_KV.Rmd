@@ -435,7 +435,7 @@ ggplot(stems_height_beuk, aes(dbh_mm, height_m)) + geom_point(aes(color = fperio
 Periode 2 ietsje hoger (1 m) => doorgroei, geen overschatting periode 1.
 
 
-# Wat met esdoorn?
+## Gewone esdoorn
 
 ```{r include=FALSE}
 stems_height_esd <- stems_modeled_height %>% filter(name_nl == "Esdoorn (gewone)")
@@ -474,7 +474,7 @@ ggplot(stems_height_esd, aes(dbh_mm, height_m)) +
 Niet zoveel verschil tss de curves, 2e set te weinig metingen voor afzonderlijke curve.
 
 
-# Wat met Zomereik?
+## Zomereik
 
 ```{r include=FALSE}
 stems_height_eik <- stems_modeled_height %>% filter(name_nl == "Zomereik")

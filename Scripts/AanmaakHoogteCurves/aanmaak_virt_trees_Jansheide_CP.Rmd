@@ -178,7 +178,7 @@ table(stems_height$ind_sht_cop, stems_height$name_nl)
 
 ```
 
-```{r HH_overzicht}
+```{r HH_overzich}
 overview_HH_height <- stems_height %>% 
   group_by(ind_sht_cop, species, name_nl) %>% 
   summarize(aantal = n()) %>% 
