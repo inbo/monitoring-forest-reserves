@@ -115,11 +115,6 @@ odbcClose(con)
 
 In dit script wordt data van het **bosreservaat `r forestreserve`** ingeladen, met als **plottype `r plot_type`**.
 
-<!-- In het geval van `r forestreserve` dient ook rekening gehouden te worden met een aantal **verstoorde plots**. -->
-<!-- Deze worden niet meegenomen in de verdere dataverwerking.   -->
-
-
-
 ```{r overview_data}
 con <- odbcConnectAccess2007(path_to_fieldmap_db)
       dbtablesRaw_1eSET <- sqlTables(con) %>% 
@@ -183,7 +178,7 @@ table(stems_height$ind_sht_cop, stems_height$name_nl)
 
 ```
 
-```{r HH_overzich}
+```{r HH_overzicht}
 overview_HH_height <- stems_height %>% 
   group_by(ind_sht_cop, species, name_nl) %>% 
   summarize(aantal = n()) %>% 
@@ -194,7 +189,7 @@ overview_HH_height <- stems_height %>%
 
 overview_HH_height %>% arrange(desc(perc_hakhout)) %>% DT :: datatable(options = list(dom = 'rt'), rownames = FALSE, filter = "top") 
 
-write.csv2(overview_HH_height, paste0(path_to_datarequest, "/overview_HH_height.csv"))
+write.csv2(overview_HH_height, paste0(path_to_datarequest, "/overview_HH_height_CP.csv"))
 ```
 
 **Besluit**: voor de meeste soorten meerwaarde om hoogtes van hakhout te betrekken bij opmaak curves!

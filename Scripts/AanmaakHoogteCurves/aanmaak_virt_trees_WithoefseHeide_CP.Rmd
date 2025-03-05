@@ -198,7 +198,7 @@ overview_HH_height <- stems_height %>%
 
 overview_HH_height %>% arrange(desc(individual)) %>% DT :: datatable(options = list(dom = 'rt'), rownames = FALSE, filter = "top") 
 
-write.csv2(overview_HH_height, paste0(path_to_datarequest, "/overview_HH_height.csv"))
+write.csv2(overview_HH_height, paste0(path_to_datarequest, "/overview_HH_height_CP.csv"))
 ```
 
 **Besluit**: Withoefse heide bevat geen hakhout, is dus geen issue hier. 

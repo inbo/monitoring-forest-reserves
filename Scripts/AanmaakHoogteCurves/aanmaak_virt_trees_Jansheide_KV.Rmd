@@ -1,5 +1,6 @@
 ---
 title: "Ophalen data voor aanmaak DH-curves in een virtuele plot mbv FM-IA"
+subtitle: "2025 - decade 3"
 author: "Anja Leyman"
 date: "`r Sys.Date()`"
 output: 
@@ -39,13 +40,10 @@ source(here::here("scripts/Setup.R"))
 
 ```{r Setup2}
 forestreserve <- "Jansheideberg"
-
-forestreserve_folder <- paste0(path_to_reserves, "4b_Jansheide_DEELS")
+forestreserve_folder <- "1_Jansheide_DEELS"
 
 plot_type <- "CA"
 # plot_type <- "CP"
-plot_type <- "Core area"
-# plot_type <- "Circular plot"
 
 virt_plot <- 101001
 
@@ -56,7 +54,9 @@ virt_plot <- 101001
 # deze worden ook in "Paths.R" gedefinieerd, hier ev. extra "paths" toevoegen indien nodig voor huidig script
 
 # resultaten
-path_to_datarequest <- paste0(forestreserve_folder, "/2AanmaakDHcurves/VirtualTreesHeightCurves")
+path_to_datarequest <- paste0(path_to_reserves, forestreserve_folder, "/verwerking_2025_1e2e3eSET/2AanmaakDHcurves_1e2e3eSET/VirtualTreesHeightCurves")
+
+path_to_html <-  paste0(path_to_reserves, forestreserve_folder, "/verwerking_2025_1e2e3eSET/2AanmaakDHcurves_1e2e3eSET")
 
 ```
 
@@ -73,21 +73,47 @@ Daartoe wordt een virtuele plot aangemaakt waar alle boomhoogtes in opgenomen zi
 Onderstaand script voegt al deze data samen, om vervolgens in FM in te laden mbv de Import2FM-tool.
 
 
+# Datacontrole
+
+Datacontrole dient vooraf te gebeuren, zie "...\Scripts\Per_gebied".
+
+Eens datacoontrole afgerond is, moet veld `processed` aangepast worden.
+
+Met behulp van een updatequery voor een vooraf geselecteerde decade, plottype en bosreservaat zetten we `DataProcessed_YN` op `10` (code 10 = 'ja'), indien `Survey_Trees_YN = 10`. 
+
+```{r update_processed, eval = FALSE}
+# Predefined strings
+decade <- "3" 
+# plot_type <- "CA"
+# forestreserve <- "Meerdaalwoud"
+
+# Construct the query string using sprintf
+query_update <- paste0(sprintf("UPDATE (PlotDetails_%seSET pd 
+                         INNER JOIN Plots p ON pd.IDPlots = p.ID) 
+                         INNER JOIN qPlotType q ON p.Plottype = q.ID 
+                         SET pd.DataProcessed_YN = 10 
+                         WHERE (pd.Survey_Trees_YN = 10) 
+                         AND (q.Value3 = '%s') 
+                         AND (pd.ForestReserve = '%s')",
+                         decade, plot_type, forestreserve)
+                       ) %>% noquote()
+
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+   sqlQuery(con,query_update)
+odbcClose(con)
+
+```
+
+
 # Data inladen
 
 In dit script wordt data van het **bosreservaat `r forestreserve`** ingeladen, met als **plottype `r plot_type`**.
-
-<!-- In het geval van `r forestreserve` dient ook rekening gehouden te worden met een aantal **verstoorde plots**. -->
-<!-- Deze worden niet meegenomen in de verdere dataverwerking.   -->
-
 
 ```{r overview_tables_fieldmap}
 con <- odbcConnectAccess2007(path_to_fieldmap_db)
       tables_fieldmap <- sqlTables(con) %>% 
                 filter(str_detect(TABLE_NAME, "MSys", negate = TRUE ))
                 # wegfilteren van records waar TABLE_NAME "MSys" bevat
-      # CircularPlots_forestreserves <- sqlFetch(con, "CircularPlots_forestreserves")   # LEEG
-      # CoreArea_forestreserves <- sqlFetch(con, "CoreArea_forestreserves")  # LEEG
 odbcClose(con)
 ```
 
@@ -100,7 +126,7 @@ qindshootcop <- sqlFetch(con, "qIndShootCop")
 qintactsnag <- sqlFetch(con, "qIntactSnag")
 
 odbcClose(con)
-# odbcCloseAll()
+
 ```
 
 Data inladen via de functies `load_data_dendrometry`, `load_data_shoots` en `compose_stem_data`uit package `forrescalc`.
@@ -131,14 +157,14 @@ unique(plotinfo_$forest_reserve)
 
 ```{r load_data}
 trees <- load_data_dendrometry(database = path_to_fieldmap_db, 
-                               plottype = "Core area", 
+                               plottype = plot_type, 
                                forest_reserve = forestreserve, 
                                extra_variables = TRUE) 
 
 # shoots <- load_data_shoots(database = path_to_fieldmap_db)
 shoots <- load_data_shoots(database = path_to_fieldmap_db, extra_variables = TRUE)# hier kan forest_reserve niet gespecifieerd worden
 
-stems <- compose_stem_data(trees, shoots)
+stems <- compose_stem_data(trees, shoots, extra_variables = TRUE)
 # door samen te voegen, wordt enkel het specifieke forest reserve behouden
 
 ```
@@ -146,20 +172,18 @@ stems <- compose_stem_data(trees, shoots)
 
 ```{r select_height_data}
 # names(stems)
-stems_height <- stems %>% 
+stems_height <- stems %>%
   filter(alive_dead == 11 & intact_snag == 11
          & ind_sht_cop != 11
          & !is.na(height_m)  # levend en intact, geen opgr spil
-         & (common_remark != 90 | is.na(common_remark))
-         & (common_remark_shoots != 90 | is.na(common_remark_shoots))  # 90: uitgebroken top
-         # & period %in% c(2,3)
-  ) %>% 
-  left_join(qspecies %>% select(ID, Value1), by = c("species"= "ID")) %>% 
-  rename(name_nl = Value1) %>% 
-  left_join(qindshootcop %>% select(ID, Value1), by = c("ind_sht_cop"= "ID")) %>% 
-  rename(ind_sht_cop_txt = Value1) %>% 
+         & (common_remark != 90 | is.na(common_remark)) # 90: uitgebroken top
+  ) %>%
+  left_join(qspecies %>% select(ID, Value1), by = c("species"= "ID")) %>%
+  rename(name_nl = Value1) %>%
+  left_join(qindshootcop %>% select(ID, Value1), by = c("ind_sht_cop"= "ID")) %>%
+  rename(ind_sht_cop_txt = Value1) %>%
   mutate(fperiod = as.factor(period),
-         ind_sht_cop = as.factor(ind_sht_cop)) %>% 
+         ind_sht_cop = as.factor(ind_sht_cop)) %>%
   select(-contains(c("dbh_min", "r_A", "core", "area", "circle")))
 
 ```
@@ -169,7 +193,6 @@ stems_height <- stems %>%
 ```{r only_core_area}
 nr_measured <- stems %>% 
   mutate(height_m = ifelse((common_remark != 90 | is.na(common_remark))
-                            & (common_remark_shoots != 90 | is.na(common_remark_shoots))
                             , height_m
                             , NA)  # uitgebroken top
         ) %>% 
@@ -186,7 +209,7 @@ nr_measured <- stems %>%
 
 nr_measured %>% DT :: datatable(options = list(dom = 'tip'),rownames = FALSE) 
 
-write.csv2(nr_measured, paste0(forestreserve_folder, "/2AanmaakDHcurves/nr_measured_KV.csv"))
+write.csv2(nr_measured, paste0(path_to_datarequest, "/nr_measured_KV.csv"))
 
 ```
 
@@ -207,7 +230,7 @@ overview_heights_KV <- stems_height %>%
     names_prefix = "periode" 
     )
 
-write_csv2(overview_heights_KV,paste0(forestreserve_folder, "/2AanmaakDHcurves/overview_heights_KV.csv"))
+write_csv2(overview_heights_KV,paste0(path_to_datarequest, "/overview_heights_KV.csv"))
 ```
 
 
@@ -229,7 +252,7 @@ table(stems$species)
 ```
 
 
-```{r HH_overzicht, eval=FALSE}
+```{r HH_overzicht}
 overview_HH_height <- stems_height %>% 
   group_by(ind_sht_cop, species, name_nl) %>% 
   summarize(aantal = n()) %>% 
@@ -240,7 +263,8 @@ overview_HH_height <- stems_height %>%
 
 overview_HH_height %>% arrange(desc(perc_hakhout)) %>% DT :: datatable(options = list(dom = 'rt'), rownames = FALSE, filter = "top") 
 
-write.csv2(overview_HH_height, paste0(forestreserve_folder, "/2AanmaakDHcurves/overview_HH_height_KV.csv"))
+write.csv2(overview_HH_height, paste0(path_to_datarequest, "/overview_HH_height_KV.csv"))
+
 ```
 
 
@@ -275,31 +299,33 @@ grid.arrange(p1, p2, nrow = 2)
 ```
 
 
-# Periode 1 en/of periode 2 gebruiken?
+# Welke periodes gebruiken?
 
-2005 en 2013
+Kunnen we alle hoogtemetingen uit de drie periodes samengooien?
+(2005 en 2013 en 2023)
 
 ## Tabel
 
 ```{r }
 n1_h <- stems %>% filter(period == 1 & alive_dead == 11 & !is.na(height_m)) %>% nrow()
 n2_h <- stems %>% filter(period == 2 & alive_dead == 11 & !is.na(height_m)) %>% nrow()
+n3_h <- stems %>% filter(period == 3 & alive_dead == 11 & !is.na(height_m)) %>% nrow()
 
 n1 <- stems %>% filter(period == 1) %>% nrow()
 n2 <- stems %>% filter(period == 2) %>% nrow()
+n3 <- stems %>% filter(period == 2) %>% nrow()
 
-periode <- c("periode 1", "periode 2")
-n_bomen <- c(n1, n2)
-n_hoogtes <- c(n1_h, n2_h)
+periode <- c("decade 1", "decade 2", "decade 3")
+n_bomen <- c(n1, n2, n3)
+n_hoogtes <- c(n1_h, n2_h, n3_h)
 dt <- data.frame(periode, n_bomen, n_hoogtes)
 dt %>% DT :: datatable(options = list(dom = 'rt'), rownames = FALSE) 
-
-
-table(stems_height$plot_id, stems_height$period)
+  
+# table(stems_height$plot_id, stems_height$period)
 
 ```
 
-Meer metingen in 2005, te weinig in 2013 => beide gebruiken
+Meer metingen in 2005, te weinig in 2013, geen in 2023 => beide gebruiken
 
 
 ## Grafiek
@@ -322,32 +348,82 @@ Op basis van bovenstaande grafieken:
 
 - 1eSET: data 1e + 2eSET
 - 2eSET: data 1e + 2eSET
+- 3eSET: data 1e + 2eSET
 
 
-# Wat met Beuk?
+# Per boomsoort
 
-Kan het zijn dat er bij periode 1 een overschatting gebeurd is bij de metingen? 
+Met behulp van extra functies (zie `functions_dhcurves.R`) hierna heel eenvoudige 
+dh-curves gemaakt: kwadratische functie obv logOmtrek, naar analogie met project 
+dhcurves van ANB ikv de houtverkoop.
 
-```{r vgl_beuk_1_vs_2_mean, include=FALSE}
-stems_height_beuk <- stems_height %>% filter(name_nl == "Beuk")
+Alternatief is een eenvoudige smoother.
 
-stems_height_beuk_p1 <- stems_height_beuk %>% filter(period == 1)
-stems_height_beuk_p2 <- stems_height_beuk %>% filter(period == 2)
+Dit zijn niet dezelfde curves als aangemaakt in FieldMap-IA.
 
-mean(stems_height_beuk_p1$height_m) # 30.6
-mean(stems_height_beuk_p2$height_m) # 32
+
+```{r}
+# Vooraf Omtrek en logOmtrek berekenen
+stems_for_model <- stems_height %>%
+  mutate(
+    Omtrek = pi*.data$dbh_mm/1000,
+    logOmtrek = log(.data$Omtrek),
+    logOmtrek2 = .data$logOmtrek ^ 2)
 
 ```
 
-Mean_height verschilt `r mean(stems_height_beuk_p1$height_m) - mean(stems_height_beuk_p2$height_m)` m.
+```{r}
+# zie functions_dhcurves.R (afgeleid van code uit project dhcurves van ANB ikv houtverkoop)
 
-(periode 1 : `r mean(stems_height_beuk_p1$height_m)` m - 
-periode 2: `r mean(stems_height_beuk_p2$height_m)` m )
+models_per_period <- fit.period(stems_for_model)
+
+parameters_per_period <- modelparameters_per_period(models_per_period
+                                                    , Data = stems_for_model)
+
+stems_modeled_height <- stems_for_model %>% 
+  left_join(parameters_per_period, by = c("species", "forest_reserve", "period")) %>% 
+  mutate(height_per_period = Ad + Bd*logOmtrek + Cd*logOmtrek2)
+
+# names(stems_modeled_height)
+```
 
 
-## Curve
 
-```{r vgl_beuk_1_vs_2_curve}
+## Beuk
+
+Kan het zijn dat er bij periode 1 een overschatting gebeurd is bij de metingen? 
+
+```{r include=FALSE}
+stems_height_beuk <- stems_modeled_height %>% filter(name_nl == "Beuk")
+
+stems_height_beuk_p1 <- stems_height_beuk %>% filter(period == 1)
+stems_height_beuk_p2 <- stems_height_beuk %>% filter(period == 2)
+stems_height_beuk_p3 <- stems_height_beuk %>% filter(period == 3)
+
+mean(stems_height_beuk_p1$height_m) # 30.6
+mean(stems_height_beuk_p2$height_m) # 32
+mean(stems_height_beuk_p3$height_m)
+
+```
+
+
+```{r vgl_beuk}
+ggplot(stems_height_beuk, aes(dbh_mm, height_m)) + 
+  geom_point(aes(color = fperiod)) + 
+  geom_smooth(aes(y = height_per_period, group = fperiod, color = fperiod))  
+
+ggplot(stems_height_beuk, aes(dbh_mm, height_m)) +
+  geom_point(aes(color = fperiod)) +
+  geom_smooth(aes(y = height_per_period))
+
+ggplot(stems_height_beuk, aes(dbh_mm, height_m)) + 
+  geom_point() + geom_smooth(aes(y = height_per_period)) + 
+  facet_wrap(~fperiod)
+
+
+```
+
+```{r vgl_beuk_curve}
 ggplot(stems_height_beuk, aes(dbh_mm, height_m)) + geom_point(aes(color = fperiod)) + geom_smooth(aes(color = fperiod)) 
 
 # ggplot(stems_height_beuk, aes(dbh_mm, height_m)) + geom_point() + geom_smooth() + facet_wrap(~fperiod)
@@ -361,34 +437,37 @@ Periode 2 ietsje hoger (1 m) => doorgroei, geen overschatting periode 1.
 
 # Wat met esdoorn?
 
-```{r vgl_esd_1_vs_2_mean, include=FALSE}
-stems_height_esd <- stems_height %>% filter(name_nl == "Esdoorn (gewone)")
+```{r include=FALSE}
+stems_height_esd <- stems_modeled_height %>% filter(name_nl == "Esdoorn (gewone)")
 
 stems_height_esd_p1 <- stems_height_esd %>% filter(period == 1)
 stems_height_esd_p2 <- stems_height_esd %>% filter(period == 2)
+stems_height_esd_p3 <- stems_height_esd %>% filter(period == 3)
 
 mean(stems_height_esd_p1$height_m, na.rm = T) # 12
 mean(stems_height_esd_p2$height_m, na.rm = T) # 18
-
+mean(stems_height_esd_p3$height_m, na.rm = T) 
 ```
 
-JA: mean_height verschilt `r mean(stems_height_esd_p1$height_m) - mean(stems_height_esd_p2$height_m)` m.
-<!-- 6 -->
+In 2eSET maar heel weinig esdoorn opgemeten.
 
-(periode 1 : `r mean(stems_height_esd_p1$height_m)` m - 
-periode 2: `r mean(stems_height_esd_p2$height_m)` m )
+```{r vgl_esd}
+ggplot(stems_height_esd, aes(dbh_mm, height_m)) + 
+  geom_point(aes(color = fperiod)) + 
+  geom_smooth(aes(y = height_per_period, group = fperiod, color = fperiod))  
 
-In 2eSET maar heel weinig esdoorn opgemleten => verschil in meean.
-Maar op grafiek is dat niet duidelijk te zien.
+# eenv. smoother
+ggplot(stems_height_esd, aes(dbh_mm, height_m)) +
+  geom_point(aes(color = fperiod)) +
+  geom_smooth(aes(color = fperiod))
 
-## Curve
+ggplot(stems_height_esd, aes(dbh_mm, height_m)) +
+  geom_point(aes(color = fperiod)) +
+  geom_smooth(aes(y = height_per_period))
 
-```{r vgl_esd_1_vs_2_curve}
-ggplot(stems_height_esd, aes(dbh_mm, height_m)) + geom_point(aes(color = fperiod)) + geom_smooth(aes(color = fperiod)) 
-
-# ggplot(stems_height_esd, aes(dbh_mm, height_m)) + geom_point() + geom_smooth() + facet_wrap(~fperiod)
-
-ggplot(stems_height_esd, aes(dbh_mm, height_m)) + geom_point(aes(color = fperiod)) + geom_smooth()
+ggplot(stems_height_esd, aes(dbh_mm, height_m)) + 
+  geom_point() + geom_smooth(aes(y = height_per_period)) + 
+  facet_wrap(~fperiod)
 
 ```
 
@@ -397,31 +476,36 @@ Niet zoveel verschil tss de curves, 2e set te weinig metingen voor afzonderlijke
 
 # Wat met Zomereik?
 
-```{r vgl_eik_1_vs_2_mean, include=FALSE}
-stems_height_eik <- stems_height %>% filter(name_nl == "Zomereik")
+```{r include=FALSE}
+stems_height_eik <- stems_modeled_height %>% filter(name_nl == "Zomereik")
 
 stems_height_eik_p1 <- stems_height_eik %>% filter(period == 1)
 stems_height_eik_p2 <- stems_height_eik %>% filter(period == 2)
+stems_height_eik_p3 <- stems_height_eik %>% filter(period == 3)
 
 mean(stems_height_eik_p1$height_m, na.rm = T) # 22.8
 mean(stems_height_eik_p2$height_m, na.rm = T) # 25
-
+mean(stems_height_eik_p3$height_m)
 ```
 
-NEE: mean_height verschilt `r mean(stems_height_eik_p1$height_m) - mean(stems_height_eik_p2$height_m)` m.
 
-(periode 1 : `r mean(stems_height_eik_p1$height_m)` m - 
-periode 2: `r mean(stems_height_eik_p2$height_m)` m )
+```{r vgl_eik}
+ggplot(stems_height_eik, aes(dbh_mm, height_m)) + 
+  geom_point(aes(color = fperiod)) + 
+  geom_smooth(aes(y = height_per_period, group = fperiod, color = fperiod))  
 
+# eenv. smoother
+ggplot(stems_height_eik, aes(dbh_mm, height_m)) +
+  geom_point(aes(color = fperiod)) +
+  geom_smooth(aes(color = fperiod))
 
-## Curve
+ggplot(stems_height_eik, aes(dbh_mm, height_m)) +
+  geom_point(aes(color = fperiod)) +
+  geom_smooth(aes(y = height_per_period))
 
-```{r vgl_eik_1_vs_2_curve}
-ggplot(stems_height_eik, aes(dbh_mm, height_m)) + geom_point(aes(color = fperiod)) + geom_smooth(aes(color = fperiod)) 
-
-# ggplot(stems_height_eik, aes(dbh_mm, height_m)) + geom_point() + geom_smooth() + facet_wrap(~fperiod)
-
-ggplot(stems_height_eik, aes(dbh_mm, height_m)) + geom_point(aes(color = fperiod)) + geom_smooth()
+ggplot(stems_height_eik, aes(dbh_mm, height_m)) + 
+  geom_point() + geom_smooth(aes(y = height_per_period)) + 
+  facet_wrap(~fperiod)
 
 ```
 
@@ -465,9 +549,6 @@ unique_ID <- c(1:nrow(stems %>%
 output <- stems %>% 
   filter(alive_dead == 11 & intact_snag == 11) %>% 
   mutate(height_m = ifelse((is.na(common_remark) |  common_remark != 90), height_m, NA)) %>% 
-  mutate(height_m = ifelse((is.na(common_remark_shoots) | common_remark_shoots != 90)
-                           , height_m
-                           , NA)) %>%
          # 90: uitgebroken top
   mutate(IDPlotsVirt = virt_plot) %>% 
   select(IDPlotsVirt
@@ -495,9 +576,26 @@ nrow(output) - length(t) == 0
 
 # Wegschrijven output
 
-De resultaten worden weggeschreven naar **TblVirtueleTrees_KV_1e2eSET.xlsx**
+De resultaten worden weggeschreven naar **TblVirtueleTrees_KV_1e2e3eSET.xlsx**
 
-```{r WegschrijvenOutput, eval=FALSE}
-write_xlsx(output, paste0(path_to_datarequest, "/TblVirtueleTrees_KV_1e2eSET.xlsx"))
+```{r WegschrijvenOutput}
+write_xlsx(output, paste0(path_to_datarequest, "/TblVirtueleTrees_KV_1e2e3eSET.xlsx"))
 
+```
+
+
+# Copy html to teamdrive
+
+Na knitting - manueel
+
+```{r eval = FALSE}
+# Specify the path of the file you want to copy
+source_file <- here::here(paste0("Scripts/AanmaakHoogteCurves/aanmaak_virt_trees_Jansheide_KV.html"))
+
+# Specify the destination directory where you want to copy the file
+destination_dir <- path_to_html
+
+# Copy the file to the destination directory
+file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
+# ? file.copy
 ```
