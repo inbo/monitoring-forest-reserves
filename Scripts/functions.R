@@ -31,6 +31,16 @@ save_results_csv <- function(results, output_dir){
 }
 
 
+
+save_results_xlsx <- function(results, output_dir){
+  for (tablename in names(results)) {
+    write.xlsx2(results[[tablename]]
+                , file = paste0(output_dir, tablename, ".xlsx")
+                , showNA = FALSE)
+                # , row.names = FALSE)
+  }
+}
+
 save_results_tsv <- function(results, root = path_to_forresdat_data, strict = TRUE){
   sorting_max <-
     c("period", "year", "plot_id", "dbh_class_5cm", "decaystage", "subplot_id", 
@@ -45,6 +55,79 @@ save_results_tsv <- function(results, root = path_to_forresdat_data, strict = TR
               strict = strict
               )
   }
+}
+
+#' retrieve height model data from (local) xlsx files
+#'
+#' This function groups the information on height models from the `.xlsx` files
+#' in the given folder together in one dataframe.
+#'
+#' @param path_to_height_models path to folder where height models are stored
+#'
+#' @return Dataframe with height model data
+#'
+#' @importFrom dplyr %>% distinct mutate select transmute
+#' @importFrom rlang .data
+#' @importFrom stringr str_detect str_extract str_split
+#' @importFrom tidyr unnest
+#' @importFrom purrr map
+#' @importFrom readxl read_xlsx
+#'
+#' @examples
+#' \dontrun{
+#' #change path before running
+#' library(forrescalc)
+#' load_height_models("C:/bosreservaten/Hoogtemodellen/")
+#' }
+#'
+#' @export
+#'
+load_height_models_local <- function(path_to_height_models) {
+  path_to_height_models <-
+    ifelse(
+      str_detect(path_to_height_models, "^(.+)\\/$"),
+      path_to_height_models,
+      paste0(path_to_height_models, "/")
+    )
+  heightmodels <-
+    data.frame(
+      filename = list.files(path = path_to_height_models, pattern = "xlsx")
+    ) %>%
+    mutate(
+      no_extension = str_extract(.data$filename, "^(.+)(?=\\.)"),
+      x = str_split(.data$no_extension, "_"),
+      plottype = sapply(.data$x, `[`, 3),
+      period = as.numeric(sapply(.data$x, `[`, 4)),
+      path_file = paste0(path_to_height_models, .data$filename)
+    ) %>%
+    select(-.data$no_extension, -.data$x) %>%
+    mutate(
+      data = map(.data$path_file, add_models)
+    ) %>%
+    unnest(cols = c(.data$data)) %>%
+    select(-.data$filename, -.data$path_file) %>%
+    distinct()
+  if (nrow(heightmodels) == 0) {
+    warning("No height models (.xlsx files) found on the given path.")
+  }
+  
+  return(heightmodels)
+}
+
+
+add_models <- function(path_file) {
+  read_xlsx(path_file) %>%
+    transmute(
+      species =
+        ifelse(
+          is.na(.data$Species) | .data$Species == "<ALL>", -Inf, .data$Species
+        ),
+      species = as.numeric(.data$species),
+      species = ifelse(.data$species == -Inf, NA_real_, .data$species),
+      model = .data$Model,
+      .data$P1, .data$P2,
+      forest_reserve = .data$BR
+    )
 }
 
 

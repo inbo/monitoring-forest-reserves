@@ -480,10 +480,10 @@ by_diam_plot_species <- totaal_5_30_reg_long_ %>%
 
 ```{r list}
 dendro <- list(
-      CA_Kerss_5_30_dendro_by_plot = by_plot,
-      CA_Kerss_5_30_dendro_by_plot_species = by_plot_species,
-      CA_Kerss_5_30_dendro_by_diam_plot = by_diam_plot,
-      CA_Kerss_5_30_dendro_by_diam_plot_species = by_diam_plot_species
+      Kerss_CA_5_30cm_by_plot = by_plot,
+      Kerss_CA_5_30cm_by_plot_species = by_plot_species,
+      Kerss_CA_5_30cm_by_diam_plot = by_diam_plot,
+      Kerss_CA_5_30cm_by_diam_spec = by_diam_plot_species
     )
 ```
 

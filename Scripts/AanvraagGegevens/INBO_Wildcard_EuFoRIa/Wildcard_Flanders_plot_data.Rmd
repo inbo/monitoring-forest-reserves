@@ -1,0 +1,2244 @@
+---
+title: "Wildcard - Flemish forest reserve network"
+subtitle: "Design, plot en tree data"
+author: "Anja Leyman"
+date: "25/02/2025"  
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: TRUE
+      smooth_scroll: TRUE
+---
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 7,
+  fig.height = 3,
+  fig.align = TRUE)
+
+library(here)
+library(writexl)
+library(scales)
+library(sf)
+
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+```
+
+
+```{r Setup2}
+# path_to_project <- "C:/03_BR/3_AanvraagGegevens/INBO_DigitaalVlaanderen"
+path_to_project_teamdrive <- paste0(path_to_output_gdrive, "EUFORIA_WILDCARD_2024")
+
+# path_to_datarequest <- paste0(path_to_project, "/output/")
+path_to_datarequest_teamdrive <- paste0(path_to_project_teamdrive, "/output_R/")
+path_to_html_teamdrive <- path_to_datarequest_teamdrive
+# path_to_html <- path_to_datarequest
+
+path_to_datacontrol <- paste0(path_to_project_teamdrive, "/datacontrole/")
+
+```
+
+<!-- De eerste analyse gebeurde op de fieldmapdb van 13/6/2024,  -->
+<!-- maar in db van 5/12/2024 zijn de 4 sites van Zoniën duidelijk afgelijnd,  -->
+<!-- dus moeten we toch van de meest recente db vertrekken (MDB_BR_X8_inbo2020_20241205) -->
+
+```{r TEMP_db}
+# path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_X8_inbo2020_20240613/")
+path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_X8_inbo2020_20241205/")
+
+dbFieldmap <- "FieldMapData_MDB_BR_X8_inbo2020.accdb"
+path_to_fieldmap_db <- paste0(path_to_fieldmap, dbFieldmap)
+```
+
+
+# Request
+
+This script creates the data as requested by Yannick De Win as part of the 
+[Wildcard project](https://drive.google.com/drive/folders/0AHzOhlj-qFSnUk9PVA).
+
+Data is collected over the whole of Europe. 
+
+The script below generates all info and data according to the guidelines stipulated in this document: [DTF_Tree-Data-Template_final.xlsx](https://docs.google.com/spreadsheets/d/1jV4II-uSDDKaNNWqeBIXi6IQ_BSK_LFr?rtpof=true&usp=drive_fs)
+
+The managed plots in the mainly non-managed forest reserves (EUFORIA-sites) are removed prior to analysis.
+
+
+## Design  level data
+Data File Title: Institute_Design.txt
+
+Tab "DESIGN_metadata"	provides explanations of the inventory design for each site and inventory year. 
+It describes the inventory strategy, target woody structures used for sampling, 
+spatial definition of the plots and the site, and others.	
+
+DESIGN: This data table aggregates site-level information on inventory desing for each site and inventory year combination (e.g. Javorina and 2009 in the example below), providing site summaries of inventory design(s). The table describes the inventory strategy, target woody structures (sampled population), spatial definition of plots and sites, and others. Opposed to the plot-level PLOTS data table with one LPI or SPI plot per each row (one-to-one), this data table groups all plots with the same characteristics for each site and inventory year combination into one row (many-to-one = all plots of the same data collection design in a given inventory year are in one row). To list individual plots for each site and inventory year combination, please use the PLOTS data sheet instead.
+
+
+
+## Plot level data
+Data File Title: Institute_Plots.txt
+
+Tab "PLOT_metadata"	provides explanations of the plot-level data such as plot ID, coordinates and possibly also several topographic characteristics such as slope, exposition and elevation. Each SIP (as well as LIP) need to be uniquely described. This results in one row per each plot. 										
+											
+PLOTS: This data table describes the plot-level data by recording the plot-site relationship, plot ID, coordinates and possibly also several topographic characteristics such as slope, exposition and elevation. Each SPI and LPI plot needs to be uniquely described, resulting in one row per each plot. In contrast to the site-level DESIGN data table grouping all LPI or SPI plots of the same data collection design in a given inventory year into one row (many-to-one), this data table lists individual plots for each site and inventory year combination. To group all plots with the same characteristics for each site and inventory year combination, please use the DESIGN data sheet instead.
+
+
+## Tree level data - standing
+Data File Title: Institute_Standing.txt
+or: Institute_Standing_Site_ID.txt
+
+Sheet "Standing_metadata" explains the recorded attributes of STANDING stems. These are divided into Basic strictly defined grey columns, where missing values are filled in as "NA"; coloured columns, where unused variants need to be deleted; and Extended attributes. Extended attributes are provided only if available.  Each data provider should clearly describe the methodology for measuring standing trees on their own research areas in the Standing_metadata.txt file;  for example: species code list, specification of height measurement, cause of death (extended).															
+																
+STANDING: This data table is designed to characterize alive and dead STANDING stems on a particular site, LPI or SPI, qualitative and quantitative attributes of each individual stem. These are divided into Basic strictly defined grey columns, where missing values are filled in as "NA"; coloured columns, where unused variants need to be deleted; and Extended attributes. Extended attributes are provided only if available. In case when the standing stem was measured in several inventories, the records are listed for each inventory on a separate row.													
+										
+
+## Tree level data - lying
+Data File Title: Institute_Lying.txt		
+or: Institute_Lying_Site_ID.txt		
+
+Sheet "Lying_metadata" explains the recorded attributes of LYING stems (object sampling). These are divided into Basic strictly defined grey columns, where unavailable values are filled in as "NA"; coloured columns, where unused variants need to be deleted; and Extended attributes. Extended attributes are provided only if available. Each data provider should clearly describe the methodology for measuring lying stems on their own research sites in the Lying_metadata.txt file; for example: specification of the point of upper end diameter measurement, decay classification, method of volume calculation of lying stems/pieces (extended), etc.												
+													
+LYING: This data table is designed to provide obect-based descriptions of LYING stems on a particular site, LPI or SPI, i.e. qualitative and quantitative attributes of each individual stem. These are divided into Basic strictly defined grey columns, where missing values are filled in as "NA"; coloured columns, where unused variants need to be deleted; and Extended attributes. Extended attributes are provided only if available. In case when the lying stem was measured in several inventories, the records are listed for each inventory on a separate line.														
+					
+
+## Coarse Woody Debris - Line Intersect
+Data File Title: Institute_CWD.txt
+Institute_CWD_Site_ID.txt
+
+Sheet "CWD_metadata" contains explanations of attributes of coarse woody debris (CWD data sheet) which is about plot level deadwood volume estimates, but unlike LYING data table does not include information on individual objects - dead stems and decaying logs. Please provide your methodology.													
+														
+CWD:	This data table is designed to provide plot level estimates of coarse woody debris volume (by line intersect sampling) summed by species and decay classes.
+
+<br>
+
+# Directories
+
+- path_to_fieldmap_db is "`r path_to_fieldmap_db`"      
+- path_to_project_teamdrive is "`r path_to_project_teamdrive`"      
+- path_to_datarequest_teamdrive is "`r path_to_datarequest_teamdrive`"      
+
+```{r results='hide', eval=TRUE}
+path_to_fieldmap_db
+# path_to_datarequest
+path_to_project_teamdrive
+path_to_datarequest_teamdrive
+
+```
+
+# Important information
+
+- This script creates data tables only of our processed data, using the dataframes
+
+    - `list_plots`: only processed plots; one record per plot_id, period and INVENTORY_YEAR
+    - `list_BR`: corresponding reserves, one record per type of plot (CA and CP), period 
+    and INVENTORY_YEAR (in some reserves we see two different INVENTORY YEAR's per period); 
+    contains PLOTS_LIST with all the plotid's included
+
+<br>
+
+- Difference between `plotdata_def` and `list_plots`:   
+
+    - `plotdata_def`: separate records for A3 and A4 (circular plots)      
+    - `list_plots`: one record per plot_id   
+
+<br>
+
+- In Flanders trees, not stems, are coupled through time. 
+
+    - PLOTS: `CONSISTENT_ID_STANDING` = P (NA for first survey)    
+    - STANDING: coppice => `CONSISTENT_ID` = N; individuel tree => CONSISTENT_ID = Y        
+
+<br>
+
+
+# Deviations "Zonienwoud-Joseph Zwaenepoel reservaat - OldCore" 
+
+## LPI
+
+- standing trees (L+D) in LPI-plot 11000 measured 
+in 1986 and 2000 have a treshold of 30 cm DBH (instead of 5 cm)
+
+- standing trees (L+D) measured in 1986 only contains trees still standing in 2000
+<!-- (dat blijkt nu toch niet zo te zijn, maar we laten het zo voor wildcard) -->
+**=> we don't include the inventory of 1986**
+
+- treshold standing trees in 2000 was 30 cm DBH, but there were also two regeneration groups with treshold 5 cm DBH
+**=> we need to filter these smaller trees out**
+
+- No (lying) deadwood measurements in 1986 and 2000
+
+- In 2010 and 2020 treshold for lying deadwood measurements is 40 cm
+<!-- (51 intacte liggende dode bomen in KV Kerss) -->
+
+## SPI
+
+- volume of lying deadwood per decaystage/diameter class is unknown for circular plots 
+(SPI_ID: 2001-2065), 1st survey (2000)
+If necessary volume and species can be derived from old inventory report: "CP_Kerss_logs_2000.xlsx" (C:/03_BR/1_DataVerwerkingBR/Data/Meetgegevens/logs_CPs_Kerss_2000) 
+**=> geen deadwood in CP's Kersselaerspleyn 1eSET (2000)**
+
+
+# PLOTS
+
+SITE_ID	SITE_NAME			LPI_ID	SPI_ID		SLOPE	TOPO	EXPO	ELEV_CENTER	ELEV_RANGE
+		WILDCARD_sub_ID	INVENTORY_YEAR CIRCLE_NO	CIRCLE_RADIUS	PLOT_SAMPLED	SAMPLED_AREA	CONSISTENT_ID_STANDING	CONSISTENT_ID_LYING	OTHER	X	Y	Z	WKT_GEOM		
+		
+LPI_ID	Plot ID in Large plot inventory (LPI) within the site (reserve).    
+SPI_ID	Plot ID in Sampling plot inventory (SPI) grid within the site (reserve).
+
+=> plot_id's van CA en CP's afzonderlijk
+
+**Wordt opgeslagen in `plotdata_def`**
+
+## Load plotinfo
+
+Plotinfo uit forresdat of gdrive
+
+```{r processed_plots, results = 'hide', eval = FALSE}
+# plotinfo <- load_plotinfo(database = path_to_fieldmap_db)
+# van gdrive (ipv forresdat)
+plotinfo <- read.csv2(paste0(path_to_plotlevel_gdrive, "plotinfo.csv")) %>% 
+  select(-1)
+
+# ! enkel de processed data - dd 11/9/2024: nu ook Wijnendale en Everzwijnbad 3de decade erbij
+names(plotinfo)
+```
+
+**We gaan enkel verder met de processed data.**   
+
+Alternatief: vertrekken van info_survey uit strata-db (19/12/2024 bijgewerkt)
+
+```{r plotinfo}
+con <- odbcConnectAccess2007(path_to_strata_db)
+  info_survey_ <- sqlFetch(con, "info_survey", stringsAsFactors = FALSE)
+  info_XY <- sqlFetch(con, "strata_location", stringsAsFactors = FALSE)
+  info_beheer <- sqlFetch(con, "strata_remaining", stringsAsFactors = FALSE)
+  dominant_tree <- sqlFetch(con, "dominant_tree", stringsAsFactors = FALSE)
+  strata_soil <- sqlFetch(con, "strata_soil", stringsAsFactors = FALSE) %>% 
+    select(Unieknr, plot_id, SiteName, SubArea, forest_reserve_fieldmap)
+odbcClose(con)
+
+# unieknr 11001 tem 11006 zijn delen van Kerss
+info_survey_ <- info_survey_ %>% 
+  filter(!Unieknr %in% c(11001, 11002, 11003, 11004, 11005, 11006))
+
+
+# strata_soil enkel nodig om SubArea van Sevendonck te onderscheiden (A vs Q)
+# andere subarea's zijn enkel verwarrend en hier niet nodig
+subarea_sevendonck <- strata_soil %>% 
+  filter(forest_reserve_fieldmap == "Sevendonck") %>% 
+  select(plot_id, forest_reserve_fieldmap, subarea = SubArea)
+```
+
+
+```{r}
+# ! Attention: standing trees (L+D) in plot 11000 (core area Kersselaerspleyn) measured 
+# in 1986 only contains trees still standing in 2000
+# <!-- (dat blijkt nu toch niet zo te zijn, maar we laten het zo voor wildcard) -->
+# **=> we don't include the inventory of 1986**
+info_survey <- info_survey_ %>% 
+  filter(!(plot_id == 11000 & period == 0))
+```
+
+## Strata
+
+### Only unmanaged plots
+
+f.e. Ename: grazing is a kind of management
+
+Veld `Management` is meest correcte hier.
+
+```{r check_management, eval=FALSE}
+names(info_beheer)
+
+unique(info_beheer$Management)
+unique(info_beheer$Management_type)
+
+
+beheer_check <- info_survey %>% 
+  left_join(info_beheer)
+
+table(beheer_check$Management, beheer_check$Management_type)
+table(beheer_check$Management)
+table(beheer_check$Management_type)
+
+unmanaged <- beheer_check %>% 
+  filter(Management == "unmanaged" | Management_type == "Non-intervention")
+table(unmanaged$Management, unmanaged$Management_type)
+
+t <- unmanaged %>% 
+  filter(Management == "managed forest" & Management_type == "Non-intervention") %>% 
+  select(forest_reserve_fieldmap, plot_id, Management, Management_type)
+
+
+```
+
+### Kluisbos: no Poplar
+
+6 plots with poplar 
+
+```{r}
+# names(info_survey)
+poplar_kluisbos <- info_survey %>% 
+  left_join(dominant_tree) %>% 
+  filter(forest_reserve == "Kluisbos" & MaxBasalAreaSpeciesName == "Populier species") %>% 
+  select(plot_id)
+
+unique(poplar_kluisbos$plot_id)
+# worden verderop weggfilterd (plotdata0: anti_join(poplar_kluisbos))
+```
+
+## Variables
+
+SITE_ID	SITE_NAME			LPI_ID	SPI_ID		SLOPE	TOPO	EXPO	ELEV_CENTER	ELEV_RANGE
+WILDCARD_sub_ID	INVENTORY_YEAR CIRCLE_NO	CIRCLE_RADIUS	PLOT_SAMPLED	SAMPLED_AREA
+CONSISTENT_ID_STANDING	CONSISTENT_ID_LYING	OTHER	X	Y	Z	WKT_GEOM		
+		
+LPI_ID	Plot ID in Large plot inventory (LPI) within the site (reserve).
+SPI_ID	Plot ID in Sampling plot inventory (SPI) grid within the site (reserve).
+
+=> plot_id's van CA en CP's afzonderlijk in een kolom
+
+```{r results = 'hide'}
+names(info_survey)
+info_survey <- info_survey %>% 
+  rename(forest_reserve_fieldmap = forest_reserve)
+
+# tijdelijk nog geen link leggen - mogelijks aan Yannick overlaten
+plotdata0 <- info_survey %>%
+  # enkel plots waar XY van berekend is => inner_join
+  # (niet 52000 en 61000: immers enkel 1eSet een opname, dan niet meer)
+  inner_join(info_XY %>% select(Unieknr, XLon_wgs84, YLat_wgs84, Z_m_TAW), by = c("Unieknr")) %>% 
+  # left_join(link_WC_FM, by = c(forest_reserve_fieldmap", plottype))
+  left_join(info_beheer) %>% 
+  filter(Management == "unmanaged") %>% 
+  anti_join(poplar_kluisbos) %>% 
+  mutate(SITE_ID = NA, SITE_NAME = NA, WILDCARD_sub_ID = NA
+         , INVENTORY_YEAR = year_dendro
+         , LPI_ID = ifelse(plottype == "CA", plot_id, NA)
+         , SPI_ID = ifelse(plottype == "CP", plot_id, NA)
+         # , CIRCLE_NO = ifelse(plottype == "CP", "1 / 2", NA)   #zie verder
+         # , CIRCLE_RADIUS = ifelse(plottype == "CP", "rA4 / rA3", NA) #zie verder
+         , PLOT_SAMPLED = "Y"  # enkel processed data hier
+         # , SAMPLED_AREA = ifelse(plottype == "CP", pi*rA4_m^2, CoreArea_ha*10000)   # in m2 !!A3 <> A4 => verderop pas berekenen
+         , CONSISTENT_ID_STANDING = ifelse(survey_number > 1, "P", NA)  
+         # NA voor 1ste survey, P voor alle andere (want is op niveau van de stems, 
+         # dus niet OK voor hakhout)
+             # If you chose P, specify in the STANDING sheet which stems could not be 
+             # reidentified and were assigned new IDs. 
+         , CONSISTENT_ID_LYING = ifelse(survey_number > 1, "N", NA)  
+         , OTHER = NA
+         # coord= Coordinate system (epsg code) used is specified in DESIGN sheet. If using WSG 84 (epsg code 4623), use decimal format with precision up to centimeters.
+         , X = XLon_wgs84
+         , Y = YLat_wgs84
+         , Z = Z_m_TAW
+         ) %>% 
+  # onderscheid A en Q cirkelplots Sevendonck ...
+  left_join(subarea_sevendonck, by = c("forest_reserve_fieldmap", "plot_id")) %>% 
+  # forest_reserve_FM_adjusted aanmaken
+  # om verder te kunnen koppelen aan site-id's wildcard
+  mutate(forest_reserve_FM_adjusted = ifelse(!is.na(subarea) & subarea == "Alder forest SFR", "Sevendonck A",
+                                         ifelse(!is.na(subarea) & subarea == "Oak forest SFR", "Sevendonck Q",
+                                                forest_reserve_fieldmap))
+         ) %>% 
+  select(-subarea)
+
+names(plotdata0)
+
+```
+
+Ontdubbelen van cirkelplots (A3 en A4)
+<!-- zijn de stralen van de subcircles constant doorheen de tijd?: hoeven we nu niet eens meer te weten -->
+
+Ook bewaren van STANDING_ALIVE_THRESHOLD	STANDING_DEAD_THRESHOLD	LYING_ALIVE_THRESHOLD	LYING_DEAD_THRESHOLD
+voor aanmaak "design_data" (zie verder)
+
+```{r tresholds, results = 'hide'}
+names(info_survey)
+# add extra rows per subcircle
+tresholds_ <- info_survey %>% 
+  # filter(plottype == "CP") %>% 
+  group_by(forest_reserve_fieldmap, plottype, period
+           , rA3_m, rA4_m, CoreArea_ha
+           # STANDING_ALIVE_THRESHOLD
+           , TresHoldDBH_A3_alive_mm, TresHoldDBH_A4_alive_mm, TresHoldDBH_CoreArea_alive_mm
+           # STANDING_DEAD_THRESHOLD
+           , TresHoldDBH_A3_dead_mm, TresHoldDBH_A4_dead_mm, TresHoldDBH_CoreArea_dead_mm
+           # LYING_ALIVE_THRESHOLD
+           # LYING_DEAD_THRESHOLD: A3 en A4 zelfde
+           , TresHoldDiam_Deadw_A4_mm, TresHoldDiam_Deadw_CoreArea_mm
+           ) %>% 
+  summarize(n = n()) %>% 
+  ungroup()
+
+```
+
+Enkel bij Kersselaersplein ("Zoniën UITBR_1995" & "Zoniën KERN_1983") gaat 
+rA3 van 9m (survey 1) naar 12m (survey 2 en 3) 
+=> rekening mee houden voor "CONSISTENT_ID_STANDING": wordt "NA" voor die 1ste 
+periode én "N" voor de 2de periode
+
+Ontdubbelen van cirkelplots (A3 en A4), met uitz van deze waar rA3 = rA4
+(Liedekerke en Withoefse heide)
+
+```{r results = 'hide'}
+names(tresholds_)
+names(plotdata0)
+
+# lang formaat maken van de cirkelplots binnen tresholds_
+CP_tresholds <- tresholds_ %>% 
+  filter(plottype == "CP") %>% 
+  pivot_longer(cols = c("rA3_m", "rA4_m")) %>% 
+  mutate(CIRCLE_NO = ifelse(name == "rA4_m", 1, 
+                            ifelse(name == "rA3_m", 2, NA))
+         , STANDING_ALIVE_THRESHOLD = ifelse(name == "rA4_m", TresHoldDBH_A4_alive_mm, 
+                            ifelse(name == "rA3_m", TresHoldDBH_A3_alive_mm, NA))
+         , STANDING_DEAD_THRESHOLD =  ifelse(name == "rA4_m", TresHoldDBH_A4_dead_mm, 
+                            ifelse(name == "rA3_m", TresHoldDBH_A3_dead_mm, NA))
+         , LYING_DEAD_THRESHOLD = TresHoldDiam_Deadw_A4_mm
+         , LYING_ALIVE_THRESHOLD = LYING_DEAD_THRESHOLD
+           ) %>% 
+  select(forest_reserve_fieldmap, period, plottype,
+         CIRCLE_NO, CIRCLE_RADIUS = value,
+         STANDING_ALIVE_THRESHOLD, STANDING_DEAD_THRESHOLD,
+         STANDING_DEAD_THRESHOLD, LYING_DEAD_THRESHOLD, LYING_ALIVE_THRESHOLD
+         )
+
+# CA's selecteren
+CA_tresholds <- tresholds_ %>% 
+  filter(plottype == "CA") %>% 
+  mutate(CIRCLE_NO = NA, CIRCLE_RADIUS = NA
+         , STANDING_ALIVE_THRESHOLD = TresHoldDBH_CoreArea_alive_mm
+         , STANDING_DEAD_THRESHOLD =  TresHoldDBH_CoreArea_dead_mm
+         , LYING_DEAD_THRESHOLD = TresHoldDiam_Deadw_CoreArea_mm
+         , LYING_ALIVE_THRESHOLD = LYING_DEAD_THRESHOLD) %>% 
+  select(forest_reserve_fieldmap, period, plottype, 
+         CIRCLE_NO, CIRCLE_RADIUS,
+         STANDING_ALIVE_THRESHOLD, STANDING_DEAD_THRESHOLD,
+         STANDING_DEAD_THRESHOLD, LYING_DEAD_THRESHOLD, LYING_ALIVE_THRESHOLD
+         )
+
+# samenvoegen
+CP_CA_tresholds <- rbind(CA_tresholds, CP_tresholds)
+
+  
+# wegfilteren van deze waar rA3 = rA4
+check_rA3A4gelijk <- CP_CA_tresholds %>% 
+  filter(plottype == "CP") %>% 
+  group_by(forest_reserve_fieldmap, period, CIRCLE_RADIUS) %>% 
+  summarize(n= n()) %>% 
+  ungroup() %>% 
+  filter(n > 1)
+
+# Liedekerke en Withoefse heide effectief rA3 = rA4
+CP_CA_tresholds <- CP_CA_tresholds %>% 
+  filter(!(forest_reserve_fieldmap %in% c("Liedekerke", "Withoefse heide") & CIRCLE_NO == 2))
+
+
+```
+
+```{r combine, results = 'hide'}
+names(plotdata0)
+names(CP_CA_tresholds)
+# groeperen per plot-id (geen)
+plotdata <- plotdata0 %>% 
+  left_join(CP_CA_tresholds, by = c("forest_reserve_fieldmap", "period", "plottype")) %>% 
+  mutate(SAMPLED_AREA = ifelse(plottype == "CP", pi*CIRCLE_RADIUS^2, CoreArea_ha*10000))   # in m2 !!A3 <> A4 
+
+plotdata %>% filter(plot_id == 11000)
+plotdata %>% filter(plot_id == 205)
+plotdata %>% filter(plot_id == 101)
+```
+CONSISTENT_ID_STANDING: aanpassen voor "Zoniën UITBR_1995" & "Zoniën KERN_1983", 
+CP's survey 2: niet gekoppeld, want rA3 gaat van 9m (survey 1) naar 12m (survey 2 en 3) 
+=> "CONSISTENT_ID_STANDING": "NA" voor de 1ste periode (= standaard), én "N" voor de 2de periode
+
+```{r uitz_consistent_id_Kerss_CP}
+plotdata <- plotdata %>% 
+  mutate(CONSISTENT_ID_STANDING = 
+           ifelse(forest_reserve_fieldmap %in% c("Zoniën UITBR_1995", "Zoniën KERN_1983") & 
+                    survey_number == 2 & plottype == "CP"
+                  , "N"
+                  , CONSISTENT_ID_STANDING)
+  )
+     
+```
+
+
+
+CONSISTENT_ID_STANDING/LYING: aanpassen voor plot_id 11000 (oude kernvlakte Kerss):
+survey 1 (1986) niet meegenomen => survey 2 (2000) moet ook nog NA zijn 
+=> "CONSISTENT_ID_STANDING": "NA" voor 2000 (1e keer gemeten)
+=> "CONSISTENT_ID_LYING": "NA" voor 2000 (geen lying gemeten) en 2010 (1e keer lying gemeten)
+
+CONSISTENT_ID_STANDING: aanpassen voor CP's "Zoniën KERN_1983": in survey 1 niet opgemeten, 
+pas vanaf survey 2 opgemeten
+
+```{r uitz_consistent_id_Kerss_OldCore}
+plotdata <- plotdata %>% 
+  mutate(# Zoniën KERN_1983 - CA
+    CONSISTENT_ID_STANDING = 
+         ifelse(plot_id == 11000 & 
+                  survey_number == 2
+                , NA
+                , CONSISTENT_ID_STANDING)
+    , CONSISTENT_ID_LYING = 
+         ifelse(plot_id == 11000 & 
+                  survey_number == 2
+                , NA
+                , CONSISTENT_ID_LYING)
+    , CONSISTENT_ID_LYING = 
+         ifelse(plot_id == 11000 & 
+                  survey_number == 3
+                , NA
+                , CONSISTENT_ID_LYING)
+    # Zoniën KERN_1983 - CP
+    , CONSISTENT_ID_LYING = 
+         ifelse(forest_reserve_fieldmap == "Zoniën KERN_1983" & 
+                  plottype == "CP" &  survey_number == 2
+                , NA
+                , CONSISTENT_ID_LYING)
+    , CONSISTENT_ID_LYING = 
+         ifelse(forest_reserve_fieldmap == "Zoniën KERN_1983" & 
+                  plottype == "CP" &  survey_number == 2
+                , NA
+                , CONSISTENT_ID_LYING)
+    )
+     
+```
+
+
+SITE_ID	SITE_NAME			LPI_ID	SPI_ID		SLOPE	TOPO	EXPO	ELEV_CENTER	ELEV_RANGE
+WILDCARD_sub_ID	INVENTORY_YEAR CIRCLE_NO	CIRCLE_RADIUS	PLOT_SAMPLED	SAMPLED_AREA
+CONSISTENT_ID_STANDING	CONSISTENT_ID_LYING	OTHER	X	Y	Z	WKT_GEOM		
+		
+
+```{r plotdata_vars, results = 'hide'}
+names(plotdata)
+
+plotdata_def <- plotdata %>%
+  select(INVENTORY_YEAR
+         # , SITE_ID, SITE_NAME, WILDCARD_sub_ID
+         , LPI_ID, SPI_ID
+         , CIRCLE_NO, CIRCLE_RADIUS
+         , PLOT_SAMPLED, SAMPLED_AREA
+         , CONSISTENT_ID_STANDING, CONSISTENT_ID_LYING, OTHER
+         , X, Y, Z
+         # extra vars
+         , forest_reserve_FM_adjusted
+         , plot_id, plottype, period
+         )
+
+
+#check
+plotdata_def %>% filter(plot_id == 101) # conc. cirkels
+plotdata_def %>% filter(plot_id == 205) # één cirkel A3 = A4
+plotdata_def %>% filter(plot_id == 1101)
+plotdata_def %>% filter(plot_id == 11000)
+plotdata_def %>% filter(plot_id == 41000)
+```
+
+```{r}
+names(plotdata_def)
+```
+
+## Overview plots and forest reserves
+
+```{r table_BR}
+# unique(plotdata_def$forest_reserve_fieldmap)
+# names(plotdata_def)
+
+plotdata_def %>% group_by(forest_reserve_FM_adjusted, plottype, LPI_ID) %>% 
+  summarize(n_surveys = n_distinct(INVENTORY_YEAR)
+            , min_year = min(INVENTORY_YEAR)
+            , max_year = max(INVENTORY_YEAR)) %>% 
+  ungroup() %>% 
+  dplyr::select(forest_reserve_fieldmap = forest_reserve_FM_adjusted # Sevendonck A en Q
+                , plottype, n_surveys, min_year, max_year) %>%  
+    DT :: datatable(filter = 'top', options = list(dom = 'rt'), rownames = FALSE)  
+
+```
+
+
+
+```{r list_plots, results='hide'}
+names(plotdata_def)
+list_plots <- plotdata_def %>%   # sampled_area nodig, maar 
+  group_by(plot_id, period
+         , forest_reserve_FM_adjusted
+         , plottype
+         , X, Y, Z, LPI_ID, SPI_ID
+         , INVENTORY_YEAR, 
+         , CONSISTENT_ID_STANDING, CONSISTENT_ID_LYING) %>% 
+  summarize(SAMPLED_AREA = max(SAMPLED_AREA)) %>% 
+  ungroup()
+
+t <- list_plots %>% filter(str_detect(forest_reserve_FM_adjusted, "Sevendonck"))
+list_plots %>% filter(is.na(forest_reserve_FM_adjusted)) %>% nrow() == 0
+list_plots %>% filter(forest_reserve_FM_adjusted == "Everzwijnbad" & period == 3)
+
+nrow(plotdata_def); nrow(list_plots)*2
+# enkel de CP's hebben twee records in plotdata_def: A3 en A4 => +/- gelijk
+```
+
+
+```{r list_BR, results ='hide'}
+names(list_plots)
+list_BR <- list_plots %>% 
+  group_by(forest_reserve_FM_adjusted, plottype, period, INVENTORY_YEAR) %>% 
+  summarize(n_periods = n_distinct(period)
+            , n_plots = n_distinct((plot_id))
+            , plot_id_min = min(plot_id)
+            , plot_id_max = max(plot_id)
+            , PLOTS_LIST = paste(plot_id, collapse = ";")
+  ) %>% 
+  ungroup() %>% 
+  mutate(plot_id = ifelse(plottype == "CA"
+                               , as.character(plot_id_min)
+                               , paste0(plot_id_min, "-", plot_id_max)
+                               )) %>% 
+  select(-plot_id_min, -plot_id_max)
+
+# t2 <- list_BR_ %>% 
+#   anti_join(list_BR, by = c("forest_reserve_fieldmap", "plottype", "PLOTS_LIST"))
+
+list_BR %>% filter(str_detect(forest_reserve_FM_adjusted,"Sevendonck"))
+list_BR %>% filter(str_detect(forest_reserve_FM_adjusted,"Everzw") & period == 3)
+```
+
+## Different inventory years, same period
+
+**Ter info**: sommige reservaten hebben per 
+opname-periode toch twee verschillende jaartallen voor `INVENTORY_YEAR`.
+Zo bv.Zwaenepoel 2nd extension: de dendro werd opgemeten tss 8/1/2020 en 15/5/2020
+=> `INVENTORY_YEAR` is deels 2019 (voor 1/5/2020) en deels 2020 (na 1/5/2020), 
+aangezien er voor gekozen werd om alles wat voor 1 mei opgemeten wordt bij 
+het voorafgaande kalenderjaar/groeiseizoen te voegen.
+
+Ook bij de andere reservaten blijkt het eerste jaar steeds de hoofdmoot van 
+opnames.
+Dit heeft als gevolg dat er voor deze reservaten dubbel zoveel records zijn in 
+`INBO_design.txt`.
+
+Het gaat om volgende bosreservaten:
+
+```{r}
+# list_BR %>% group_by(forest_reserve_fieldmap, period, plottype, subarea) %>% 
+#   summarise(n = n()) %>% ungroup() %>% filter(n > 1)
+
+dubbbel_BR <- list_BR %>% group_by(forest_reserve_FM_adjusted, period, plottype) %>% 
+  summarise(n = n()) %>% ungroup() %>% filter(n > 1)
+
+list_BR %>% inner_join(dubbbel_BR) %>% 
+  select(forest_reserve = forest_reserve_FM_adjusted, plottype
+         , period, INV_YEAR = INVENTORY_YEAR, n_plots) %>% 
+  DT::datatable()
+# telkens een aantal plots net op een later moment opgemeten 
+# het eerste jaar is steeds de hoofdmoot van opnames, maar eigenlijk correcter 
+# om deze met een ander INVENTORY YEAR te behouden 
+```
+
+<br>
+
+# STANDING 
+
+Data File Title: Institute_Standing.txt
+or: Institute_Standing_Site_ID.txt
+
+Sheet "Standing_metadata" explains the recorded attributes of STANDING stems. These are divided into Basic strictly defined grey columns, where missing values are filled in as "NA"; coloured columns, where unused variants need to be deleted; and Extended attributes. Extended attributes are provided only if available.  Each data provider should clearly describe the methodology for measuring standing trees on their own research areas in the Standing_metadata.txt file;  for example: species code list, specification of height measurement, cause of death (extended).															
+																
+STANDING: This data table is designed to characterize alive and dead STANDING stems on a particular site, LPI or SPI, qualitative and quantitative attributes of each individual stem. These are divided into Basic strictly defined grey columns, where missing values are filled in as "NA"; coloured columns, where unused variants need to be deleted; and Extended attributes. Extended attributes are provided only if available. In case when the standing stem was measured in several inventories, the records are listed for each inventory on a separate row.		
+
+**Wordt opgeslagen in `standing`**
+
+## Load data dendrometry														
+
+```{r load_lkp}
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+
+  qIndShootCop <- sqlFetch(con, "qIndShootCop", stringsAsFactors = FALSE)
+  # deadw_test <- sqlFetch(con, "Deadwood_3eSET", stringsAsFactors = FALSE)
+  qAliveDead <- sqlFetch(con, "qAliveDead", stringsAsFactors = FALSE)
+  qSpecies <- sqlFetch(con, "qSpecies", stringsAsFactors = FALSE)
+  qDecaystage <- sqlFetch(con, "qdecaystage", stringsAsFactors = FALSE)
+  qIntactSnag <- sqlFetch(con, "qIntactSnag", stringsAsFactors = FALSE)
+  qiufrovitality <- sqlFetch(con, "qiufrovitality", stringsAsFactors = FALSE)
+  qcommonremark <- sqlFetch(con, "qcommonremark", stringsAsFactors = FALSE)
+  qVdagnVfm <- sqlFetch(con, "qVdagnVfm", stringsAsFactors = FALSE)
+  
+odbcClose(con)
+
+# 
+qIndShootCop <- qIndShootCop %>% select(ID, ind_sht_cop_txt = Value1)
+qIntactSnag <- qIntactSnag %>% select(ID, intact_snag_txt = Value1)
+qAliveDead <- qAliveDead %>% select(ID, alive_dead_txt = Value1)
+qSpecies <- qSpecies %>% select(ID, name_nl = Value1, name_sc = Value2)
+qDecaystage <- qDecaystage %>% select(ID, decaystage_txt = Value2)
+qiufrovitality <- qiufrovitality %>% select(ID, vitality_txt = Value2) %>% 
+  unique() %>% filter(ID < 40)
+qVdagnVfm <- qVdagnVfm %>% select(ID, intact_fragment_txt = Value1)
+
+```
+
+
+```{r load_dendro}
+#names(plotdata_def)
+data_dendro0 <- load_data_dendrometry(database = path_to_fieldmap_db
+                                     , processed = TRUE 
+                                     , extra_variables = TRUE)
+
+data_shoots <- load_data_shoots(database = path_to_fieldmap_db
+                                , extra_variables = TRUE)
+```
+
+```{r treshold30}
+# ! Attention: treshold standing trees in 2000 was 30 cm DBH, but there were also two regeneration groups with treshold 5 cm DBH
+# **=> we need to filter these smaller trees out**
+# 913 records
+names(data_dendro0)
+t <- data_dendro0 %>% 
+  filter(plot_id == 11000 & year == 2000 & dbh_mm < 300)
+
+data_dendro <- data_dendro0 %>% 
+  filter(!(plot_id == 11000 & year == 2000 & dbh_mm < 300))
+
+nrow(data_dendro0) == nrow(t) + nrow(data_dendro)
+```
+
+
+## Unique tree-id 
+
+CONSISTENT_ID_STANDING	
+The identification numbers of standing stems from the previous inventory year were 
+completely (Y), partly (P) reidentified or were not reidentified (N).
+If you chose P, specify in the STANDING sheet which stems could not be reidentified and 
+were assigned new IDs. 
+For single-inventory sites and the first (oldest) inventories, fill in NA.
+
+---
+
+In Flanders trees, not stems, are coupled through time.
+
+The function `create_unique_tree_id()` from package forrescalc, allows us to create unique
+id's on **tree level** (based on old_id en coppice_id)
+NOT on stem level!
+
+=> plotdata_def: CONSISTENT_ID_STANDING = P (see above)    
+=> standing_def: coppice => CONSISTENT_ID = N; individuel tree => CONSISTENT_ID = Y   
+(coppice trees don't have a unique tree-id, only the individual trees)
+
+
+```{r create_unique_tree_id, results='hide'}
+# ?create_unique_tree_id
+data_dendro <- create_unique_tree_id(data_dendro)
+names(data_dendro)
+```
+
+
+```{r }
+data_dendro %>% filter(is.na(tree_id)) %>% nrow() == 0
+```
+
+```{r}
+# check - ok
+t <- data_dendro %>% 
+  filter(plot_id == 53000 & tree_measure_id %in% c(11495, 11483, 256, 119)) %>% 
+  select(plot_id, period
+         , tree_id, tree_measure_id, old_id, coppice_id
+         , ind_sht_cop, alive_dead, species)
+```
+
+
+```{r check_coppice}
+t <- data_dendro %>% 
+  filter(ind_sht_cop == 12) %>% 
+  select(plot_id, period
+         , tree_id, tree_measure_id, old_id, coppice_id
+         , ind_sht_cop, alive_dead, species)
+
+```
+
+## Calculate dendro
+
+```{r results='hide'}
+data_stems <- compose_stem_data(data_dendro, data_shoots, extra_variables = TRUE)
+
+# height_model <- load_height_models()
+# sneller en bij problemen met forresheights github, eigen functie gebruiken
+path_to_height_models <- "C:/03_BR/1_DataVerwerkingBR/Data/Hoogtemodellen/"
+height_model <- load_height_models_local(path_to_height_models)
+
+data_deadwood <- load_data_deadwood(database = path_to_fieldmap_db, processed = TRUE)
+data_deadwood <- calc_intact_deadwood(data_deadwood)  # overschrijft calc_volume_m3 uit db met volume intacte boom
+
+data_stems_calc <- calc_variables_stem_level(data_stems, height_model)
+
+summary(data_stems_calc)
+
+# check tree_id
+data_stems_calc %>% filter(is.na(tree_id)) %>% nrow() == 0
+# t <- data_stems_calc %>% group_by(tree_id, ind_sht_cop) %>% 
+#   summarise(n = n()) %>% ungroup()
+```
+
+
+## Select processed plots
+
+Enkel de dendro data van de reservaten die in `list_plots` zitten (idem als plots in `plotdata_def`).
+
+```{r}
+standing0 <- data_stems_calc %>% 
+  inner_join(list_plots, by = c("plot_id", "period", "plottype"))
+
+t <- standing0 %>% group_by(forest_reserve_FM_adjusted, plottype, year) %>% 
+  summarise(n_trees = n(), n_plots = n_distinct(plot_id)) %>% ungroup()
+
+# check - niet opgenomen
+not_included <- data_stems_calc %>% 
+  anti_join(plotdata_def %>% select(plot_id, period),
+             by = c("plot_id", "period"))
+
+t2 <- not_included %>% group_by(forest_reserve, plottype, year) %>% 
+  summarise(n_trees = n(), n_plots = n_distinct(plot_id)) %>% ungroup()
+
+# nrows?
+nrow(standing0) == nrow(data_stems_calc) - sum(t2$n_trees)
+nrow(list_plots) == 1717
+
+info_survey %>% anti_join(list_plots) %>% nrow() == 174
+# table(t$forest_reserve_fieldmap)
+# De heide    Ename Kluisbos 
+#       52       55       67
+# dat zijn ename, kluisbos en de heide
+```
+## Variables
+
+SITE_ID	LPI_ID	SPI_ID	TREE_ID	STEM_ID	INVENTORY_YEAR	CONSISTENT_ID	
+STATUS : LIFE	POSITION	INTEGRITY	
+HEIGHT	DATE
+
+
+FULL_SCIENTIFIC	GENUS	SPECIES	CODE	ABBREVIATION
+
+DBH_cm	DBH_mm
+
+DECAY	: NUMERIC	TEXT
+X	Y	Z	AZIMUTH	DISTANCE	WKT_GEOM
+
+EXTENDED																
+HOM_m	STATUS2	CAUSE_OF_DEATH	VOLUME	SUN_EXP	RED_FACTOR	HABITAT1	HABITAT2	HABITAT3	INSECT	CAVITIES	FUNGI	BARK_DAMAGE	BREAK_TYPE	VITALITY	LAYER	TAG
+
+
+**Ter info mbt consistent_id:**
+
+- consistent_id wordt op plotniveau bepaald:
+    * voor 1ste survey steeds NA
+    * voor 2de survey waar mogelijkheid is tot koppeling: bij hakhout "N" en bij individuele bomen "Y"
+    * dus ook ingroei krijgt "Y"
+
+
+```{r extra vars}
+# tijdelijk extra vars mee selecteren, vooraleer weg te schrijven terug verwijderen
+extra_vars <- c("forest_reserve_FM_adjusted", "plot_id", "plottype", "period")
+```
+
+```{r standing_vars, results='hide'}
+names(standing0)
+unique(plotdata_def$CONSISTENT_ID_STANDING)
+names(qSpecies)
+names(qDecaystage)
+
+# !! nog tree_id toevoegen en obdaarvan CONSISTENT_ID
+# = sowieso NA in eerste survey
+
+standing <- standing0 %>%
+  left_join(qSpecies %>% select(-name_nl), by = c("species" = "ID")) %>% 
+  left_join(qDecaystage, by = c("decaystage" = "ID")) %>% 
+  left_join(qiufrovitality, by = c("iufro_vital" = "ID")) %>% 
+  # left_join(list_plots) %>% 
+  mutate(TREE_ID = tree_id
+         , STEM_ID = shoot_measure_id
+         , CONSISTENT_ID = ifelse(CONSISTENT_ID_STANDING == "P"
+                                  # op stemniveau => "Y" voor single trees, "N" voor coppice
+                                  , ifelse(ind_sht_cop == 10, "Y", "N")
+                                  , CONSISTENT_ID_STANDING)
+         , LIFE	= ifelse(alive_dead == 12, "D", "A")  # Life can be in form of Alive (A) or Dead (D). 
+         , POSITION	= "S"
+         , INTEGRITY = ifelse(intact_snag == 10, "F", "C")	 # Complete (C) or Fragmented (F)
+         , HEIGHT = height_m # measured!
+         , DATE = as.Date(date_dendro, format = "%d/%m/%Y") # Date of measurement of particular stem (format yyyy-mm-dd): 2002-12-01
+         , DBH_mm = dbh_mm
+         , TREE_SPECIES_FULL_SCIENTIFIC = name_sc
+         , TREE_SPECIES_CODE = species	
+         , DECAY_NUMERIC = ifelse(alive_dead == 12, decaystage, NA)
+         , DECAY_TEXT = ifelse(alive_dead == 12, decaystage_txt, NA)
+         # , X = X + x_local  # !! geldt niet bij WGS84 (Lat&Long), enkel bij Lambert
+         # , Y = Y + y_local	
+         , HOM_m = 1.3
+         , HEIGHT_model = ifelse(intact_snag == 11, round(calc_height_m, 1), NA)
+         , VOLUME = round(vol_bole_m3, 2)
+         , VITALITY = vitality_txt
+         ) %>% 
+  select(LPI_ID,	SPI_ID,	TREE_ID,	STEM_ID,	INVENTORY_YEAR,	CONSISTENT_ID
+         , LIFE, POSITION, INTEGRITY
+         , HEIGHT, DATE
+         , TREE_SPECIES_FULL_SCIENTIFIC, TREE_SPECIES_CODE
+         , DBH_mm
+         , DECAY_NUMERIC, DECAY_TEXT
+         , x_local, y_local, 
+         , HOM_m, HEIGHT_model, VOLUME, VITALITY
+         , all_of(extra_vars)
+         # , forest_reserve_fieldmap, plot_id, plottype, period
+         , tree_measure_id
+         )
+
+#check
+standing %>% filter(plot_id == 101)
+t <- standing %>% filter(plot_id == 1101)
+t <- standing %>% filter(plot_id == 2001)  
+# uitbr_1995: andere straal dus CONSISTENT_ID_STANDING = N voor survey 2
+t <- standing %>% filter(plot_id == 11000)
+```
+
+```{r}
+names(standing)
+```
+
+
+```{r check_consistent}
+consist_summ <- standing %>% 
+  group_by(forest_reserve_FM_adjusted, plottype, LPI_ID
+           , period, CONSISTENT_ID) %>% 
+  summarize(n = n()) %>% 
+  ungroup()
+```
+<br>
+
+# LYING 
+
+Sheet "Lying_metadata" explains the recorded attributes of LYING stems (object sampling). These are divided into Basic strictly defined grey columns, where unavailable values are filled in as "NA"; coloured columns, where unused variants need to be deleted; and Extended attributes. Extended attributes are provided only if available. Each data provider should clearly describe the methodology for measuring lying stems on their own research sites in the Lying_metadata.txt file; for example: specification of the point of upper end diameter measurement, decay classification, method of volume calculation of lying stems/pieces (extended), etc.												
+													
+LYING: This data table is designed to provide obect-based descriptions of LYING stems on a particular site, LPI or SPI, i.e. qualitative and quantitative attributes of each individual stem. These are divided into Basic strictly defined grey columns, where missing values are filled in as "NA"; coloured columns, where unused variants need to be deleted; and Extended attributes. Extended attributes are provided only if available. In case when the lying stem was measured in several inventories, the records are listed for each inventory on a separate line.														
+
+**Wordt opgeslagen in `lying`**
+
+## Select processed plots
+
+```{r results='hide'}
+names(data_deadwood)
+names(list_plots)
+
+lying0 <- data_deadwood %>% 
+  inner_join(list_plots, by = c("plot_id", "period", "plottype"))
+
+t <- lying0 %>% group_by(forest_reserve_FM_adjusted, plottype, year) %>% 
+  summarise(n_trees = n(), n_plots = n_distinct(plot_id)) %>% ungroup()
+
+# check - niet opgenomen
+not_included <- data_deadwood %>% 
+  anti_join(plotdata_def %>% select(plot_id, period),
+             by = c("plot_id", "period"))
+
+t2 <- not_included %>% group_by(forest_reserve, plottype, year) %>% 
+  summarise(n_trees = n(), n_plots = n_distinct(plot_id)) %>% ungroup()
+
+# nrows?
+nrow(lying0) == nrow(data_deadwood) - sum(t2$n_trees)
+nrow(list_plots) == 1717
+```
+
+## Data control
+
+```{r tmp}
+# 9/6 records met diameter < 10 cm => laten checken door Peter
+error_D1D2 <- lying0 %>% 
+  filter(max_diam_mm < 100) 
+
+# tijdelijk deze records deleten
+lying_ <- lying0 %>% 
+  filter(max_diam_mm >= 100)
+
+nrow(lying_) == nrow(lying0) - 6
+
+lying0 <- lying_
+
+```
+
+
+## XY top and bottom - NIET
+
+XY-coördinaten van top en bottom nodig:
+
+=> in Project Manager via de tool "Export data" in de Acces dB 
+(PlainSHP setting: DC - settings - general - map layers handling) 
+de tabellen Deadwood_details genereren (in access "MDB_deadw_details_20240613.accdb")
+<!-- (c)A: volgen mij is "geodatabase" ook OK ipv PlainSHP setting -->
+
+> beter om dit nu niet aan te leveren, teveel onduidelijkheden
+
+
+```{r load_xy, eval = FALSE}
+# path_to_db_LISplots <-  "C:/03_BR_db_monitoring/LIS_plots_20240930/FieldMapData_LIS_plots_20240930.accdb"
+path_to_deadw_details <-  "C:/03_BR_db_monitoring/MDB_deadw_details_20240613.accdb"
+
+query_XY_1 <- 
+    "SELECT deadw_xy.IDPlots AS plot_id, 
+    deadw_xy.IDDeadwood AS lying_deadw_id, 
+    deadw_xy.ID, 
+    deadw_xy.X_m AS x_m, 
+    deadw_xy.Y_m AS y_m, 
+    deadw_xy.Z_m AS z_m, 
+    deadw_xy.Diam_mm AS diam_mm
+    FROM Deadwood_Details deadw_xy;"
+query_XY_2 <- 
+    "SELECT deadw_xy.IDPlots AS plot_id, 
+    deadw_xy.IDDeadwood_2eSET AS lying_deadw_id, 
+    deadw_xy.ID, 
+    deadw_xy.X_m AS x_m, 
+    deadw_xy.Y_m AS y_m, 
+    deadw_xy.Z_m AS z_m, 
+    deadw_xy.Diam_mm AS diam_mm
+    FROM Deadwood_2eSET_Details deadw_xy;"
+query_XY_3 <- 
+    "SELECT deadw_xy.IDPlots AS plot_id, 
+    deadw_xy.IDDeadwood_3eSET AS lying_deadw_id, 
+    deadw_xy.ID, 
+    deadw_xy.X_m AS x_m, 
+    deadw_xy.Y_m AS y_m, 
+    deadw_xy.Z_m AS z_m, 
+    deadw_xy.Diam_mm AS diam_mm
+    FROM Deadwood_3eSET_Details deadw_xy;"
+
+con <- odbcConnectAccess2007(path_to_deadw_details)
+  data_xy_1 <- sqlQuery(con, query_XY_1, stringsAsFactors = TRUE) %>% 
+    mutate(period = 1) 
+  data_xy_2 <- sqlQuery(con, query_XY_2, stringsAsFactors = TRUE) %>% 
+    mutate(period = 2) 
+  data_xy_3 <- sqlQuery(con, query_XY_3, stringsAsFactors = TRUE) %>% 
+    mutate(period = 3) 
+odbcClose(con)
+
+data_xy <- rbind(data_xy_1, data_xy_2, data_xy_3)
+
+```
+
+
+```{r eval = FALSE}
+names(data_xy)
+# names(data_FAS_xy)
+# names(data_FAS_diam)
+# names(data_FAS)
+```
+
+
+```{r eval = FALSE}
+deadw_xy <- dplyr::select(data_xy, plot_id, lying_deadw_id, ID, period
+                         , x_m, y_m, z_m, diam_mm) %>%
+  group_by(plot_id, lying_deadw_id, period) %>%
+  arrange(-diam_mm) %>% 
+  summarise(d1=first(diam_mm), d2=last(diam_mm), x1=first(x_m), x2=last(x_m), y1=first(y_m), y2=last(y_m), z1=first(z_m), z2=last(z_m), deadw_id=first(lying_deadw_id), n_points = n()) %>%
+  ungroup() 
+
+deadw_xy %>% filter(n_points > 2) %>% nrow()  # 242
+d <- deadw_xy %>% filter(n_points > 2)
+table(d$period)
+ #  1   2   3 
+ # 60 175   7 
+```
+
+Sommmige fragmenten hebben nog één of meer tussenliggende punten (naast top en bottom).
+Volume is dan wel correct, maar XY zegt weinig.
+(vooral periode 1 en 2)
+
+```{r eval = FALSE}
+## basis (D1_mm) en top (D2_mm) toewijzen
+deadw_xy$D1_mm <-ifelse(deadw_xy$d1<deadw_xy$d2, deadw_xy$d2, deadw_xy$d1)
+deadw_xy$X_1 <-ifelse(deadw_xy$d1<deadw_xy$d2, deadw_xy$x2, deadw_xy$x1)
+deadw_xy$Y_1 <-ifelse(deadw_xy$d1<deadw_xy$d2, deadw_xy$y2, deadw_xy$y1)
+deadw_xy$Z_1 <-ifelse(deadw_xy$d1<deadw_xy$d2, deadw_xy$z2, deadw_xy$z1)  
+
+deadw_xy$D2_mm <-ifelse(deadw_xy$d1<deadw_xy$d2, deadw_xy$d1, deadw_xy$d2)
+deadw_xy$X_2 <-ifelse(deadw_xy$d1<deadw_xy$d2, deadw_xy$x1, deadw_xy$x2)
+deadw_xy$Y_2 <-ifelse(deadw_xy$d1<deadw_xy$d2, deadw_xy$y1, deadw_xy$y2)
+deadw_xy$Z_2 <-ifelse(deadw_xy$d1<deadw_xy$d2, deadw_xy$z1, deadw_xy$z2)
+
+deadw_xy <- deadw_xy %>% 
+  select(plot_id, lying_deadw_id, period, D1_mm, , X_1, Y_1, Z_1, D2_mm, X_2, Y_2, Z_2)
+```
+
+
+```{r eval = FALSE}
+deadw_xy_ <- lying0 %>% 
+  left_join(deadw_xy, by = c("plot_id", "period", "lying_deadw_id"))
+nrow(deadw_xy_);nrow(lying0)
+t <- deadw_xy_ %>% filter(is.na(X_1))
+```
+
+Z-coord niet steeds correct.
+
+- Z-coord van centrum plot komt uit de shapefile (X en Y ook)    
+- in fieldmap staat de z-coord op plotniveau altijd op 0
+- soms is z-coord van fragment ingemeten tov "0" en soms tov echte z-coord
+
+Als de z-coord van top en  bottom met dezelfde fieldmap-instelling opgemeten zijn, 
+is dat geen probleem voor de volumeberekening, 
+maar als we zowel de z-coord van centrum plot als van dood hout aanleveren, moeten
+we wel zorgen dat dat overeenkomt.
+
+```{r check, eval = FALSE}
+#  ev. z-waarde van plot overnemen
+deadw_xy_ <- deadw_xy_ %>% 
+  mutate(Z_1 = ifelse(Z_1 <= 0 | Z_1 > 1000, Z, Z_1),
+         Z_2 = ifelse(Z_2 <= 0 | Z_2 > 1000, Z, Z_2))
+
+t <- deadw_xy_ %>%
+  filter(Z_1 > Z + 3 | Z_1 < Z - 3) %>% 
+  select(1:5, 9, contains(c("X", "Y", "Z")))
+nrow(t) # 16196 / 9114
+
+```
+
+Belangrijker is om te kijken of er onlogische hooogteverschillen zijn tss Z1 en Z2.
+
+In controle hierna grens op 3 m gezet => 6786 records!
+Dit is heel soms OK, in geaccidenteerde reservaten, maar niet overal.
+Vaak lijkt Z_2 rond de 0 te liggen en Z_1 meer in lijn met plotcentrum of omgekeerd ...
+
+Als we grens op 10m zetten blijven er nog 5746 records over
+
+
+```{r eval = FALSE}
+# belangrijker is om te kijken of er onlogische hooogteverschillen zijn tss Z1 en Z2
+t2 <- deadw_xy_ %>%
+  filter(Z_1 > Z_2 + 3 | Z_1 < Z_2 - 3) %>% 
+  mutate(z_diff = Z_1 - Z_2) %>% 
+  select(1:5, 9, X, Y, X_1, Y_1, X_2, Y_2, Z, Z_1, Z_2, z_diff, contains(c("calc", "total_")))
+nrow(t2)   # 6786
+
+t2 %>% filter(abs(z_diff) > 10) %>% nrow()
+
+write.xlsx(x = t2, 
+           file = paste0(path_to_dataverwerking_teamdrive, "overkoepelend/deadw_diff_Z_MDB20240613.xlsx"))
+# G:\Gedeelde drives\Team_Boseco_BR\PRJ_BR_Gegevensverwerking\overkoepelend
+```
+
+Bijkomend is er ook nog het probleem dat de X en Y coördinaten van het plotcentrum 
+in WGS 84 uitgedrukt staan,
+terwijl er deadwood fragmenten zijn (vooral kernvlaktes) die exacte coördinaten hebben 
+(geen lokale) die in Lambert staan.
+Om de volledig databank om te zetten naar WGS 84 is geen optie.
+Het coördinatenstelsel wordt immers op plotniveau ingesteld.
+
+Alles in lokale coördinaten is zelfde probleem.
+
+
+## Variables				
+
+SITE_ID	LPI_ID	SPI_ID	
+TREE_ID	STEM_ID	PIECE_ID	
+INVENTORY YEAR	CONSISTENT_ID	
+DATE
+LIFE	POSITION	INTEGRITY	
+
+TREE_SPECIES FULL_SCIENTIFIC CODE
+DBH_mm D1_mm D2_mm
+LENGTH
+DECAY NUMERIC TEXT
+
+VOLUME
+
+
+```{r lying_vars, results='hide'}
+names(lying0)
+unique(list_plots$CONSISTENT_ID_LYING)
+names(qSpecies)
+names(qDecaystage)
+unique(lying0$intact_fragm)
+unique(lying0$decaystage)
+
+lying <- lying0 %>%
+  left_join(qSpecies %>% select(-name_nl), by = c("species" = "ID")) %>% 
+  left_join(qDecaystage, by = c("decaystage" = "ID")) %>% 
+  left_join(qVdagnVfm, by = c("intact_fragm" = "ID")) %>% 
+  mutate(TREE_ID = NA
+         , STEM_ID = NA
+         , PIECE_ID = lying_deadw_id
+         , CONSISTENT_ID = ifelse(CONSISTENT_ID_LYING == "N"
+                                  , "N"   # 
+                                  , CONSISTENT_ID_LYING) # N of NA
+         , LIFE	= "D"  # liggend is steeds dood bij ons
+         , POSITION	= "L"
+         , INTEGRITY = ifelse(intact_fragm == 10, "C", "F")	 # Complete (C) or Fragmented stem (F)
+         , DATE = as.Date(date_dendro, format = "%d/%m/%Y") # Date of measurement of particular stem (format yyyy-mm-dd): 2002-12-01
+         , TREE_SPECIES_FULL_SCIENTIFIC = name_sc
+         , TREE_SPECIES_CODE = species	
+         , DBH_mm = ifelse(intact_fragm == 10, max_diam_mm, NA) # Diameter at distance of 1.3 m from the lower end of the lying log.
+         , D1_mm = ifelse(intact_fragm == 10, NA, max_diam_mm)  
+         #Diameter of the lower end, ev. nog bij te snijden
+         , D2_mm = ifelse(intact_fragm == 10, NA, min_diam_mm) 
+         # Diameter of the upper end of the lying log, ev. nog bij te snijden
+         
+         # x1, x2 en y1, y2: zoals ingemeten - TOCH NIET
+         # (enkel indien expliciet gevraagd: XY van top en bottom deel dat IN plot valt cfr script Arno)
+         # , X_1 = X + x_1
+         # , X_2 = X + x_2
+         # , Y_1 = Y + x_1
+         # , Y_2 = Y + x_1
+         , LENGTH = round(calc_length_m, 1)
+         , DECAY_NUMERIC = ifelse(decaystage == 0, NA, decaystage)
+         , DECAY_TEXT = decaystage_txt
+         , VOLUME = round(calc_volume_m3, 2)
+         ) %>% 
+  select(LPI_ID,	SPI_ID,	TREE_ID,	STEM_ID, PIECE_ID
+         , INVENTORY_YEAR,	CONSISTENT_ID
+         , LIFE, POSITION, INTEGRITY
+         , DATE
+         , TREE_SPECIES_FULL_SCIENTIFIC, TREE_SPECIES_CODE
+         , DBH_mm, D1_mm, D2_mm
+         # , X_1, X_2, Y_1, Y_2
+         , LENGTH
+         , DECAY_NUMERIC, DECAY_TEXT
+         , VOLUME
+         , all_of(extra_vars)
+         # , forest_reserve_FM_adjusted, plot_id, plottype, period
+         )
+
+names(lying)
+table(lying$DECAY_NUMERIC)
+table(lying$DECAY_TEXT)
+
+#check
+lying %>% filter(plot_id == 101)
+lying %>% filter(plot_id == 2001)
+lying %>% filter(plot_id == 11000)
+
+```
+
+```{r}
+names(lying)
+```
+<br>
+
+# CWD - NIET
+
+Sheet "CWD_metadata" contains explanations of attributes of coarse woody debris (CWD data sheet) which is about plot level deadwood volume estimates, but unlike LYING data table does not include information on individual objects - dead stems and decaying logs. Please provide your methodology.													
+														
+CWD:	This data table is designed to provide plot level estimates of coarse woody debris volume (by line intersect sampling) summed by species and decay classes.
+
+SITE_ID
+SPI_ID
+TREE_SPECIES
+DECAY
+VOLUME
+
+**Wordt opgeslagen in `cwd`**
+
+26/11/2024: afgesproken om dit NIET mee te nemen, gaat ook maar over beperkt 
+aantal reservaten, waar daarnaast wél een gewone deadwood opname gebeurd is,
+maar met een andere treshold (vanaf 30 cm, ipv 10 cm)
+
+"We stumbled upon another 'issue'. 
+For the line intersect method used for CWD, no upper diameter threshold was used. 
+As a consequence, there is some overlap between the measurements for CWD and 
+the trees measured in the LYING table, more specifically for dbh > 30 cm If this 
+is a problem we would suggest omitting the CWD table, as this only covers 2 sites 
+and one survey. Furthermore the line intersect sampling doesn't give accurate 
+information on plot level (designed for estimating deadwood on the level of 
+a reserve), and it only gives extra information on the fraction 10 to 30 cm diameter."
+
+
+## Load LIS data
+
+Het package forrescalc berekent deze data nog niet => rechtstreeks uit de databank te halen
+
+Enkel uitgevoerd bij 
+- Wijnendale CP
+- Everzwijnbad CP
+- Heirnisse CA: nog niet verwerkt
+
+```{r results='hide', eval = FALSE}
+range(list_plots$INVENTORY_YEAR)
+BR_LIS <- list_plots %>% 
+  filter(INVENTORY_YEAR >= 2021 & plot_id < 11000)
+unique(BR_LIS$forest_reserve_fieldmap)
+```
+
+```{r load_LIS, results='hide', eval = FALSE}
+# enkel bij 3eSET beschikbaar
+query_LIS <- 
+    "SELECT lis.IDPlots AS plot_id, 
+    lis.IDLineIntersect_3eSet, 
+    lis.ID, 
+    lis.TreeSpecies AS species,
+    lis.AliveDead,
+    lis.DecayStage AS decaystage,
+    lis.Diameter_mm AS diam_mm, 
+    lis.Angle as angle_cde
+    FROM LI_data_3eSet lis;"
+
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+  data_LIS_ <- sqlQuery(con, query_LIS, stringsAsFactors = TRUE)
+  qLIangle <- sqlFetch(con, "qLIangle", stringsAsFactors = TRUE) %>% 
+    select(ID, angle = Value2)
+odbcClose(con)
+
+
+names(data_LIS_)
+nrow(data_LIS_)  # 991
+range(data_LIS_$plot_id)
+unique(data_LIS_$AliveDead) == 12  # enkel dood
+```
+```{r results='hide', eval = FALSE}
+data_LIS <- data_LIS_ %>% 
+  mutate(period = 3) %>% 
+  inner_join(list_plots %>% select(plot_id, forest_reserve_FM_adjusted, period))
+
+unique(data_LIS$forest_reserve_FM_adjusted)
+
+data_LIS %>% filter(is.na(diam_mm)) %>% nrow() == 0
+data_LIS %>% filter(is.na(angle_cde)) %>% nrow() == 0
+# mocht er in toekomst voor degrees niks ingevuld staan 
+# => vervangen door "0" (anders geen berekening mogelijk voor die plot)
+
+data_LIS <- data_LIS %>% 
+ left_join(qLIangle, by = c("angle_cde" = "ID"))
+
+```
+
+
+```{r results='hide', eval = FALSE}
+colnames(data_LIS)
+summary(data_LIS) # ok
+
+Li<-45  # lengte van de drie transecten   
+
+cwd_ <- data_LIS %>%
+  mutate(diam_m = diam_mm/1000) %>% 
+  dplyr::group_by(plot_id, period, species, decaystage) %>%
+  dplyr::summarise(
+    volume_m3_m2=pi^2/8/Li*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)) %>% 
+  ungroup()
+# bij mogelijkse verwarring tss VBI en BR: VBI rekent obv diam_cm en komt m3/ha uit, 
+# BR gebruikt diam_m en komt m3/m2 uit
+
+ 
+```
+
+
+
+## Variables				
+
+SITE_ID	SPI_ID	
+INVENTORY YEAR	
+TREE_SPECIES	
+DECAY	
+VOLUME
+
+
+```{r cwd_vars, results='hide', eval = FALSE}
+## Add variables from reserve
+cwd0 <- cwd_ %>% 
+  inner_join(list_plots, by = c("plot_id", "period"))
+
+names(cwd0)
+names(qSpecies)
+names(qDecaystage)
+unique(cwd0$decaystage) # 12 13 11 14 10 15
+
+cwd <- cwd0 %>%
+  left_join(qSpecies %>% select(-name_nl), by = c("species" = "ID")) %>% 
+  left_join(qDecaystage, by = c("decaystage" = "ID")) %>% 
+  mutate(TREE_SPECIES_FULL_SCIENTIFIC = name_sc
+         , TREE_SPECIES_CODE = species	
+         , DECAY_NUMERIC = ifelse(decaystage == 0, NA, decaystage)
+         , DECAY_TEXT = decaystage_txt
+         , VOLUME = round(volume_m3_m2 * SAMPLED_AREA, 2)
+         ) %>% 
+  select(SPI_ID
+         , INVENTORY_YEAR
+         , TREE_SPECIES_FULL_SCIENTIFIC, TREE_SPECIES_CODE
+         , DECAY_NUMERIC, DECAY_TEXT
+         , VOLUME
+         , all_of(extra_vars)
+         # , forest_reserve_FM_adjusted, plot_id, plottype, period
+         )
+
+names(cwd)
+table(cwd$DECAY_NUMERIC)
+table(cwd$DECAY_TEXT)
+
+#check
+cwd %>% filter(plot_id == 101)
+
+```
+
+```{r, eval = FALSE}
+names(cwd)
+```
+
+<br>
+
+# BIODIV
+
+## Request
+
+**Mail from Yannek Kaber: **
+
+"I started organizing the biodiversity data from WILDCARD partners.
+Would it be possible for you to send me biodiv data of the sites for which you 
+deliver(ed) dendrometrical data to Kamil?
+
+The additional work for sending me your raw files would be:
+
+- to provide a table which links the location of sampling to the dendrometric data 
+to whatever identifier you use in your data set. 
+This table should include the identifiers “institute”, “res_ID_inst”, 
+“reserve_name”, “WILDCARD_sub_ID” from the meta data table. 
+Plus if possible provide exact coordinates of the sampling location and/or the plot ID 
+which was used when you sent the dendrometric data to the database people.
+
+- Provide existing documentation of the files that you sent me. 
+This can be any document that correctly describes the data. Preferably there are 
+published studies that explain the data structure well. 
+Field manuals in foreign language is also possible.
+
+My approach will be to ask for minimal information at the beginning and take on 
+the harmonization work myself. 
+You will just need to be available for clarifying open questions afterwards."
+
+
+**Antwoord Kris:**
+
+"what is readily available are the *ground vegetation* relevées : 
+for the circular plots, these are located in the center of the sample plots 
+of the dendrometrics, so can be easily linked to the coordinates and 
+plot code of the circular plots.
+
+For the larger plots, also vegetation plots are available in subplots of 10x10m. 
+
+For details, I can refer to our field protocol that is described in detail in the 
+file attached.
+
+Inventories of *ground fungi* are also available for about 10 transects in the 
+so-called core areas (= large plots).
+
+For other biodiversity data: these are more 'ad hoc', and not always linked to 
+sample plots. Most of them are included in the Bottoms-up data, 
+so it might be better to wait for the data request there.
+
+
+## Load ground vegetation
+
+In eerste instantie enkel vegetatie
+Fungi enkel als er om gevraagd wordt (ik weet niet waar die data zit)
+
+SITE_ID, SITE_NAME, WILDCARD_sub_ID, INVENTORY_YEAR,  LPI_ID, SPI_ID, 
+PLOT_SAMPLED, SAMPLED_AREA, LPI_sub_ID,
+SPECIES, COVER
+
+
+```{r load_lkp_veg}
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+  # qtotalCover<- sqlFetch(con, "qtotalCover", stringsAsFactors = FALSE)
+  qHerbSpecies<- sqlFetch(con, "qHerbSpecies240810", stringsAsFactors = FALSE)
+  # qCoverHerbs <- sqlFetch(con, "qCoverHerbs", stringsAsFactors = FALSE)
+odbcClose(con)
+
+# 
+qHerbSpecies <- qHerbSpecies %>% select(ID, name_sc = Value2)
+```
+
+
+```{r load_veg_data, results='hide'}
+data_vegetation0 <-
+  load_data_vegetation(
+    database = path_to_fieldmap_db,
+    processed = TRUE
+  )
+
+data_vegetation <- data_vegetation0 %>% 
+  inner_join(list_plots) # `by = join_by(plot_id, plottype, period)
+nrow(data_vegetation) #5731
+
+
+# verschil processed TRUE/FALSE: -----
+# als FALSE, dan worden NA's ingeladen => die meenemen? NEE
+# als ik die meeneen verschijnt er in "ground_veg" een extra record met jaartal=NA
+# en plot_smpled=NA => verwarrend, beter niet meenemen
+data_vegetation2 <- load_data_vegetation(
+    database = path_to_fieldmap_db,
+    processed = FALSE
+  ) %>% 
+  inner_join(list_plots)
+nrow(data_vegetation2) # 5759
+
+t <-  data_vegetation2 %>% 
+  anti_join(data_vegetation, by = c("plot_id", "plottype", "period"))
+# 28
+# With heide periode 2: geen veg-opname, wel dendro
+# plot 112, 946, 957: gevaarlijk, niet opgenomen maar wel <1% voor waterlayer-cover
+  
+```
+
+```{r results='hide'}
+data_vegetation %>% filter(is.na(plotarea_ha)) %>% nrow() == 0
+data_vegetation %>% filter(is.na(total_herb_cover_id)) %>% nrow() == 171 # vooral plots 1eSET
+t <- data_vegetation %>% filter(is.na(total_herb_cover_id))
+table(t$period)
+#   1   2 
+# 167  4
+
+t2 <- data_vegetation %>% filter(is.na(total_herb_cover_id) & is.na(total_tree_cover_id) &
+                                   is.na(total_shrub_cover_id))
+table(t2$period)
+#   1   2 
+# 110  3
+
+# vaak ook geen datum
+t3 <- data_vegetation %>% filter(is.na(date_vegetation))
+table(t3$period)
+#  1
+# 80  
+```
+
+
+```{r results='hide'}
+names(data_vegetation)
+
+# welke velden niet gebruikt?
+summary(data_vegetation)
+```
+
+
+```{r load_herblayer, results='hide'}
+data_herblayer0 <-
+  load_data_herblayer(
+    database = path_to_fieldmap_db,
+    processed = TRUE
+  )
+
+data_herblayer <- data_herblayer0 %>% 
+  inner_join(list_plots) # `by = join_by(plot_id, plottype, period)
+  
+nrow(data_herblayer) # 76103
+
+table(data_herblayer$period)
+#     1     2     3 
+# 33990 32153  9960
+
+```
+
+```{r eval=FALSE}
+# NA's? 
+data_herblayer %>% filter(is.na(forest_reserve)) %>% nrow() == 0
+
+data_herblayer %>% filter(is.na(coverage_id)) %>% nrow() == 122
+t <- data_herblayer %>% filter(is.na(coverage_id)) 
+table(t$period)
+#   1    3 
+# 121    1
+
+data_herblayer %>% filter(is.na(coverage_id) & !is.na(species)) %>% nrow() == 0
+
+data_herblayer %>% filter(is.na(year)) %>% nrow() == 80
+data_herblayer %>% filter(is.na(year) & !is.na(species)) %>% nrow() == 0
+t <- data_herblayer %>% filter(is.na(year))
+table(t$forest_reserve)
+# Hannecart Rodebos KV2 
+#          40          40 
+# dat zijn twee kernvlaktes, die tss 1 en 2 groter geworden zijn
+# gaat allemaal over periode 1
+# Dit gaat om subplot die toen niet opgemeten zijn, in periode 1 is er enkel een 
+# transect opgemeten en niet de volledige kernvlakte.  
+# Deze subplots krijgen verderop `PLOT_SAMPLED = "N"` krijgen
+# `Survey_veg` wordt immers op niveau van de volledige kernvlakte bepaald
+```
+
+```{r results='hide'}
+names(data_herblayer)
+
+# welke velden niet gebruikt?
+summary(data_herblayer)
+```
+
+Er zijn plots waar een opname gebeurd is, maar waar geen soorten gevonden zijn.
+Zodra `date_vegetation` ingevuld is, weten we dat er een opname gebeurd is.
+
+Ter controle `survey_veg = T/F` uit plotinfo halen. 
+
+**Opgepast**: `survey_veg = T/F` wordt op niveau van de volledige plot bepaald,
+bij een KV kan het dus wel zijn dat bepaalde subplots NIET opgemeten werden.
+Zie ook verder.
+
+
+```{r check_NA, results='hide'}
+data_herblayer_ <- data_herblayer %>% 
+  left_join(data_vegetation %>% select(forest_reserve, plot_id, subplot_id
+                                       , period, year_main_survey, date_vegetation
+                                       , total_herb_cover_id)) %>% 
+  # by = join_by(forest_reserve, plot_id, subplot_id, period, date_vegetation)
+  left_join(info_survey %>% select(plot_id, period, survey_veg, plotsize_veg)) 
+
+t <- data_herblayer_ %>% 
+  filter(survey_veg == TRUE & is.na(date_vegetation))
+table(t$plottype)
+# enkel geen jaar beschikbaar bij twee core area's - periode 1
+table(t$forest_reserve)
+# Hannecart Rodebos KV2 
+#   40          40
+table(t$period)
+#  1 
+# 80 
+```
+
+Bij twee kernvlaktes (periode 1) ontbreekt de `vegetation_date`, 
+telkens bij 40 van de 50 subplots:     
+
+ - Hannecart    31000 
+ - Rodebos KV2  43000
+
+Dit gaat om subplots die toen niet opgemeten zijn, in periode 1 is er enkel een 
+transect opgemeten en niet de volledige kernvlakte.  
+
+Deze subplots moeten `PLOT_SAMPLED = "N"` krijgen.
+`INVENTORY_YEAR` overnemen van rest van de kernvlakte:    
+- 2001 voor Hannecart - 31000
+- 2001 voor Rodebos KV2 - 43000
+
+`Survey_veg` wordt op niveau van de volledige kernvlakte bepaald.
+
+```{r results='hide'}
+# survey_veg = FALSE
+data_herblayer_ %>% filter(survey_veg == FALSE) %>% nrow() == 0
+# deze worden niet mee ingeladen als processed = TRUE staat
+    # processed = FALSE: 
+    # table(t$forest_reserve)
+    # Everzwijnbad    Pruikemakers Withoefse heide 
+    #            1               2              25
+    # table(t$period)
+    # 1  2 
+    # 3 25
+
+```
+
+```{r}
+data_herblayer <- data_herblayer_
+```
+
+## Variables
+
+SITE_ID, SITE_NAME, WILDCARD_sub_ID, INVENTORY_YEAR,  LPI_ID, SPI_ID, 
+PLOT_SAMPLED, SAMPLED_AREA, LPI_sub_ID,
+SPECIES, COVER
+
+```{r}
+names(data_herblayer)
+data_herblayer %>% filter(is.na(plottype)) %>% nrow() == 0
+data_herblayer %>% filter(is.na(survey_veg)) %>% nrow() == 0
+data_herblayer %>% filter(year(date_vegetation) != year) %>% nrow() == 0
+
+data_herblayer %>% filter(is.na(year)) %>% nrow() == 80 # 2 KV's - periode 1
+# `INVENTORY_YEAR` overnemen van rest van de kernvlakte:    
+# - 2001 voor Hannecart - 31000
+# - 2001 voor Rodebos KV2 - 43000
+
+ground_veg <- data_herblayer %>% 
+  left_join(qHerbSpecies, by = c("species" = "ID")) %>% 
+  mutate(SAMPLED_AREA = ifelse(plottype == "CP", 16*16, 10*10)
+         , PLOT_SAMPLED = ifelse(survey_veg == TRUE 
+                                 , ifelse(!is.na(date_vegetation), "Y", "N")
+                                 , "N")
+         , LPI_sub_ID = ifelse(plottype == "CA", subplot_id, NA)
+         , INVENTORY_YEAR = ifelse(is.na(year) & 
+                                     plot_id %in% c(31000, 43000)
+                                   , 2001, year)
+         ) %>% 
+  select(LPI_ID, SPI_ID, LPI_sub_ID
+         , INVENTORY_YEAR 
+         , PLOT_SAMPLED, SAMPLED_AREA
+         , SPECIES_CODE = species
+         , SPECIES_FULL_SCIENTIFIC = name_sc
+         , COVER_PERCENTAGE = coverage_class_average_perc
+         , all_of(extra_vars)
+         # , forest_reserve_FM_adjusted, plot_id, plottype, period
+         )
+
+summary(ground_veg)
+ground_veg %>% filter(is.na(INVENTORY_YEAR)) %>% nrow() == 0
+```
+
+**Info on large core area Zoniën (Zoniën KERN_1983 - CA)**
+Vegetation : standard relevé on 10x10m subplots: 
+
+- 750 plots, only summer survey in 2001     
+- 140 plots in 2011 and 2021 - spring and summer survey; additional survey in 
+spring 2015 (vernal flora)    
+
+Hier stelt zich het probleem van Hannecart en Rodebos zich niet, omdat de laag
+van de subplots verschillend is bij 1eSET enerzijds en 2e en 3eSET anderzijds. 
+Bij 2e en 3eSET zijn effectief maar 140 subplots opgenomen in die laag.
+Dus die extra subplots van 1eSET, zitten NIET in de data van 2de en 3deSET
+(dus geen `PLOT_SAMPLED = "N"`)
+
+> moeten die extra toegevoegd worden? 
+Ik (Anja) zou dat niet doen, is aan degene die alle data samenzetten om dat te doen,
+als ze dat opportuun achten.
+
+> ik stel voor om de subplots (`PLOT_SAMPLED = "N"`) van KV Rodebos 
+en Hannecart ook te verwijderen, eerder dan die te behouden in de dataset.
+Dan is alles conform.
+Zie hierna.
+
+```{r}
+#`PLOT_SAMPLED = "N"`
+ground_veg %>% filter(PLOT_SAMPLED == "N") %>% nrow == 80
+```
+
+```{r remove_subplots_not_sampled}
+ground_veg_ <- ground_veg %>% 
+  filter(PLOT_SAMPLED == "Y")
+nrow(ground_veg_) == nrow(ground_veg) - 80
+
+ground_veg <- ground_veg_
+```
+
+<br>
+
+# DESIGN
+
+Request:
+SITE_ID	SITE_NAME	WILDCARD_sub_ID	INVENTORY_YEAR	INVENTORY_TYPE	PLOTS_LIST	CIRCLE_NO	CIRCLE_RADIUS	CIRCLE_AZIMUTH	CIRCLE_DISTANCE	POM_MARK	STANDING_ALIVE_THRESHOLD	STANDING_DEAD_THRESHOLD	LYING_ALIVE_THRESHOLD	LYING_DEAD_THRESHOLD	SPECIES_POOL	LIS_CWD	BOUNDARY	STEM_COORD_REF_POINT	EPSG_CODE
+
+Coordinate system (epsg code) used is specified in DESIGN sheet. If using WSG 84 (epsg code 4623), use decimal format with precision up to centimeters.
+
+**Wordt opgeslagen in `design_def`**
+
+## Variables
+
+SITE_ID	SITE_NAME	WILDCARD_sub_ID	composed_site_id inventory_id
+INVENTORY_YEAR	
+INVENTORY_TYPE	PLOTS_LIST	
+CIRCLE_NO	CIRCLE_RADIUS	CIRCLE_AZIMUTH	CIRCLE_DISTANCE	
+POM_MARK	
+STANDING_ALIVE_THRESHOLD	STANDING_DEAD_THRESHOLD	LYING_ALIVE_THRESHOLD	LYING_DEAD_THRESHOLD	
+SPECIES_POOL	
+LIS_CWD	
+BOUNDARY	STEM_COORD_REF_POINT	EPSG_CODE
+
+```{r results='hide'}
+names(plotdata)
+names(plotdata_def)
+names(list_BR)
+
+design_ <- plotdata %>%
+  left_join(list_BR %>% select(forest_reserve_FM_adjusted, plottype
+                               , period, INVENTORY_YEAR
+                               , PLOTS_LIST)) %>% 
+  group_by(INVENTORY_YEAR
+           , forest_reserve_FM_adjusted, plottype, period
+           , PLOTS_LIST
+           , CIRCLE_NO, CIRCLE_RADIUS
+           , STANDING_ALIVE_THRESHOLD, STANDING_DEAD_THRESHOLD
+           , LYING_DEAD_THRESHOLD, LYING_ALIVE_THRESHOLD) %>% 
+  summarize(n_plots = n()) %>% 
+  ungroup() %>% 
+  # beslist om geen CWD aan te leveren
+      # left_join(cwd %>% group_by(forest_reserve_FM_adjusted, period, plottype) %>% 
+      #             summarize() %>% ungroup() %>% 
+      #             mutate(cwd_survey = TRUE)
+      #           , by = c("forest_reserve_FM_adjusted", "plottype", "period")) %>% 
+  # left_join(link_WC_FM, by = c("forest_reserve_fieldmap", plottype))
+  mutate(INVENTORY_TYPE = ifelse(plottype == "CA", "LPI", 
+                                   ifelse(plottype == "CP", "SPI", NA))
+         # , PLOTS_LIST
+         , CIRCLE_AZIMUTH = ifelse(plottype == "CP", 0, NA)  # centre of the appropriate sub-circle
+         , CIRCLE_DISTANCE = ifelse(plottype == "CP", 0, NA)  # centre of the appropriate sub-circle
+         , POM_MARK = "N"
+         , SPECIES_POOL = "AWS"  # all woody species
+         # LIS enkel bij Wijnendale en Everzwijnbad, CP's, decade3
+         # beslist om niet aan te leveren
+              # , LIS_CWD = ifelse(cwd_survey & !is.na(cwd_survey), "Y", "N")
+         , LIS_CWD = "N"
+         , STEM_COORD_REF_POINT = "BHC"
+         , EPSG_CODE = "4326"  # GCS_WGS_1984 - EPSG:4326
+         ) 
+
+names(design_)
+nrow(design_)  # 118
+
+t <- design_ %>% filter(str_detect(forest_reserve_FM_adjusted,"Sevendonck"))
+design_ %>% filter(str_detect(forest_reserve_FM_adjusted,"Zoni"))
+```
+
+
+```{r}
+design_def <- design_ %>%
+  select(INVENTORY_YEAR
+         # ,SITE_ID, SITE_NAME, WILDCARD_sub_ID # op einde pas link leggen
+         , INVENTORY_TYPE
+         , PLOTS_LIST
+         , CIRCLE_NO, CIRCLE_RADIUS
+         , CIRCLE_AZIMUTH, CIRCLE_DISTANCE, 
+         , POM_MARK
+         , STANDING_ALIVE_THRESHOLD, STANDING_DEAD_THRESHOLD
+         , LYING_ALIVE_THRESHOLD, LYING_DEAD_THRESHOLD
+         , SPECIES_POOL 
+         , LIS_CWD
+         # , BOUNDARY: NIET, shapefiles te bezorgen
+         , STEM_COORD_REF_POINT, EPSG_CODE
+         # extra vars (! zonder plot_id)
+         , forest_reserve_FM_adjusted, plottype, period
+         )
+
+names(design_def)
+```
+<br>
+
+# Link wildcard_id
+
+Helemaal naar achteren, want `list_plots` nodig en die is gemaakt obv 
+processed data.
+
+Dan pas alles koppelen.
+
+Wildcard id's:
+
+- SITE_ID	
+- SITE_NAME	
+- WILDCARD_sub_ID
+- composed_site_id
+
+
+=> link met onze FM-id's van de reservaten
+
+- plot_id
+- period
+- forest_reserve_FM_adjusted  (Sevendonck A/Q ipv Sevendonck)
+- plottype
+
+```{r link_WC_FM, results = 'hide'}
+link_WC_FM <- read_xlsx(paste0(path_to_project_teamdrive, "/LINK_WILDCARD_fieldmap_Yannick_AL.xlsx")
+                        , sheet = "Link_FM_vs2") %>% 
+  select(-forest_reserve_fieldmap)
+
+names(link_WC_FM)
+names(design_def)
+```
+
+```{r link_DESIGN, results='hide'}
+
+design_def_link <- design_def %>% 
+  left_join(link_WC_FM %>% select(-comment, -subarea, -`LPI_ID / SPI_ID`)
+            , by = c("forest_reserve_FM_adjusted", "plottype")) %>% 
+  # inventory_id = institute__dataset__inventory_year__site_id__wildcard_sub_id__inventory_type
+  mutate(inventory_id = paste("INBO__NA", INVENTORY_YEAR, SITE_ID, WILDCARD_sub_ID, INVENTORY_TYPE, sep = "__")) %>% 
+  select(SITE_ID, SITE_NAME, WILDCARD_sub_ID, composed_site_id, inventory_id
+         , everything())
+
+head(design_def_link)
+
+```
+
+```{r results='hide'}
+# check
+t <- design_def_link %>% filter(str_detect(forest_reserve_FM_adjusted, "Sevendonck"))
+names(list_BR)
+names(list_plots)
+t2 <- design_def_link %>% filter(forest_reserve_FM_adjusted == "Zoniën UITBR_1995")
+t3 <- design_def_link %>% filter(str_detect(SITE_NAME, "Zoni"))
+
+# overal link?
+design_def_link %>% filter(is.na(SITE_ID)) %>% nrow() == 0
+```
+
+```{r eval= FALSE, results='hide'}
+# records zonder link naar SITE_ID verwijderen - niet meer nodig
+
+# design_def_link_ <- design_def_link %>% 
+#   filter(!is.na(SITE_ID))
+# 
+# nrow(design_def_link_) == nrow(design_def_link) - 2
+# 
+# design_def_link <- design_def_link_
+```
+
+```{r link_PLOTS, results='hide'}
+names(link_WC_FM)
+names(plotdata_def)
+
+plotdata_def_link <- plotdata_def %>% 
+  left_join(list_BR %>% select(forest_reserve_FM_adjusted, plottype
+                               , period, INVENTORY_YEAR)) %>% 
+  left_join(link_WC_FM %>% select(-comment, -subarea, -`LPI_ID / SPI_ID`)
+            , by = c("forest_reserve_FM_adjusted", "plottype")) %>% 
+  select(SITE_ID, SITE_NAME, WILDCARD_sub_ID
+         , everything())
+
+nrow(plotdata_def_link) == nrow(plotdata_def) 
+```
+
+```{r results='hide'}
+# check
+t <- plotdata_def_link %>% filter(forest_reserve_FM_adjusted == "Sevendonck A")
+names(list_BR)
+names(list_plots)
+t2 <- plotdata_def_link %>% filter(forest_reserve_FM_adjusted == "Everzwijnbad")
+
+# overal link?
+plotdata_def_link %>% filter(is.na(SITE_ID)) %>% nrow() == 0
+```
+
+```{r link_STANDING, results='hide'}
+names(link_WC_FM)
+names(standing)
+
+standing_link <- standing %>% 
+  left_join(list_BR %>% select(forest_reserve_FM_adjusted, plottype
+                               , period, INVENTORY_YEAR)) %>% 
+  left_join(link_WC_FM %>% select(-comment, -subarea, -`LPI_ID / SPI_ID`)
+            , by = c("forest_reserve_FM_adjusted", "plottype")) %>% 
+  select(SITE_ID, SITE_NAME, WILDCARD_sub_ID
+         , everything())
+
+nrow(standing_link) == nrow(standing) 
+```
+
+
+```{r link_LYING, results='hide'}
+names(link_WC_FM)
+names(lying)
+
+lying_link <- lying %>% 
+  left_join(list_BR %>% select(forest_reserve_FM_adjusted, plottype
+                               , period, INVENTORY_YEAR)) %>% 
+  left_join(link_WC_FM %>% select(-comment, -subarea, -`LPI_ID / SPI_ID`)
+            , by = c("forest_reserve_FM_adjusted", "plottype")) %>% 
+  select(SITE_ID, SITE_NAME, WILDCARD_sub_ID
+         , everything())
+
+nrow(lying_link) == nrow(lying) 
+```
+
+
+```{r link_CWD_NIET, results='hide', eval = FALSE}
+# names(link_WC_FM)
+# names(cwd)
+# 
+# cwd_link <- cwd %>% 
+#   left_join(list_BR %>% select(forest_reserve_FM_adjusted, plottype
+#                                , period, INVENTORY_YEAR)) %>% 
+#   left_join(link_WC_FM %>% select(-comment, -subarea, -`LPI_ID / SPI_ID`)
+#             , by = c("forest_reserve_FM_adjusted", "plottype")) %>% 
+#   select(SITE_ID, SITE_NAME, WILDCARD_sub_ID
+#          , everything())
+# 
+# nrow(cwd_link) == nrow(cwd) 
+# nrow(cwd_link %>% filter(is.na(SITE_ID))) == nrow(cwd_link %>% filter(forest_reserve_FM_adjusted == "De heide"))
+# 
+# cwd_link <- cwd_link %>% 
+#   filter(!is.na(SITE_ID))
+```
+
+
+```{r link_GROUND_VEG, results='hide'}
+names(link_WC_FM)
+names(ground_veg)
+
+ground_veg
+
+ground_veg_link <- ground_veg %>% 
+  left_join(list_BR %>% select(forest_reserve_FM_adjusted, plottype
+                               , period, INVENTORY_YEAR)) %>% 
+  left_join(link_WC_FM %>% select(-comment, -subarea, -`LPI_ID / SPI_ID`)
+            , by = c("forest_reserve_FM_adjusted", "plottype")) %>% 
+  select(SITE_ID, SITE_NAME, WILDCARD_sub_ID
+         , everything())
+
+nrow(ground_veg_link) == nrow(ground_veg) 
+
+```
+<br>
+
+# Wegschrijven output
+
+De resultaten worden weggeschreven naar txt (Separator = tab, Decimal =	.) en xls: 
+
+- INBO_Design.txt
+- INBO_Plots.txt   
+- INBO_Standing.txt   
+- INBO_Lying.txt   
+<!-- - INBO_CWD.txt    -->
+- INBO_ground_veg.txt
+
+Daarnaast ook volgende lookuplijsten:   
+
+- qSpecies.txt   
+- qDecaystage.txt   
+- qVitality.txt  
+- qHerbSpecies.txt   
+
+En tenslotte de shapefiles van de CA-plots en de grens van het reservaat (voor de CP's)
+ipv veld "BOUNDARY" in DESIGN.txt (gevraagd aan Yannick (mail 25/9/2024)):   
+
+- It defines the geometry of *site boundaries* and *LPI plot boundaries*. 
+  Site boundary is indicated by the black line in Fig. 1A. 
+  If possible fill in as a well-known text geometry (WKT).
+  e.g. type Polygon for site boundary or one LPI plot, MultiPolygon for site boundary + one or multiple LIP plots. 
+
+- Alternatively please provide shapefiles.
+
+```{r final_check, eval = FALSE}
+#
+summary(lying_link)
+# 45 NA's voor D1/2: OK, want intacte bomen
+# 87 NA's voor decay - OK, kan
+names(lying)
+names(lying0)
+lying0 %>% filter(is.na(calc_volume_m3)) %>% nrow() == 0
+# t <- lying0 %>% 
+#   filter(is.na(calc_volume_m3)) %>% 
+#   select(forest_reserve, plottype
+#          , plot_id, period, year, lying_deadw_id
+#          , intact_fragm
+#          , species
+#          , contains(c("calc", "total", "diam", "vol")))
+# t %>% distinct(forest_reserve, plottype)
+# period 3: nog niet bijgewerkt (calc_volume inside plot en bijwerken calc_volume)
+# ok 25/9/2024
+
+#
+# summary(cwd_link)
+
+#
+summary(standing_link)
+standing_link %>% filter(is.na(VOLUME)) %>% nrow() == 0
+# standing0 %>% filter(is.na(vol_bole_m3)) %>% 
+#   select(plot_id, period
+#          , tree_id, tree_measure_id, old_id, coppice_id
+#          , ind_sht_cop, alive_dead, species, intact_snag
+#          , contains(c("m2", "m3")))
+# !! intact_snag = 12, maar geen hoogte - ok; (intact van gemaakt in moederdb)
+
+#
+summary(plotdata_def_link)
+plotdata_def_link %>% filter(is.na(SAMPLED_AREA)) %>% nrow() == 0
+# plotdata_def_link %>% filter(SITE_ID == 7) # OK, opgelost
+
+#
+summary(design_def_link)
+design_def_link %>% filter(is.na(LYING_DEAD_THRESHOLD)) %>% nrow() 
+design_def_link %>% filter(is.na(LYING_DEAD_THRESHOLD)) %>% distinct(SITE_NAME, WILDCARD_sub_ID, period)
+# OK, geen deadwood opname gebeurd
+```
+
+```{r results='hide'}
+# check voor NA's site-id
+names(design_def_link)
+col <- c("SITE_ID", "SITE_NAME", "INVENTORY_YEAR")
+
+design_def_link %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+plotdata_def_link %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+standing_link %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+lying_link %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+# cwd_link %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+ground_veg_link %>% filter(PLOT_SAMPLED == "Y") %>% 
+  filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+
+```
+
+
+```{r EENMALIG_deadw_bijwerken_moederdb, eval=FALSE}
+# ondertussen ook in MDB versie 20240930 bijgesneden en CalcVol/Length bijgewerkt
+
+
+# enkel deadw_3eSET
+    # qry_update_calc_vol <- paste0("UPDATE Deadwood_3eSET SET Deadwood_3eSET.CalcVolume_m3 = Deadwood_3eSET.Volume_m3 WHERE ((Deadwood_3eSET.CalcVolume_m3 Is Null) AND (Deadwood_3eSET.IntactFragment=20))") %>%
+    #            noquote()
+    # 
+    # qry_update_calc_length <- "UPDATE Deadwood_3eSET SET Deadwood_3eSET.CalcLength_m = Deadwood_3eSET.Length_m WHERE ((Deadwood_3eSET.CalcLength_m) Is Null)" %>%
+    #            noquote()
+    #   
+    # conn <- odbcConnectAccess2007(path_to_fieldmap_db)
+    # 
+    # sqlQuery(conn,qry_update_calc_vol)
+    # sqlQuery(conn,qry_update_calc_length)
+    # 
+    # odbcClose(conn)
+```
+
+
+
+
+```{r WegschrijvenOutput, eval = FALSE}
+# zonder extra variables  "forest_reserve_fieldmap"  forest_reserve_FM_adjusted" "plot_id" "plottype" "period" 
+# extra_vars
+
+write.table(design_def_link %>% select(-forest_reserve_FM_adjusted, -plottype, -period)
+            , paste0(path_to_datarequest_teamdrive, "INBO_Design.txt")
+            , sep = " ", dec = ".")
+
+write.table(plotdata_def_link %>% select(-all_of(extra_vars), -composed_site_id)
+            , paste0(path_to_datarequest_teamdrive, "INBO_Plots.txt")
+            , sep = " ", dec = ".")
+
+write.table(standing_link %>% select(-all_of(extra_vars), -tree_measure_id, -composed_site_id)
+            , paste0(path_to_datarequest_teamdrive, "INBO_Standing.txt")
+            , sep = " ", dec = ".")
+# lookuplists
+write.table(qSpecies, paste0(path_to_datarequest_teamdrive, "qSpecies.txt")
+            , sep = " ", dec = ".")
+write.table(qDecaystage, paste0(path_to_datarequest_teamdrive, "qDecaystage.txt")
+            , sep = " ", dec = ".")
+write.table(qiufrovitality, paste0(path_to_datarequest_teamdrive, "qVitality.txt")
+            , sep = " ", dec = ".")
+
+
+write.table(lying_link %>% select(-all_of(extra_vars), -composed_site_id)
+            , paste0(path_to_datarequest_teamdrive, "INBO_Lying.txt")
+            , sep = " ", dec = ".")
+
+# write.table(cwd_link %>% select(-all_of(extra_vars))
+#             , paste0(path_to_datarequest_teamdrive, "INBO_CWD.txt")
+#             , sep = " ", dec = ".")
+
+
+write.table(ground_veg_link %>% select(-all_of(extra_vars), -composed_site_id)
+            , paste0(path_to_datarequest_teamdrive, "INBO_ground_veg.txt")
+            , sep = " ", dec = ".")
+# lookuplists
+write.table(qHerbSpecies, paste0(path_to_datarequest_teamdrive, "qHerbSpecies.txt")
+            , sep = " ", dec = ".")
+```
+
+
+```{r WegschrijvenOutput_csv, eval = FALSE}
+# idem als txt, maar voor gemak ook naar xls
+
+write_csv2(design_def_link %>% select(-forest_reserve_FM_adjusted, -plottype, -period)
+            , paste0(path_to_datarequest_teamdrive, "csv/INBO_Design.csv"))
+
+write_csv2(plotdata_def_link %>% select(-all_of(extra_vars))
+            , paste0(path_to_datarequest_teamdrive, "csv/INBO_Plots.csv"))
+
+write_csv2(standing_link %>% select(-all_of(extra_vars), -tree_measure_id)
+            , paste0(path_to_datarequest_teamdrive, "csv/INBO_Standing.csv")
+            )
+# lookuplists
+write_csv2(qSpecies, paste0(path_to_datarequest_teamdrive, "csv/qSpecies.csv")
+            )
+write_csv2(qDecaystage, paste0(path_to_datarequest_teamdrive, "csv/qDecaystage.csv")
+            )
+write_csv2(qiufrovitality, paste0(path_to_datarequest_teamdrive, "csv/qVitality.csv")
+            )
+
+
+write_csv2(lying_link %>% select(-all_of(extra_vars))
+            , paste0(path_to_datarequest_teamdrive, "csv/INBO_Lying.csv")
+            )
+
+# write_csv2(cwd_link %>% select(-all_of(extra_vars))
+#             , paste0(path_to_datarequest_teamdrive, "csv/INBO_CWD.csv")
+#             )
+
+
+write_csv2(ground_veg_link %>% select(-all_of(extra_vars))
+            , paste0(path_to_datarequest_teamdrive, "csv/INBO_ground_veg.csv")
+            )
+# lookuplists
+write_csv2(qHerbSpecies, paste0(path_to_datarequest_teamdrive, "csv/qHerbSpecies.csv")
+            )
+```
+
+<br>
+
+# Read
+
+Checken of de geëxporteerde files goed in R ingelezen worden
+(er staat wel degelijk "NA" in de txt!)
+
+```{r check_read, eval = FALSE, results='hide'}
+#
+design_check <- read.table(paste0(path_to_datarequest_teamdrive, "INBO_Design.txt")
+                           , sep = " ", dec = ".")
+head(design_check)
+names(design_check)
+
+#
+plots_check <- read.table(paste0(path_to_datarequest_teamdrive, "INBO_Plots.txt")
+                           , sep = " ", dec = ".")
+head(plots_check)
+names(plots_check)
+
+
+#
+standing_check <- read.table(paste0(path_to_datarequest_teamdrive, "INBO_Standing.txt")
+                           , sep = " ", dec = ".")
+
+# standing_check <- standing_link %>% select(-all_of(extra_vars), -tree_measure_id)
+head(standing_check)
+names(standing_check)
+
+
+#
+lying_check <- read.table(paste0(path_to_datarequest_teamdrive, "INBO_Lying.txt")
+                           , sep = " ", dec = ".")
+head(lying_check)
+names(lying_check)
+
+#
+# cwd_check <- read.table(paste0(path_to_datarequest_teamdrive, "INBO_CWD.txt")
+#                            , sep = " ", dec = ".")
+# head(cwd_check)
+# names(cwd_check)
+# table(cwd_check$SITE_NAME)
+
+#
+ground_veg_check <- read.table(paste0(path_to_datarequest_teamdrive, "INBO_ground_veg.txt")
+                           , sep = " ", dec = ".")
+head(ground_veg_check)
+names(ground_veg_check)
+
+```
+
+```{r txt_metadata_vs2_Yannick, eval = FALSE}
+# < Yannick als txt (op vraag van Thomas voor extra info mbt onze methodiek)
+INBO_extended_Metadata_v2 <- read.table(paste0(path_to_datarequest_teamdrive, "INBO_extended_Metadata_v2.txt"), header = TRUE)
+
+INBO_user_Metadata_v2 <- read.table(paste0(path_to_datarequest_teamdrive, "INBO_user_Metadata_v2.txt"), header = TRUE)
+
+# wegschrijven op zelfde plaats als csv
+write.csv2(INBO_extended_Metadata_v2, paste0(path_to_datarequest_teamdrive, "csv/INBO_extended_Metadata_v2.csv"))
+write.csv2(INBO_user_Metadata_v2, paste0(path_to_datarequest_teamdrive, "csv/INBO_user_Metadata_v2.csv"))
+```
+
+<br>
+
+# Copy html to teamdrive
+
+Na knitting - manueel
+
+```{r eval = FALSE}
+# Specify the path of the file you want to copy
+source_file <- here::here(paste0("Scripts/AanvraagGegevens/INBO_Wildcard_EuFoRIa/Wildcard_Flanders_plot_data.html"))
+
+# Specify the destination directory where you want to copy the file
+destination_dir <- path_to_html_teamdrive
+
+# Copy the file to the destination directory
+file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
+# ? file.copy
+```

@@ -134,4 +134,6 @@ obv branch "statistics_and_other_issues".
 
 - 9/3/2022: ook tree-id toegevoegd, functie was nog niet in orde, maar licht aangepast  
 
-
+## sept 2024
+Forresdat van begin weer aanvullen
+Nu vertrekkende van een copy van de moederdatabank

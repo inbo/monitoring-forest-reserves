@@ -499,7 +499,7 @@ Volgende stappen worden doorlopen:
 
 <!-- 3) Estimer la hauteur: obv tabel "EqnHtBiom" én veld "eq_ht"  -->
 
-<!-- 4) Estime un volume pour les arbres dont 20<circ<22 et ceratins (certifieer) autres arbres -->
+<!-- 4) Estime un volume pour les arbres dont 20<circ<22 et certains (certifieer) autres arbres -->
 <!-- - varb = 1/3*(htot*(cir/100)^2) / (4*pi()) where varb is null or varb=0 -->
 <!-- REDEN: bij lage omtrekken is volume soms 0 obv Dagnelie => dan formule van kegel (?) -->
 <!-- MAAR dan moet het stukje < 7cm ervan afgetrokken worden -->

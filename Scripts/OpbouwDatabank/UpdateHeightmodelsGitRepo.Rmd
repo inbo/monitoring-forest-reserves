@@ -1,0 +1,86 @@
+---
+title: "Update repo heightmodels"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: yes
+      smooth_scroll: yes
+---
+
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = FALSE,  # FALSE: dan kan ik knitten zonder dat er iets gebeurt
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+library(readxl)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+
+```
+
+
+# Vraagstelling
+DOEL van dit script is om de hoogtemodellen als csv op te slaan en naar een 
+gitrepo te kopiëren.
+Bij de dataverwerking kunnen ze van daaruit ingeladen en gebruikt worden.
+Dit in kader van versiebeheer. 
+
+```{r results='hold', eval=TRUE}
+# van xlsx
+path_to_height_models
+path_to_heightmodels_teamdrive
+
+# naar csv op gitrepo
+path_to_forresheights
+```
+
+```{r}
+source_dir <- path_to_height_models
+destination_dir <- path_to_forresheights
+
+excel_files <- list.files(source_dir, pattern = "\\.xlsx$", full.names = TRUE)
+
+for (file in excel_files) {
+  # Extract file name without extension
+  file_name <- tools::file_path_sans_ext(basename(file))
+  
+  # Read Excel file
+  data <- read_excel(file)
+  
+  # Create path for CSV file in destination directory
+  csv_file <- file.path(destination_dir, paste0(file_name, ".csv"))
+  
+  # Write data to CSV file
+  write.csv2(data, csv_file, row.names = FALSE)
+}
+```
+
+```{r check}
+csv_files <- list.files(destination_dir, pattern = "\\.csv$", full.names = TRUE)
+
+head(csv_files)
+length(csv_files)
+# 67  / 72
+
+```
+
+**Na update van forresheights, project "forresheights.Rproj" openen en alles naar de cloud pushen**
+

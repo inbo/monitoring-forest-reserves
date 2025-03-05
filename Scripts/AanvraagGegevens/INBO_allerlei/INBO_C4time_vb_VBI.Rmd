@@ -1,0 +1,263 @@
+---
+title: "GEG_INBO_SelectiePlots"
+
+author: "Leen Govaere"
+
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: FALSE
+      smooth_scroll: FALSE
+
+---
+
+
+
+
+
+```{r Rm}
+rm(list=ls())
+
+```
+
+```{r Setup, include=FALSE}
+
+library(knitr)
+knitr::opts_chunk$set(
+  echo = FALSE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(tidyverse)
+library(RODBC)
+library(here)
+library(DT)
+library(openssl)
+library(kableExtra)
+# library(plotly)
+library(xlsx)
+# library(dplyr)
+library(sf)
+library(here)
+# library(stringr)
+# library(ggplot2)
+library(httr)
+library("ows4R")
+library(tmap)
+library(RColorBrewer)
+
+source(here::here('Scripts/bestandsnamen_invoergegevens.R'))
+source(here::here('Scripts/VBI_Functies.R'))
+source(here::here('Scripts/VBI3_Functies.R'))
+
+
+Verzoek <- 'LucDK_C_jongBos'
+run <- 'run_LG'
+#run <- 'run_AL'
+scriptNaam <- "GEG_INBO_SelectiePlots.Rmd"
+
+```
+
+# Luc vraagt plots 
+
+Zijn er in de set van proefvlakken die gediend hebben voor het artikel over koolstofaccumulatie, cirkelplots die voldoen aan
+ - oude bossen met vooral eik, met een hoge voorraad (>350 m3 per ha bvb)
+ - op een PNV 5 of 6 site
+ - in het geval van de VBI: gekoppelde plots
+ - bossen van openbare besturen (het is de bedoeling om bodemstalen te nemen).
+
+We hebben niet zoveel plots nodig: ik schat dat 5 à 10 volstaat, liefst wel verspreid over Vlaanderen. Ik kan er enkele bedenken in de bosreservaten: Muizenbos, Rodebos (kernvlakte weliswaar), Wijnendalebos, maar het zou goed zijn om nog wat meer mogelijkheden te hebben (ik denk bvb aan Buggenhoutbos).
+
+Selectie van :
+
+    - plots gebruikt bij de eerdere C-berekeningen
+    - PNV 5 of 6
+    - geen rand-of overgangsplots
+    - geen plots met verschillende segmenten
+    - inschatting bestandsleeftijd > 60 jaar
+    - bestandsvolume > 350 m³/ha
+    - bms met grootste G is Inlandse eik
+    - openbaar bos (eigendom ANB, technisch beheer, huur, erfpacht, toegewezen, beheerovereenkomst en protocol landsverdediging)
+    
+
+```{r include=FALSE}
+conn <- odbcConnectAccess2007(dbStrata_path)
+#sqlTables(conn)
+tblStrataStat <- sqlFetch(conn, "tblPlotStrataStatic")
+tblStrataDyn <- sqlFetch(conn, "tblPlotStrataDynamic")
+odbcClose(conn)
+
+    names(tblStrataStat) #PNV
+    names(tblStrataDyn) # OwnerType, RechtenANB_DateDendro, ForestTypeMegaGroupCode
+    unique(tblStrataDyn$RechtenANB_DateDendro)
+
+conn <- odbcConnectAccess2007(dbAnalyseData_path)
+#sqlTables(conn)
+tblKwal <- sqlFetch(conn, "tbl2BestandskaraktKwal")
+tblKwan <- sqlFetch(conn, "tbl3BestandskaraktKwant")
+
+odbcClose(conn)
+
+    names(tblKwal) #"v5_StandAge" v7_ForestEdge v8_ForestOvergang
+    names(tblKwan) #MaxBasalAreaSpeciesName, DiamClass4, v11_Volume_ha TotalBasalArea
+
+unique(tblKwal$v5_StandAge)
+
+
+
+conn <- odbcConnectAccess2007(dbMeetproces_path)
+#sqlTables(conn)
+tblRM <- sqlFetch(conn, "tblRepeatedMeasurement")
+coo <- sqlFetch(conn, "tblCoordinaten")
+
+odbcClose(conn)
+```
+
+
+
+
+
+```{r include=FALSE}
+tblRM_2_3 <- tblRM %>%
+    filter(timespan == "2_3" & rm_dendro == TRUE)
+
+# selectie op Periode 3, erna gaan we de hermeting uit Periode 2 toevoegen aan de analyseset
+analyseset <- tblKwal %>%
+    left_join(tblKwan, by = c("IDPlots", "IDSegments", "Periode")) %>%
+    left_join(tblStrataDyn, by = c("IDPlots", "IDSegments", "Periode")) %>%
+    left_join(tblStrataStat, by = "IDPlots") 
+
+# selectie op Periode 3, erna gaan we de hermeting uit Periode 2 toevoegen aan de analyseset
+lst_analyseset <- analyseset %>%
+    filter(Periode == 3) %>%
+    filter(IDPlots %in% tblRM_2_3$idplots) %>%
+    filter(v7_ForestEdge == FALSE & v8_ForestOvergang == FALSE) %>%
+    filter( ! (v5_StandAge %in% c("21 - 40 jaar", "41 - 60 jaar", "1 - 20 jaar"  ))) %>% # weglaten van plots die bij hermeting nog steeds jong zijn
+    filter(v11_Volume_ha > 350 & MaxBasalAreaSpeciesName == 'Inlandse eik') %>%
+    filter(RechtenANB_DateDendro %in% c("Eigendom", "Technisch beheer conform bosdecreet", "Huur", "Erfpacht", "Toegewezen obv RVV-Natuur", "Beheerovereenkomst", "Protocol landsverdediging")) %>%
+    filter(PNV %in% c(5,6))
+```
+
+
+```{r eval=FALSE, include=FALSE}
+# waar gelegen? ----
+wfs_anb<-"https://gis.natuurenbos.be/arcgis/services/Publicatie/PublicatieServiceDataSetsANB/MapServer/WFSServer?request=GetCapabilities&service=WFS&version=2.0.0"
+url <- parse_url(wfs_anb)
+
+anb_client <- WFSClient$new(wfs_anb,
+                            serviceVersion = "2.0.0")
+
+anb_client$getFeatureTypes(pretty = TRUE)
+
+
+url$query <- list(service = "wfs"
+                  , request = "GetFeature"
+                  , typename = "Publicatie_PublicatieServiceDataSetsANB:Inkleuring_RechtenANB"
+                  , srsName = "EPSG:31370")
+
+request <- build_url(url)
+
+print(Sys.time())
+sf_patb<- read_sf(request) #8'
+names(sf_patb)
+
+# geen domeinnaam in deze wms --> beter xy projecteren op kaartje tmap
+#
+```
+
+
+```{r include=FALSE}
+lst_analyseset <- lst_analyseset %>%
+    select(IDPlots, IDSegments, Periode, v5_StandAge, v11_Volume_ha, MaxBasalAreaSpeciesName, RechtenANB_DateDendro, PNV) 
+```
+
+```{r include=FALSE}
+subset_INBO <- analyseset %>%
+    filter(IDPlots %in% lst_analyseset$IDPlots & Periode %in% c(2,3))
+
+lijst_2_metingen <- subset_INBO %>%
+    group_by(IDPlots) %>%
+    dplyr::summarise(aantal = n()) %>%
+    arrange(desc(aantal)) %>%
+    filter(aantal == 2)
+
+analyseset_INBO <- subset_INBO %>%
+    filter(IDPlots %in% lijst_2_metingen$IDPlots)    %>%
+    left_join(coo, by = c(c("IDPlots" = "idplots"), c("Periode" = "periode")))
+
+```
+
+
+
+```{r}
+load(file=here::here("Scripts/Analysedatabank/Rdata/analyseSet_carbon_ABG.RData"))
+#names(analyseset_ABG)
+
+analyseset_ABG_P2 <- analyseset_ABG %>%
+    filter(Periode == 2)
+
+nrow(
+    analyseset_INBO %>% 
+        filter(Periode == 3) %>%
+        filter(IDPlots %in% analyseset_ABG_P2$IDPlots)
+    )
+
+result <- analyseset_INBO %>% 
+        filter(Periode == 3) %>%
+        filter(IDPlots %in% analyseset_ABG_P2$IDPlots) %>%
+        select(IDPlots, x, y, RechtenANB_DateDendro, v11_Volume_ha, MaxBasalAreaSpeciesName, PNV)
+```
+
+
+```{r include=FALSE}
+tmap_mode("view")
+sf_lst_analyseset <- result %>%
+    st_as_sf(coords = c("x" , "y"), crs = 31370 ) %>%
+    st_transform(crs = 31370)
+```
+
+```{r eval=FALSE, include=FALSE}
+
+st_crs(sf_lst_analyseset)
+st_write(sf_lst_analyseset, paste0(here::here(), "/Output/Shapes_tmp/subset_eik.shp"), append = FALSE)
+```
+
+
+
+
+```{r kaart, echo=FALSE}
+# trukje om gemiddelde als info tip te gebruiken -- als eerste attribuut zetten
+
+tm_shape(sf_lst_analyseset) +
+  tm_bubbles(col = "RechtenANB_DateDendro", size= 1, scale = .5) +
+  tm_legend(legend.outside = TRUE) +
+  tm_view()
+
+
+```
+
+
+
+Ook 3-maal heropgemeten? 
+
+```{r}
+result_ <- result %>% inner_join(tblRM, by = c("IDPlots" = "idplots"))
+
+result_ %>% 
+    filter(rm_dendro == TRUE) %>%
+    group_by(timespan) %>%
+    dplyr::summarise(aantal = n())
+    
+```
+
+```{r}
+st_crs(sf_lst_analyseset)
+```
+

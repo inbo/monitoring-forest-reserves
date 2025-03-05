@@ -1,0 +1,345 @@
+---
+title: "Json data packages - verkenning"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    code_folding: hide
+    fig_caption: yes
+    number_sections: yes
+    toc: yes
+    toc_float:
+      collapsed: no
+      smooth_scroll: no
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = FALSE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+#rm(list = ls())
+
+library(here)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+
+library(frictionless)
+# library (rlang)
+# library(dplyr)
+# library(RODBC)
+# library(lubridate)
+# library(knitr)
+# library(here)
+# library(openssl)
+# library(kableExtra)
+# library(stringr)
+
+
+```
+
+# Vraagstelling
+
+Heeft frictionless voordelen tov git2rdata
+
+json data-package naast csv
+
+Enkele voorbeelden doorgekregen van Els:
+
+Voor meer voorbeelden, zie datasets gepubliceerd door [INBO op Zenodo](https://zenodo.org/communities/inbo/?q=&l=list&p=1&s=10&sort=newest), 
+bv. [deze](https://zenodo.org/records/10054718) en 
+[deze](https://zenodo.org/records/10054709). 
+(Ik zie wel dat in deze willekeurig gekozen voorbeelden vooral .csv.gz zit, 
+waarschijnlijk omdat er geodata in zitten? In elk geval kan het ook met gewone .csv, 
+zoals er in het 2de voorbeeld eentje tussen zit.)
+
+Mooi verwoord: 
+
+Data in this package are exported from Movebank study 1259686571. 
+Fields in the data follow the Movebank Attribute Dictionary and are described 
+in datapackage.json. Files are structured as a Frictionless Data Package. 
+You can access all data in R via https://zenodo.org/records/10054718/files/datapackage.json 
+using frictionless.
+
+- datapackage.json: technical description of the data files.   
+- LBBG_JUVENILE-reference-data.csv: reference data about the animals, tags and deployments.   
+- LBBG_JUVENILE-gps-yyyy.csv.gz: GPS data recorded by the tags, grouped by year.   
+
+
+# Practisch
+
+Zie [info on package](https://cran.r-project.org/web/packages/frictionless/vignettes/frictionless.html)
+
+## Inlezen
+
+To read a Data Package, you need to know the path or URL to its descriptor file, 
+named datapackage.json. 
+That file describes the Data Package, provides access points to its Data Resources 
+and can contain dataset-level metadata. L
+et’s read a Data Package descriptor file published on Zenodo:
+
+```{r}
+package <- read_package("https://zenodo.org/record/10054718/files/datapackage.json")
+# warning is ok, standaard melding!
+```
+`read_package()` returns the content of datapackage.json as a list, 
+printed here with `str()` to improve readability:
+
+```{r}
+str(package, list.len = 3)
+
+str(package, list.len = 4)
+
+
+```
+The most important aspect of a Data Package are its Data Resources, which describe 
+and point to the data. You can list all included resources with `resources()`:
+
+```{r}
+resources(package)
+```
+
+This Data Package has 3 resources. Let’s read the data from the gps resource into a data frame:
+
+
+```{r}
+gps <- read_resource(package, "gps")
+gps
+```
+
+The data frame contains all GPS records, even though the actual data were split over 
+multiple CSV zipped files. 
+`read_resource()` assigned the column names and types based on the Table Schema 
+that was defined for that resource, not the headers of the CSV file.
+
+You can also read data from a local (e.g. downloaded) Data Package. In fact, there 
+is one included in the frictionless pkg, let’s read that one from disk:
+
+```{r}
+local_package <- read_package(
+  system.file("extdata", "datapackage.json", package = "frictionless")
+)
+#> Please make sure you have the right to access data from this Data Package for your intended use.
+#> Follow applicable norms or requirements to credit the dataset and its authors.
+read_resource(local_package, "media")
+```
+Data from the media was not stored in a CSV file, but directly in the data property of 
+that resource in datapackage.json. 
+`read_resource()` will automatically detect where to read data from.
+
+
+## Aanmaken
+
+Data Package is a good format to technically describe your data, e.g. if you are 
+planning to deposit it on research repository. It also goes a long way meeting FAIR principles.
+
+The frictionless pkg assumes your data are stored as a data frame or CSV files. 
+Let’s use the built-in dataset iris as your data frame.
+Create a Data Package with `create_package()` and add your data frame as a 
+resource with the name iris:
+
+```{r}
+library(dplyr)
+dplyr::as_tibble(iris)
+
+my_package <-
+  create_package() %>%
+  add_resource(resource_name = "iris", data = iris)
+```
+
+Note that you can chain most frictionless functions together using pipes (%>% or |>), 
+which improves readability.
+
+my_package now contains one resource:
+
+```{r}
+resources(my_package)
+```
+By default, `add_resource()` will create a Table Schema for your data frame, 
+describing its field names, field types and (for factors) constraints. 
+You can retrieve the schema of a resource with `get_schema()`. 
+It is a list, which we print here using `str()`:
+
+```{r}
+iris_schema <-
+  my_package %>%
+  get_schema("iris")
+
+str(iris_schema)
+
+```
+
+You can also create a schema from a data frame, using `create_schema()`:
+
+```{r}
+iris_schema <- create_schema(iris)
+```
+
+Doing so allows you to customize the schema before adding the resource. 
+E.g. let’s add a description for Sepal.Length:
+
+```{r}
+iris_schema$fields[[1]]$description <- "Sepal length in cm."
+# Show result
+str(iris_schema$fields[[1]])
+#> List of 3
+#>  $ name       : chr "Sepal.Length"
+#>  $ type       : chr "number"
+#>  $ description: chr "Sepal length in cm."
+```
+Since schema is a list, you can **use the purrr pkg to edit multiple elements at once**:
+
+```{r}
+# Remove description for first field
+iris_schema$fields[[1]]$description <- NULL
+
+# Set descriptions for all fields
+descriptions <- c(
+  "Sepal length in cm.",
+  "Sepal width in cm.",
+  "Pedal length in cm.",
+  "Pedal width in cm.",
+  "Iris species."
+)
+iris_schema$fields <- purrr::imap(
+  iris_schema$fields,
+  ~ c(.x, description = descriptions[.y])
+)
+
+str(iris_schema)
+```
+
+Let’s add iris as a resource to your Data Package again, but this time with the customized schema. 
+Note that you have to remove the originally added resource iris with remove_resource() first, 
+since Data Packages can only contain uniquely named resources:
+
+```{r}
+my_package <-
+  my_package %>%
+  remove_resource("iris") %>% # Remove originally added resource
+  add_resource(
+    resource_name = "iris",
+    data = iris,
+    schema = iris_schema # Your customized schema
+  )
+```
+
+## Bestaande csv's toevoegen
+
+If you already have your data stored as CSV files and you want to include them as is 
+as a Data Resource, you can do so as well. As with data frames, you can opt to create a 
+Table Schema automatically or provide your own.
+
+```{r}
+# Two CSV files with the same structure
+path_1 <- system.file("extdata", "observations_1.csv", package = "frictionless")
+path_2 <- system.file("extdata", "observations_2.csv", package = "frictionless")
+
+path_1
+# [1] "C:/R/library/frictionless/extdata/observations_1.csv"
+
+
+# Add both CSV files as a single resource
+my_package <-
+  my_package %>%
+  add_resource(resource_name = "observations", data = c(path_1, path_2))
+```
+
+Your Data Package now contains 2 resources, but you can add metadata properties as well 
+(see the Data Package documentation for an overview). Since it is a list, you can use 
+append() to insert properties at the desired place. Let’s add name as first and title 
+as second property:
+
+```{r}
+my_package <- append(my_package, c(name = "my_package"), after = 0)
+# Or with purrr::prepend(): prepend(my_package, c(name = "my_package))
+my_package <- append(my_package, c(title = "My package"), after = 1)
+```
+
+
+Note that in the above steps you started a Data Package from scratch with `create_package()`, 
+but you can use the same functionality to edit an existing Data Package read with `read_package()`.
+
+
+## Add descriptions using purr
+
+Since schema is a list, you can **use the purrr pkg to edit multiple elements at once**:
+
+```{r}
+# Remove description for first field
+iris_schema$fields[[1]]$description <- NULL
+
+# Set descriptions for all fields
+descriptions <- c(
+  "Sepal length in cm.",
+  "Sepal width in cm.",
+  "Pedal length in cm.",
+  "Pedal width in cm.",
+  "Iris species."
+)
+iris_schema$fields <- purrr::imap(
+  iris_schema$fields,
+  ~ c(.x, description = descriptions[.y])
+)
+
+str(iris_schema)
+```
+
+(c) Anja: geeft mogelijkheid om mijn csv's met metadata in te laden en zo toe te kennen 
+aan de verschillende velden
+Els Lommelen heeft code waarbij toewijzing gebeurt obv veldnaam ipv positie.
+
+
+
+## Export
+
+Now that you have created your Data Package, you can write it to a directory of your 
+choice with `write_package()`.
+
+```{r}
+write_package(my_package, "my_directory")
+```
+
+The directory will contain four files: the descriptor `datapackage.json`, 
+one CSV file containing the data for the resource `iris` and two CSV files 
+containing the data for the resource `observations`.
+
+```{r}
+list.files("my_directory")
+#> [1] "datapackage.json"   "iris.csv"           "observations_1.csv"
+#> [4] "observations_2.csv"
+```
+
+
+The frictionless pkg does not provide functionality to deposit your Data Package on 
+a research repository such as Zenodo, but here are some tips:   
+
+1. Validate your Data Package before depositing. You can do this in Python with the 
+Frictionless Framework using frictionless validate datapackage.json.    
+
+2. Zip the individual CSV files (and update their paths in datapackage.json) to reduce size, 
+not the entire Data Package. That way, users still have direct access to the 
+datapackage.json file. See `this example`(https://zenodo.org/records/5061303#files).     
+
+3. Only describe the technical aspects of your dataset in datapackage.json 
+(fields, units, the dataset identifier in id). 
+Authors, methodology, license, etc. are better described in the metadata fields 
+the research repository provides.   
+
+
+
+
+
+
+

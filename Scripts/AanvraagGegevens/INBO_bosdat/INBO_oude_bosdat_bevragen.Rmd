@@ -1,0 +1,465 @@
+---
+title: "Tabellen uit bosdat ophalen, joinen en exporteren"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: FALSE
+      smooth_scroll: FALSE
+---
+
+# Setup
+
+```{r rm}
+rm(list=ls())
+```
+
+
+```{r setup0, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+
+library(RODBC)
+library(readr)
+library(dplyr)
+library(tidyr)
+library(dhcurve)
+library(readxl)
+library(stringr)
+library(writexl)
+
+```
+
+
+```{r Path}
+# deze worden ook in "Setup.R" gedefinieerd (aanroepen van "Paths.R")
+# hier ev. extra "paths" toevoegen indien nodig 
+
+path_to_datarequests
+path_to_datarequests_gdrive
+
+path_to_datarequest <- paste0(path_to_datarequests, "INBO_bosdat/")
+path_to_datarequest_gdrive <- paste0(path_to_datarequests_gdrive, "INBO_bosdat/")
+
+```
+
+
+# Ophalen gegevens
+
+1) **Bosdat-data**
+Opgemeten in kader van de beheerplanning, eerder voor volumebepalingen, dan voor opstellen van dh-curves
+- T4-metingen: omtrekklasse + 1 à 3 hoogtes + totaal aantal bomen in deze omtrekklasse
+- T7-metingen: omtrek + hoogte - per boom
+Beide types metingen komen zowel in volopnames als proefvlakopnames voor.
+
+
+2) **Nieuwe metingen**
+Terreinploegen op pad gestuurd, specifiek voor opmeten van hoogtes.
+Hier wellicht geen uitgebroken toppen, of schuinstaande bomen.
+
+
+## Mdb
+
+> probleem met dataconnectie
+
+```{r try_connection, eval = FALSE}
+# probleem met dataconnectie
+
+library(odbc)
+conexion <- dbConnect(odbc::odbc(),
+                      .connection_string = "Driver={Microsoft Access Driver (*.mdb, *.accdb)};
+                      Dbq=C:/03_BR_gebieden/Bertembos/bosreservaatgemeentebertembosdat5/bosdat5.mdb;", 
+                      encoding = "latin1") # This is only for data with non ASCII characters
+
+
+odbcListDrivers()
+```
+
+Have in mind that the "Driver" parameter could be different depending on your Microsoft Access version (older versions use a different database engine)
+
+
+```{r data_mdb_NOT, eval = FALSE}
+# temp bosdat probeersel ------------------------
+con <- odbcConnectAccess(paste0(dbpath, "bosdat5.mdb"))
+
+# con <- odbcConnectAccess2007(paste0(dbpath, "bosdat_link.accdb"))
+# 
+# con <- odbcConnectAccess2007(paste0(dbpath, "grotenhout-bosdat4.mdb"))
+# 
+overview_tbls <- sqlTables(con)
+
+opname <- sqlFetch(con, "BOS_OPNAME")
+totalen <- sqlFetch(con, "BOSBESTAND_PARAMETERS_BMS")
+OPNAME_TABEL_T7 <- sqlFetch(con, "OPNAME_TABEL_T7")
+OPNAME_TABEL_T4 <- sqlFetch(con, "OPNAME_TABEL_T4")
+opnametabel <- sqlFetch(con, "OPNAME_TABEL")
+
+odbcClose(con)
+
+```
+
+## Accdb
+
+### Bertembos 
+Pieter heeft bosdat Bertembos omgevormd en toegankelijk gemaakt
+
+```{r paths_bertembos}
+name_forest <- "Bertembos"
+name_db <- "bosdat5.accdb"
+
+# automatisc
+db <- paste0(path_to_datarequest, "/", name_forest, "/", name_db)
+
+output_path <- paste0(path_to_datarequest, name_forest, "/")
+output_path_gdrive  <- paste0(path_to_datarequest_gdrive, name_forest, "/")
+
+```
+
+
+```{r data_accdb}
+con <- odbcConnectAccess2007(db)
+
+overview_tbls <- sqlTables(con) %>% filter(TABLE_TYPE != "SYSTEM TABLE")
+
+# bosbestand - ligging
+BOSBESTAND <- sqlFetch(con, "BOSBESTAND")
+BOS_BOSPERCEEL <- sqlFetch(con, "BOS_BOSPERCEEL")
+BOS_BOSPLAATS <- sqlFetch(con, "BOS_BOSPLAATS")
+BOS_BOSDOMEIN <- sqlFetch(con, "BOS_BOSDOMEIN")
+
+# bosbestand - info (lftd, menging, ...)
+BOS_BOSBESTAND <- sqlFetch(con, "BOS_BOSBESTAND")
+
+# bosopname - welk proefvlak
+OPNAME_TABEL <- sqlFetch(con, "OPNAME_TABEL")
+BOS_OPNAME <- sqlFetch(con, "BOS_OPNAME")
+
+# bosopname - metingen
+OPNAME_TABEL_T7 <- sqlFetch(con, "OPNAME_TABEL_T7")
+OPNAME_TABEL_T4 <- sqlFetch(con, "OPNAME_TABEL_T4")
+
+# lookuplijsten
+qBOS_BMS <- sqlFetch(con, "BOS_BMS")
+qBOS_BOOMGROEP <- sqlFetch(con, "BOS_BOOMGROEP")
+qOMTREKKLASSE <- sqlFetch(con, "OMTREKKLASSE") #enkel T4
+qBOS_OPNAME_TYPE <- sqlFetch(con, "BOS_OPNAME_TYPE")
+# Volopname, Proefvlakopname, Dreef / Randzone
+qBOS_PROEFCIRKELTYPE <- sqlFetch(con, "BOS_PROEFCIRKELTYPE")
+qBOS_TYPE <- sqlFetch(con, "BOS_TYPE")
+
+qBOS_LEEFTIJD <- sqlFetch(con, "BOS_LEEFTIJD")
+qBOS_MENGINGSVORM <- sqlFetch(con, "BOS_MENGINGSVORM")
+qBOS_SLUITINGSGRAAD <- sqlFetch(con, "BOS_SLUITINGSGRAAD")
+qBOS_BESTANDSTYPE <- sqlFetch(con, "BOS_BESTANDSTYPE")
+qBOS_BESTAND_LEEFTIJDSKLASSE <- sqlFetch(con, "BOS_BESTAND_LEEFTIJDSKLASSE")
+qBOS_BEDRIJFSVORM <- sqlFetch(con, "BOS_BEDRIJFSVORM")
+
+
+# berekende waardes - vaak leeg
+totalen <- sqlFetch(con, "BOSBESTAND_PARAMETERS_BMS")
+
+odbcClose(con)
+
+```
+
+
+# Tabellen
+
+- *OPNAME_TABEL_T1 tem T7*: opnames zelf (hoogtes, dbh, aantallen, ...)
+  - T4 en T7 bevatten dendro > 7 cm dbh    
+  
+- *OPNAME_TABEL*: overzicht van alle opnames (T1 tem T7) met link naar de opnames 
+in de opnametabellen via `OPNAME_TABEL_ID`; info over T1/../T7 in `TAB_NAAM`   
+
+- *BOS_OPNAME*: link tss de opname en BOSBESTAND (`BOSBESTAND_ID`) en zo 
+verder naar perceel, bosplaats en domein
+
+- *BOSBESTAND*: bevat veld `HC_BOSBESTAND_STR` (bv. gemeentebos bertem_bosreservaat_1_a),
+maar ook link naar perceel (`BOS_BOSPERCEEL_ID`) en zo verder naar bosplaats en domein
+
+- *BOS_BOSBESTAND*: bevat alle info over het bestand zoals lftd, bestandstype, bedrijfsvorm, 
+mengingsvorm, sluitingsgraad, bedekking avk, liggend dood hout
+
+
+```{r}
+str(OPNAME_TABEL_T4)
+str(OPNAME_TABEL_T7)
+str(OPNAME_TABEL)
+table(OPNAME_TABEL$OMSCH, OPNAME_TABEL$TAB_NAAM)
+
+str(BOS_OPNAME)
+head(BOS_OPNAME$HC_BOS_OPNAME_STR)
+
+str(BOSBESTAND)
+head(BOSBESTAND$HC_BOSBESTAND_STR)
+
+str(BOS_BOSPERCEEL)
+str(BOS_BOSPLAATS)
+str(BOS_BOSDOMEIN)
+
+# info over bosbestand
+str(BOS_BOSBESTAND)
+
+# lookup
+str(qBOS_BMS)
+str(qBOS_BOOMGROEP)
+str(qOMTREKKLASSE)
+
+str(qBOS_OPNAME_TYPE)
+# unique(qBOS_OPNAME_TYPE$OMSCH)
+
+str(qBOS_PROEFCIRKELTYPE)
+```
+
+
+# Relaties
+
+**bosbestand - locatie**
+BOSBESTAND (met `HC_BOSBESTAND_STR`) ---> BOS_BOSPERCEEL ---> BOS_BOSPLAATS ---> BOS_BOSDOMEIN
+
+(`HC_BOSBESTAND_STR`: bv. gemeentebos bertem_bosreservaat_1_a)
+
+
+**opnames**
+OPNAME_TABEL_T7 ---> OPNAME_TABEL ---> BOS_OPNAME ---> BOSBESTAND ---> BOS_BOSBESTAND
+
+**bosbestand - info**
+BOS_BOSBESTAND (met `HC_BOSBESTAND_STR`) ---> BOSBESTAND 
+
+
+## ID's omvormen
+
+Vroeger gebruikte ik "b_",  zdd bij openen in excel of access de id's als string 
+weergegeven worden (numeric wordt soms afgerond of als e-10 weergegeven wat join bemoeilijkt)
+Nu toch "as.character", lijkt me goed genoeg
+
+```{r list_ID_as_char}
+# Namen van alle dataframes waarvan ik ID as character wil opslaan
+dataframe_names <- c("OPNAME_TABEL_T7", "OPNAME_TABEL_T4", "OPNAME_TABEL", 
+                     "BOS_BOSBESTAND", "BOS_BOSDOMEIN", "BOS_BOSPERCEEL", "BOS_BOSPLAATS",
+                     "BOS_OPNAME", "BOSBESTAND",
+                     "qBOS_BMS", "qBOS_BOOMGROEP", 
+                     "qBOS_OPNAME_TYPE", "qBOS_PROEFCIRKELTYPE",
+                     "qOMTREKKLASSE", "qBOS_TYPE", "qBOS_LEEFTIJD", 
+                     "qBOS_MENGINGSVORM", "qBOS_SLUITINGSGRAAD", "qBOS_BESTANDSTYPE", 
+                     "qBOS_BESTAND_LEEFTIJDSKLASSE", "qBOS_BEDRIJFSVORM")
+
+# Creëer een lijst van dataframes uit de namen
+list_dataframes <- mget(dataframe_names)  
+# dan direct naam van df in list (<--> list("OPNAME_TABEL_T7", "OPNAME_TABEL"))
+```
+
+```{r ID_as_char}
+# functie
+convert_ID_to_char <- function(dataframe){
+  # Zoek naar velden met "_ID" in de naam en zet ze om naar karakter
+  cols_to_convert <- names(dataframe)[grep("_ID", names(dataframe))]
+  # Converteer naar karakter
+  dataframe[cols_to_convert] <- lapply(dataframe[cols_to_convert], as.character)
+  dataframe
+}
+
+# for-loop om de functie op elk dataframe toe te passen en de dataframes te overschrijven
+for (df_naam in dataframe_names) {
+  list_dataframes[[df_naam]] <- convert_ID_to_char(list_dataframes[[df_naam]])
+}
+
+# overschrijf de oorspronkelijke dataframes met de gewijzigde dataframes
+for (df_naam in dataframe_names) {
+  assign(df_naam, list_dataframes[[df_naam]])
+}
+
+# check
+str(OPNAME_TABEL)
+str(OPNAME_TABEL_T7)
+```
+
+
+# Resulterende tabellen    
+
+Welke tabellen wil ik?
+
+- **OPNAME_TABEL_T7_** en **OPNAME_TABEL_T4_**: tabellen met metingen en boomsoort 
+en link naar de opname
+
+
+- **OPNAME_TABEL_**: een tabel met alle beschikbare opnames en bijhorende info 
+(T4 of T7, datum, proefvlaknr, ...); deze info moet immers niet bij elke 
+hoogtemeting toegevoegd worden
+!! hier ook info over bostype (hooghout, hakhout, middelhout), dit wordt niet 
+op bestandsniveau genoteerd
+
+
+- **BOSBESTAND_**: een tabel met alle info over het bosbestand: naam (nr), 
+bestandstype, lftd, menging, sluiting, ....
+!! info over bostype wordt op proefvlakniveau bepaald (hakhout, hooghout, ...)
+
+
+```{r T7}
+str(BOS_OPNAME)
+
+OPNAME_TABEL_T7_ <- OPNAME_TABEL_T7 %>% 
+  left_join(qBOS_BMS %>% select(BOS_BMS_ID, BMS = OMSCH)
+            , by = c("BMS_ID" = "BOS_BMS_ID")) %>% 
+  left_join(OPNAME_TABEL %>% rename(OPNAME = OMSCH)) %>% 
+  left_join(BOS_OPNAME %>% select(BOS_OPNAME_ID, BOSBESTAND_ID, 
+                                  PROEFVLAKNUMMER, DATUM_OPNAME)) %>% 
+  left_join(BOSBESTAND %>% select(BOSBESTAND_ID, HC_BOSBESTAND_STR))
+
+str(OPNAME_TABEL_T7_)
+
+```
+
+
+
+```{r T4}
+str(BOS_OPNAME)
+
+OPNAME_TABEL_T4_ <- OPNAME_TABEL_T4 %>% 
+  left_join(qBOS_BMS %>% select(BOS_BMS_ID, BMS = OMSCH)
+            , by = c("BMS_ID" = "BOS_BMS_ID")) %>% 
+  left_join(qOMTREKKLASSE %>% select(OMTREKKLASSE_ID, OMTREKKLASSE)) %>% 
+  left_join(OPNAME_TABEL %>% rename(OPNAME = OMSCH)) %>% 
+  left_join(BOS_OPNAME %>% select(BOS_OPNAME_ID, BOSBESTAND_ID, 
+                                  PROEFVLAKNUMMER, DATUM_OPNAME)) %>% 
+  left_join(BOSBESTAND %>% select(BOSBESTAND_ID, HC_BOSBESTAND_STR))
+
+str(OPNAME_TABEL_T4_)
+
+```
+
+
+```{r opnames}
+OPNAME_TABEL_ <- OPNAME_TABEL %>% 
+  left_join(BOS_OPNAME) %>% 
+  left_join(qBOS_OPNAME_TYPE %>% rename(OPNAME_TYPE = OMSCH)) %>% 
+  left_join(qBOS_PROEFCIRKELTYPE %>% rename(PROEFCIRKEL_TYPE = OMSCH)) %>% 
+  left_join(qBOS_TYPE %>% rename(BOS_TYPE = OMSCH)) %>% 
+  select(OPNAME_TABEL_ID, BOS_OPNAME_ID, BOSBESTAND_ID, 
+         TAB_NAAM, TAB_OMSCH = OMSCH, 
+         PROEFVLAKNUMMER, DATUM_OPNAME, OPNAME_TYPE, PROEFCIRKEL_TYPE,
+         OPP_A1, OPP_A2, OPP_A3, OPP_A4, OPP_VOL, Opp_Representatief,
+         BOS_TYPE,
+         POPULIER_X, POPULIER_Y, # ?betekenis
+         HC_BOS_OPNAME_STR)
+
+# verschil BOS_OPNAME_TYPE_ID, OPNAME_TYPE_ID: lijkt zelfde te zijn (toch voor Bertembos)
+# BOS_OPNAME_TYPE_ID: in tabel qBOSTYPE
+# OPNAME_TYPE_ID: in tabel BOS_OPNAME
+
+str(OPNAME_TABEL_)
+names(OPNAME_TABEL_)
+
+
+```
+
+
+
+Lookuplijsten toevoegen aan info over het bestand
+
+```{r bosbestand}
+BOSBESTAND_ <- BOS_BOSBESTAND %>% 
+  left_join(BOSBESTAND %>% select(contains("_ID"), HC_BOSBESTAND_STR, BESTAND = OMSCH)) %>% 
+  left_join(BOS_BOSPERCEEL %>% select(contains("_ID"), PERCEEL = NR)) %>% 
+  left_join(BOS_BOSPLAATS %>% select(contains("_ID"), BOSPLAATS = OMSCH)) %>% 
+  left_join(BOS_BOSDOMEIN %>% select(contains("_ID"), BOSDOMEIN = OMSCH)) %>% 
+  # bestandstype
+  left_join(qBOS_BESTANDSTYPE %>% select(BOS_BESTANDSTYPE_ID, BESTANDSTYPE = OMSCH)
+            , by = c("BESTANDSTYPE_HOOFD_ID" = "BOS_BESTANDSTYPE_ID")) %>% 
+  left_join(qBOS_BESTANDSTYPE %>% select(BOS_BESTANDSTYPE_ID, BESTANDSTYPE_SUB = OMSCH)
+            , by = c("BESTANDSTYPE_SUB_ID" = "BOS_BESTANDSTYPE_ID")) %>% 
+  left_join(qBOS_BESTANDSTYPE %>% select(BOS_BESTANDSTYPE_ID, BESTANDSTYPE_SUBSUB = OMSCH)
+            , by = c("BESTANDSTYPE_SUBSUB_ID" = "BOS_BESTANDSTYPE_ID")) %>% 
+  #leeftijd
+  left_join(qBOS_LEEFTIJD %>% select(BOS_LEEFTIJD_ID, LEEFTIJD = OMSCH)
+            , by = c("BOS_BEH_LEEFTIJD_ID" = "BOS_LEEFTIJD_ID")) %>% 
+  left_join(qBOS_BESTAND_LEEFTIJDSKLASSE %>% select(leeftijdsklasse_id, leeftijdsklasse_BE = leeftijdsklasse)
+            , by = c("LEEFTIJDSKLASSE_BE_ID" = "leeftijdsklasse_id")) %>% 
+  left_join(qBOS_BESTAND_LEEFTIJDSKLASSE %>% select(leeftijdsklasse_id, leeftijdsklasse_NE = leeftijdsklasse)
+            , by = c("LEEFTIJDSKLASSE_NE_ID" = "leeftijdsklasse_id")) %>% 
+  #bedrijfsvorm, menging, sluiting
+  left_join(qBOS_BEDRIJFSVORM %>% select(BOS_BEDRIJFSVORM_ID, BEDRIJFSVORM = OMSCH)) %>% 
+  left_join(qBOS_MENGINGSVORM %>% select(BOS_MENGINGSVORM_ID, MENGING = OMSCH)) %>% 
+  left_join(qBOS_SLUITINGSGRAAD %>% select(BOS_SLUITINGSGRAAD_ID, SLUITING = OMSCH)) %>% 
+  select(BOS_BOS_BESTAND_ID, BOSBESTAND_ID, HC_BOSBESTAND_STR, DATUM_OPNAME, 
+         BESTANDSTYPE, BESTANDSTYPE_SUB, BESTANDSTYPE_SUBSUB, 
+         LEEFTIJD, leeftijdsklasse_BE, leeftijdsklasse_NE,
+         PLANTJAAR, NE_PLANTJAAR,
+         BE_LEEFTIJD, NE_LEEFTIJD, 
+         BEDRIJFSVORM, MENGING, SLUITING,
+         BED_AMER_Z, BED_AMER_S, BED_AMER_B, 
+         LIG_DOOD_DUN, LIG_DOOD_DIK, LIG_DOOD_ZD,
+         OPMERKINGEN, 
+         BESTAND, PERCEEL, BOSPLAATS, BOSDOMEIN
+  )
+
+str(BOSBESTAND_)
+names(BOSBESTAND_)
+
+```
+
+
+Dreef wordt soms vermeld als perceel (ipv een perceelsnr) en hangt dan vaak samen met 
+een volopname (zie `OPNAME_TYPE`), OF wordt als afzonderlijk `OPNAME_TYPE` vermeld ("Dreef/Randzone")
+
+Bosreservaat staat bij `BOSPLAATS` vermeld
+
+# Export
+
+```{r list}
+str(BOSBESTAND_)
+str(OPNAME_TABEL_)
+str(OPNAME_TABEL_T4_)
+str(OPNAME_TABEL_T7_)
+
+export_names <- c("OPNAME_TABEL_T7_", "OPNAME_TABEL_T4_"
+                  , "OPNAME_TABEL_", "BOSBESTAND_")
+
+# Creëer een lijst van dataframes uit de namen
+list_export <- mget(export_names)  
+
+```
+
+
+```{r list_all_export, eval = FALSE}
+output_path
+
+# stats
+for (i in 1:length(list_export)){
+	  write.csv2(list_export[[i]], 
+	             paste0(output_path, names(list_export)[i], ".csv")) 
+}
+```
+
+Ook rechtstreeks naar gdrive
+
+```{r list_export_gdrive, eval = FALSE}
+output_path_gdrive
+
+# stats
+for (i in 1:length(list_export)){
+	  write.csv2(list_export[[i]], 
+	             paste0(output_path_gdrive, names(list_export)[i], ".csv")) 
+}
+
+# xlsx
+# write.xlsx(info_BR, paste0(path_to_datarequest_gdrive, "BR_niveau/", "site_info.xlsx"))
+
+```
+

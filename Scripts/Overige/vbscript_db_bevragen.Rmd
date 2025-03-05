@@ -1,0 +1,115 @@
+---
+title: "Voorbeeld script om access-databank aan te spreken"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: yes
+      smooth_scroll: yes
+---
+
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = FALSE,  # FALSE: dan kan ik knitten zonder dat er iets gebeurt
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+library(dplyr)
+library(RODBC)
+
+```
+
+1) Link naar db leggen 
+
+```{r}
+path <- "G:/Gedeelde drives/Team_Boseco/00_projecten/PRJ_BR_LIFE-PROGNOSES/Dataverwerking-bovengronds/"
+
+db <- paste0(path, "temp_vb_FieldMapData_PROGNOSES_Zonien.accdb")
+
+```
+
+2) Overzicht van de aanwezige tabellen opvragen
+
+```{r}
+con <- odbcConnectAccess2007(db)
+
+dbtables <- sqlTables(con) %>% filter(TABLE_TYPE != "SYSTEM TABLE")
+str(dbtables)
+
+odbcClose(con)
+```
+
+
+3) Specifieke tabel opvragen, volledig
+
+```{r}
+con <- odbcConnectAccess2007(db)
+
+# Trees <- sqlFetch(con, "Trees_3eSET")  # te zwaar
+MicroHabitats <- sqlFetch(con, "MicroHabitats_Prognoses")
+
+odbcClose(con)
+```
+
+4) Query gebruiken om deel van een tabel in te laden
+
+```{r}
+query_dendro <-
+      "SELECT Plots.ID AS plot_id,
+        qPlotType.Value3 AS plottype,
+        Trees.ID AS tree_measure_id,
+        Trees.OldID AS old_id,
+        pd.ForestReserve AS forest_reserve,
+        pd.rA1 AS r_A1, pd.rA2 AS r_A2, pd.rA3 AS r_A3, pd.rA4 AS r_A4,
+        pd.TresHoldDBH_Trees_A3_alive AS dbh_min_a3,
+        pd.TresHoldDBH_Trees_A3_dead AS dbh_min_a3_dead,
+        pd.TresHoldDBH_Trees_A4_alive AS dbh_min_a4,
+        pd.TresHoldDBH_Trees_A4_dead AS dbh_min_a4_dead,
+        Trees.DBH_mm AS dbh_mm,
+        Trees.Height_m AS height_m,
+        Trees.Species AS species,
+        Trees.AliveDead AS alive_dead,
+        Trees.IntactSnag AS intact_snag,
+        Trees.DecayStage AS decaystage,
+        Trees.Calcheight_m AS calc_height_fm,
+        Trees.IndShtCop AS ind_sht_cop,
+        Trees.TreeNumber AS nr_of_stems
+      FROM (((Plots INNER JOIN Trees_3eSET Trees ON Plots.ID = Trees.IDPlots)
+        INNER JOIN PlotDetails_3eSet pd ON Plots.ID = pd.IDPlots)
+        INNER JOIN qPlotType ON Plots.Plottype = qPlotType.ID)
+        ;"
+
+con <- odbcConnectAccess2007(db)
+
+dataset <- sqlQuery(con, query_dendro)
+
+odbcClose(con)
+
+```
+
+5) mbv package forrescalc
+
+```{r}
+library(forrescalc)
+
+data_dendro <- load_data_dendrometry(database = db, 
+                                     extra_variables = TRUE)
+# = trees, met extra info mbt A3 en A4
+# !!! te controleren of dat correct is voor deze dataset
+```
+

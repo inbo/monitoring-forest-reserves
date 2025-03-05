@@ -14,6 +14,26 @@ output:
       smooth_scroll: FALSE
 ---
 
+**UPDATE dec 2024**
+
+Er werd beslist (nalv Euforia) om **Zoniën** op te splitsen in **4 sites**: 
+
+    - Zoniën KERN_1983: bevat KV en 11 CP's (voorheen "Kersselaerspleyn")     
+    - Zoniën UITBR_1995: bevat de CP's die NIET in de oude/eerste kernvlakte van 1983 
+    liggen (voorheen "Kersselaerspleyn")     
+    - Zoniën HARRAS_1995: bevat KV en CP (voorheen "Harras" voor KV en "Zwaenepoel" voor CP's)    
+    - Zoniën UITBR_2010: bevat enkel CP's (voorheen "Zwaenepoel", maar zonder deze die nu in "HARRAS_1995" liggen)
+
+Er is een link naar shapefiles.
+
+De reeds aangemaakte hoogtemodellen blijven behouden, maar 
+
+- naam van de excel-files veranderd
+- veld "BR" wordt aangepast
+- sommige excels worden gedupliceerd
+
+Zie "archief" voor oude versie.
+
 ```{r Rm, eval = FALSE}
 rm(list=ls())
 ```

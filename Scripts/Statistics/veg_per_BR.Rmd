@@ -44,9 +44,6 @@ Statistieken op niveau van bosreservaat, obv de cirkelplots.
 
 Alle basis variabelen van de monitoring:
 - veg
-- reg_per_height
-- reg_per_height_species
-
 
 Hierna worden deze één voor één doorlopen en weggeschreven naar de resultatendb
 
@@ -341,49 +338,51 @@ dataset2 %>% group_by(plot_id, period) %>% summarize(n_subplots = n_distinct(sub
 
 ### Aantal/percentage plots waar soort voorkomt
 
-```{r species_n_plots, results='hide'}
+```{r n_plots_per_species, results='hide'}
 names(dataset2)  # herblayer_by_plot, reeds gefilterd op CPs en open area
 
-species_n_plots <- dataset2 %>% 
+n_plots_per_species <- dataset2 %>% 
   filter(!is.na(coverage_class_average_perc)) %>% 
   group_by(forest_reserve, period, species) %>% 
   summarize(n_plots = n()) %>% 
   ungroup()
 
-names(species_n_plots)
+names(n_plots_per_species)
 
 n_plots_per_BR <- dataset %>%   # veg_by_plot
   # filter(plottype == "CP") %>% 
   group_by(forest_reserve, period) %>%
-  summarize(n_max_plots = n()) %>% 
+  summarize(n_total_plots = n()) %>% 
   ungroup()
 
-species_perc_plots <- species_n_plots %>% 
+species_perc_plots <- n_plots_per_species %>% 
   left_join(n_plots_per_BR) %>% 
-  mutate(perc_plots = 100*n_plots/n_max_plots)
+  mutate(perc_plots = 100*n_plots/n_total_plots)
 
+# percentage steeds kleiner dan 100?
+species_perc_plots %>% filter(perc_plots > 100) %>% nrow() == 0
 ```
 
 
-```{r check_max_n_plots_OK, eval = FALSE}
-# check
-t <- species_n_plots %>% 
-  group_by(forest_reserve, period) %>% 
-  summarize(max_n_plots = max(n_plots)) %>% 
-  ungroup()
-
-# aantal_plots_per_BR
-n_plots_per_BR <- vegetation_by_plot %>% 
-  filter(plottype == "CP") %>% 
-  group_by(forest_reserve, period) %>%
-  summarize(n_plots = n()) %>% 
-  ungroup()
-
-check <- t %>% 
-  left_join(n_plots_per_BR) %>% 
-  mutate(verschil = max_n_plots - n_plots)
-
-range(check$verschil)
+```{r check_max_n_plots_OK_magwegdenkik, eval = FALSE}
+# # check
+# t <- n_plots_per_species %>% 
+#   group_by(forest_reserve, period) %>% 
+#   summarize(max_n_plots = max(n_plots)) %>% 
+#   ungroup()
+# 
+# # aantal_plots_per_BR
+# n_plots_per_BR <- vegetation_by_plot %>% 
+#   filter(plottype == "CP") %>% 
+#   group_by(forest_reserve, period) %>%
+#   summarize(n_plots = n()) %>% 
+#   ungroup()
+# 
+# check <- t %>% 
+#   left_join(n_plots_per_BR) %>% 
+#   mutate(verschil = max_n_plots - n_plots)
+# 
+# range(check$verschil)
 # OK: nooit meer plots dan er werkelijk zijn
 ```
 
@@ -396,8 +395,8 @@ names(species_perc_plots)
 resultaat2 <- species_perc_plots %>% 
   left_join(qHerbSpecies, by = c("species" = "ID")) %>% 
   round_df(., 2) %>% 
-  mutate(variable = "perc_plots_met_soort"
-         , n_obs = n_max_plots
+  mutate(variable = "perc_plots_with_species"
+         , n_obs = n_total_plots
          , mean = perc_plots
          , variance = NA, lci = NA, uci = NA
          , strata = "species"
@@ -419,9 +418,10 @@ My.ResultsToDatabase(results = resultaat2,
 
 ### Karakteristieke bedekking
 
-Obv aantal plots waar soort voorkomt
+Obv aantal plots waar de soort voorkomt
 
-som van bedekkingen in de plots waar soort voorkomt en dat delen door aantal plots
+Karakteristieke bedekking = som van bedekkingen in de plots waar soort voorkomt, 
+gedeeld door het aantal plots waar de soort voorkomt
 
 
 ```{r, results='hide'}
@@ -444,7 +444,7 @@ resultaat3 <- karakt_bedekking %>%
   left_join(qHerbSpecies, by = c("species" = "ID")) %>% 
   round_df(., 2) %>% 
   mutate(variable = "karakt_bedekking"
-         , n_obs = n_max_plots
+         , n_obs = n_total_plots
          , mean = karakt_bedekking
          , variance = NA, lci = NA, uci = NA
          , strata = "species"

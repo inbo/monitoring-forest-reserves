@@ -46,6 +46,9 @@ ook het volume (totaal, levend, dood) per PNV:
 - volume incl kroon
 - dood: liggend en staand samen
 
+Voor aanmaak van kaartjes:     
+- coördinaten en PNV per plot
+
 Folder op gdrive:     
 - [artikel](https://drive.google.com/drive/folders/1GY3uYeL5JjG14h_BAkzsQwse31el-yhC)   
 - [artikel - data](https://drive.google.com/drive/folders/1J9ZOC5K6WqjxuV298dd-iNfcKzLvAWjp?usp=share_link)   
@@ -63,10 +66,13 @@ path_to_article <- "G:/.shortcut-targets-by-id/1GY3uYeL5JjG14h_BAkzsQwse31el-yhC
 ```
 
 ```{r load_info_lkp}
-plotinfo <- read_vc(file = "plotinfo", root = path_to_forresdat_data)
+# plotinfo <- read_forresdat_table(tablename = "plotinfo")
+plotinfo <- read.csv2(paste0(path_to_forresdat_data, "plotinfo.csv"))
 
 con <- odbcConnectAccess2007(path_to_strata_db)
  strata_tables <- sqlTables(con) %>% filter(!str_detect(TABLE_NAME, "MSys"))
+ plotinfo <- sqlFetch(con, "info_survey", stringsAsFactors = FALSE)
+ XY <- sqlFetch(con, "strata_location", stringsAsFactors = FALSE)
  pnv <- sqlFetch(con, "strata_soil", stringsAsFactors = FALSE)
 odbcClose(con)
 
@@ -74,7 +80,8 @@ qPNV <- read_xlsx(paste0(path_to_strata, "legende_PNV.xlsx")) %>%
   select(PNVcde = Code, PNVtxt = "Nederlandse naam") %>% 
   mutate(PNVcde = as.integer(PNVcde))
 
-qSpecies <- read_vc(file = "qSpecies", root = path_to_forresdat_data)
+qspecies <- read.csv2(paste0(path_to_forresdat_data, "qSpecies.csv"))
+
 ```
 
 
@@ -91,6 +98,7 @@ n_distinct(analyseSet$plot_id) == nrow(analyseSet)/2
 
 plots <- unique(analyseSet$plot_id)
 ```
+
 Deze analyseset bevat geen "volume inclusief kroon", enkel "volume bole".
 Daarom `dendro_by_plot` importeren.
 
@@ -119,18 +127,44 @@ analyseSet <- dendro_by_plot %>%
 
 ```
 
+# XY-coordinaten
+
+- coördinaten en PNV per plot
+
+```{r}
+names(analyseSet)
+
+XY_PNV <- analyseSet %>% 
+  select(forest_reserve, plot_id, plottype, PNV) %>% 
+  unique() %>% 
+  left_join(XY %>% select(plot_id
+                          , XY_co, XLambert72, YLambert72
+                          , LatLon_co, XLon_wgs84, YLat_wgs84)) %>% 
+  filter(!is.na(PNV))
+  
+# ! 2 plots Heirnisse zonder PNV (729 en 730: werden niet meegenomen in analyse op pnv-niveau)
+# hier ook wegfilteren
+
+
+```
+
+
+
 # Export plot-level
 
 ```{r eval = FALSE}
 write_excel_csv2(analyseSet,paste0(path_to_request, "volume_plot_level.csv"))
+write_excel_csv2(XY_PNV,paste0(path_to_request, "BR_XY_PNV.csv"))
 
 write_excel_csv2(analyseSet,paste0(path_to_gdrive, "volume_plot_level.csv"))
+write_excel_csv2(XY_PNV,paste0(path_to_gdrive, "BR_XY_PNV.csv"))
 
 # oppassen om niet te overschrijven
 write_excel_csv2(analyseSet,paste0(path_to_article, "BR_volume_plot_level.csv"))
 
 
 ```
+
 
 
 

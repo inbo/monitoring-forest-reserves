@@ -1,0 +1,348 @@
+---
+title: "Dataverwerking - verjonging"
+subtitle: "FOURCAST - cirkelplots"
+author: "Anja Leyman"
+date: "2024-06-27"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: TRUE
+      smooth_scroll: TRUE
+---
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 7,
+  fig.height = 3,
+  fig.align = TRUE)
+
+library(here)
+library(writexl)
+library(scales)
+
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+
+```
+
+
+```{r Setup2}
+path_to_project <- "C:/03_BR/3_AanvraagGegevens/INBO_FOURCAST"
+path_to_project_teamdrive <- "G:/Gedeelde drives/PRJ_FOURCAST/Data/Dendrometrie"  
+
+path_to_datarequest <- paste0(path_to_project, "/output/")
+path_to_datarequest_teamdrive <- paste0(path_to_project_teamdrive, "/2024/")
+path_to_html_teamdrive <- path_to_datarequest_teamdrive
+path_to_html <- path_to_datarequest
+
+path_to_datacontrol <- paste0(path_to_project, "/datacontrole/")
+
+```
+
+
+Brondata Fieldmap: `path_to_fieldmap_db` aanpassen
+
+```{r Path_tmp}
+# path_to_fieldmap_db <-
+#   "C:/03_BR/3_AanvraagGegevens/FOURCAST/BF_inbo23/FieldMapData_BF_inbo23.accdb"
+
+path_to_fieldmap_db <-
+  "C:/03_BR/3_AanvraagGegevens/INBO_FOURCAST/FOURCAST_inbo24/FieldMapData_FOURCAST_inbo24.accdb"
+```
+
+
+
+# Vraagstelling
+
+Dataverwerking dendrometrie en verjonging in kader van FOURCAST project - per plot:   
+
+- stamtal en grondvlak per soort: xx/ha en %         
+- **verjonging A1 en A2: exact aantal, stamtal/ha en %**      
+- uit plotgegevens info halen mbt liggend dood hout, kroonsluiting, 
+leeftijdsklasse, aantal etages, mengingswijze     
+
+
+```{r results='hold', eval=TRUE}
+path_to_fieldmap_db
+path_to_datarequest
+path_to_datarequest_teamdrive
+
+```
+
+# Invoer gegevens
+
+## Load lookuplijsten
+
+```{r load_lkp}
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+  qSpecies <- sqlFetch(con, "qSpecies", stringsAsFactors = FALSE)
+  qHeightClass <- sqlFetch(con, "qHeightClass_regeneration", stringsAsFactors = FALSE)
+odbcClose(con)
+
+# 
+qSpecies <- qSpecies %>% select(ID, name_nl = Value1, name_sc = Value2)
+qHeightClass <- qHeightClass %>% select(ID, height_class_txt = Value1)
+
+
+```
+
+## Load plotinfo
+
+Plotinfo samenstellen, zijnde plottype, naam forest_reserve en info over survey en data al dan niet processed.
+Wegschrijven naar git, access en opslaan als csv
+
+```{r plotinfo_load}
+plotinfo <- load_plotinfo(database = path_to_fieldmap_db, processed = FALSE) %>% 
+  filter(plottype == "CP")
+names(plotinfo)
+
+# plotinfo %>% filter(data_processed == FALSE) %>% nrow()
+table(plotinfo$data_processed)
+```
+
+# Datacontrole
+
+
+```{r check_reg}
+# regeneration
+incorrect_regeneration <- check_data_regeneration(database = path_to_fieldmap_db)  
+
+nrow(incorrect_regeneration)
+view(incorrect_regeneration)
+
+# regspecies
+incorrect_regspecies <- check_data_regspecies(database = path_to_fieldmap_db)  
+
+nrow(incorrect_regspecies)
+view(incorrect_regspecies)
+```
+
+```{r reg_data_fieldteam}
+missing_date_reg <- incorrect_regeneration
+
+```
+
+```{r eval = FALSE}
+write.xlsx(missing_date_reg
+           , paste0(path_to_datacontrol, "incorrect.xlsx")
+           , sheetName = "missing_date_reg"
+           , showNA = FALSE
+           , append = TRUE) 
+```
+
+
+Missing date en fieldteam gecorrigeerd in databank door Peter Vdk (18/6/2024)
+
+```{r}
+# sort(unique(missing_date_reg$plot_id))
+
+```
+
+
+# Herinvoer gegevens
+
+```{r load_reg}
+data_regeneration <-
+  load_data_regeneration(
+    database = path_to_fieldmap_db,
+    processed = FALSE
+  ) 
+
+data_regeneration_CP <- data_regeneration %>% filter(plottype == "CP")
+
+data_regeneration %>% filter(is.na(plotarea_ha)) %>% nrow() == 0
+
+unique(data_regeneration$height_class)
+#4000 9000 
+# 4000: > 200 cm
+# 9000: < 200 cm
+
+# NA's wegens geen verjonging
+data_regeneration %>% 
+  filter(is.na(height_class) & nr_of_regeneration != 0) %>% 
+  nrow() == 0
+```
+```{r results = 'hide'}
+names(data_regeneration)
+```
+
+Velden `data_regeneration`:  
+
+- nr_of_regeneration: exact aantal    
+
+- subcircle: A1 of A2: seedlings vs established   
+
+    - height_class = 9000: < 200 cm => A1 
+    - height_class = 4000: > 200 cm => A2   
+
+- subcirclearea_ha:  
+
+    - enkel berekend bij CP's obv `r_A1` & `r_A2`   
+
+- plotarea_ha:    
+
+    - CP's: steeds gelijk aan subcirclearea_ha     
+           
+
+# Analyse
+
+Stamtal en grondvlak per soort: xx/ha en %
+
+## Basisvariabelen
+
+Met behulp van het R-package `forrescalc` worden de basisgegevens zoals 
+aantal per hectare, per soort en per hoogteklasse, berekend.
+
+Hiervoor wordt de functie `calculate_regeneration()`gebruikt.
+
+```{r calc_reg}
+regeneration <- calculate_regeneration(data_regeneration)
+
+```
+
+
+Plotinfo (`plot_id`, `forest_reserve`) toevoegen aan de resultaten
+
+```{r join_plottype_BR}
+reg_plotinfo <- lapply(regeneration, function(x) left_join(x, plotinfo %>% select(plot_id, forest_reserve, period), by = c("plot_id", "period")))
+# lapply: same function over all elements of the list
+```
+
+
+```{r CreateSeparateDataframesReg}
+for (tablename in names(reg_plotinfo)) {
+     assign(tablename, reg_plotinfo[[tablename]])
+} 
+
+```
+
+
+## Controle op NA's
+
+```{r results = 'hide'}
+names(reg_by_plot_height_species)
+
+unique(reg_by_plot_height_species$height_class)
+unique(reg_by_plot_height_species$species)
+```
+
+
+```{r}
+col <- c("approx_nr_regeneration_ha")
+
+reg_by_plot_height_species %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+
+```
+## Extra variabelen
+
+Naast het getelde aantal en aantal/ha, moet ook procentueel aandeel van elke 
+boomsoort berekend worden.
+
+```{r }
+# names(regeneration_by_plot_height_species)
+
+result_reg <- reg_by_plot_height_species %>% 
+  # exact aantal toevoegen
+  left_join(data_regeneration %>% 
+              select(plot_id, species, height_class, subcircle, nr_of_regeneration)
+            , by = c("plot_id", "species", "height_class")) %>% 
+  select(forest_reserve, plot_id, year, period,
+         species, height_class, subcircle,
+         nr_of_regeneration,
+         nr_of_regeneration_ha = approx_nr_regeneration_ha)
+
+names(result_reg)
+```
+
+
+```{r totalen}
+totalen <- result_reg %>% 
+  group_by(plot_id, height_class, subcircle) %>% 
+  summarize(total_nr_heightclass = sum(nr_of_regeneration)) %>% 
+  ungroup()
+```
+
+```{r proc_aandeel}
+result_reg_ <- result_reg %>% 
+  left_join(totalen, by = c("plot_id", "height_class", "subcircle")) %>% 
+  mutate(perc_nr_of_reg = 100*nr_of_regeneration/total_nr_heightclass) %>% 
+  left_join(qSpecies, by = c("species" = "ID")) %>% 
+  left_join(qHeightClass, by = c("height_class" = "ID")) %>% 
+  # afronden
+  forestmangr::round_df(., 2) %>% 
+  select(-contains(c("total")), -period) %>% 
+  select(forest_reserve, plot_id, year, 
+         # period,
+         species, name_nl, name_sc,
+         height_class, height_class_txt,
+         everything())
+
+names(result_reg_)
+head(result_reg_)
+
+result_reg <- result_reg_
+```
+
+
+# Export
+
+Resultaten worden opgeslagen als xlsx op c-schijf en in teamdrive:
+
+```{r}
+path_to_datarequest
+path_to_datarequest_teamdrive
+
+```
+
+```{r save, eval=FALSE}
+write.xlsx(result_reg
+           , paste0(path_to_datarequest, "plot_level_data.xlsx")
+           , sheetName = "reg"
+           , showNA = FALSE
+           , append = TRUE) 
+
+
+```
+
+```{r save_teamdrive, eval=FALSE}
+write.xlsx(result_reg
+           , paste0(path_to_datarequest_teamdrive, "plot_level_data.xlsx")
+           , sheetName = "reg"
+           , showNA = FALSE
+           , append = TRUE) 
+
+```
+
+
+
+
+
+# Copy html to teamdrive
+
+Na knitting - manueel
+
+```{r eval = FALSE}
+# Specify the path of the file you want to copy
+source_file <- here::here(paste0("Scripts/AanvraagGegevens/INBO_FOURCAST/FOURCAST_reg_2024.html"))
+
+# Specify the destination directory where you want to copy the file
+destination_dir <- path_to_html
+
+# Copy the file to the destination directory
+file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
+# ? file.copy
+```

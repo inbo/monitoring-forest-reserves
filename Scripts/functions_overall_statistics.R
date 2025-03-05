@@ -33,6 +33,9 @@
 #' }
 #'
 get_open_area <- function(repo_path = path_to_git_forresdat){
+  
+  repo_path <- path_to_git_forresdat
+  
   dendro_by_plot <- read_forresdat("dendro_by_plot", repo_path)
   regeneration_by_plot <- read_forresdat("regeneration_by_plot", repo_path)
   open_area <- dendro_by_plot %>% 
@@ -213,7 +216,7 @@ get_year_range_veg <- function(dataset, repo_path = path_to_git_forresdat){
 
 
 
-#' get the height classes used per forest reserve and per period
+#' get the height classes of regeneration used per forest reserve and per period
 #' 
 #' This function helps to remove the incorrect zeros added by the function `add_zeros()`
 #' 

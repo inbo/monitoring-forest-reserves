@@ -33,7 +33,7 @@ knitr::opts_chunk$set(
 library(here)
 
 # libraries & invoergegevens
-source(here::here("scripts/Setup_ForresCalc.R"))
+source(here::here("scripts/Setup.R"))
 
 # library(tidyr)
 # library (rlang)
@@ -56,7 +56,7 @@ Dit package wordt ingeladen in het script "Setup_ForresCalc.R".
 
 ```{r Path}
 # deze worden ook in "Setup_ForresCalc.R" gedefinieerd, hier ev. extra "paths" toevoegen indien nodig voor huidig script
-      # path_to_fieldmap <- "C:/3BR/5_MDB_BOSRES_selectieEls/FieldMapData_MDB_BOSRES_selectieEls.accdb"
+      # path_to_fieldmap_db <- "C:/3BR/5_MDB_BOSRES_selectieEls/FieldMapData_MDB_BOSRES_selectieEls.accdb"
       # path_to_git_forresdat <- "C:/3BR/2_VisualisatieDataBR/2Packages/forresdat"
       # 
       # path_to_analysis_set <- "C:/3BR/2_VisualisatieDataBR/1DataVerwerkingBR/Output/BR_analysedb.accdb"
@@ -77,8 +77,8 @@ Dit package wordt ingeladen in het script "Setup_ForresCalc.R".
 
 data_overzicht <- data.frame(
   tabelnaam = c("FieldMapData_MDB_BOSRES_selectieEls.accdb"),
-  locatie = c(path_to_fieldmap),
-  md5 = c(md5(path_to_fieldmap))
+  locatie = c(path_to_fieldmap_db),
+  md5 = c(md5(path_to_fieldmap_db))
 )
 
 data_overzicht %>%
@@ -89,9 +89,9 @@ data_overzicht %>%
 
 
 ```{r LoadLookuplists}
-con <- odbcConnectAccess2007(path_to_fieldmap)
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
   
-  qHeightClass <- sqlFetch(con, "qHeightClass_regenaration", stringsAsFactors = FALSE)
+  qHeightClass <- sqlFetch(con, "qHeightClass_regeneration", stringsAsFactors = FALSE)
   qNumberClass <- sqlFetch(con, "qnumber_regeneration_classes", stringsAsFactors = FALSE)
   qSpecies <- sqlFetch(con, "qspecies", stringsAsFactors = FALSE)
 
@@ -109,10 +109,40 @@ Eerst dienen de verjongingsgegevens ingeladen te worden.
 ```{r LoadDataRegeneration}
 data_regeneration <-
   load_data_regeneration(
-    database = path_to_fieldmap
+    database = path_to_fieldmap_db
   )
 
 ```
+
+seedlings vs established? [#98](https://github.com/inbo/forrescalc/issues/98):
+bij calculate_regeneration_plot() en calculate_regeneration_core_area_species() wordt verjonging van records waar subcircle NA is, toegevoegd aan zowel seedlings als established. Ik neem aan dat dit niet veel voorkomt en niet de bedoeling is dat dit voorkomt, maar mss toch beter om dit op te lossen en te kiezen waar we evt NA's bij tellen?
+
+```{r}
+t <- data_regeneration %>% filter(is.na(subcircle))   # A1 of A2
+mean(t$nr_of_regeneration) == 0
+summary(t)
+# heightclass = NA
+# species = NA
+# numberclass = NA
+# nr_of_reg = 0 = approx_nr_regeneration, min_number_of_regeneration, max_number_of_regeneration
+# rubbing_damage_number = 0
+# subcirclearea_ha = NA
+table(t$plottype)
+
+# subcircle = NA wanneer er geen verjonging gemeten is
+range(data_regeneration$subcircle, na.rm = TRUE)
+
+# is bij eke nr_by_reg = 0 subcircle NA? - JA
+t2 <- data_regeneration %>% 
+  filter(nr_of_regeneration == 0)
+
+library(waldo)
+waldo::compare(t2,t)
+# ✔ No differences
+```
+
+
+
 
 ## Berekeningen
 Vervolgens kunnen pas de berekeningen gebeuren.
@@ -130,7 +160,8 @@ Om een data-opvolgingssysteem te verkrijgen, moet weggeschreven worden naar git,
 ```
 
 ```{r FunctionRegenerationGlobal}
-regeneration <- calculate_regeneration(data_regeneration)
+plotinfo <- load_plotinfo(database = path_to_fieldmap_db)
+regeneration <- calculate_regeneration(data_regeneration = data_regeneration, plotinfo = plotinfo)
 
 save_results_access (results = regeneration, database = path_to_analysis_set, remove_tables = TRUE)
 
@@ -156,6 +187,24 @@ for (tablename in names(regeneration)) {
 } 
 
 ```
+
+Afz. test core area: vraagj eEls L.: plotarea_ha vervangen door 0.01?
+```{r}
+t <- calculate_regeneration_core_area_height_species(data_regeneration, plotinfo)
+
+t <- data_regeneration %>% filter(plot_id>10000 & period == 2) %>% 
+  group_by(forest_reserve) %>% 
+  summarise(n_subplots = n_distinct(subplot_id)) %>% 
+  ungroup()
+# ook de lege subplots zijn al meegenomen in data_regeneration => ok!
+data_regeneration %>% filter(is.na(species)) %>% nrow()
+t2 <- data_regeneration %>% filter(is.na(species))
+
+
+```
+
+
+
 
 
 ## Basisdata
@@ -249,7 +298,7 @@ Aandachtspunt:
 ```{r ControleMuizenbos}
 str(regeneration_by_plot)
 # info mbt BR en plottype zit in afzonderlijke tabel, dan moet ze niet elke keer opgeslagen worden
-plotinfo <- load_plotinfo(database = path_to_fieldmap)
+plotinfo <- load_plotinfo(database = path_to_fieldmap_db)
 
 controle_plot <- regeneration_by_plot %>% 
   left_join(plotinfo, by= c("plot_id")) %>% 

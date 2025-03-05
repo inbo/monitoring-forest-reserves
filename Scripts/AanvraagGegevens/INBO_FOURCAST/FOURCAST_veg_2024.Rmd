@@ -1,0 +1,313 @@
+---
+title: "Dataverwerking - vegetatie"
+subtitle: "FOURCAST - cirkelplots"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: TRUE
+      smooth_scroll: TRUE
+---
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 7,
+  fig.height = 3,
+  fig.align = TRUE)
+
+library(here)
+library(writexl)
+library(scales)
+
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+
+```
+
+
+```{r Setup2}
+path_to_project <- "C:/03_BR/3_AanvraagGegevens/INBO_FOURCAST"
+path_to_project_teamdrive <- "G:/Gedeelde drives/PRJ_FOURCAST/Data/"  
+
+path_to_datarequest <- paste0(path_to_project, "/output/")
+path_to_datarequest_teamdrive <- paste0(path_to_project_teamdrive, "Vegetatie/")
+path_to_html_teamdrive <- path_to_datarequest_teamdrive
+path_to_html <- path_to_datarequest
+
+path_to_datacontrol <- paste0(path_to_project, "/datacontrole/")
+
+```
+
+
+Brondata Fieldmap: `path_to_fieldmap_db` aanpassen
+
+```{r Path_tmp}
+# path_to_fieldmap_db <-
+#   "C:/03_BR/3_AanvraagGegevens/FOURCAST/BF_inbo23/FieldMapData_BF_inbo23.accdb"
+
+path_to_fieldmap_db <-
+  "C:/03_BR/3_AanvraagGegevens/INBO_FOURCAST/FOURCAST_inbo24/FieldMapData_FOURCAST_inbo24.accdb"
+
+# < FOURCAST_inbo24_202410011516.zip
+```
+
+
+
+# Vraagstelling
+
+Export vegetatiegegevens in kader van FOURCAST project:
+
+- Gegevens op plotniveau mbt totale bedekking (enkel 2024)    
+- Gegevens op soortniveau (beide periodes beschikbaar in FieldMap)    
+
+**OPGEPAST**: bij de vorige opname werden geen houtige soorten genoteerd, nu wel.      
+Er werden ook geen kopgegevens zoals totale bedekking kruid-, struik- en boomlaag genoteerd.
+
+```{r results='hold', eval=TRUE}
+path_to_fieldmap_db
+path_to_datarequest
+path_to_datarequest_teamdrive
+
+```
+
+# Automatische datacontrole
+
+OK (1/10/2024)
+
+```{r check, results='hide'}
+incorrect_vegetation <- check_data_vegetation(database = path_to_fieldmap_db)  
+
+nrow(incorrect_vegetation)
+unique(incorrect_vegetation$anomaly) == "missing"
+# view(incorrect_vegetation)
+# periode 3: navigatieplot => OK
+# rest is missing kopgegevens peroide 1 => OK
+
+#
+incorrect_herbl <- check_data_herblayer(database = path_to_fieldmap_db)  
+
+nrow(incorrect_herbl) == 0
+# view(incorrect_herbl)
+# unique(incorrect_herbl$plot_id) == 0   # navigatieplot => OK
+
+```
+
+
+# Invoer gegevens
+
+## Load lookuplijsten
+
+```{r load_lkp}
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+
+  qtotalCover<- sqlFetch(con, "qtotalCover", stringsAsFactors = FALSE)
+  qHerbSpecies240810<- sqlFetch(con, "qHerbSpecies240810", stringsAsFactors = FALSE)
+  qCoverHerbs <- sqlFetch(con, "qCoverHerbs", stringsAsFactors = FALSE)
+  qBrowsIndex <- sqlFetch(con, "qBrowsIndex", stringsAsFactors = FALSE)
+  
+  qcommonremark <- sqlFetch(con, "qcommonremark", stringsAsFactors = FALSE)
+  
+odbcClose(con)
+
+```
+
+## Load plotinfo
+
+Plotinfo samenstellen, zijnde plottype, naam forest_reserve en info over survey en data al dan niet processed.
+Wegschrijven naar git, access en opslaan als csv
+
+```{r plotinfo_load, results='hide'}
+plotinfo <- load_plotinfo(database = path_to_fieldmap_db, processed = FALSE) %>% 
+  filter(plottype == "CP")
+names(plotinfo)
+
+# plotinfo %>% filter(data_processed == FALSE) %>% nrow()
+table(plotinfo$data_processed)
+```
+
+
+## Load vegetation plot level data
+
+```{r load_veg}
+data_vegetation <-
+  load_data_vegetation(
+    database = path_to_fieldmap_db,
+    processed = FALSE
+  )
+
+data_vegetation <- data_vegetation %>% filter(plottype != "NAV")
+nrow(data_vegetation) == 2*57 - 1
+
+data_vegetation %>% filter(is.na(plotarea_ha)) %>% nrow() == 0
+data_vegetation %>% filter(is.na(total_herb_cover_id)) %>% nrow() == 56 # plots 1eSET
+```
+Geen kopgegevens eerste periode.
+Plot 96 (Ravels) werd enkel in de tweede periode opgemeten (rapport 2000: 56 bosplots ...).
+
+
+```{r results = 'hide'}
+names(data_vegetation)
+
+# welke velden niet gebruikt?
+summary(data_vegetation)
+```
+
+## Load herblayer species data
+
+OPGEPAST: doordat er geen vegetatiedata op plotniveau ingevoerd zijn in FOURCAST,
+worden de oudere data niet ingeladen met de forrescalc-functies.
+
+```{r load_herblayer}
+data_herblayer <-
+  load_data_herblayer(
+    database = path_to_fieldmap_db,
+    processed = FALSE
+  )
+
+data_herblayer <- data_herblayer %>% filter(plottype != "NAV")
+nrow(data_herblayer) == 1260
+
+table(data_herblayer$period)
+data_herblayer %>% filter(is.na(forest_reserve)) %>% nrow() == 0
+data_herblayer %>% filter(is.na(coverage_id)) %>% nrow() == 0
+```
+
+
+```{r results='hide'}
+names(data_herblayer)
+
+# welke velden niet gebruikt?
+summary(data_herblayer)
+```
+
+
+# Variabelen
+
+## Layer vegetation
+
+Velden `data_vegetation`:  
+
+- year_main_survey
+- date_vegetation  (= as.Date(date_vegetation, format = "%d/%m/%Y"))
+- totalplotarea_ha
+- total_moss_cover (id, interval, mid)
+- total_herb_cover
+- total_shrub_cover
+- total_tree_cover
+- total_waterlayer_cover
+(- geen game soil dist)
+
+
+```{r}
+result_veg  <- data_vegetation %>% 
+  mutate(date_vegetation = as.Date(date_vegetation, format = "%d/%m/%Y")
+         , period = ifelse(period == 1, 1, 2)) %>% 
+  select(forest_reserve, plot_id
+         # , plottype
+         , period, year_main_survey, date_vegetation
+         # , totalplotarea_ha
+         , contains(c("cover"))
+         , -contains(c("game")))
+
+names(result_veg)
+# head(result_veg)
+
+```
+
+
+
+## Herblayer
+
+Velden `data_herblayer`:  
+
+- year
+- date_vegetation  (= as.Date(date_vegetation, format = "%d/%m/%Y"))
+- totalplotarea_ha
+- species
+- coverage_id
+- coverage_class_average_perc
+(- geen browse_index_id)
+
+
+```{r}
+result_herbs <- data_herblayer %>% 
+  mutate(date_vegetation = as.Date(date_vegetation, format = "%d/%m/%Y")
+         , period = ifelse(period == 1, 1, 2)) %>% 
+  left_join(qHerbSpecies240810, by = c("species" = "ID")) %>% 
+  select(forest_reserve, plot_id
+         # , plottype
+         , period, year, date_vegetation
+         # , totalplotarea_ha
+         , species_id = species, name_nl = Value1, name_sc = Value2
+         , coverage_id, coverage_class_average_perc) 
+
+
+unique(result_herbs$year) 
+```
+
+
+
+# Export
+
+Resultaten worden opgeslagen als csv op c-schijf en in teamdrive:
+
+```{r}
+path_to_datarequest
+path_to_datarequest_teamdrive
+
+```
+
+
+```{r list}
+list_veg <- list(lookup_totalCover = qtotalCover,
+                 lookup_HerbSpecies = qHerbSpecies240810, 
+                 lookup_CoverHerbs = qCoverHerbs, 
+                 vegetation_plotlevel = result_veg,
+                 herblayer_species = result_herbs
+                 )
+```
+
+```{r save, eval=FALSE}
+save_results_csv(
+    results = list_veg,
+    output_dir = path_to_datarequest)
+
+# teamdrive
+save_results_csv(
+    results = list_veg,
+    output_dir = path_to_datarequest_teamdrive)
+```
+
+
+# Copy html
+
+Na knitting - manueel
+
+Naar `r path_to_html` (c-schijf)
+
+```{r eval = FALSE}
+# Specify the path of the file you want to copy
+source_file <- here::here(paste0("Scripts/AanvraagGegevens/INBO_FOURCAST/FOURCAST_reg_2024.html"))
+
+# Specify the destination directory where you want to copy the file
+destination_dir <- path_to_html
+
+# Copy the file to the destination directory
+file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
+# ? file.copy
+```

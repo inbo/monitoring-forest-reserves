@@ -1,0 +1,1379 @@
+---
+title: "Update forresdat - carbon stock op plotniveau"
+subtitle: "Levende en dode biomassa cfr Latte 2013"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: yes
+      smooth_scroll: yes
+---
+
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,  # FALSE: dan kan ik knitten zonder dat er iets gebeurt
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+
+# libraries & invoergegevens & functions
+source(here::here("scripts/Setup.R"))
+
+
+# FACTORS
+dbFactorsWallonia <- "Data/ExterneData/Wallonie_Biomass.accdb"
+dbFactorsWallonia_path <- here::here(dbFactorsWallonia)
+
+
+```
+
+
+
+```{r juiste_forrescalc, eval = FALSE}
+# !!! eerst zeker 'install.packages("forrescalc")
+# zodat data goede release krijgt!
+# zie mail 7/10/24 van Els L.
+# soms een andere branch nodig als Els nog iets moet fixen, maar als ik naar forresdat 
+# wil wegschrijven, moet ik officiële versie van forresclac gebruiken
+
+install.packages("forrescalc")
+```
+
+
+
+# Vraagstelling
+DOEL van dit script is om - naar analogie met LULUCF - een plot-level analyseset aan te maken, 
+met info over carbon stock.
+
+We hanteren dezelfe methdoiek als bij de bosinventarisatie (zie script "GEG_VolumeBiomassCarbon_aanmaak_analyseset.Rmd")
+
+Volgende **variabelen** worden berekend:   
+
+- volume/biomass/carbon van staande, levende bomen (AGB + BGB)
+- volume/biomass/carbon van staande, dode bomen (ABG + BGB)
+- volume/biomass/carbon van liggend dood hout
+
+- volume/biomass/carbon van staand én liggend dood hout samen
+
+
+Deze analyseset wordt vervolgens ook geëxporteerd (zoals de overige plot-level-data) naar:     
+
+- forresdat-folder als csv (nadien nog te pushen naar github)
+- BR_analysedb.accdb
+- output-folders "_plot-level-data" en "_tree-level-data" als csv
+- gdrive-folders "_plot-level-data" en "_tree-level-data" als csv
+
+Zoniën blijkt op meerdere vlakken uitzonderingen te bevatten.
+Deze uitzonderingen worden na het inladen van de data gecorrigeerd. 
+
+# Methodiek
+
+## Richtlijnen Latte
+
+According to the IPCC, forest carbon stocks may be divided into **three main** 
+**pools and five subpools** (in brackets):    
+
+- biomass (aboveground biomass and belowground biomass)    
+- dead organic matter (deadwood and litter)    
+- soils (soil organic matter)     
+
+Wij focussen op **biomass (AGB + BGB) ** and **dead organic matter (deadwood)**
+
+**Deadwood** bevat: 
+
+- dead standing trees and (stem part of) snags
+- coarse woody debris: in Vlaanderen bepaald mbv line intersect
+- under 3-year old stumps: NIET
+
+(CS = Carbon Stock)
+
+The **wood volume of coarse woody debris and stem part of snags**
+was calculated using Huber’s formula (cylinder
+volume from length and circumference at halfway). Thus,
+the CS of snags had to be calculated at two levels: (1) stem
+part from Huber’s volume (Eq. 1) and (2) root part of the
+corresponding entire tree from Vallet’s volume (Eq. 2).
+
+
+In the case of coarse woody debris, dead standing trees,
+and snags, **deadwood decomposition** was taken into
+account by applying to the CS a reducing factor (based on
+Yatskov et al. (2003) and Sandström et al. (2007)) corresponding
+to the decomposition degree among the three
+classes observed on the field:    
+
+- 1, if no decomposition occurred
+- 0.75, if decomposition was in progress
+- 0.5, when the wood was highly decomposed
+
+The biomass was **converted into carbon** mass, using a carbon content 
+of 50 % as suggested by Vande Walle et al. (2005).
+
+
+## Formules
+
+**Algemeen**
+
+De carbon uptake factor wordt berekend volgens de stock change methode (eq. 3.2.3. IPCC LULUCF): 
+
+<!-- carbon uptake factor = (C2 - C1) / (t2 - t1) -->
+
+<!-- $$\left(\frac{se_{V_{tot}}}{\hat{V}_{tot}}\right)^2 = \left(\frac{se_{V_{mean}}}{\hat{V}_{mean}}\right)^2  + \left(\frac{se_{A_{prod}}}{\hat{A_{prod}}}\right)^2$$ -->
+
+$$\ C{{uptake}} = \frac{\left(\ C2 - C1 \right)}{\left(\ t2 - t1 \right)}$$
+
+
+met 
+
+- C~uptake~ = Carbon uptake factor (tC/ha/jaar)
+- C1: carbon stock at time 1 (tC/ha)
+- C2: carbon stock at time 1 (tC/ha)
+- t1: time 1
+- t2: time 2
+
+en 
+
+<!-- C = V * BEF * WD * (1 + R) * FC -->
+
+$$\ C = \ V *  BEF * WD * \left(\ 1 + R \right) * FC$$
+
+met 
+
+- C = carbon stock (tC/ha)
+- V = stamvolume > 7 cm (m³/ha)
+- BEF = branch/biomass expansion factor: om het totale bovengrondse houtvolume 
+(inclusief zwaar en dun kroonhout) te berekenen, vertrekkende van het 
+stamvolume (diameter > 7 cm) + stompvolume 
+- WD = wood density: om van volume naar biomassa over te gaan (t/m³)
+- FC = carbon factor: ton C/ton droge biomassa (= 0.5)
+- R = verhouding ondergrondse biomassa tov bovengrondse biomassa
+
+<br>
+
+**Verschillende methodes**
+
+Vlaanderen en Wallonië gebruiken momenteel andere BEF's en WD's (verschillende bronnen).
+Daarnaast zijn er ook wijzigingen doorheen de tijd.
+
+De keuze van BEF en WD bepaalt sterk de uiteindelijke carbon uptake factor. 
+
+In het INBO-advies A.4103 werden vier methodes (met variërende BEF en WD) met elkaar vergeleken:
+
+1) conform huidige werkwijze VMM
+
+2) conform methodiek beschreven in NIR 2020 voor Vlaanderen: mbv factoren zoals gebruikt in FRA 2010
+
+3) conform methodiek beschreven in NIR 2020 voor Wallonië: mbv factoren van Valette en aangepaste wood density
+
+4) conform de FRL: mbv BEF/VEF van Longuetaud (afh. van diameter en hoogte) + factoren cfr. FRL (R, FC, WD)     
+    - 4bis: FC = 0.5
+    - 4tris: FC = 0.5 én WD = WD_FRA, zoals gebruikt bij NIR 2020 Vlaanderen
+
+<br>
+
+**Concreet**
+
+In onderstaand script gaan we verder met methode 4b, conform de FRL:     
+- BEF/VEF van Longuetaud: dit zijn variabele BEF's (afh. van diameter en hoogte)    
+- factoren cfr. FRL (R, FC, WD)      
+- FC = 0.5 cfr Latte en FRL
+
+<br>
+De factoren van Longuetaud zijn niet enkel boomsoort-afhankelijk, maar worden mede 
+bepaald door diameter en hoogte van de boom.
+Bijgevolg zijn we verplicht te vertrekken van individuele boommetingen (*tbl0Boom*).
+
+<br>
+
+# Referenties
+
+Anonymous. Note technique version 20/11/2017. Estimation du volume et biomasse de différents compartiments de l’arbre. 
+Accompagnement scientifique de l’IPRFW. ULiège - Wallonie environnement SPW.
+
+Dagnelie, P., Palm, R., Rondeux, J., 2013. Cubage des arbres et des peuplements forestiers. Tables et
+équations. Presses agronomiques de Gembloux.
+
+Latte, N., Colinet, G., Fayolle, A., Lejeune, P., Hébert, J., Claessens, H., Bauwens, S., 2013. 
+Description of a new procedure to estimate the carbon stocks of all forest pools and 
+impact assessment of methodological choices on the estimates. 
+European journal of forest research 132, 565–577.
+
+Longuetaud, F., Santenoise, P., Mothe, F., Kiessé, T.S., Rivoire, M., Saint-André, L., Ognouabi, N.,
+Deleuze, C., 2013. Modeling volume expansion factors for temperate tree species in France.
+For. Ecol. Manag. 292, 111–121.
+
+Wagenführ R, Schreiber C (1985) Holzatlas, 2nd edn. VEB. Fachbuchverlag Leipzig, Leipzig
+
+Zanne, A.E., Lopez-Gonzalez, G., Coomes, D.A., Ilic, J., Jansen, S., Lewis, S.L., Miller, R.B., Swenson, N.G.,
+Wiemann, M.C., Chave, J., 2009. Data from: Towards a worldwide wood economics spectrum.
+https://doi.org/10.5061/dryad.234
+
+<br>
+
+
+# Invoer gegevens
+
+```{r results='hold', eval=TRUE}
+path_to_forresdat_data
+path_to_analysis_set_db
+path_to_plotlevel_csv
+path_to_treelevel_csv
+path_to_output_gdrive
+path_to_meetgegevens
+
+```
+
+```{r load_lkp}
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+
+  qIndShootCop <- sqlFetch(con, "qIndShootCop", stringsAsFactors = FALSE)
+  # deadw_test <- sqlFetch(con, "Deadwood_3eSET", stringsAsFactors = FALSE)
+  qAliveDead <- sqlFetch(con, "qAliveDead", stringsAsFactors = FALSE)
+  qSpecies <- sqlFetch(con, "qSpecies", stringsAsFactors = FALSE)
+  qDecaystage <- sqlFetch(con, "qdecaystage", stringsAsFactors = FALSE)
+  qIntactSnag <- sqlFetch(con, "qIntactSnag", stringsAsFactors = FALSE)
+  # qVdagnVfm <- sqlFetch(con, "qVdagnVfm", stringsAsFactors = FALSE)
+  
+odbcClose(con)
+
+# 
+qIndShootCop <- qIndShootCop %>% select(ID, ind_sht_cop_txt = Value1)
+qIntactSnag <- qIntactSnag %>% select(ID, intact_snag_txt = Value1)
+qAliveDead <- qAliveDead %>% select(ID, alive_dead_txt = Value1)
+qSpecies <- qSpecies %>% select(ID, name_nl = Value1, name_sc = Value2)
+qDecaystage <- qDecaystage %>% select(ID, decaystage_txt = Value2)
+# qVdagnVfm <- qVdagnVfm %>% select(ID, intact_fragment_txt = Value1)
+
+```
+
+
+```{r load_plotinfo, results = 'hide'}
+plotinfo <- load_plotinfo(database = path_to_fieldmap_db, 
+                          processed = TRUE)
+names(plotinfo)
+
+unique(plotinfo$forest_reserve)
+```
+
+```{r load_dendro}
+#names(plotdata_def)
+data_dendro <- load_data_dendrometry(database = path_to_fieldmap_db
+                                     , processed = TRUE 
+                                     , extra_variables = TRUE)
+
+data_shoots <- load_data_shoots(database = path_to_fieldmap_db
+                                , extra_variables = TRUE)
+```
+
+```{r calc_dendro, results='hide'}
+data_stems <- compose_stem_data(data_dendro, data_shoots, extra_variables = TRUE)
+
+# height_model <- load_height_models()
+# bij problemen met forresheights github, eigen functie gebruiken
+path_to_height_models <- "C:/03_BR/1_DataVerwerkingBR/Data/Hoogtemodellen/"
+height_model <- load_height_models_local(path_to_height_models)
+
+data_deadwood <- load_data_deadwood(database = path_to_fieldmap_db, processed = TRUE)
+data_deadwood <- calc_intact_deadwood(data_deadwood)  # overschrijft calc_volume_m3 uit db met volume intacte boom
+
+stems_calc <- calc_variables_stem_level(data_stems, height_model)
+
+summary(stems_calc)
+unique(stems_calc$forest_reserve)
+```
+```{r}
+# kleine check
+stems_calc %>% filter(is.na(calc_height_m)) %>% nrow() == 0
+t <- stems_calc %>% filter(is.na(calc_height_m))
+```
+
+```{r ConnectieExterneData}
+connectieExterneData <- odbcConnectAccess2007(dbExterneData) 
+
+# SpeciesChar <- sqlFetch(connectieExterneData, "tblTreeSpeciesCharacteristics")
+Species_BiomassFactors <- sqlFetch(connectieExterneData, "tblBiomassExpFactors_TreeSpeciesGroups")
+convC130<-sqlFetch(connectieExterneData,"tblCoefOmzetOmtrek")
+
+odbcClose(connectieExterneData)
+
+convC130 <- convC130 %>% select(-NameNl_VBI)
+
+```
+
+```{r ConnectieFactorsWallonia, results='hide'}
+
+ConnectieFactorsWallonia <- odbcConnectAccess2007(dbFactorsWallonia_path) 
+
+Species_BiomassFactors_FRL <- sqlFetch(ConnectieFactorsWallonia, "Dico_Ess_BR")
+EqnC0Biom <- sqlFetch(ConnectieFactorsWallonia, "EqnC0Biom")
+EqnC10Biom <- sqlFetch(ConnectieFactorsWallonia, "EqnC10Biom")
+EqnCrBiom <- sqlFetch(ConnectieFactorsWallonia, "EqnCrBiom")
+EqnHtBiom <- sqlFetch(ConnectieFactorsWallonia, "EqnHtBiom")
+EqnVEFBiom <- sqlFetch(ConnectieFactorsWallonia, "EqnVEFBiom")
+EqnWDBiom <- sqlFetch(ConnectieFactorsWallonia, "EqnWDBiom")
+
+odbcClose(ConnectieFactorsWallonia)
+
+# WD en R koppelen aan soorten
+names(EqnWDBiom)
+names(Species_BiomassFactors_FRL)
+BiomassFactors4_FRL <- Species_BiomassFactors_FRL %>% 
+  left_join(EqnWDBiom, by = c("eq_wd" = "id")) %>% 
+  dplyr::rename(WD_FRL = mean_wd,
+                R_FRL = BEF2) %>% 
+  dplyr::select(-WD, -BEF1)
+
+```
+
+
+# Controle: ontbrekende waarden nakijken
+
+<!-- Enkel levende en staande, dode bomen -->
+
+<!-- Ontbrekende waarden controleren -->
+
+```{r CheckMissingValues}
+check_species <- sum(is.na(stems_calc$species)) == 0
+check_alive_dead <- sum(is.na(stems_calc$alive_dead)) == 0
+check_v3_Volume_ha <- sum(is.na(stems_calc$vol_bole_m3)) == 0
+check_DateDendro <- sum(is.na(stems_calc$date_dendro)) == 0
+check_calc_height <- sum(is.na(stems_calc$calc_height_m)) == 0
+```
+
+Er zijn geen ontbrekende waarden. 
+
+
+# Overzicht gebruikte factoren
+
+
+```{r}
+# hoger enkel vermeld: FC = 0.5
+# hier vastklikken
+FC_value <- 0.5
+```
+
+
+```{r OverzichtGebruikteFactoren}
+# Methode FRL (= methode 4): 
+#   - VEF = f(D, H) => wordt hier niet opgenomen
+#   - Wél de wood density én de FC (0.47)
+
+FactorsPerMethod <- Species_BiomassFactors %>% 
+  left_join(BiomassFactors4_FRL %>% dplyr::select(IDTreeSp, WD_FRL, R_FRL), 
+            by = c("IDTreeSp")) %>%  
+  dplyr::select(IDTreeSp, NameNl, WD_FRL, R_FRL) %>% 
+  mutate(WD_FRL = round(WD_FRL, 2)
+         , FC = FC_value)
+
+
+```
+
+
+```{r TableFactoren}
+
+FactorsPerMethod %>% 
+            DT::datatable(options = list(pageLength = 12, order = list(0, 'asc'), scrollX = TRUE), rownames = FALSE, filter = "top")
+
+write_excel_csv2(FactorsPerMethod,here::here("Data/ExterneData/BiomassFactorsMethode_FRL.csv"))
+
+```
+
+Het overzicht met gebruikte factoren wordt weggeschreven naar "Data/ExterneData/BiomassFactorsMethode_FRL.csv".
+
+
+# Biomassa berekening
+
+## Staande bomen - boomniveau 
+
+Aangezien de methode van de FRL gebruik maakt van expansiefactoren die afhankelijk 
+zijn van diameter en boomhoogte, vertrekken we van *stems_calc* (spilniveau).
+
+```{r trees_standing, results='hide'}
+names(stems_calc)
+trees_standing0 <- stems_calc %>%
+  dplyr::select(-contains(c("basal", "reduction", "remark", "local", 
+                            "iufro", "number", "class", "dead_", "_alive")), 
+                          -plottype)
+
+```
+
+
+De methode die we hierna volgen, baseert zich op de berekening van het 
+forest reference level (FRL; Wallonië en Vlaanderen).
+*(muv stompvolume dat ook met VEF vermenigculdigd moet worden)*
+<br>
+
+Volgende stappen worden doorlopen:
+
+- berekening van VEF~Longuetaud~ = diameter- en hoogte-afhankelijke expansiefactoren 
+(VEF : volume expansion factor)       
+- mbv deze VEF: van stamvolume + stompvolume naar totaal volume (inclusief smaller kroonhout)     
+- mbv wood density naar biomassa/ha (WD)     
+- mbv R: inschatting ondergrondse biomassa     
+- mbv FC naar carbon/ha (C/ha)  
+
+<br>
+
+### Code Wallonië - verborgen
+
+De code van Wallonië (dec. 2020) is in de R-code opgenomen als comment. 
+
+<!-- #### Overzicht te volgen stappen -->
+
+<!-- Vertrekkende van diameter en hoogte in tbl0Boom -->
+
+<!-- 6 tabellen met parameters uit vergelijkingen -->
+<!-- - EqnC0Biom: 12 groepen (code - cfr. "code", b0, b1, b2 -->
+
+<!-- - EqnC10Biom: 12 groepen, b0, b1, b2, b3, b4, b5 -->
+
+<!-- - EqnCrBiom: 12 groepen én 10 'pc' (10, 20, ..100), b0, b1, b2 -->
+
+<!-- - EqnHtBiom: 14 groepen, a, b, c -->
+
+<!-- - EqnVEFBiom: 12 groepen, b1, b2, b3, b4 -->
+
+<!-- - EqnWDBiom: 1 per boomsoort  -->
+
+<!-- Overzicht van alle sooorten met link naar de te gebruiken vergelijkingen -->
+
+<!-- Dico_ess: overzicht van de "essences":  -->
+<!-- - NumEquation: 1-14: link naar gebruikte curves -->
+<!-- - veld "eq_ht" = link naar veld "id" in tabel EqnHtBiom -->
+<!-- - veld "eq_cir" = link naar veld "id" in tabel Eqn????   -->
+
+<!-- EqnC0Biom: id -->
+<!-- EqnC10Biom: ID -->
+<!-- EqnCrBiom: code (+ uniek veld id + pc telkens 10, 20, ...100) -->
+
+<!-- - veld "eq_VEF" = link naar veld "id" in tabel EqnVEFBiom -->
+<!-- - veld "eq_wd" = link naar veld "id" in tabel EqnWDBiom -->
+
+
+<!-- Accesss-code -->
+
+<!-- Futaie afzonderlijk = hooghout versus brins de taillis =  -->
+<!-- Dim carbonCoef As Double -->
+<!-- carbonCoef = 0.47 -->
+
+
+<!-- vef = exp(e.b1-(c130/pi()))^e.b2 + exp(e.b3+e.b4)*(c130/pi()) / htot^2+1 -->
+
+<!-- vtotaer= varb * vef -->
+
+<!-- vhatotaer = vtotaer * nha -->
+
+
+<!-- Verschillende stappen: -->
+<!-- 1) onderscheid hooghout (a = arbf90) en hakhout (a = arbt90): enkel om de correcte tabel te selecteren én ev. iets andere veldnamen -->
+
+<!-- 2) select de velden uit de resp. tabel -->
+<!-- - varb reeds berekend! ?? is dat stamvolume of stam + kroon? -->
+<!-- - a.etg enkel voor futaie: komt verder niet voor -->
+<!-- - a.etat: ook enkel bij futaie: enkel bepaalde codes (wellicht enkel levende) -->
+<!-- - htot in meter voor futaie; NA voor taillis -->
+<!-- - C130 obv C150 wellicht -->
+
+<!-- 3) Estimer la hauteur: obv tabel "EqnHtBiom" én veld "eq_ht"  -->
+
+<!-- 4) Estime un volume pour les arbres dont 20<circ<22 et ceratins (certifieer) autres arbres -->
+<!-- - varb = 1/3*(htot*(cir/100)^2) / (4*pi()) where varb is null or varb=0 -->
+<!-- REDEN: bij lage omtrekken is volume soms 0 obv Dagnelie => dan formule van kegel (?) -->
+<!-- MAAR dan moet het stukje < 7cm ervan afgetrokken worden -->
+<!-- h22 = calc_h22(cir, htot, c90, c10, c0, eq_cir)   // hoogte bij omtrek 22 -->
+<!-- vol_bout = (1/3 * ((0.22^2) / (4*pi())) * (htot - h22)) where h22>0 -->
+<!-- vha = (varb-vol_bout)*nha where vha is null or vha=0 -->
+
+<!-- 5) volume de souche - NAGEVRAAGD bij Sébastien: onderst 10 cm van elke boom cfr Dagnelie -->
+<!-- c0, c10, c90: resp. obv EqnC0Biom, EqnC10Biom, EqnCrBiom  -->
+<!-- - EqnC10Biom & c10 = (e.b0 + e.b1 * c130 + e.b2 * c130^2 + e.b3 * c130^3 + e.b4 * htot + e.b5 * c130^2 * htot) where htot is not null -->
+<!-- - EqnC0Biom & c0 = ((e.b0 + e.b1 / c10 + e.b2 / c10^2) * c10) where c10 is not null -->
+<!-- - EqnCrBiom " pc=90 en c90 = ((e.b0 + e.b1 / c10 + e.b2 / c10^2) * c10) where c10 is not null -->
+
+
+<!-- 5) Volume bout de tige: volume van de stam < 7 cm -->
+<!-- Enkel gebruikt om volume te schatten van bomen met omtrek tss 20<cir<22 -->
+
+
+<!-- 6) Adapter c150/c130 si c150 > 230 cm (volume Varb déjà calculé, c'est pour VEF qu'on limite à cir=230 car hors du domaine de validité) -->
+
+<!-- 7) Volume total:  -->
+<!-- VEF obv c130 en htot -->
+<!-- vtotaer= varb * vef -->
+
+<!-- 8) Biomasse aerienne sans souche et Biomasse aerienne avec souche  (stomp) -->
+<!-- agb = vtotaer * e.mean_wd   // a < abovegroubnd, bovengronds -->
+<!-- agbtot = (vtotaer+vol_souche) * e.mean_wd -->
+
+<!-- 9) Biomasse souterraine -->
+<!-- bgb = agbtot * bef2  // b < belowground, ondergronds -->
+<!-- (= R-factor van VMM) -->
+
+<!-- 10) Biomasse totale -->
+<!-- biomtot = agbtot (mét stumps) + bgb  -->
+
+<!-- 11) omrekening naar carbon mbv carbonfactor van 0.47 (ipv 0.5 bij VMM) -->
+
+
+### Koppelen van boomsoortafhankelijke parameters
+
+```{r koppelen_BEF_methode4, results = 'hide'}
+colnames(trees_standing0)
+colnames(BiomassFactors4_FRL)
+
+BiomassFactors4_FRL <- BiomassFactors4_FRL %>% 
+  dplyr::select(IDTreeSp, ESS_D, ESS_D_Latin, efor, NumEquation, R_FRL
+                , eq_ht, eq_cir, eq_vef, eq_wd, WD_FRL)
+
+trees_standing1 <- trees_standing0 %>% 
+  left_join(BiomassFactors4_FRL, by = c("species" = "IDTreeSp")) %>% 
+  mutate(FC = FC_value)  
+        # FC = 0.47 in access-txt van Sébastien, maar 0.5 algemener aanvaard 
+        # (ook cfr VMM LULUCF rapportage 2021)
+
+trees_standing1 %>% filter(is.na(eq_vef)) %>% nrow() == 0
+``` 
+
+
+### Hoogte en omtrek
+
+De VEF's zijn afhankelijk van diameter en hoogte.
+
+```{r results='hide'}
+names(trees_standing1)
+trees_standing2 <- trees_standing1 %>% 
+  mutate(htot=calc_height_m,  # = height_modeled, belangrijk voor snags voor BGB 
+         d130=dbh_mm/10,
+         c130=pi*dbh_mm/10)
+
+trees_standing2 %>% filter(is.na(htot)) %>% nrow() == 0
+trees_standing2 %>% filter(intact_snag == 10) %>% head()
+# calc_height is effectief de gemodeleerde hoogte
+```
+
+
+### Conversie omtrek op 1,3m naar omtrek op 1,5m
+
+Wallonië rekent bij bepaalde stappen in de berekening met c150 ipv c130. We maken hiertoe een extra attribuut c150 voor alle records.
+
+```{r c130_naar_c150, results = 'hide', fig.show='hide'}
+trees_standing3 <- trees_standing2 %>% 
+  left_join(convC130, by = c("species" = "IDTreeSp")) %>% 
+  mutate(c150 = (c130-A)/B) %>% 
+  dplyr::select(-A,-B)
+
+head(trees_standing3[, c("c130", "c150")])
+
+g <- ggplot(trees_standing3, aes(x = c130, y = c150)) + geom_point () + geom_abline()
+g
+
+trees_standing3 %>% filter(is.na(c150)) %>% nrow() == 0
+
+```
+
+
+```{r check_c150_c130, results = 'hide', fig.show='hide'}
+check1 <- trees_standing3 %>% 
+  mutate(verschil_c130c150 = c130-c150) 
+g <- ggplot(check1, aes(x = c150, y = verschil_c130c150)) + geom_point (aes=(color = "SpeciesGroup"))
+g
+
+# soms is C150 groter dan C130, maar max. 0.4 cm
+```
+
+
+
+### Volume van de stomp (souche)
+
+Het stamvolume (`Volume_m3`) wordt verder aangevuld met het volume van de stomp.  
+> bij BR is dat StemVolumeBole_m3 ???
+
+De stomp is de onderste 10 cm van elke boom, en wordt berekend als het volume van een cilinder met   
+
+  - hoogte = 10 cm    
+  - omtrek = omtrek onderaan de stam (c0)    
+  - c10% (`c10_`: omtrek op 10% van totale hoogte boom) wordt afgeleid van `c130` en `htot` (= `Height_modeled` voor VBI2 en 3, en `Height_m` voor VBI1 (VBI1: geen `IntactTreeCode`))   
+  - c0 wordt afgeleid van c10%     
+
+<!-- (resp. obv EqnC0Biom, EqnC10Biom, EqnCrBiom) -->
+<!-- - EqnC10Biom & c10 = (e.b0 + e.b1 * c130 + e.b2 * c130^2 + e.b3 * c130^3 + e.b4 * htot + e.b5 * c130^2 * htot) where htot is not null -->
+<!-- - EqnC0Biom & c0 = ((e.b0 + e.b1 / c10 + e.b2 / c10^2) * c10) where c10 is not null -->
+<!-- - EqnCrBiom " pc=90 en c90 = ((e.b0 + e.b1 / c10 + e.b2 / c10^2) * c10) where c10 is not null -->
+
+
+```{r eval = FALSE}
+names(trees_standing3)
+# trees_standing4 %>% filter(!is.na(IntactTreeCode) & Periode == 1) %>% nrow() == 0
+# => VBI1: niet genoteerd of een boom intact is of niet; htot is opgemeten hoogte
+
+trees_standing3 %>% filter(is.na(htot)) %>% nrow() == 0
+check_snags <- trees_standing3 %>% filter(intact_snag == 10) %>% 
+  select(contains("height"), htot, intact_snag, everything())
+```
+
+```{r calc_c10_c0, results = 'hide'}
+# c10% -------
+        # EqnC10Biom as e on (p.eq_cir=e.id) set 
+        # c10% = b0 + b1 * c130 + b2 * c130^2 + b3 * c130^3 + b4 * htot + b5 * c130^2 * htot
+        #        where htot is not null
+trees_standing3 %>% filter(htot == 0 | is.na(htot)) %>% nrow() == 0
+
+trees_standing4 <- trees_standing3 %>% 
+  left_join(EqnC10Biom, by = c("eq_cir"= "ID")) %>% 
+  mutate(c10_ = b0 + b1 * c130 + b2 * c130^2 + b3 * c130^3 + b4 * htot + b5 * c130^2 * htot) %>% 
+  dplyr::select(-b0, -b1, -b2, -b3, -b4, -b5)
+
+check <- trees_standing4 %>%
+  select(1:4, alive_dead, intact_snag, species, contains(c("height", "c0", "c1")))
+check %>% filter(c10_ < c130) %>% nrow()
+t <- check %>% filter(c10_ < c130)
+# ?? kan c10_ veel kleiner zijn dan C130 bij zware bomen?
+# JA, c10_ is eigenlijk c10%: omtrek op 10% van de hoogte van de boom
+# als boom > 13 m , dan zal c10 kleiner zijn dan c130
+
+# c0 ----------
+      # EqnC0Biom as e on (p.eq_cir=e.id) set
+      # c0 = (b0 + b1 / c10 + b2 / c10^2) * c10
+      # where c10_ is not null
+trees_standing4  %>% filter(c10_ == 0 | is.na(c10_)) %>% nrow() == 0
+
+trees_standing4 <- trees_standing4 %>% 
+  left_join(EqnC0Biom, by = c("eq_cir"= "id")) %>% 
+  mutate(c0 = (b0 + b1 / c10_ + b2 / c10_^2) * c10_) %>% 
+  dplyr::select(-b0, -b1, -b2)
+```
+
+
+```{r volume_de_souche, results = 'hide'}
+# volume souche
+# vol_souche = 0.1 * (c0/100)^2 / (4*pi)  
+# volume cilinder met straal = c0 en hoogte = 10 cm
+# c0 wordt afgeleid van c10 from Dagnelie taper models (2013). These "taper" models requires as variable the circumference located at 10% of the beginning of the stem: c10
+# C10 is itself estimated from C130
+names(trees_standing4)
+trees_standing4 <- trees_standing4 %>% 
+  mutate(VolumeStump_m3 = 0.1 * (c0/100)^2 / (4*pi),
+         # stamvolume zonder stump (cfr Dagnelie/Quataert)
+         StemVolume_m3 = vol_bole_m3)
+
+trees_standing4 %>% filter(VolumeStump_m3 == 0 | is.na(VolumeStump_m3)) %>% nrow() == 0
+
+check <- trees_standing4 %>% 
+  dplyr::select(plot_id, NameNl, period, d130, c130
+                , c0, c10_, htot
+                , StemVolume_m3, VolumeStump_m3) %>% 
+  mutate(verh_stump_stam_perc = round(100*VolumeStump_m3/StemVolume_m3, 2))
+
+head(check, 10)
+
+check2 <- check %>% 
+  filter(StemVolume_m3 != 0) %>% 
+  group_by(NameNl) %>% 
+  summarize(verh_stump_stam_perc = mean(verh_stump_stam_perc)) %>% 
+  ungroup()
+
+head(check2, 10)
+
+```
+
+
+### NIET - Schatting volume kleine bomen (20<c150<22)
+
+Dit lijkt ons overkill (obv data VBI: < 0.003 %), hebben we ook zo laten weten aan Jerome Périn (mail 24/8/2023).
+
+Vanaf 12/12/2024 (branch 'bugfix_AL') is minimaaal volume op 0.001 m gezet (ipv 0), 
+cfr werkwijze oude dataverwerking VBI1.
+Dat vangt ook al een deel op.
+
+```{r tmp_replace_volume_0, results='hide'}
+trees_standing4 <- trees_standing4 %>% 
+  mutate(StemVolume_m3 = ifelse(StemVolume_m3 == 0, 0.001, StemVolume_m3))
+```
+
+Indien toch oude code gewenst: 
+zie [commit 8cbc344](https://github.com/natuur-en-bos/bosinventaris/commit/8cbc344699b546ea71c103bdce36e26ab167bd32)
+>  !! nog aan te passen aan BR code
+> (zie oud script net voor dit)
+
+```{r check_vol_dunne_boompjes, eval = FALSE}
+# Volume cilinder = als c130 < 23 en volume = 0.001 => (pi*d130^2*1.3/4)/10000, 0)
+(pi*7^2*1.3/4)/10000
+# [1] 0.005002986
+
+# volume kegel = = als c130 >= 23 en volume = 0.001
+c130 <- 23
+htot <- 7
+
+# volume kegel
+volume_kegel <- 1/3*(htot*(c130/100)^2) / (4*pi) 
+# [1] 0.009822513
+
+# volume top kegel
+htot_h22 <- htot*22^2/c130^2 # htot - h22 = hoogte van top kegel
+Volume_top_kegel <- 1/3*(htot_h22)*(0.22^2) / (4*pi)
+
+# afgeknotte kegel
+Volume_afgeknot <- volume_kegel - Volume_top_kegel
+
+# > Volume_afgeknot
+# [1] 0.001600049
+
+# BESLUIT: 0.001 vangt veel op => is OK zo
+
+```
+
+### Zware bomen (c150 > 230 cm)
+
+<!-- 6) Adapter c150/c130 si c150 > 230 cm (volume Varb déjà calculé, c'est pour VEF qu'on limite à cir=230 car hors du domaine de validité) -->
+
+Omdat de zwaarste bomen buiten de geldigheid van de VEF-berekening liggen,
+wordt bij bomen met omtrek op 1.5 m hoogte (c150) > 230 cm, gebruik gemaakt van 
+een maximale VEF, berekend op basis van een d130 die overeenstemt met c150 = 230 cm. 
+
+Voor 't gemak vervangen we dus `d130` bij deze zware bomen door een waarde
+die overeenstemt met een c150 van 230 cm voor die specifieke soort.
+
+```{r VEF_correctie_grote_c150, results = 'hide'}
+# c150 > 230 cm ligt buiten geldigheid van VEF => de VEF van 230 cm gebruiken
+grote_c150 <- trees_standing4 %>% 
+  filter(c150 > 230) %>% 
+  left_join(convC130, by = c("species" = "IDTreeSp", "NameNl")) %>% 
+  mutate(d130 = ifelse(c150>230, (A + B*230)/pi, d130)) %>% 
+  dplyr::select(-A, -B)
+  # dplyr::select(-A, -B, -c10_, -c0, -Perimeter_cm)
+# 100* (nrow(grote_c150)/nrow(trees_standing5))
+# 1%
+
+
+# d130 op max. instellen (d130 wordt gebruikt bij berekening van VEF)
+# c130=(q.hv * 230 +q.iv)
+
+trees_standing5 <- trees_standing4 %>% 
+  left_join(convC130, by = c("species" = "IDTreeSp", "NameNl")) %>% 
+  mutate(d130 = ifelse(c150>230, (A + B*230)/pi, d130)) %>% 
+  dplyr::select(-A, -B)
+# dplyr::select(-A, -B, -c10_, -c0, -Perimeter_cm)
+
+t <- trees_standing5 %>% 
+  filter(c150 > 230) %>% 
+  arrange(-c130)
+head(t, 20)
+# kleine verschillen zijn te wijten aan andere A en B voor verschillende soorten
+```
+
+### Berekening VEF 
+
+De Volume Expansion Factor (VEF) is afhankelijk van   
+
+- diameter (`d130`)
+- hoogte (`htot`)
+- boomsoort (`species`)
+
+(Bron: Longuetaud et al. (2013))
+
+
+```{r VEF, results = 'hide'}
+# VEF obv c130 en htot
+# vef = exp(e.b1-(c130/pi)^e.b2 + exp(e.b3+e.b4)*(c130/pi()) / htot^2+1;"
+trees_standing6 <- trees_standing5 %>% 
+  left_join(EqnVEFBiom, by = c("eq_vef" = "id")) %>% 
+  mutate(VEF = exp(b1-d130)^b2 + exp(b3+b4)*d130/htot^2 + 1) %>% 
+  dplyr::select(-b1, -b2, -b3, -b4)
+
+trees_standing6 %>% filter(is.na(VEF)) %>% nrow() == 0
+```
+
+
+### Bovengronds volume mbv VEF 
+
+Om het totale bovengrondse volume te berekenen, wordt een onderscheid gemaakt tussen 
+
+- intacte (levende of dode bomen)
+- snags (zonder kroon)
+
+Enkel bij de intacte bomen wordt het totale volume (inclusief kroon en fijn takhout)
+berekend door stamvolume + stompvolume te vermenigvuldigen met de net berekende, 
+**boomspecifieke VEF-factor van Longuetaud**.
+
+Voor de (dode) snags wordt enkel naar het stamvolume gekeken, cfr Latte.
+
+Anderzijds hebben we ook bij de snags nood aan het totale bovengrondse volume omdat 
+we daar het ondergrondse volume van moeten afleiden.
+We gebruiken hiervoor het veld `VolumeInclTwigs_m3`.
+
+Daarvan wordt het veld `VolumeAGB_m3` afgeleid, dat voor intacte bomen gelijk is aan 
+`VolumeInclTwigs_m3`, maar voor snags gelijk is aan `StemVolume_m3 + VolumeStump_m3`.
+(`StemVolume_m3` voor snags in `tbl0Boom` is berekend als een cilinder (dbh x hoogte), 
+maar vervangen door het stamvolume van een intacte boom als dat volume lager ligt. 
+Dit om overschattingen te voorkomen)
+
+<!-- The **wood volume of coarse woody debris and stem part of snags** -->
+<!-- was calculated using Huber’s formula (cylinder -->
+<!-- volume from length and circumference at halfway). Thus, -->
+<!-- the CS of snags had to be calculated at two levels: (1) stem -->
+<!-- part from Huber’s volume (Eq. 1) and (2) root part of the -->
+<!-- corresponding entire tree from Vallet’s volume (Eq. 2). -->
+
+
+```{r VolumeInclTwigs_m3, results = 'hide'}
+# vtotaer= varb * vef
+names(trees_standing6)
+
+trees_standing6 <- trees_standing6 %>% 
+  mutate(VolumeInclTwigs_m3 = VEF * (StemVolume_m3 + VolumeStump_m3)
+         , VolumeAGB_m3 = ifelse(is.na(intact_snag) | intact_snag == 11    # intact
+                                 , VolumeInclTwigs_m3
+                                 , StemVolume_m3 + VolumeStump_m3))
+
+trees_standing6 %>% filter(is.na(VolumeInclTwigs_m3)) %>% nrow() == 0
+range(trees_standing6$VolumeInclTwigs_m3)
+range(trees_standing6$StemVolume_m3)
+
+check <- trees_standing6 %>% 
+  mutate(test = VolumeInclTwigs_m3/(StemVolume_m3 + VolumeStump_m3)) %>% 
+  select(test, contains("vol"), everything()) %>% 
+  dplyr::group_by(period) %>% 
+  dplyr::summarize(test = mean(test, na.rm = T))
+
+check       
+# VBI
+# 1	1.372480			
+# 2	1.397972		
+# gemiddeld 1.37 à 1.40 om van stamvolume naar totaal volume te gaan
+
+# BR
+# 1	2.155877			
+# 2	1.999453
+# gemiddeld factor 2 om van stamvolume naar totaal volume te gaan
+
+# period test
+# 0	1.231121			
+# 1	2.244955			
+# 2	2.134259			
+# 3	1.717589
+
+mean(trees_standing6$VEF) # 2.10
+median(trees_standing6$VEF) # 1.32
+```
+
+### Totale biomassa (ondergronds + bovengronds)
+
+Om de levende en dode biomassa van **staande, intacte bomen** te berekenen, 
+worden volgende stappen doorlopen:
+
+1) **bovengrondse** biomassa: wordt afgeleid van het totale bovengrondse volume 
+(inclusief stomp), gebruik makend van een soort-specifieke wood density `WD` (ton/m³).
+
+2) Vervolgens wordt de **ondergrondse** biomassa berekend door de bovengrondse biomassa 
+te vermenigvuldigen met een soort-specifieke R-factor `R`.
+
+
+Voor **niet-intacte, staande bomen**: 
+
+1) **bovengrondse** biomassa: 
+bovengronds volume x soort-specifieke wood density (ton/m³) x factor deadwood decomposition     
+- 1, if no decomposition occurred
+- 0.75, if decomposition was in progress
+- 0.5, when the wood was highly decomposed
+
+2) **ondergrondse** biomassa: 
+bovengrondse biomassa van een staande, intacte boom x soort-specifieke R-factor
+
+
+```{r biomassa, results = 'hide'}
+# 8) Biomasse aerienne sans souche et Biomasse aerienne avec souche  (stomp)
+# 
+# agb = vtotaer * e.mean_wd   // a < aboveground, bovengronds
+# agbtot = (vtotaer+vol_souche) * e.mean_wd
+
+names(trees_standing6)
+trees_standing6 %>% filter(is.na(decaystage)) %>% nrow()  #891
+# rekening houden met ontbrekden decaystage
+# onderscheid maken levend en dood
+
+trees_standing6_ <- trees_standing6 %>% 
+  mutate(R = R_FRL
+         , WD = WD_FRL
+         , decomposition = case_when(
+           alive_dead == 11 ~ 1,
+           decaystage %in% c(10,11,16) ~ 1,
+           decaystage %in% c(12,13,0) ~ 0.75,
+           # 0: enkel bij Kerss 1986: geen decaystage genoteerd
+           decaystage %in% c(14,15) ~ 0.5,
+           is.na(decaystage) & alive_dead == 12 ~ 0.75
+           )
+         , BiomassAboveGr_t = VolumeAGB_m3 * WD * decomposition
+         # ook bij dode bomen wordt ondergrondse biomassa afgeleid van VolumeInclTwigs_m3
+         , BiomassBelowGr_t = VolumeInclTwigs_m3 * WD * R * decomposition
+         , TotalBiomass_t = BiomassAboveGr_t + BiomassBelowGr_t)
+
+trees_standing6_ %>% filter(is.na(decomposition)) %>% nrow() == 0
+table(trees_standing6_$decaystage, trees_standing6_$decomposition)
+
+trees_standing6 <- trees_standing6_
+```
+
+### Totaal koolstofgehalte (ondergronds + bovengronds) 
+
+Tenslotte wordt de biomassa omgezet in **koolstof** gebruik makend van een carbon conversie factor (FC). 
+De default IPCC conversion factor CC heeft een waarde van 0.5 (Eggleston et al., 2006, equation 8). 
+Dit is conform de methodology NFAP.
+
+```{r total_carbon, results = 'hide'}
+trees_standing6 <- trees_standing6 %>% 
+  mutate(CarbonAboveGr_t = BiomassAboveGr_t*FC,
+         CarbonBelowGr_t = BiomassBelowGr_t*FC,
+         TotalCarbon_t = TotalBiomass_t*FC
+         ) 
+
+```
+
+
+## Omzetting biomassa staande bomen naar plotniveau
+
+Vertrekkende van *stems_calc*
+
+
+### Onderscheid levende en dode biomassa
+
+```{r results='hide'}
+colnames(trees_standing6)
+summary(trees_standing6$plotarea_ha)
+table(trees_standing6$subcirclearea_ha, trees_standing6$plotarea_ha)
+table(trees_standing6$core_area_ha, trees_standing6$plotarea_ha)
+
+
+trees_standing6 %>% filter(core_area_ha == 0.1 & plotarea_ha == 0.5)
+
+t <- trees_standing6 %>% select(forest_reserve, plot_id, plotarea_ha, dbh_mm)
+
+
+trees_standing6 %>% filter(core_area_ha == 0.1 & plotarea_ha == 0.5)
+```
+
+```{r plotniveau, results = 'hide'}
+analyseSet_plot0 <- trees_standing6 %>%
+  dplyr::group_by(forest_reserve, plot_id, period) %>%   
+  dplyr::summarise(    
+            # StemVolume_m3_ha_all = sum(StemVolume_m3*Fext_Ha, na.rm = TRUE),
+            StemVolume_m3_ha_alive = 
+              sum(StemVolume_m3*(alive_dead == 11)/plotarea_ha, na.rm = TRUE),
+            VolumeStump_m3_ha_alive = 
+              sum(VolumeStump_m3*(alive_dead == 11)/plotarea_ha, na.rm = TRUE),
+            TotalVolumeAGB_m3_ha_alive = 
+              sum(VolumeAGB_m3*(alive_dead == 11)/plotarea_ha, na.rm = TRUE),
+
+            BiomassAboveGr_t_ha_alive = 
+              sum(BiomassAboveGr_t*(alive_dead == 11)/plotarea_ha, na.rm = TRUE),
+            BiomassBelowGr_t_ha_alive = 
+              sum(BiomassBelowGr_t*(alive_dead == 11)/plotarea_ha, na.rm = TRUE),
+            Biomass_t_ha_alive = 
+              sum(TotalBiomass_t*(alive_dead == 11)/plotarea_ha, na.rm = TRUE),
+            
+            CarbonAboveGr_t_ha_alive = 
+              sum(CarbonAboveGr_t*(alive_dead == 11)/plotarea_ha, na.rm = TRUE),
+            CarbonBelowGr_t_ha_alive = 
+              sum(CarbonBelowGr_t*(alive_dead == 11)/plotarea_ha, na.rm = TRUE),
+            Carbon_t_ha_alive = 
+              sum(TotalCarbon_t*(alive_dead == 11)/plotarea_ha, na.rm = TRUE),
+            
+            # DEAD
+            StemVolume_m3_ha_dead = 
+              sum(StemVolume_m3*(alive_dead == 12)/plotarea_ha, na.rm = TRUE),
+            VolumeStump_m3_ha_dead = 
+              sum(VolumeStump_m3*(alive_dead == 12)/plotarea_ha, na.rm = TRUE),
+            TotalVolumeAGB_m3_ha_dead = 
+              sum(VolumeAGB_m3*(alive_dead == 12)/plotarea_ha, na.rm = TRUE),
+
+            BiomassAboveGr_t_ha_dead = 
+              sum(BiomassAboveGr_t*(alive_dead == 12)/plotarea_ha, na.rm = TRUE),
+            BiomassBelowGr_t_ha_dead = 
+              sum(BiomassBelowGr_t*(alive_dead == 12)/plotarea_ha, na.rm = TRUE),
+            BiomassStanding_t_ha_dead = 
+              sum(TotalBiomass_t*(alive_dead == 12)/plotarea_ha, na.rm = TRUE),
+            
+            CarbonAboveGr_t_ha_dead = 
+              sum(CarbonAboveGr_t*(alive_dead == 12)/plotarea_ha, na.rm = TRUE),
+            CarbonBelowGr_t_ha_dead = 
+              sum(CarbonBelowGr_t*(alive_dead == 12)/plotarea_ha, na.rm = TRUE),
+            CarbonStanding_t_ha_dead = 
+              sum(TotalCarbon_t*(alive_dead == 12)/plotarea_ha, na.rm = TRUE)
+            ) %>%
+  dplyr::ungroup() 
+
+```
+
+
+### Toevoegen van plots zonder biomass
+
+Aan de lijst van plots mét bomen moeten de plots zonder bomen (volume = 0) toegevoegd  worden, die behoren tot productief bos (geen open ruimtes).
+Dit zijn kapvlaktes of bestanden met enkel verjonging (bomen met diameter < 5 cm).
+
+Deze plots leiden we af van `plotinfo`.
+
+<br>
+
+```{r bosplots_zonder_volume, results='hide'}
+names(plotinfo)
+names(analyseSet_plot0)
+
+# !! niet obv dendro_per_plot, want daar enkel plots in mét bomen
+
+zero_volume <- analyseSet_plot0 %>% 
+  full_join(plotinfo %>% select(plot_id, period, survey_trees, year_dendro, data_processed), by = c("plot_id", "period")) %>% 
+  filter(is.na(BiomassAboveGr_t_ha_alive) & survey_trees == TRUE & data_processed == TRUE) 
+
+zero_volume
+# plot 475 periode 1: geen bomen
+# 13 plots Ename (13xx)
+# 52000: geen opname
+
+# OPGEPAST: ENKEL DE BOSPLOTS, NIET DE OPEN RUIMTES! --------------
+
+# repo_path <- path_to_git_forresdat
+# open_area <- get_open_area()
+
+# read_forresdat werkt niet momenteel
+# dendro_by_plot <- read_forresdat("dendro_by_plot", path_to_git_forresdat)
+# regeneration_by_plot <- read_forresdat("regeneration_by_plot", repo_path)
+
+# Functies `read_forresdat()` en `read_forresdat_table()` kunnen enkel data binnenhalen 
+# van de main branch, niet de develop branch.
+# Op termijn zou dat in orde moeten geraken (gevraagd via mail 26/9/24 aan Els): 
+# optie om ook uit develop branch data binnen te kunnen halen.
+
+dendro_by_plot <- read.csv2(paste0(path_to_plotlevel_csv, "dendro_by_plot.csv")) %>% 
+  select(-1)
+
+regeneration_by_plot <- read.csv2(paste0(path_to_plotlevel_csv, "regeneration_by_plot.csv")) %>% 
+  select(-1)
+
+open_area <- dendro_by_plot %>% 
+    filter(number_of_tree_species == 0) %>% # 14 plots (13 plots ename & plot 475)
+    filter(vol_deadw_m3_ha == 0) %>%  # dan valt plot 475 weg => is bosplot, maar op dat moment zonder bomen/verjonging
+    left_join(regeneration_by_plot) %>% 
+    filter((approx_nr_established_ha == 0 & approx_nr_seedlings_ha == 0) 
+           | (is.na(approx_nr_established_ha) & is.na(approx_nr_seedlings_ha))
+    ) %>% 
+    select(plot_id, period, number_of_tree_species)
+
+nrow(open_area) #13
+
+zero_volume_bosplots <- zero_volume %>% 
+  anti_join(open_area)
+nrow(zero_volume_bosplots) == 1
+zero_volume_bosplots
+# plot 475 periode 1
+```
+
+Plots zonder levende biomassa, maar mét dode bomen zitten reeds in `analyseSetT_plot0`.
+We willen enkel de plots toevoegen waar niks staat, ook geen dode bomen, anders 
+creëren we dubbels.
+
+Komen niet voor in deBR-en (tem dataverwerking 12/2024)
+
+```{r results='hide'}
+plots_only_dead_biomass <- analyseSet_plot0 %>% 
+  filter(BiomassAboveGr_t_ha_alive == 0 & BiomassStanding_t_ha_dead > 0)
+plots_only_dead_biomass %>% nrow() == 0
+```
+
+```{r add_bosplots_without_volume, results='hide'}
+# enkel plot 475, periode 1, zonder reg
+colnames(analyseSet_plot0);colnames(zero_volume_bosplots)
+
+# VBI: 
+#colnames(analyseSet_plot0);colnames(plots_volume0_tbl3);colnames(plots_only_dead_biomass)
+# ?? onderstaande nodig?? < VBI - kan geen kwaad, behouden want later misschien wel ndoig
+analyseSet_plot_no_biomass <- zero_volume_bosplots %>%
+  anti_join(plots_only_dead_biomass %>% select(plot_id, period))  # 0
+
+# meerdere kolommmen allemaal 0 toekennen
+colnames(analyseSet_plot0)
+
+biomass_columns <- colnames(analyseSet_plot0[4:21])
+analyseSet_plot_no_biomass[biomass_columns] <- 0
+
+names(analyseSet_plot_no_biomass); names(analyseSet_plot0)
+
+# combine
+analyseSet_plot1 <- rbind(analyseSet_plot0
+                          , analyseSet_plot_no_biomass %>% 
+                            select(-survey_trees, -year_dendro, -data_processed))
+# 1880
+
+```
+
+
+## Liggend dood hout
+
+Voor **coarse woody debris (liggend dood hout)**:    
+volume x soort-specifieke wood density (ton/m³) x factor deadwood decomposition     
+
+- 1, if no decomposition occurred   
+- 0.75, if decomposition was in progress   
+- 0.5, when the wood was highly decomposed   
+
+Het liggende dood hout wordt vanaf 2022 deels opgemeten mbv LIS en deels obv volopname.
+
+Voor de huidige analyse gaan we nog even verder met de volopnames (!! voor Wijnendale en Everzwijnbad 
+vanaf 30 cm opgemeten in 3de decade).
+
+### Biomassa obv decay en species
+
+```{r results='hide'}
+deadw_by_decay_plot_species <- read.csv2(paste0(path_to_plotlevel_csv, "deadw_by_decay_plot_species.csv")) %>% 
+  select(-1, -vol_log_m3_ha_min40cm)
+
+names(deadw_by_decay_plot_species)
+```
+
+```{r results='hide'}
+colnames(deadw_by_decay_plot_species)
+colnames(BiomassFactors4_FRL)
+
+logs1 <- deadw_by_decay_plot_species %>% 
+  left_join(BiomassFactors4_FRL, by = c("species" = "IDTreeSp")) %>% 
+  mutate(FC = FC_value)  
+        # FC = 0.47 in access-txt van Sébastien, maar 0.5 algemener aanvaard 
+        # (ook cfr VMM LULUCF rapportage 2021)
+
+logs1 %>% filter(is.na(WD_FRL)) %>% nrow() == 0
+```
+```{r biomassa_logs1}
+logs2 <- logs1 %>% 
+    mutate(WD = WD_FRL
+         , decomposition = case_when(
+           decaystage %in% c(10,11,16) ~ 1,
+           decaystage %in% c(12,13,0) ~ 0.75,
+           # 0: enkel bij Kerss 1986: geen decaystage genoteerd
+           decaystage %in% c(14,15) ~ 0.5,
+           is.na(decaystage) ~ 0.75
+           )
+         , BiomassLyingDeadw_t_ha = vol_log_m3_ha * WD * decomposition
+         )
+```
+
+
+### Plotniveau
+
+Sommeren per plot (want nu nog per decaystage en soort apart).    
+
+> Er zijn 14 records van plot 11000 zonder volume 
+Nog uit te zoeken, nu even verder want enkel interessse in CP's voor Time4C
+
+```{r NA}
+# NA versus 0?
+NA_logs <- logs2 %>% 
+  filter(is.na(vol_log_m3_ha))
+nrow(NA_logs) == 0
+#14
+```
+
+```{r logs_plot}
+logs_per_plot1 <- logs2 %>% 
+  filter(!is.na(vol_log_m3_ha)) %>% 
+  # hier filetren ew de NA's van plot 11000 weg
+  dplyr::group_by(plot_id, period) %>%   
+  dplyr::summarise(
+    VolumeLogs_m3_ha = sum(vol_log_m3_ha, na.rm = TRUE)
+    , BiomassLying_t_ha_dead = sum(BiomassLyingDeadw_t_ha, na.rm = TRUE)
+  ) %>% 
+  ungroup() %>% 
+  mutate(CarbonLying_t_ha_dead = BiomassLying_t_ha_dead * FC_value)
+```
+
+
+### Extra plot data 
+
+We gebruiken `dendro_by_plot` om ontbrekende info mbt nulwaardes en 
+ontbrekende waardes aan te vullen.
+
+**OPGEPAST**     
+
+CP's "Zoniën UITBR_1995" en "Zoniën KERN_1983": liggend dood hout NIET in fieldmap; 
+cijfers in `dendro_by_plot` zijn overgenomen uit het monitoringrapport, zie 
+"CP_Kerss_logs_2000.xlsx" (C:/03_BR/1_DataVerwerkingBR/Data/Meetgegevens/logs_CPs_Kerss_2000)
+
+We nemen deze cijders over en gebruiken een     
+- gemiddelde decomposition van 0.75
+- WD van 0.52, zoals bij VBI voor ander loofhout (meeste bomen zijn LH in Zoniën)
+
+```{r extra_plot_level, results='hide'}
+logs_per_plot2 <- dendro_by_plot %>% 
+  filter(!is.na(vol_log_m3_ha)) %>% 
+  select(plot_id, period, vol_log_m3_ha) %>% # waarde uit dendo_by_plot
+  unique() %>% 
+  # testje: maar één record per plot => op plotniveau
+  # group_by(plot_id, period) %>%
+  # summarize(n = n()) %>%
+  # ungroup()
+  left_join(logs_per_plot1)
+
+names(logs_per_plot2)
+# nullen aanvullen + waarde van CP's zoniën overnemen
+logs_per_plot3 <- logs_per_plot2 %>% 
+  mutate(VolumeLogs_m3_ha = ifelse(is.na(VolumeLogs_m3_ha),
+                                   vol_log_m3_ha, VolumeLogs_m3_ha)
+         , BiomassLying_t_ha_dead = ifelse(is.na(BiomassLying_t_ha_dead),
+                                   vol_log_m3_ha * 0.75 * 0.52
+                                   , BiomassLying_t_ha_dead)
+         , CarbonLying_t_ha_dead = BiomassLying_t_ha_dead * FC_value)
+  
+```
+
+
+```{r results='hide'}
+t <- logs_per_plot3 %>% 
+  anti_join(logs_per_plot1, by = c("plot_id", "period"))
+range(t$vol_log_m3_ha)
+# [1] 0 100.8
+# ok, goed aangevuld
+```
+
+
+```{r biomass_all, results='hide'}
+names(logs_per_plot3)
+names(analyseSet_plot1)
+
+analyseSet_plot2 <- analyseSet_plot1 %>% 
+  left_join(logs_per_plot3 %>% select(-vol_log_m3_ha),
+            by = c("plot_id", "period")) %>% 
+  mutate(Volume_m3_ha_dead = TotalVolumeAGB_m3_ha_dead + VolumeLogs_m3_ha
+    , Biomass_t_ha_dead = BiomassStanding_t_ha_dead + BiomassLying_t_ha_dead
+    , Carbon_t_ha_dead = CarbonStanding_t_ha_dead + CarbonLying_t_ha_dead)
+names(analyseSet_plot2)
+```
+
+
+
+
+# Finale analyseset
+
+```{r}
+carbon_by_plot <- analyseSet_plot2
+```
+
+
+## Vergelijking met oude data
+
+```{r eval = FALSE}
+carbon_by_plot_git <- read_vc(file = "carbon_by_plot", root = path_to_forresdat_data)
+
+carbon_by_plot_git <- carbon_by_plot_git %>% 
+  select(plot_id, year, everything()) %>% 
+  select(names(dendro_by_plot))
+nrow(carbon_by_plot) == nrow(carbon_by_plot_git)
+summary(carbon_by_plot)
+names(carbon_by_plot) == names(carbon_by_plot_git)
+summary(carbon_by_plot_git)
+
+
+carbon_by_plot %>% select(-year) %>% arrange(plot_id, period) == carbon_by_plot_git %>% select(-year) %>% arrange(plot_id, period)
+# OK denk ik andere ordening van variabelen
+carbon_by_plot == carbon_by_plot_git
+
+head(carbon_by_plot %>% arrange(plot_id, period)); head(carbon_by_plot_git %>% arrange(plot_id, period))
+
+```
+
+
+## Aanmaak list
+
+```{r new_list_carbon}
+# opnieuw list van maken om te exporteren en plotinfo aan te koppelen
+carbon <- list(
+      carbon_by_plot = carbon_by_plot
+    )
+```
+
+
+# Plotinfo toevoegen (aan csv-files)
+
+```{r join_plottype_surveynr_BR}
+carbon_plotinfo <- lapply(carbon, function(x) left_join(x, plotinfo %>% select(plot_id, forest_reserve, plottype, period, survey_number), by = c("plot_id", "period")))
+# lapply: same function over all elements of the list
+```
+
+
+# Export plot-level-data
+
+**!!!! ENKEL PLOTS EXPORTEREN WAARVAN DATA PROCESSED ZIJN!!**
+Is standaard parameter bij inladen dendro-data 
+
+
+Opgepast met plots waar combinatie is met LIS (zie plotdetails_3eSET)
+(!! voor Wijnendale en Everzwijnbad voledige logs vanaf 30 cm opgemeten in 3de decade).
+
+
+
+
+**DUS: zorgen dat dit veld in Fieldmap up-to-date is, zie chunck "plotinfo_processed"**
+
+```{r save_carbon_git, eval = FALSE}
+# geen plotinfo naar git
+save_results_git(
+  results = carbon,
+  repo_path = path_to_git_forresdat,
+  strict = TRUE
+)
+```
+
+```{r save_carbon_git_manueel, eval = FALSE}
+# manueel - eigen simpele functie - als save_results_git niet werkt
+save_results_tsv(carbon, 
+                 root = path_to_forresdat_data, 
+                 strict = FALSE)
+```
+
+
+```{r save_carbono_access_csv, eval = FALSE}
+# hier wel plotinfo (plottype, BR, surveynr mee wegschrijven)
+
+# volgende functie heb ik zelf geschreven, zit niet in het package!
+save_results_csv (
+    results = carbon_plotinfo,
+    output_dir = path_to_plotlevel_csv
+    )
+
+# afgerond voor export naar access
+carbon_round <- carbon_plotinfo %>% 
+  lapply(., function(x) round_df(x, 2))
+
+save_results_access (
+  results = carbon_round,
+  database = path_to_analysis_set_db,
+  remove_tables = TRUE
+  )
+
+```
+
+Direct naar gdrive exporteren (csv): 
+naar **/PRJ_BOSECO_ALGEMEEN/PRJ_BR_AanvraagGegevens/00_METADATA-ALL_PLOTS/_plot-level-data/**
+
+```{r save_dendro_gdrive, eval = FALSE}
+save_results_csv(
+    results = carbon_plotinfo,
+    output_dir = path_to_plotlevel_gdrive
+    )
+
+```
+
+
+**Na update van forresdat, project "forresdat" openen en alles naar de cloud pushen**
+**Eventueel ook access op gdrive plaatsen**

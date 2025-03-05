@@ -1,0 +1,675 @@
+---
+title: "Digitaal Vlaanderen"
+subtitle: "Boomgegevens kernvlaktes"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: TRUE
+      smooth_scroll: TRUE
+---
+
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 7,
+  fig.height = 3,
+  fig.align = TRUE)
+
+library(here)
+library(writexl)
+library(scales)
+library(sf)
+
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+
+```
+
+
+```{r Setup2}
+path_to_project <- "C:/03_BR/3_AanvraagGegevens/INBO_DigitaalVlaanderen"
+path_to_project_teamdrive <- paste0(path_to_output_gdrive, "INBO_DigitaalVlaanderen")
+
+path_to_datarequest <- paste0(path_to_project, "/output/")
+path_to_datarequest_teamdrive <- paste0(path_to_project_teamdrive, "/output/")
+path_to_html_teamdrive <- path_to_datarequest_teamdrive
+path_to_html <- path_to_datarequest
+
+path_to_datacontrol <- paste0(path_to_project_teamdrive, "/datacontrole/")
+
+```
+
+
+# Vraagstelling
+
+Digitaal Vlaanderen wil naast laag en hoog groen ook canopy height modelleren 
+(obv orthofoto’s 2013-2015 + hoogtemodel obv LIDAR => boomkruinen identificeren + tophoogte)
+
+Dit wegens vraag van steden en gemeentes naar meer info => focus op stedelijk groen
+
+Zij vragen daarvoor data om hun model te checken.
+Vraag loopt via Luc DK (tegen 15/7)
+
+**Concreet:**    
+
+- bomen uit alle KV’s - 1 tabel
+- dood en levend, op spilniveau (stems)
+- height en calc_height; snag; alive_dead; soort; diameter; jaartal
+- XY-coord Lambert 72 (positie) + link naar KV (shapefile)
+- bomen van opname die nauwste aansluit bij 2013-2015
+- shapefile met de kernvlaktes (perimeter van de proefvlakken)
+
+
+
+
+```{r results='hold', eval=TRUE}
+path_to_fieldmap_db
+path_to_datarequest
+path_to_datarequest_teamdrive
+
+```
+
+# Invoer gegevens
+
+## Load lookuplijsten
+
+```{r load_lkp}
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+
+  qIndShootCop <- sqlFetch(con, "qIndShootCop", stringsAsFactors = FALSE)
+  # deadw_test <- sqlFetch(con, "Deadwood_3eSET", stringsAsFactors = FALSE)
+  qAliveDead <- sqlFetch(con, "qAliveDead", stringsAsFactors = FALSE)
+  qSpecies <- sqlFetch(con, "qSpecies", stringsAsFactors = FALSE)
+  qDecaystage <- sqlFetch(con, "qdecaystage", stringsAsFactors = FALSE)
+  qIntactSnag <- sqlFetch(con, "qIntactSnag", stringsAsFactors = FALSE)
+
+  qcommonremark <- sqlFetch(con, "qcommonremark", stringsAsFactors = FALSE)
+  
+odbcClose(con)
+
+# 
+qIndShootCop <- qIndShootCop %>% select(ID, ind_sht_cop_txt = Value1)
+qIntactSnag <- qIntactSnag %>% select(ID, intact_snag_txt = Value1)
+qAliveDead <- qAliveDead %>% select(ID, alive_dead_txt = Value1)
+qSpecies <- qSpecies %>% select(ID, name_nl = Value1, name_sc = Value2)
+qDecaystage <- qDecaystage %>% select(ID, decaystage_txt = Value1)
+```
+
+## Load plotinfo
+
+Plotinfo samenstellen, zijnde plottype, naam forest_reserve en info over survey en data al dan niet processed.
+Bijkomend ook afmetingen kernvlaktes uit plotdetails.
+
+```{r plotinfo, results = 'hide'}
+plotinfo_ <- load_plotinfo(database = path_to_fieldmap_db, 
+                          processed = FALSE, plottype = "CA")
+names(plotinfo_)
+
+plotinfo_ %>% filter(data_processed == FALSE & !is.na(survey_number))
+plotinfo_ %>% filter(data_processed == TRUE) %>% nrow()
+
+```
+
+
+Drie kernvlaktes nog niet processed, maar opname na 2021.
+We gaan enkel verder met de processed data.
+
+We selecteren de opnameperiode die het nauwste aansluit bij 2013-2015.
+Dat blijkt overal periode 2 te zijn.
+
+```{r}
+plotinfo <- plotinfo_ %>% 
+  filter(survey_trees & data_processed & period == 2)
+```
+
+Daarnaast willlen we enkel de echte KV's, dus niet de transecten van 10m breed.
+
+```{r plotdetails}
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+  plotdetails_ <- sqlFetch(con, "PlotDetails_2eSET", stringsAsFactors = FALSE)
+odbcClose(con)
+
+# names(plotdetails_)
+
+plotdetails <- plotdetails_ %>% 
+  mutate(period = 2) %>% 
+  select(plot_id = IDPlots, period, 
+         area_ha = Area_ha, length_core_area = LengthCoreArea_m,
+         width_core_area = WidthCoreArea_m,
+         contains(c("TresHoldDBH_Trees_CoreArea"))) %>% 
+  filter(width_core_area > 10 | area_ha > 1) 
+
+nrow(plotdetails)
+# 17
+table(plotdetails$width_core_area, plotdetails$length)
+  #    70 100 140 150
+  # 50   0   6   0   0
+  # 70   0   0   8   1
+  # 140  1   0   0   0
+
+```
+
+```{r combine}
+plotinfo <- plotinfo %>% 
+  inner_join(plotdetails, by = c("plot_id", "period")) %>% 
+  rename(treshold_dbh_alive = TresHoldDBH_Trees_CoreArea_alive,
+         treshold_dbh_dead = TresHoldDBH_Trees_CoreArea_dead)
+```
+
+## Load XY
+
+Globale XY-coördinaten van centraal punt per kernvlakte inladen.
+
+```{r}
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+  GPSReferencePoints <- sqlFetch(con, "GPSReferencePoints", stringsAsFactors = FALSE)
+odbcClose(con)
+
+```
+
+## Load dendro data
+
+Standaard worden enkel de "processed" data ingeladen mbv de load-functies.
+
+```{r load_data, results='hide'}
+data_dendro <- load_data_dendrometry(database = path_to_fieldmap_db
+                                     , processed = TRUE 
+                                     , plottype = "CA"
+                                     , extra_variables = TRUE)
+
+data_shoots <- load_data_shoots(database = path_to_fieldmap_db
+                                , extra_variables = TRUE)
+
+```
+
+
+
+# Datacontrole
+
+Controle op trees en shoots, enkel deze behouden in KV's én juiste periode (mbv info uit plotdetails).
+
+```{r check_trees, results='hide'}
+# trees
+incorrect_trees_ <- check_data_trees(database = path_to_fieldmap_db) 
+incorrect_trees <- incorrect_trees_ %>% 
+  inner_join(plotinfo %>% select(plot_id, period, forest_reserve)
+             , by = c("plot_id", "period"))
+
+nrow(incorrect_trees) # 32416 / 289 / 25
+# view(incorrect_trees)
+
+incorrect_trees <- incorrect_trees %>% 
+  filter(!str_detect(aberrant_field, "iufro"))
+table(incorrect_trees$anomaly)
+
+# 2 times the same coppice_id     shifter in coppice tree              tree not alive 
+#                           7                           7                           3 
+#      tree too thick and low      walker in coppice tree 
+#                           1                           8 
+
+```
+
+```{r check_shoots, results='hide'}
+incorrect_shoots_ <- check_data_shoots(database = path_to_fieldmap_db)  
+
+incorrect_shoots <- incorrect_shoots_ %>% 
+  inner_join(plotinfo %>% select(plot_id, period, forest_reserve)
+             , by = c("plot_id", "period"))
+
+nrow(incorrect_shoots) # 22/0
+# view(incorrect_shoots)
+
+incorrect_shoots <- incorrect_shoots %>% 
+  filter(!str_detect(aberrant_field, "iufro"))
+
+nrow(incorrect_shoots) == 0
+```
+
+```{r coppice, eval = FALSE}
+coppice <- incorrect_trees %>%
+  filter(str_detect(aberrant_field, "coppice") |
+           str_detect(anomaly, "coppice"))
+
+write.xlsx(coppice
+           , paste0(path_to_datacontrol, "incorrect.xlsx")
+           , sheetName = "coppice"
+           , showNA = FALSE
+           , append = FALSE)
+```
+
+
+```{r not_alive, eval = FALSE}
+not_alive <- incorrect_trees %>% 
+  filter(str_detect(anomaly, "not alive"))
+
+write.xlsx(not_alive
+           , paste0(path_to_datacontrol, "incorrect.xlsx")
+           , sheetName = "not_alive"
+           , showNA = FALSE
+           , append = TRUE) 
+```
+
+
+
+```{r snags, eval = FALSE}
+snags_intact <- incorrect_trees %>% 
+   filter(str_detect(aberrant_field, "ratio"))
+
+write.xlsx(snags_intact
+           , paste0(path_to_datacontrol, "incorrect.xlsx")
+           , sheetName = "snags_intact"
+           , showNA = FALSE
+           , append = TRUE) 
+```
+
+
+```{r link_to_layer_shoots}
+# link_to_layer_shoots <- incorrect_trees %>% 
+#   filter(str_detect(aberrant_field, "link_to_layer_shoots"))
+# 
+# write.xlsx(link_to_layer_shoots
+#            , paste0(path_to_datacontrol, "incorrect.xlsx")
+#            , sheetName = "link_to_layer_shoots"
+#            , showNA = FALSE
+#            , append = TRUE) 
+```
+
+```{r decay}
+# decaystage <- incorrect_trees %>% 
+#   filter(str_detect(aberrant_field, "decay"))
+# 
+# write.xlsx(decaystage
+#            , paste0(path_to_datacontrol, "incorrect.xlsx")
+#            , sheetName = "decaystage"
+#            , showNA = FALSE
+#            , append = TRUE) 
+```
+
+
+# Herinvoer gegevens
+
+## Load dendro data
+
+Enkel data in KV's, periode 2 én processed: selectie mbv plotinfo (inner_join).
+
+```{r load_data2, results='hide'}
+# Standaard worden enkel de "processed" data ingeladen mbv de load-functies.
+data_dendro <- load_data_dendrometry(database = path_to_fieldmap_db
+                                     , plottype = "CA"
+                                     , extra_variables = TRUE) %>% 
+  inner_join(plotinfo %>% select(plot_id, period)
+             , by = c("plot_id", "period"))
+
+data_shoots <- load_data_shoots(database = path_to_fieldmap_db
+                                , extra_variables = TRUE)
+
+# door shoots en trees te combineren,  blijft enkel gewenst BR over
+data_stems  <- compose_stem_data(data_dendro, data_shoots
+                                 , extra_variables = TRUE)
+
+height_model <- load_height_models()
+
+# data deadwood hier niet nodig, maar wel om functies te kunnen runnen
+data_deadwood <- load_data_deadwood(database = path_to_fieldmap_db
+                                    , processed = TRUE) %>% 
+  inner_join(plotinfo %>% select(plot_id, period)
+             , by = c("plot_id", "period"))
+
+nrow(data_deadwood)
+```
+
+# Berekenen basisvariabelen
+
+Met behulp van het R-package `forrescalc` worden extra basisgegevens zoals berekend, 
+zoals:
+
+- calc_height
+
+Volgende functies worden gebruikt:   
+
+- `calc_variables_stem_level()` 
+- `calc_variables_tree_level()`
+
+
+```{r calc_stems_trees, results='hide'}
+data_stems_calc <- calc_variables_stem_level(data_stems, height_model)
+names(data_stems_calc)
+nrow(data_stems_calc) # 17933
+table(data_stems_calc$year)
+
+data_dendro_calc <- calc_variables_tree_level(data_dendro, data_stems_calc)
+names(data_dendro_calc)
+table(data_dendro_calc$year)
+
+```
+
+```{r calc_plot_level}
+# als referentie: totalen per KV
+dendro_by_plot  <- calculate_dendro_plot(data_dendro_calc, data_deadwood, plotinfo)
+table(dendro_by_plot$year)
+
+dendro_by_plot_species <- calculate_dendro_plot_species(data_dendro_calc, data_deadwood, plotinfo)
+
+dendro <- list(dendro_by_plot = dendro_by_plot, dendro_by_plot_species = dendro_by_plot_species)
+
+```
+
+
+Info mbt enkel bole en liggend dood hout verwijderen uit de plot-level-resultaten.
+
+```{r results='hide'}
+names(dendro_by_plot)
+dendro_ <- lapply(dendro, 
+                  function(x) select(x, -contains(c("log", "vol_deadw", "bole"))))
+```
+
+
+Plotinfo (`forest_reserve`) toevoegen aan de resultaten.
+
+```{r join_plottype_BR}
+dendro_plotinfo <- lapply(dendro_, function(x) 
+  left_join(x, plotinfo %>% select(plot_id, forest_reserve, period)
+            , by = c("plot_id", "period")))
+# lapply: same function over all elements of the list
+```
+
+
+```{r CreateSeparateDataframesDendro}
+for (tablename in names(dendro_plotinfo)) {
+     assign(tablename, dendro_plotinfo[[tablename]])
+} 
+
+```
+
+
+
+
+# Controle op NA's
+
+```{r results='hide'}
+names(data_dendro_calc)
+```
+
+```{r data_dendro_calc, results='hide'}
+col <- c("basal_area_alive_m2_ha","basal_area_dead_m2_ha", 
+         "vol_alive_m3_ha", "vol_dead_standing_m3_ha",
+         "vol_bole_alive_m3_ha","vol_bole_dead_m3_ha",
+         "number_of_trees_alive_ha", "number_of_trees_dead_ha")
+
+data_dendro_calc %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+
+```
+
+```{r dendro_by_plot, results='hide'}
+names(dendro_by_plot)
+col <- c("basal_area_alive_m2_ha","basal_area_dead_m2_ha", 
+         "number_of_tree_species", "stems_per_tree", 
+         "vol_alive_m3_ha", "vol_dead_standing_m3_ha",
+         # "vol_bole_alive_m3_ha","vol_bole_dead_m3_ha",
+         "number_of_trees_ha", "stem_number_ha")
+
+dendro_by_plot %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+```
+
+
+
+# Coördinaten toevoegen
+
+XY-coördinaten Lambert 72 (positie) : lokale coördinaten uit FM omzetten naar globale coördinaten
+
+
+```{r }
+XY_global <- GPSReferencePoints %>% 
+  select(plot_id = IDPlots, x_global_ca = Xproj_m, y_global_ca = Yproj_m) %>% # , Altitude_m
+  inner_join(plotinfo %>% select(plot_id))
+# geen periode: één plot doorheen de periodes ...
+
+```
+
+
+## Check coordinaten - TEMP
+
+Zijn er van elke kernvlakte coördinaten? JA
+
+```{r eval = FALSE}
+plotinfo_xy_global <- plotinfo %>% 
+  left_join(GPSReferencePoints %>% 
+              select(plot_id = IDPlots
+                     , x_global_plot = Xproj_m, y_global_plot = Yproj_m)) 
+
+no_xy <- plotinfo_xy_global %>% 
+  filter(is.na(x_global_plot) | is.na(y_global_plot))
+```
+
+```{r xy_shape, eval = FALSE}
+# aangemaakt door M.Esprit
+shp_monitoring_all <- paste0(path_to_shp, "alle_proefvlakken_gecombineerd/boseco_alleproefvlakken_lam72_basisversie.shp")
+
+shp_monitoring_pt <- paste0(path_to_shp, "alle_proefvlakken_gecombineerd/boseco_alleproefvlakken_centraalpunt_lam72_metinfo.shp")
+
+```
+
+
+```{r eval = FALSE}
+# shp_plots <- sf::st_read(shp_monitoring_all) 
+shp_plots <- sf::st_read(shp_monitoring_pt) 
+
+class(shp_plots)
+# [1] "sf"         "data.frame"
+names(shp_plots)
+unique(shp_plots$PlotType)
+
+shp_plotids <- shp_plots %>% 
+  st_drop_geometry() %>%
+  group_by(PlotID) %>% 
+  summarize(n = n()) %>% 
+  ungroup()
+
+shp_df <- shp_plots %>% 
+  st_drop_geometry() %>% 
+  # select(plot_id = PlotID, Bos, x_shp = X_m, y_shp = Y_m, plottype_shp = PlotType, rA4_shp = PlotSize)
+  # select(plot_id = PlotID, x_shp = X_m, y_shp = Y_m)
+  select(plot_id = PlotID, x_shp = XLambert72, y_shp = YLambert72
+         , SiteName, plottype_shp = PlotType)
+
+names(shp_df)
+summary(shp_df)
+
+# shp_df %>% filter(str_detect(Bos, "luisbos"))
+
+```
+
+
+Zijn de coördinaten van de shapefile dezelfde als deze in FieldMap?
+
+NEE
+
+```{r vgl_xy_shp_fm, eval = FALSE}
+vgl <- plotinfo_xy_global %>% 
+  select(plot_id, forest_reserve, x_global_plot, y_global_plot) %>% 
+  left_join(shp_df, by = c("plot_id"))
+
+names(vgl)
+
+t <- vgl %>% filter((abs(x_global_plot - x_shp) > 1) | 
+                      (abs(y_global_plot - y_shp) > 1))
+
+```
+
+## Berekenen globale coördinaten
+
+We nemen de globale coördinaten voor het centraal punt over van 
+tabel `GPSReferencePoints` uit Fieldmap.
+
+(Marc E., 16/7/24: *We hebben inderdaad plots heringemeten met FM. Zo was bv. het oorspronkelijke raster in de kernvlakte Kersselaerspleyn het theoretische rooster uit ArcGis (ArcView) en hebben we veel later enkele punten ge-gps't en van daaruit de feno's opnieuw ingemeten (en nu ligt het raster dan wel nogal scheef hé).*)
+
+De globale coördinaten op boomniveau worden berekend obv hun lokale coördinaten in 
+combinatie met de globale coördinaten van het centrale punt.
+
+```{r results='hide'}
+data_stems_calc_ <- data_stems_calc %>% 
+  left_join(XY_global, by = c("plot_id")) %>% 
+  mutate(x_global = x_local + x_global_ca,
+         y_global = y_local + y_global_ca) %>% 
+  select(-x_global_ca, -y_global_ca)
+
+data_stems_calc_ %>% filter(is.na(x_global) | is.na(y_global)) %>% nrow() == 0
+names(data_stems_calc_)  
+  
+data_stems_calc <- data_stems_calc_
+  
+```
+# Variabelen output
+
+```{r results='hide'}
+names(data_stems_calc)
+
+result_stems <- data_stems_calc %>% 
+  left_join(qSpecies, by = c("species" = "ID")) %>% 
+  left_join(qAliveDead, by = c("alive_dead" = "ID")) %>% 
+  left_join(qIntactSnag, by = c("intact_snag" = "ID")) %>% 
+  left_join(qIndShootCop, by = c("ind_sht_cop" = "ID")) %>%
+  left_join(qDecaystage, by = c("decaystage" = "ID")) %>% 
+  select(forest_reserve, plot_id, period, year, date_dendro
+         , plotarea_ha = totalplotarea_ha
+         , tree_measure_id, shoot_measure_id
+         , species, name_nl, name_sc
+         , alive_dead, alive_dead_txt
+         , intact_snag, intact_snag_txt
+         , ind_sht_cop, ind_sht_cop_txt
+         , dbh_mm, dbh_class_5cm,
+         , height_measured = height_m, height_modeled = calc_height_m
+         , decaystage, decaystage_txt
+         , x_local, y_local
+         , x_global, y_global
+         ) %>% 
+  mutate(height_measured = round(height_measured, 1)
+         , height_modeled = round(height_modeled, 1))
+
+
+```
+
+```{r}
+names(result_stems)
+```
+
+
+
+# Shapefiles kernvlaktes
+
+In ArcGIS de kernvlaktes en transecten geselecteerd uit "boseco_alleproefvlakken_lam72_basisversie.shp"
+(folder G:/Gedeelde drives/Team_Boseco_BR/PRJ_BR_AanvraagGegevens/00_METADATA-ALL_PLOTS/GIS-lagen bosreservaten/alle proefvlakken gecombineerd)
+
+Weggeschreven naar folder ".../GIS-lagen bosreservaten/alle_kernvlaktes" 
+als "Bosreservaten_KernvlaktesTransecten.shp"
+
+Vervolgens de 17 strikte kernvlaktes geselecteerd en weggeschreven als "kernvlaktes_strikt.shp".
+
+```{r results='hide'}
+shp_monitoring_all <- paste0(path_to_shp, "alle_proefvlakken_gecombineerd/boseco_alleproefvlakken_lam72_basisversie.shp")
+
+shp_monitoring_CP <- paste0(path_to_shp, "alle_cirkelplots/Bosreservaten_allecirkels.shp")
+
+shp_monitoring_CA <- paste0(path_to_shp, "alle_kernvlaktes/Bosreservaten_KernvlaktesTransecten.shp")
+
+# specifiek voor deze datavraag (17 KV's)
+shp_core_area <- paste0(path_to_shp, "alle_kernvlaktes/kernvlaktes_strikt.shp")
+```
+
+
+```{r results='hide'}
+shp_core_area <- sf::st_read(shp_core_area)   # aangemaakt door M.Esprit
+class(shp_core_area)
+# [1] "sf"         "data.frame"
+names(shp_core_area)
+unique(shp_core_area$PlotYype)
+
+shp_plotids <- shp_core_area %>% 
+  st_drop_geometry() %>%
+  group_by(PlotID) %>% 
+  summarize(n = n()) %>% 
+  ungroup()
+
+shp_df <- shp_core_area %>% 
+  st_drop_geometry()
+```
+
+
+# Export
+
+De gegegevens op spilniveau - "result_stems.xlsx" - worden weggeschreven naar de c-schijf en de teamdrive.
+
+De shapefile met de perimeters van de kernvlaktes staat op dezelfde plaats (als zip). 
+
+
+**Enkele verduidelijkingen:**    
+
+* "plot_id" = link naar de shapefile van de kernvlaktes (IDPlots)    
+* height_measured = effectief gemeten    
+* height_modeled = op basis van dh-curves   
+* x_global & y_global: Lambert 72   
+* x_local & y_local: coördinaten ten opzichte van een centraal punt in de kernvlakte   
+
+
+```{r}
+path_to_datarequest
+path_to_datarequest_teamdrive
+
+```
+
+
+
+```{r save, eval=FALSE}
+write.xlsx(result_stems
+           , paste0(path_to_datarequest, "result_stems_kernvlaktes.xlsx")
+           , sheetName = "stems"
+           , showNA = FALSE
+           , append = FALSE) 
+
+
+```
+
+
+```{r save_teamdrive, eval=FALSE}
+write.xlsx(result_stems
+           , paste0(path_to_datarequest_teamdrive,
+                    "result_stems_kernvlaktes.xlsx")
+           , sheetName = "stems"
+           , showNA = FALSE
+           , append = FALSE) 
+
+```
+
+
+
+# Copy html to teamdrive
+
+Na knitting - manueel
+
+```{r eval = FALSE}
+# Specify the path of the file you want to copy
+source_file <- here::here(paste0("Scripts/AanvraagGegevens/INBO_DigitaalVlaanderen/DigitaalVl_trees_kernvlaktes.html"))
+
+# Specify the destination directory where you want to copy the file
+destination_dir <- path_to_html_teamdrive
+
+# Copy the file to the destination directory
+file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
+# ? file.copy
+```

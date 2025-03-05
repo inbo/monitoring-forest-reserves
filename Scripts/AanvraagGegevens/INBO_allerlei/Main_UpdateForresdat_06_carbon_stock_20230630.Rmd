@@ -42,6 +42,19 @@ dbFactorsWallonia_path <- here::here(dbFactorsWallonia)
 ```
 
 
+
+```{r juiste_forrescalc}
+# !!! eerst zeker 'install.packages("forrescalc")
+# zodat data goede release krijgt!
+# zie mail 7/10/24 van Els L.
+# soms een andere branch nodig als Els nog iets moet fixen, maar als ik naar forresdat 
+# wil wegschrijven, moet ik officiële versie van forresclac gebruiken
+
+install.packages("forrescalc")
+```
+
+
+
 # Vraagstelling
 DOEL van dit script is om - naar analogie met LULUCF - een plot-level analyseset aan te maken, 
 met info over carbon stock.
@@ -702,6 +715,9 @@ check
 # 2	2.130835			
 # 3	1.657285	
 
+
+mean(trees_living5$VEF)
+median(trees_living5$VEF)
 ```
 
 
@@ -935,6 +951,11 @@ zero_volume
 # read_forresdat werkt niet momenteel
 # dendro_by_plot <- read_forresdat("dendro_by_plot", path_to_git_forresdat)
 # regeneration_by_plot <- read_forresdat("regeneration_by_plot", repo_path)
+
+# Functies `read_forresdat()` en `read_forresdat_table()` kunnen enkel data binnenhalen 
+# van de main branch, niet de develop branch.
+# Op termijn zou dat in orde moeten geraken (gevraagd via mail 26/9/24 aan Els): 
+# optie om ook uit develop branch data binnen te kunnen halen.
 
 dendro_by_plot <- read_vc(file = "dendro_by_plot", root = path_to_forresdat_data)
 regeneration_by_plot <- read_vc(file = "regeneration_by_plot", root = path_to_forresdat_data)

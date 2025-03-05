@@ -1,0 +1,474 @@
+---
+title: "Dataverwerking - dendro"
+subtitle: "FOURCAST - cirkelplots"
+author: "Anja Leyman"
+date: "2024-06-27"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: TRUE
+      smooth_scroll: TRUE
+---
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 7,
+  fig.height = 3,
+  fig.align = TRUE)
+
+library(here)
+library(writexl)
+library(scales)
+
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+
+```
+
+
+```{r Setup2}
+path_to_project <- "C:/03_BR/3_AanvraagGegevens/INBO_FOURCAST"
+path_to_project_teamdrive <- "G:/Gedeelde drives/PRJ_FOURCAST/Data/Dendrometrie"  
+
+path_to_datarequest <- paste0(path_to_project, "/output/")
+path_to_datarequest_teamdrive <- paste0(path_to_project_teamdrive, "/2024/")
+path_to_html_teamdrive <- path_to_datarequest_teamdrive
+path_to_html <- path_to_datarequest
+
+path_to_datacontrol <- paste0(path_to_project, "/datacontrole/")
+```
+
+
+Brondata Fieldmap: `path_to_fieldmap_db` aanpassen
+
+```{r Path_tmp}
+# path_to_fieldmap_db <-
+#   "C:/03_BR/3_AanvraagGegevens/FOURCAST/BF_inbo23/FieldMapData_BF_inbo23.accdb"
+
+path_to_fieldmap_db <-
+  "C:/03_BR/3_AanvraagGegevens/INBO_FOURCAST/FOURCAST_inbo24/FieldMapData_FOURCAST_inbo24.accdb"
+```
+
+
+
+# Vraagstelling
+
+Dataverwerking dendrometrie en verjonging in kader van FOURCAST project - per plot:   
+
+- **stamtal en grondvlak per soort: xx/ha en %**     
+- verjonging A1 en A2: exact aantal, stamtal/ha en %     
+- uit plotgegevens info halen mbt liggend dood hout, kroonsluiting, 
+leeftijdsklasse, aantal etages, mengingswijze     
+
+
+```{r results='hold', eval=TRUE}
+path_to_fieldmap_db
+path_to_datarequest
+path_to_datarequest_teamdrive
+
+```
+
+# Invoer gegevens
+
+## Load lookuplijsten
+
+```{r load_lkp}
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+
+  qIndShootCop <- sqlFetch(con, "qIndShootCop", stringsAsFactors = FALSE)
+  # deadw_test <- sqlFetch(con, "Deadwood_3eSET", stringsAsFactors = FALSE)
+  qAliveDead <- sqlFetch(con, "qAliveDead", stringsAsFactors = FALSE)
+  qSpecies <- sqlFetch(con, "qSpecies", stringsAsFactors = FALSE)
+  qDecaystage <- sqlFetch(con, "qdecaystage", stringsAsFactors = FALSE)
+  qIntactSnag <- sqlFetch(con, "qIntactSnag", stringsAsFactors = FALSE)
+
+  qcommonremark <- sqlFetch(con, "qcommonremark", stringsAsFactors = FALSE)
+  
+odbcClose(con)
+
+# 
+qIndShootCop <- qIndShootCop %>% select(-Value3, -OrderField, -Active)
+qAliveDead <- qAliveDead %>% select(-Value3, -OrderField, -Active)
+qSpecies <- qSpecies %>% select(ID, name_nl = Value1, name_sc = Value2)
+qDecaystage <- qDecaystage %>% select(-Value3, -OrderField, -Active, -MasterID)
+```
+
+## Load plotinfo
+
+Plotinfo samenstellen, zijnde plottype, naam forest_reserve en info over survey en data al dan niet processed.
+Wegschrijven naar git, access en opslaan als csv
+
+```{r plotinfo_load}
+plotinfo <- load_plotinfo(database = path_to_fieldmap_db, processed = FALSE)
+names(plotinfo)
+
+# plotinfo %>% filter(data_processed == FALSE) %>% nrow()
+table(plotinfo$data_processed)
+```
+
+
+## Load dendro data
+
+Standaard worden enkel de "processed" data ingeladen mbv de load-functies.
+
+```{r load_data, results='hide'}
+data_dendro <- load_data_dendrometry(database = path_to_fieldmap_db
+                                     , processed = FALSE 
+                                     , extra_variables = TRUE)
+
+data_shoots <- load_data_shoots(database = path_to_fieldmap_db
+                                , extra_variables = TRUE)
+
+```
+
+# Datacontrole
+
+Enkel controle op trees en op regeneration
+
+```{r check_dendro}
+# trees
+incorrect_trees <- check_data_trees(database = path_to_fieldmap_db)  
+
+nrow(incorrect_trees)
+view(incorrect_trees)
+
+incorrect_trees <- incorrect_trees %>% 
+  filter(!str_detect(aberrant_field, "iufro"))
+table(incorrect_trees$anomaly)
+
+# shoots
+incorrect_shoots <- check_data_shoots(database = path_to_fieldmap_db)  
+
+nrow(incorrect_shoots)
+view(incorrect_shoots)
+
+incorrect_shoots <- incorrect_shoots %>% 
+  filter(!str_detect(aberrant_field, "iufro"))
+
+nrow(incorrect_shoots)
+
+```
+
+```{r coppice_id}
+coppice_id <- incorrect_trees %>% 
+  filter(str_detect(aberrant_field, "coppice_id"))
+
+write.xlsx(coppice_id
+           , paste0(path_to_datacontrol, "incorrect.xlsx")
+           , sheetName = "walker_coppice"
+           , showNA = FALSE
+           , append = FALSE) 
+```
+
+```{r link_to_layer_shoots}
+link_to_layer_shoots <- incorrect_trees %>% 
+  filter(str_detect(aberrant_field, "link_to_layer_shoots"))
+
+write.xlsx(link_to_layer_shoots
+           , paste0(path_to_datacontrol, "incorrect.xlsx")
+           , sheetName = "link_to_layer_shoots"
+           , showNA = FALSE
+           , append = TRUE) 
+```
+
+```{r shoots_decay}
+shoots_decaystage <- incorrect_trees %>% 
+  filter(str_detect(aberrant_field, "decay"))
+
+write.xlsx(shoots_decaystage
+           , paste0(path_to_datacontrol, "incorrect.xlsx")
+           , sheetName = "shoots_decaystage"
+           , showNA = FALSE
+           , append = TRUE) 
+```
+
+Enkel hoogtes van snags werden opgemeten, maar in database staan deze bomen 
+niet steeds als snag aangeduid - OPGELOST 27/6/2024
+
+```{r snags}
+snags_error <- data_dendro %>% 
+  filter(!is.na(height_m) & intact_snag == 11) %>% 
+  select(forest_reserve, plot_id, tree_measure_id, dbh_mm, height_m,
+         alive_dead, intact_snag, ind_sht_cop)
+view(snags_error)
+
+write.xlsx(snags_error
+           , paste0(path_to_datacontrol, "incorrect.xlsx")
+           , sheetName = "snags_intact"
+           , showNA = FALSE
+           , append = TRUE) 
+```
+
+
+# Herinvoer gegevens
+
+## Processed
+
+Na datacontrole alle plots op processed zetten. 
+
+Met behulp van een updatequery voor een vooraf geselecteerde decade, plottype en bosreservaat zetten we `DataProcessed_YN` op `10` (code 10 = 'ja'), indien `Survey_Trees_YN = 10`. 
+
+```{r update_processed, eval = FALSE}
+# Predefined strings
+decade <- "3" 
+plot_type <- "CP"
+# forestreserve <- "Wijnendalebos"
+
+# Construct the query string using sprintf
+# !! zorg dat Value3 van qPlottype ingevuld is!!!!
+query_update <- paste0(sprintf("UPDATE (PlotDetails_%seSET pd 
+                         INNER JOIN Plots p ON pd.IDPlots = p.ID) 
+                         INNER JOIN qPlotType q ON p.Plottype = q.ID 
+                         SET pd.DataProcessed_YN = 10 
+                         WHERE (pd.Survey_Trees_YN = 10) 
+                         AND (q.Value3 = '%s')",
+                         decade, plot_type)
+                       ) %>% noquote()
+
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+   sqlQuery(con,query_update)
+odbcClose(con)
+
+```
+
+```{r plotinfo_load2, eval=FALSE}
+plotinfo <- load_plotinfo(database = path_to_fieldmap_db, processed = FALSE)
+names(plotinfo)
+
+# plotinfo %>% filter(data_processed == FALSE) %>% nrow()
+table(plotinfo$data_processed)
+table(plotinfo$survey_trees)
+# not-processed = navigatieplot
+# FALSE  TRUE 
+#     1    57 
+# FALSE: = navigatieplot!! (forest_reesrve = NA)
+```
+
+## Load dendro data
+
+Standaard worden enkel de "processed" data ingeladen mbv de load-functies.
+
+```{r load_data2, results='hide'}
+data_dendro <- load_data_dendrometry(database = path_to_fieldmap_db
+                                     , extra_variables = TRUE)
+
+data_shoots <- load_data_shoots(database = path_to_fieldmap_db
+                                , extra_variables = TRUE)
+
+# door shoots en trees te combineren,  blijft enkel gewenst BR over
+data_stems  <- compose_stem_data(data_dendro, data_shoots
+                                 , extra_variables = TRUE)
+
+height_model <- load_height_models()
+
+data_deadwood <- load_data_deadwood(database = path_to_fieldmap_db
+                                    , processed = TRUE)
+nrow(data_deadwood) == 0
+```
+# Analyse
+
+Stamtal en grondvlak per soort: xx/ha en %
+
+## Basisvariabelen
+
+Met behulp van het R-package `forrescalc` worden de basisgegevens zoals 
+stamtal em grondvlak per hectare berekend.
+
+Volgende functies worden gebruikt:   
+
+- `calc_variables_stem_level()` 
+- `calc_variables_tree_level()`
+- `calculate_dendrometry()`
+
+```{r calc_stems_tree}
+data_stems_calc <- calc_variables_stem_level(data_stems, height_model)
+
+data_dendro_calc <- calc_variables_tree_level(data_dendro, data_stems_calc)
+
+dendro <- calculate_dendrometry(data_dendro, data_deadwood, data_shoots, height_model, plotinfo)
+# waar survey_trees = TRUE, wordt een '0' toegekend, als er geen andere metingen zijn
+# DUS: als ik wegfilter obv data_processed, worden data NIET ingeladen,
+# MAAR omdat survey_trees = TRUE, wordt er in functie "calc_dendro_plot()" een '0' 
+# toegekend aan die non-processed plots ( 400, ...°)
+# DAAROM: hoger in chunck 'load_data' het argument processed = FALSE zetten
+# zdd dat deze toch meegenomen worden, en géén "0" toegekend krijgen.
+# OPGEPAST: er bij statistische verwerking wél voor zorgen dat deze plots niet meegenomen worden
+# ev. mbv lijstje "plots_to_exclude" obv processed = TRUE
+```
+
+
+Plotinfo (`plot_id`, `forest_reserve`) toevoegen aan de resultaten.
+
+```{r join_plottype_BR}
+dendro_plotinfo <- lapply(dendro, function(x) left_join(x, plotinfo %>% select(plot_id, forest_reserve, period), by = c("plot_id", "period")))
+# lapply: same function over all elements of the list
+```
+
+
+```{r CreateSeparateDataframesDendro}
+for (tablename in names(dendro_plotinfo)) {
+     assign(tablename, dendro_plotinfo[[tablename]])
+} 
+
+```
+
+
+## Controle op NA's
+
+Er werden geen volumeberekeningen gedaan cfr rapport 1999.
+
+```{r results='hide'}
+names(data_dendro_calc)
+```
+
+```{r data_dendro_calc}
+col <- c("basal_area_alive_m2_ha","basal_area_dead_m2_ha", 
+         # "vol_alive_m3_ha", "vol_dead_standing_m3_ha", 
+         # "vol_bole_alive_m3_ha","vol_bole_dead_m3_ha", 
+         "number_of_trees_alive_ha", "number_of_trees_dead_ha")
+
+data_dendro_calc %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+
+```
+
+```{r dendro_by_plot}
+names(dendro_by_plot)
+col <- c("basal_area_alive_m2_ha","basal_area_dead_m2_ha", 
+         "number_of_tree_species", "stems_per_tree", 
+         # "vol_alive_m3_ha", "vol_dead_standing_m3_ha", 
+         # "vol_bole_alive_m3_ha","vol_bole_dead_m3_ha", 
+         "number_of_trees_ha", "stem_number_ha")
+
+dendro_by_plot %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+```
+
+```{r dendro_by_diam_plot_species}
+names(dendro_by_diam_plot_species)
+col <- c("basal_area_alive_m2_ha","basal_area_dead_m2_ha", 
+         "stem_number_alive_ha", "stem_number_dead_ha")
+
+dendro_by_diam_plot_species %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+```
+## Extra variabelen
+
+Naast N/ha en G/ha, moet ook procentueel aandeel van elke boomsoort berekend 
+worden, zowel obv stamtal als obv grondvlak.
+
+```{r }
+# names(dendro_by_plot_species)
+
+result_dendro <- dendro_by_plot_species %>% 
+  select(forest_reserve, plot_id, year, period,
+         species, 
+         number_of_trees_ha, stem_number_ha,
+         basal_area_alive_m2_ha, basal_area_dead_m2_ha) %>% 
+  left_join(qSpecies, by = c("species" = "ID"))
+
+names(result_dendro)
+head(result_dendro)
+```
+
+```{r totalen}
+totalen <- result_dendro %>% 
+  group_by(plot_id) %>% 
+  summarize(total_N = sum(number_of_trees_ha),
+            total_BA_alive = sum(basal_area_alive_m2_ha),
+            total_BA_dead = sum(basal_area_dead_m2_ha),
+            total_stemnr = sum(stem_number_ha)) %>% 
+  ungroup()
+```
+
+```{r proc_aandeel}
+result_dendro_ <- result_dendro %>% 
+  left_join(totalen, by = c("plot_id")) %>% 
+  mutate(perc_number_of_trees = 100*number_of_trees_ha/total_N,
+         perc_basal_area_alive = 100*basal_area_alive_m2_ha/total_BA_alive,
+         perc_basal_area_dead = 100*basal_area_dead_m2_ha/total_BA_dead,
+         perc_stem_number = 100*stem_number_ha/total_stemnr,
+         # NaN wegens 0/0 vervangen door 0
+         perc_basal_area_dead = ifelse(total_BA_dead == 0
+                                       , 0, perc_basal_area_dead)) %>% 
+  # afronden
+  forestmangr::round_df(., 2) %>% 
+  select(-contains(c("total")), -period) %>% 
+  select(forest_reserve, plot_id, year, 
+         # period,
+         species, name_nl, name_sc,
+         everything())
+
+view(result_dendro_)
+
+result_dendro <- result_dendro_
+```
+
+
+
+# Export
+
+Resultaten worden opgeslagen als csv op c-schijf en in teamdrive:
+
+```{r}
+path_to_datarequest
+path_to_datarequest_teamdrive
+
+```
+
+Enkele verduidelijkingen:
+
+* "number_of_tree_species" = aantal soorten obv de levende bomen
+
+* "stems_per_tree" = meerstammigheid (stem_number_ha / number_of_trees_ha)
+
+
+```{r save, eval=FALSE}
+write.xlsx(result_dendro
+           , paste0(path_to_datarequest, "plot_level_data.xlsx")
+           , sheetName = "dendro"
+           , showNA = FALSE
+           , append = FALSE) 
+
+
+```
+
+
+```{r save_teamdrive, eval=FALSE}
+write.xlsx(result_dendro
+           , paste0(path_to_datarequest_teamdrive, "plot_level_data.xlsx")
+           , sheetName = "dendro"
+           , showNA = FALSE
+           , append = FALSE) 
+
+```
+
+
+
+# Copy html to teamdrive
+
+Na knitting - manueel
+
+```{r eval = FALSE}
+# Specify the path of the file you want to copy
+source_file <- here::here(paste0("Scripts/AanvraagGegevens/INBO_FOURCAST/FOURCAST_dendro_2024.html"))
+
+# Specify the destination directory where you want to copy the file
+destination_dir <- path_to_html
+
+# Copy the file to the destination directory
+file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
+# ? file.copy
+```
+
