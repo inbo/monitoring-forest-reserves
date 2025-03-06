@@ -163,6 +163,46 @@ stems_height <- stems %>%
   rename(ind_sht_cop_txt = Value1)
 ```
 
+# Aantal gemeten hoogtes per soort
+
+```{r }
+nr_measured <- stems %>% 
+  # filter(alive_dead == 11 & intact_snag == 11) %>% 
+  group_by(species) %>% 
+  summarize(n = n(),
+            n_alive = sum(alive_dead == 11),
+            n_dead = sum(alive_dead == 12),
+            n_height_all = sum(height_m > 0, na.rm = TRUE), 
+            n_height_alive = sum(height_m > 0 & alive_dead == 11 & intact_snag == 11, na.rm = TRUE)) %>%
+  ungroup() %>% 
+  left_join(qspecies %>% select(ID, name_nl = Value1), by = c("species" = "ID")) %>% 
+  arrange(n_height_alive, n_alive)
+
+nr_measured %>% arrange(desc(n_height_alive)) %>% DT :: datatable(options = list(dom = 'tip'),rownames = FALSE) 
+
+write.csv2(nr_measured, paste0(path_to_datarequest, "/nr_measured_CP.csv"))
+
+```
+
+# Aantal metingen per periode
+
+```{r}
+table(stems_height$period)
+unique(stems_height$year)
+
+overview_heights_CP <- stems_height %>% 
+  group_by(name_nl, period) %>% 
+  summarize(aantal = n()) %>% 
+  ungroup() %>% 
+  pivot_wider(
+    names_from = period,
+    values_from = c(aantal),
+    names_prefix = "periode" 
+    )
+
+write_csv2(overview_heights_CP, paste0(path_to_datarequest, "/overview_heights_CP.csv"))
+```
+
 # Hakhout meenemen?
 
 JA, zie onderstaand overzicht

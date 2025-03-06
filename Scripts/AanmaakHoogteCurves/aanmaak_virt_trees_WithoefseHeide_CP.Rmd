@@ -47,7 +47,7 @@ forestreserve_folder <- "3_With_heide_DEELS"
 # plot_type <- "CA"
 plot_type <- "CP"
 
-virt_plot <- 839
+virt_plot <- 299
 
 # plots_to_exclude <- c(701, 707, 709, 727, 728, 738, 739, 740, 759, 760)
 
@@ -168,6 +168,48 @@ stems_height <- stems %>%
   left_join(qindshootcop, by = c("ind_sht_cop"= "ID")) %>% 
   rename(ind_sht_cop_txt = Value1)
 ```
+
+
+# Aantal gemeten hoogtes per soort
+
+```{r }
+nr_measured <- stems %>% 
+  # filter(alive_dead == 11 & intact_snag == 11) %>% 
+  group_by(species) %>% 
+  summarize(n = n(),
+            n_alive = sum(alive_dead == 11),
+            n_dead = sum(alive_dead == 12),
+            n_height_all = sum(height_m > 0, na.rm = TRUE), 
+            n_height_alive = sum(height_m > 0 & alive_dead == 11 & intact_snag == 11, na.rm = TRUE)) %>%
+  ungroup() %>% 
+  left_join(qspecies %>% select(ID, name_nl = Value1), by = c("species" = "ID")) %>% 
+  arrange(n_height_alive, n_alive)
+
+nr_measured %>% arrange(desc(n_height_alive)) %>% DT :: datatable(options = list(dom = 'tip'),rownames = FALSE) 
+
+write.csv2(nr_measured, paste0(path_to_datarequest, "/nr_measured_CP.csv"))
+
+```
+
+# Aantal metingen per periode
+
+```{r}
+table(stems_height$period)
+unique(stems_height$year)
+
+overview_heights_CP <- stems_height %>% 
+  group_by(name_nl, period) %>% 
+  summarize(aantal = n()) %>% 
+  ungroup() %>% 
+  pivot_wider(
+    names_from = period,
+    values_from = c(aantal),
+    names_prefix = "periode" 
+    )
+
+write_csv2(overview_heights_CP, paste0(path_to_datarequest, "/overview_heights_CP.csv"))
+```
+
 
 # Hakhout meenemen?
 
@@ -510,7 +552,7 @@ Na knitting - manueel
 
 ```{r eval = FALSE}
 # Specify the path of the file you want to copy
-source_file <- here::here(paste0("Scripts/AanmaakHoogteCurves/aanmaak_virt_treesWithoefseHeide_CP.html"))
+source_file <- here::here(paste0("Scripts/AanmaakHoogteCurves/aanmaak_virt_trees_WithoefseHeide_CP.html"))
 
 # Specify the destination directory where you want to copy the file
 destination_dir <- path_to_html

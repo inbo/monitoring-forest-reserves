@@ -43,8 +43,8 @@ source(here::here("scripts/Setup.R"))
 ```{r Setup2}
 forestreserve <- "Jansheideberg"
 forestreserve_short <- forestreserve
-# forestreserve_short <- "Jansheide"
-forestreserve_folder <- "1_Jansheide_DEELS"
+forestreserve_short <- "Jansheide"
+
 forestreserve_folder <- paste0(path_to_reserves, "1_Jansheide_DEELS")
 
 # plot_type <- "CA"
@@ -58,26 +58,18 @@ virt_plot <- 839
 
 
 ```{r Path}
-# resultaten
-path_to_datarequest <- paste0(path_to_reserves, forestreserve_folder, "/verwerking_2025_1e2e3eSET/2AanmaakDHcurves_1e2e3eSET/")
-
-path_to_html <-  path_to_datarequest
-```
-
-
-
-```{r Path}
 # specifiek voor Wijnendale werden hoogtes toegevoegd aan "Wijnendale_DHcurves_CP_X8_inbo2020.accdb"
 # => dit project gebruiken om dhcurves te verkennen
-path_to_fieldmap_dhcurves <- paste0(forestreserve_folder,"/FMprojecten_2024/", forestreserve_short, "_DHcurves_", plot_type, "_X8_inbo2020/FieldMapData_", forestreserve_short, "_DHcurves_", plot_type, "_X8_inbo2020.accdb")
-
+path_to_fieldmap_dhcurves <- paste0(forestreserve_folder,"/FMprojecten_2024/", forestreserve, "_DHcurves_", plot_type, "_X8_inbo2020/FieldMapData_", forestreserve, "_DHcurves_", plot_type, "_X8_inbo2020.accdb")
 
 # resultaten
 path_to_datarequest <- paste0(forestreserve_folder, "/verwerking_2025_1e2e3eSET/2AanmaakDHcurves_1e2e3eSET/")
 
-# hoogtemodellen
-# path_to_height_models
+path_to_html <-  path_to_datarequest
 
+# hoogtemodellen: zie paths.R
+    # path_to_height_models   # "C:/03_BR/1_DataverwerkingBR/Data/Hoogtemodellen/"
+    # path_to_heightmodels_teamdrive # "G:/Gedeelde drives/Team_Boseco_BR/PRJ_BR_Gegevensverwerking/50_Hoogtemodellen/"
 ```
 
 
@@ -237,7 +229,7 @@ write.xlsx(x = erraneous_, file = paste0(path_to_datarequest, "erraneous_records
 
 Zowel bij log als bij exponentiële functie:  
 
- - 0_7_residuals.emf voor beuk: 1 outlier: dbh 355cm en hoogte 39.6m => géén outlier 
+ - zie `0_7_residuals.emf`: beuk (dbh 355cm en hoogte 39.6m): blijkt géén outlier te zijn 
  
  <!-- => hoogte verwijderen     -->
  <!-- **Hierna dh-curves opnieuw laten berekenen in FM-IA.** -->
@@ -377,9 +369,8 @@ nr_measured <- all_stems_reserve %>%
   left_join(qspecies %>% select(ID, name_nl = Value1), by = c("species" = "ID")) %>% 
   arrange(n_height_alive, n_alive)
 
-nr_measured %>% DT :: datatable(filter = 'top', options = list(dom = 'tip'),rownames = FALSE) 
-
-write.csv2(nr_measured, paste0(path_to_datarequest, "/nr_measured.csv"))
+nr_measured %>% arrange(desc(n_height_alive)) %>% 
+  DT :: datatable(filter = 'top', options = list(dom = 'tip'),rownames = FALSE) 
 
 ```
 
@@ -408,7 +399,7 @@ nr_measured %>% filter(between(n_height_alive, 0, 0)) %>%
 ```
 
 
-Daar wordt dan automatisch de algemene curve gebruikt = OK    
+Daar wordt automatisch de algemene curve gebruikt = OK    
 
 
 ## Adjusted curve 
@@ -482,7 +473,7 @@ opgesteld kon worden (hier zijn dat soorten 69 en 17)
 ## Verwijderen plotmodellen
 
 De plotmodellen (plotID = 599) van soorten waar ook een globaal model (plotID = <ALL>) 
-van is, verwijderen, zodat ssoorten niet dubbel voorkomen in de lijst.
+van is, verwijderen, zodat soorten niet dubbel voorkomen in de lijst.
 
 
 ## Toevoegen plotmodellen van geclusterde soorten   
@@ -497,11 +488,11 @@ De parameterfile kopiëren naar folder "C:/03_BR/1_DataVerwerkingBR/Data/Hoogtem
 voor gebruik in R, package forrescalc.
 
 
-- Eerst de oude parameterfiles die daar staan, hernoemen naar "xxxxx_vs2021.xlsx" en 
+- Eerst de oude parameterfiles die daar staan, hernoemen naar "xxxxx_vs2022.xlsx" en 
 verplaatsen naar folder "archief",met behulp van onderstaande code (! versienr aanpassen).    
 
 ```{r}
-versienr <- "vs2021"
+versienr <- "vs2022"
 
 for (decade in c(1, 2)){
   
@@ -518,10 +509,24 @@ for (decade in c(1, 2)){
   
 }
 
+# idem voor teamdrive
+for (decade in c(1, 2)){
+  
+  # bestaat de file al?
+  archive_filename <- paste0(path_to_heightmodels_teamdrive, "archief/HeightParams_", forestreserve_short, "_", plot_type, "_", decade, "_", versienr, ".xlsx")
+  
+  if (file.exists(archive_filename)) {
+  print(paste0(archive_filename, " already exists!"))
+} else {
+  print("The file does not exist.")
+  parameters_old <- read_excel(paste0(path_to_heightmodels_teamdrive, "HeightParams_", forestreserve_short, "_", plot_type, "_1.xlsx"))
+  write.xlsx(parameters_old, file = archive_filename, showNA = FALSE) 
+}
+  
+}
+
+
 ```
-
-
-
 
 - De parameterfile inlezen.    
 
@@ -552,24 +557,24 @@ write.xlsx(parameters, file = paste0(path_to_heightmodels_teamdrive, "HeightPara
 write.xlsx(parameters, file = paste0(path_to_heightmodels_teamdrive, "HeightParams_", forestreserve_short, "_", plot_type, "_3.xlsx"), showNA = FALSE)
 ```
 
-
-
-
 # Html kopieren naar teamdrive
 
-Html manueel kopieren naar onze teamdrive **_`r paste0("PRJ_BR_Gegevensverwerking/per_gebied/2024_", forestreserve_short)`_**   
+Html manueel kopieren naar c-schijf en naar de teamdrive (`r paste0("PRJ_BR_Gegevensverwerking/per_gebied/2024_", forestreserve_short)`)  
 
 Na knitting - manueel
 
 ```{r eval = FALSE}
 # Specify the path of the file you want to copy
-source_file <- here::here(paste0("Scripts/AanmaakHoogteCurves/verkenning_DHcurves_", forestreserve_short, "_", plot_type, "_2024.html"))
+source_file <- here::here(paste0("Scripts/AanmaakHoogteCurves/verkenning_DHcurves_", forestreserve_short, "_", plot_type, "_2025.html"))
 
 # Specify the destination directory where you want to copy the file
-destination_dir <- paste0(path_to_dataverwerking_teamdrive, "/per_gebied/2024_", forestreserve_short)
+destination_dir1 <- path_to_datarequest
+destination_dir2 <- paste0(path_to_dataverwerking_teamdrive, "20_Per_gebied/2024_"
+                           , forestreserve, "/02_dh_curves")
 
 # Copy the file to the destination directory
-file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
+file.copy(from = source_file, to = destination_dir1, overwrite = TRUE)
+file.copy(from = source_file, to = destination_dir2, overwrite = TRUE)
 # ? file.copy
 ```
 

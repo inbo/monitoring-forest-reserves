@@ -97,7 +97,7 @@ path_to_meetgegevens <- paste0(path_to_data, "Meetgegevens/")
 
 # Hoogtemodellen - xlsx ----
 path_to_height_models <- paste0(path_to_data, "Hoogtemodellen/")
-path_to_heightmodels_teamdrive <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverwerking/Hoogtemodellen/")
+path_to_heightmodels_teamdrive <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverwerking/50_Hoogtemodellen/")
 # op git: path_to_forresheights <- "C:/03_BR/2_Forresheights/data/" 
 
 
