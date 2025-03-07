@@ -128,7 +128,8 @@ stems <- load_data_dendrometry(path_to_fieldmap_dhcurves, extra_variables = TRUE
 names(stems)
 
 stems_ <- stems %>% 
-  select(plot_id, tree_measure_id, species, alive_dead
+  select(plot_id, tree_measure_id
+         , species, alive_dead
          , intact_snag, ind_sht_cop, dbh_mm, height_m
          , remark, common_remark)
 
@@ -144,8 +145,6 @@ stems_height <- stems_ %>%
   ) %>% 
   left_join(qspecies %>% select(ID, name_nl = Value1), by = c("species"= "ID")) %>% 
   left_join(qindshootcop %>% select(ID, ind_sht_cop_txt = Value1), by = c("ind_sht_cop"= "ID"))
-
-
 
 table(stems_height$period)
 
@@ -328,7 +327,7 @@ Enkel bij breedbladige wilg (77) duidelijk extrapolatie, maar is OK.
 
 ### Exp vs log
 
-In 20115 en 2022 geopteerd voor exp. functie, die was toen beter.
+In 2015 en 2022 geopteerd voor exp. functie, die was toen beter.
 Nu lijkt log beter, MAAR:   
 
 - CA: exponentiële functie beter

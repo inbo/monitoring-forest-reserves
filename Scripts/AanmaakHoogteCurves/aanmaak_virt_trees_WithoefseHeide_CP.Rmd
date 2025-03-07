@@ -119,6 +119,10 @@ In dit script wordt data van het **bosreservaat `r forestreserve`** ingeladen, m
 <!-- In het geval van `r forestreserve` dient ook rekening gehouden te worden met een aantal **verstoorde plots**. -->
 <!-- Deze worden niet meegenomen in de verdere dataverwerking.   -->
 
+Omdat er te weinig metingen zijn van de eerste en tweede decade, laden we ook de 
+**hoogtes van het transect** (plot 61000) in (opgemeten in juni 2003).
+Bij de dataverwerking van 2022 gebruikten we immers enkel deze hoogtes. 
+Het is beter om een menging te hebben van de verschillende periodes.
 
 
 ```{r overview_data}
@@ -146,9 +150,10 @@ odbcClose(con)
 # trees_tmp <- load_data_dendrometry(database = path_to_fieldmap, plottype = "Core area", forest_reserve = "Muizenbos", extra_variables = TRUE)
 
 # gaf foutmelding => achteraf gefilterd
-trees <- load_data_dendrometry(database = path_to_fieldmap_db, plottype = plot_type, extra_variables = TRUE) %>% 
+trees <- load_data_dendrometry(database = path_to_fieldmap_db, extra_variables = TRUE) %>% 
   # filter(forest_reserve == forestreserve & !plot_id %in% plots_to_exclude) %>% 
-  filter(forest_reserve == forestreserve) %>% 
+  filter(forest_reserve == forestreserve |
+           forest_reserve == "Withoefse heide T") %>% 
   mutate(fperiod = as.factor(period))
 
 shoots <- load_data_shoots(database = path_to_fieldmap_db, extra_variables = TRUE)
@@ -187,7 +192,7 @@ nr_measured <- stems %>%
 
 nr_measured %>% arrange(desc(n_height_alive)) %>% DT :: datatable(options = list(dom = 'tip'),rownames = FALSE) 
 
-write.csv2(nr_measured, paste0(path_to_datarequest, "/nr_measured_CP.csv"))
+write.csv2(nr_measured, paste0(path_to_datarequest, "/nr_measured_CP_T.csv"))
 
 ```
 
@@ -207,7 +212,7 @@ overview_heights_CP <- stems_height %>%
     names_prefix = "periode" 
     )
 
-write_csv2(overview_heights_CP, paste0(path_to_datarequest, "/overview_heights_CP.csv"))
+write_csv2(overview_heights_CP, paste0(path_to_datarequest, "/overview_heights_CP_T.csv"))
 ```
 
 
@@ -240,7 +245,7 @@ overview_HH_height <- stems_height %>%
 
 overview_HH_height %>% arrange(desc(individual)) %>% DT :: datatable(options = list(dom = 'rt'), rownames = FALSE, filter = "top") 
 
-write.csv2(overview_HH_height, paste0(path_to_datarequest, "/overview_HH_height_CP.csv"))
+write.csv2(overview_HH_height, paste0(path_to_datarequest, "/overview_HH_height_CP_T.csv"))
 ```
 
 **Besluit**: Withoefse heide bevat geen hakhout, is dus geen issue hier. 
@@ -289,9 +294,8 @@ Op basis van bovenstaande grafieken:
 - 2eSET: data 1e + 2e + 3eSET
 - 3eSET: data 1e + 2e + 3eSET
 
-Immers maar weinig metingen in eerste decade en geen in tweede ...
-
-De vorige dh-curves werden aangemaakt op basis van metingen uit het transect (eerste decade).
+Immers geen metingen in tweede decade en deze van eerste decade komen vooral uit het transect.
+(de vorige dh-curves werden aangemaakt op basis van metingen uit het transect).
 
 
 # Per boomsoort
@@ -347,7 +351,7 @@ mean(stems_height_gD_p3$height_m)
 ```
 
 
-```{r vgl_beuk}
+```{r vgl_den}
 ggplot(stems_height_gD, aes(dbh_mm, height_m)) + 
   geom_point(aes(color = fperiod)) + 
   geom_smooth(aes(y = height_per_period, group = fperiod, color = fperiod))  
@@ -363,7 +367,7 @@ ggplot(stems_height_gD, aes(dbh_mm, height_m)) +
 
 ```
 
-```{r vgl_beuk_histo, eval = FALSE}
+```{r vgl_den_histo, eval = FALSE}
 # hoogtes
 h1 <- ggplot(stems_height_gD_p1, aes(height_m)) + geom_histogram()
 h2 <- ggplot(stems_height_gD_p2, aes(height_m)) + geom_histogram()
@@ -378,7 +382,7 @@ grid.arrange(d1, d2, d3, nrow = 1)
 
 ```
 
-```{r vgl_beuk_smoother, eval = FALSE}
+```{r vgl_den_smoother, eval = FALSE}
 # ggplot(stems_height_gD, aes(dbh_mm, height_m)) + 
 #   geom_point(aes(color = fperiod)) + 
 #   geom_smooth(aes(color = fperiod)) 
@@ -541,7 +545,7 @@ t <- unique(output$unique_ID)
 De resultaten worden weggeschreven naar **TblVirtueleTrees_CP_1e2e3eSET.xlsx**
 
 ```{r WegschrijvenOutput}
-write_xlsx(output, paste0(path_to_datarequest, "/TblVirtueleTrees_CP_1e2e3eSET.xlsx"))
+write_xlsx(output, paste0(path_to_datarequest, "/TblVirtueleTrees_CP_T_1e2e3eSET.xlsx"))
 
 ```
 
