@@ -78,7 +78,7 @@ csv_files <- list.files(destination_dir, pattern = "\\.csv$", full.names = TRUE)
 
 head(csv_files)
 length(csv_files)
-# 67  / 72
+# 67  / 72 / 78
 
 ```
 
