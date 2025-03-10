@@ -39,14 +39,16 @@ source(here::here("scripts/Setup.R"))
 > juiste forrescalc kiezen:   
 - om weg te schrijven naar forresdat => met juiste release: dan `install.packages("forrescalc")`  
 - laatste correcties van forrescalc => juiste branch selecteren in forrescalc en opnieuw builden
-(bv. branch 'bugfix' met corr van read_forresdat waarbij we de develop branch kunnen selecteren ipv main)
+(10/3/25: branch 'bugfix' met corr van read_forresdat waarbij we de develop branch kunnen selecteren ipv main)
 
 **Update 18/12/2024: enkel naar csv lokaal en op gdrive, niet naar forresdat**
+**Update 10/3/2025: enkel naar csv lokaal en op gdrive, niet naar forresdat**
+Dus: selecteren van juiste forrescalc branch (bugfix), maar dan kan ik niet wegschrijven naar forresdat, 
+want daarvoor moet ik de juiste release gebruiken!!!
 
-
-```{r juiste_forrescalc, eval = FALSE}
+```{r forrescalc_to_write_to_forresdat, eval = FALSE}
 # !!! eerst zeker 'install.packages("forrescalc")
-# zodat data goede release krijgt!
+# zodat forresdat-data goede release krijgt!
 # zie mail 7/10/24 van Els L.
 # soms een andere branch nodig als Els nog iets moet fixen, maar als ik naar forresdat 
 # wil wegschrijven, moet ik officiële versie van forrescalc gebruiken
@@ -116,6 +118,9 @@ en Zwaenepoel werden vervangen door
     liggen (voorheen "Kersselaerspleyn")     
     - Zoniën HARRAS_1995: bevat KV en CP (voorheen "Harras" voor KV en "Zwaenepoel" voor CP's)    
     - Zoniën UITBR_2010: bevat enkel CP's (voorheen "Zwaenepoel", maar zonder deze die nu in "HARRAS_1995" liggen)
+
+- 10/3/2025: update van de reeds verwerkte data, vooral vanuit vraag naar trees wide beuk
+(trees_weide_beuk: tabel met ook Wijnendale, Everzwijnbad en Jansheideberg)
 
 
 # Update lookuplijsten - INDIEN GEWIJZIGD
@@ -341,6 +346,9 @@ plotinfo <- plotinfo %>%
 ```{r check_processed}
 table(plotinfo$forest_reserve, plotinfo$data_processed)
 # table(plotinfo$forest_reserve, plotinfo$data_processed)
+# Zoniën UITBR_1995: altijd één plot niet-processed = 1999 CA (Rogister+)
+# wijnendale: 4 plots
+# 10/3/2025: Coolhem en Bos Terrijst: periode 3 zit er al in, maar nog niet verwerkt, klopt
 
 plotinfo %>% filter(data_processed==FALSE)
 ```
@@ -359,8 +367,7 @@ check_survey_trees_summ %>%
 
 Wijnendalebos: 4 plots uit periode 1 die niet verder meegenomen werden in de verwerking - ok
 Kersselaerspleyn: plot 1999: Rgister+: OK, niet mee te nemen
-Withoefse heide: 3eSET (dd 13/7/2022), verwerking is uitgesteld naar 2025
-Ook nog Heirnisse en Jansheideberg (datacontrole reeds gedaan, maar dataverwerking nog niet)
+Bos Terrijst en Coolhem: nog niks mee gedaan, ook geen datacontrole
 
 ```{r}
 plotinfo %>% filter(is.na(forest_reserve)) %>% nrow() == 0
@@ -436,6 +443,8 @@ plotinfo <- plotinfo_
 
 
 # Export plotinfo
+
+10/3/2025: NIET naar forresdat
 
 ```{r plotinfo_save_git, eval=FALSE}
 save_results_forresdat(
