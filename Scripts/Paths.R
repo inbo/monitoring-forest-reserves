@@ -57,7 +57,9 @@ path_to_plotlevel_csv <- paste0(path_to_dataverwerking, "Output/_plot-level-data
 path_to_lulists_csv <- paste0(path_to_dataverwerking, "Output/_qXX_lookuplijsten/") 
 path_to_treelevel_csv <- paste0(path_to_dataverwerking, "Output/_tree-level-data/")
 
-path_to_analysis_set_db <- paste0(path_to_dataverwerking, "Output/BR_analysedb.accdb") # accessdb
+path_to_analysis_set_db <- paste0(path_to_dataverwerking, "Output/BR_analysedb_20250310.accdb") # accessdb
+# path_to_analysis_set_db <- paste0(path_to_dataverwerking, "Output/BR_analysedb_20240924.accdb") # accessdb
+
 
 path_to_dbResults <- paste0(path_to_dataverwerking, "Output/BR_resultaten.accdb")
 dbResults <- path_to_dbResults
