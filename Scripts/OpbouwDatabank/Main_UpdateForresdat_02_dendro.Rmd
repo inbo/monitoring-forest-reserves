@@ -38,7 +38,7 @@ source(here::here("scripts/Setup.R"))
 > juiste forrescalc kiezen:   
 - om weg te schrijven naar forresdat => met juiste release: dan `install.packages("forrescalc")`  
 - laatste correcties van forrescalc => juiste branch selecteren in forrescalc en opnieuw builden
-(bv. branch 'bugfix' met corr van read_forresdat waarbij we de develop branch kunnen selecteren ipv main)
+(10/3/25: branch 'bugfix' met corr van read_forresdat waarbij we de develop branch kunnen selecteren ipv main)
 
 ```{r juiste_forrescalc, eval = FALSE}
 # !!! eerst zeker 'install.packages("forrescalc")
@@ -91,12 +91,16 @@ en Zwaenepoel werden vervangen door
     - Zoniën HARRAS_1995: bevat KV en CP (voorheen "Harras" voor KV en "Zwaenepoel" voor CP's)    
     - Zoniën UITBR_2010: bevat enkel CP's (voorheen "Zwaenepoel", maar zonder deze die nu in "HARRAS_1995" liggen)
 
-    
+- 10/3/2025: update van de reeds verwerkte data, vooral vanuit vraag naar trees wide beuk
+(trees_weide_beuk: tabel met ook Wijnendale, Everzwijnbad en Jansheideberg)
+
+
 # Load plotinfo
 
-Verder werken met plotinfo uit Main_01, want correcties mbt date_dendro doorgevoerd.
+Verder werken met plotinfo uit Main_01, want correcties mbt `survey_deadw` doorgevoerd
+(Zoniën UITBR_1995 - 2000).
 
-Plotinfo inladen: plottype, naam forest_reserve en info over survey's.
+Plotinfo inladen: `plottype`, naam `forest_reserve` en info over survey's.
 (plotinfo op gdrive en forresdat: enkel processed plots!)
 
 ```{r }
@@ -140,6 +144,7 @@ data_stems  <- compose_stem_data(data_dendro, data_shoots, extra_variables = TRU
 # sneller en bij problemen met forresheights github, eigen functie gebruiken
 path_to_height_models <- "C:/03_BR/1_DataVerwerkingBR/Data/Hoogtemodellen/"
 height_model <- load_height_models_local(path_to_height_models)
+# mean(height_model$P1) == mean(height_model2$P1)
 
 data_deadwood <- load_data_deadwood(database = path_to_fieldmap_db, processed = TRUE) %>% 
   filter(plottype != "OTHER")
@@ -151,32 +156,33 @@ table(height_model$forest_reserve, height_model$period)
 table(plotinfo$forest_reserve)
 
 height_model %>% group_by(forest_reserve) %>% summarise(n = n()) %>% ungroup() %>% anti_join(plotinfo, by = c("forest_reserve"))
-# Rodebos	51	- OK, als algemeen voor beide KV's, niet gelinkt aan een feitelijke KV (= Rodebos KV1 en Rodebos KV2)
-# Rodebos KV	56 - NIET OK!!! - AANGEPAST
-# Walenbos	28	- OK, als algemeen voor beide KV's, niet gelinkt aan een feitelijke KV (= Walenbos KV1 en Walenbos OT)
+# prognoses_extra: OK, deze hoeven niet meegenomen worden bij de standaard dataverwerking, 
+# want geen deel van monitoring (onbeheerde) BRen
+# In moederdb zijn plotdetails niet ingevuld (geen processed en geen "reservaat"forest_reesrve") 
+# => trees werden niet ingeladen 
 ```
 
 # Correctie year van dendrometrie - NIET MEER NODIG
-Gevraagd aan Els (issue #114)
 
 Year = jaar van groeiseizoen
 Grens was gelegd op 1/7, nu naar 1/5.
 Aangevraagd in issue # 114, OK (27/3/2024)
+<!-- Berekening van year en year_dendro aangepast voor load_data_dendrometry() en load_plotinfo():  -->
 
-*Berekening van year en year_dendro aangepast voor load_data_dendrometry() en load_plotinfo(): t.e.m. 30 april wordt nog bij het vorige jaar geteld, vanaf 1 mei wordt bij het nieuwe jaar geteld (1 mei bij huidig jaar).*
+**T.e.m. 30 april wordt nog bij het vorige jaar geteld, vanaf 1 mei wordt bij het **
+**nieuwe jaar geteld (1 mei bij huidig jaar).**
+
+Volgende reservaten daadwerkelijk over twee jaartallen heen opgemeten:
+
+- Bos Terrijst CA - 1eSET: OK
+- Heirnisse - 2eSET: 5 plots 9/2014: OK
+- Everzwijnbad - 3eSET: 1 plot (118) pas op 5/5/2023 opgemeten
+- Wijnendale - 3eSET: 1 plot (425) pas volgend jaar in nov (07/11/2023) opgemeten
+- Zoniën HARRAS_1995 - 3eSET: 3 plots nog opgemeten 14/5/2020, rest in 2019 opgemeten
+- Zoniën UITBR_2010 - 3eSET: 52 plots jan 2020 tot april 2020 en 12 plots in mei 2020
 
 
-Hier geen sluitende code, gewoon deze waarvan ik weet dat het niet klopt, die aanpassen: 
-
-- Bos Terrijst CA: OK
-- Heirnisse: 5 plots 9/2014: OK
-- enkel Kerss: alle 16 plots 2009 te wijzigen in 2010: CP's en CA
-
-- !! ook Withoefse heide
-(gecheckt in dbEls_deel2 op datum dendro in plotdetails en Kerss en With heide zijn enige reservaten in dit geval)
-
-
-```{r check}
+```{r check, results='hide'}
 names(data_dendro)
 
 year_range <- data_dendro %>% 
@@ -191,43 +197,24 @@ t <- year_range %>%
 
 ```
 
-Tijdelijk tot update forrescalc
 
-```{r correcte_year_data_dendro_TMP}
-data_dendro_ <- data_dendro %>% 
-  mutate(year = ifelse(year == 2009 & forest_reserve == "Kersselaerspleyn"
-    , year + 1
-    , year)
-  ) %>% 
-  mutate(year = ifelse(year == 1999 & forest_reserve == "Withoefse heide"
-    , year + 1
-    , year)
-  )   
+```{r results='hide'}
+t2 <- data_dendro %>% 
+  inner_join(t)
 
-data_dendro <- data_dendro_
+t2 %>% group_by(forest_reserve, period, year) %>% 
+  summarize(n_plots = n_distinct(plot_id)) %>% 
+  ungroup() %>% 
+  filter(period == 3)
 
-data_stems  <- compose_stem_data(data_dendro, data_shoots, extra_variables = TRUE)
-```
-
-```{r correcte_year_data_deadw_TMP}
-data_deadwood_ <- data_deadwood %>% 
-  mutate(year = ifelse(year == 2009 & forest_reserve == "Kersselaerspleyn"
-    , year + 1
-    , year)
-  ) %>% 
-  mutate(year = ifelse(year == 1999 & forest_reserve == "Withoefse heide"
-    , year + 1
-    , year)
-  )  
-
-data_deadwood <- data_deadwood_
-
+t2 %>% filter(forest_reserve == "Everzwijnbad" & year == 2023)
+t2 %>% filter(forest_reserve == "Wijnendalebos" & year == 2023)
+t2 %>% filter(forest_reserve == "Zoniën HARRAS_1995" & year == 2020)
+t2 %>% filter(forest_reserve == "Zoniën UITBR_2010" & year == 2020)
 ```
 
 
-
-
-# Liggend dood hout (intact/fragment) volume bijwerken - OK - 23/11/2022
+# Liggend dood hout (intact/fragment) volume bijwerken - OK - 10/3/2025
 
 De volumeberekening van liggend dood hout baseert zich op het veld `calc_volume_m3`
 uit FM-databank (layer `Deadwood`).
@@ -250,7 +237,7 @@ klopt wel degelijk...voor KV KP = BEkartering....
 
 ## Fragmenten - update van volume in FM
 
-**Elke keer te doen bij nieuwe db**
+**Elke keer te doen bij nieuwe db** 
 
 In Fieldmap zijn er twee velden opgenomen, die "manueel" bijgewerkt moeten worden.
 Makkelijkste is om dit hier op te vangen in een updatequery.
@@ -272,6 +259,11 @@ Dat doen we hier mbv een updatequery, nadat we zeker zijn dat de waardes correct
 berekend zijn in FM-DC ("inside plot").
 Dit moet normaliter enkel gebeuren voor periode 3, periode 1 en 2 zijn bijgewerkt 
 in de moederdatabank zelf.
+
+**!!! ZEKER WANNEER ER EXTRA PLOTS TOEGEVOEGD ZIJN**
+Dan blijkt volume nog niet "inside plot" berekend te zijn!
+Zoals nu (10/3/2025) Withoefse heide, Heirnisse en Jansheideberg
+
 
 ```{r sql_update_calc_deadw_inside_plot, eval = FALSE}
 # !! ENKEL UITVOEREN NADAT IN DC "volume inside plot" BEREKEND IS
@@ -316,26 +308,24 @@ odbcClose(conn)
 
 # opnieuw inladen
 data_deadwood_old <- data_deadwood
-data_deadwood <- load_data_deadwood(database = path_to_fieldmap_db, processed = TRUE)
-
+data_deadwood <- load_data_deadwood(database = path_to_fieldmap_db, processed = TRUE) %>% 
+  filter(plottype != "OTHER")
+data_deadwood <- calc_intact_deadwood(data_deadwood)
 
 data_deadwood %>% filter(is.na(calc_volume_m3)) %>% nrow()
-# 2 (intacte)
+# 0
 ```
 
-## Intacte bomen - correctie mbv R-code - NIET MEER NODIG
+## Intacte bomen - NIET MEER NODIG
 
 Indien deadwood als intact (veld `IntactFragment`) aangevinkt staat, moeten er 
 **tarieven** gebruikt worden om dit volume te berekenen.
-
-> Issue # 105 aangemaakt in forrescalc. Is geïmplementeerd.
-Toch nog eens checken of intact-fragment wel klopt!!
-(klopte alvast wel bij Wijnendale KV, één intacte kastanje - sp 64)
+(zie issue # 105) 
 
 Er werd afgesproken met Peter `intact` enkel nog te gebruiken voor de BE's of de KV's  
 (als bomen tenminste plotgrens van KV niet overschrijden). 
 
-- hier in KV Wijnendale één intacte
+- in KV Wijnendale één intacte
 
 Peter heeft een controle gedaan op oudere data (zie mail 24/11/2022)
 Intact kan NIET bij 
@@ -417,15 +407,12 @@ nrow(check_deadw) == 0
 
 ```
 
-# Correctie staande bomen - Zoniën KERN_1983 & UITBR_1995  
-
-## Afwijkingen 
+# Correctie staande bomen - Zoniën KERN_1983  
 
 - Zoniën KERN_1983 - KV - 1986: 
 ** geen shoots, geen deadwood, reg of veg
-** pas vanaf dbh > 30 cm  
-** enkel de bomen die in 2000 nog recht stonden, werden geïmporteerd in FieldMap
-=> enkel te gebruiken voor volume-aanwas
+** pas vanaf dbh 30 cm   
+
 
 - Zoniën KERN_1983 - KV - 2000: 
 ** pas vanaf dbh 30 cm volopname  
@@ -449,15 +436,16 @@ not positioned; smaller trees not surveyed in full area but in subsamples (see r
 *Eigen verwerking*: 
 
 Concreet Kersselaerspleyn_IA_KV1986etc_INBO33: bevat alle jaartallen:
-	- 1986 (!! Enkel deze die in 2000 nog recht stonden => enkel te gebruiken voor volume-aanwas)
+	- 1986 
 	- 2000 (!! Pas gebiedsdekkend opgemeten vanaf 30 cm DBH => extra filter toevoegen bij de verwerking)
 	- 2010
 
-In 2000 werd gebiedsdekkend gemeten vanaf 30 cm DBH, en twee groepen vanaf 5 cm.
+In 2000 werd gebiedsdekkend gemeten vanaf 30 cm DBH, en in twee verjongingsgroepen vanaf 5 cm.
 Daarnaast streeplijsten: samen met veg in 750 subsamples: 30-20, 20-10 en < 10 cm.
 Afzonderlijk verwerkt: zie `CA_Kerss_5_30_dendro_by_xxx`
 
-**DAAROM in trees en stems deze < 30 cm wegfilteren (want dat zijn er in 2 kleine verjongingsgroepjes en niet representatief) zdd we resultaten hebben van levend > 30 cm**
+**DAAROM in trees en stems deze < 30 cm wegfilteren (want dat zijn bomen in 2 kleine **
+**verjongingsgroepjes, bijgevolg niet representatief) zdd we resultaten hebben van levend > 30 cm**
 **(cfr dataverwerking in 2012) **
 
 > We gaan ervanuit dat degene die data gebruiken, het methodiekrapport gelezen hebben en dit dus weten.
@@ -493,24 +481,13 @@ data_dendro <- data_dendro_
 ```{r}
 check_Kerss <- data_stems %>% 
   filter(plot_id == 11000 & period == 1)
-min(check_Kerss$dbh_mm) # 300
+min(check_Kerss$dbh_mm) == 300 # 300
 ```
-
-## Zoniën KERN_1983 - KV 1986 - opgepast
-
-In 1986: in FM werden enkel deze die in 2000 nog recht stonden, ingeladen.  
-Dus enkel geschikt voor aanwas-berekeningen, niet om staande voorraad te berekenen.
-
-Kan niet (moeilijk) rechtgezet worden.
-
-> We gaan ervanuit dat degene die data gebruiken, het methodiekrapport gelezen hebben en dit dus weten.
-Staat ook in metadata
-
 
 # Calculate dendro data
 
 ```{r save_previous, eval = FALSE}
-# laatste update: 15/5/2023 (with heide 2000 ipv 1999)
+# laatste update: 10/3/2025
 save(data_stems, data_dendro, data_shoots, height_model, data_deadwood,
      file=here::here("RData/main02_dendro_basics.RData"))
 
@@ -554,6 +531,7 @@ DUS BEST MEENEMEN IN DATACONTROLE
 ## Tree-level
 
 ```{r check_NA1, eval = FALSE}
+names(data_stems_calc)
 col <- c("dbh_mm", "species", "dbh_class_5cm", "calc_height_m", "vol_crown_m3",
          "vol_bole_m3", "vol_tot_m3", "stem_number_alive_ha", "stem_number_dead_ha",
          "basal_area_alive_m2_ha", "basal_area_dead_m2_ha", "vol_alive_m3_ha",
@@ -571,20 +549,35 @@ col <- c("dbh_mm", "species", "dbh_class_5cm", "calc_height_m",
 nrow(data_dendro_calc  %>%
        filter_at(col, any_vars(is.na(.)))) == 0
 
+# bij problemen ---
 # names(data_stems_calc)
 # names(data_dendro_calc)
-# data_stems_NA <- data_stems_calc %>% 
+# data_stems_NA <- data_stems_calc %>%
 #   filter_at(col, any_vars(is.na(.))) %>%
 #   select(plot_id, period,
-#          dbh_mm, species, alive_dead, 
+#          tree_measure_id, shoot_measure_id, 
+#          dbh_mm, species, alive_dead,
 #          height_m, calc_height_m, vol_bole_m3, vol_bole_alive_m3_ha,
 #          decaystage, intact_snag,
 #          ind_sht_cop,
 #          contains(c("iufro", "remark"))
-#          ) %>% 
-#   left_join(plotinfo, by = c("plot_id", "period")) 
+#          ) %>%
+#   left_join(plotinfo, by = c("plot_id", "period"))
+# 
+# data_stems_whyNA <- data_stems_calc %>%
+#   filter(intact_snag == 10 & ind_sht_cop == 12 & is.na(height_m)) %>%
+#   select(plot_id, period,
+#          tree_measure_id, shoot_measure_id, 
+#          dbh_mm, species, alive_dead,
+#          height_m, calc_height_m, vol_bole_m3, vol_bole_alive_m3_ha,
+#          decaystage, intact_snag,
+#          ind_sht_cop,
+#          contains(c("iufro", "remark"))
+#          ) %>%
+#   left_join(plotinfo, by = c("plot_id", "period"))
 ```
 
+Mogelijk probleem kan zijn dat er geen hoogte ingevuld staat bij snag, dan wordt geen volume berekend.
 
 ## Dendro_by_plot 
 
@@ -615,7 +608,7 @@ col <- c("year", "number_of_trees_ha", "stem_number_ha",
          "vol_log_m3_ha", "vol_deadw_m3_ha")
 
 dendro_by_plot_species %>% filter_at(col, any_vars(is.na(.))) %>% nrow()
-# 100
+# 100/101
 
 check <- dendro_by_plot_species %>% filter_at(col, any_vars(is.na(.)))
 # is OK, zijn alle waar geen liggend dood hout gemeten is
@@ -629,7 +622,7 @@ NA als er geen bomen zijn, is OK.
 
 ```{r}
 dendro_by_plot %>% filter(is.na(stems_per_tree)) %>% nrow() == 14
-# ename en plot 475 waar geen bomen staan
+# ename en plot 475 waar geen bomen staan; plot 52000: gevraagd aan Peter in mail (10/3/2025)
 
 dendro_by_plot %>% filter( stems_per_tree == 0) %>% nrow() == 0
 # komt niet voor
@@ -639,9 +632,9 @@ dendro_by_plot %>% filter( stems_per_tree == 0) %>% nrow() == 0
 
 ```{r}
 dendro_by_plot_species %>% filter(is.na(stems_per_tree)) %>% nrow()
-# 1389 records
+# 1389 records / 1479
 dendro_by_plot_species %>% filter(stem_number_ha == 0) %>% nrow()
-# ook 1389 => OK
+# ook 1389 /1479 => OK
 
 dendro_by_plot_species %>% filter( stems_per_tree == 0)
 # komt niet voor
@@ -658,11 +651,12 @@ col <- c("year", "stem_number_alive_ha", "stem_number_dead_ha",
          "vol_log_m3_ha")
 
 dendro_by_diam_plot %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
-# 280
+# 280 / 281
 
 check <- dendro_by_diam_plot %>% filter_at(col, any_vars(is.na(.)))
-# klopt
-
+# klopt, geen opname liggend dood hout
+# 110000, 52000, beheerd deel kluisbos
+# unique(check$plot_id)
 ```
 
 
@@ -679,6 +673,7 @@ col <- c("year", "species", "stem_number_alive_ha", "stem_number_dead_ha",
 dendro_by_diam_plot_species %>% filter_at(col, any_vars(is.na(.))) %>% nrow() 
 
 check <- dendro_by_diam_plot_species %>% filter_at(col, any_vars(is.na(.)))
+# deadwood geen opname, ename: geen species en dbh_clss, 734: geen levende bomen in dbhclass 35-40cm 
 
 # beperkter
 col <- c("year", "stem_number_alive_ha", "stem_number_dead_ha",
@@ -711,6 +706,7 @@ deadw_by_decay_plot %>% filter_at(col, any_vars(is.na(.))) %>%
 check <- deadw_by_decay_plot %>% filter_at(col, any_vars(is.na(.))) %>% 
   filter(vol_bole_dead_m3_ha != 0 | vol_log_m3_ha != 0)
 # deels decaystage missing => ook OK
+# deels geen liggend dood hout opname => ok
 ```
 
 ## Deadw_by_decay_plot_species
@@ -730,11 +726,10 @@ check <- deadw_by_decay_plot_species %>% filter_at(col, any_vars(is.na(.))) %>%
 
 # Add zero's - NIET MEER NODIG
 
-Sommige plots bevatten geen bomen én geen dood hout (Bv. Ename), en zijn dus 
-niet opgenomen in `dendro_by_plot`.
+Sommige plots bevatten geen bomen én geen dood hout (Bv. Ename). 
 
-18/12/2024: wél opgenomen
-In forrescalc obv `plotinfo` - `survey_trees` en `survey_deadw` - nulwaarden toegevoegd.
+Sinds 18/12/2024: nulwaardes automatisch toegevoegd aan `dendro_by_plot` obv 
+`plotinfo` - `survey_trees` en `survey_deadw`.
 
 ```{r eval = FALSE}
 dendro_by_plot %>% left_join(plotinfo) %>% 
@@ -1123,11 +1118,9 @@ dendro_by_diam_plot_species <- dendro_by_diam_plot_species_
 
 ```
 
-> Ook voor decaystage aanpassingen nodig
-!! als package aangepast is, moet onderstaande code aangepast worden, want
-dan ook staand dood hout per decaystage.
 
 ```{r}
+names(deadw_by_decay_plot)
 # ook voor de andere plot-level-resultaten
       # deadw_by_decay_plot = logs_by_decay_plot,
       # deadw_by_decay_plot_species = logs_by_decay_plot_species
@@ -1163,8 +1156,21 @@ deadw_by_decay_plot_species <- deadw_by_decay_plot_species_
 # Vergelijking met oude data
 
 ```{r eval = FALSE}
-dendro_by_plot_git <- read_vc(file = "dendro_by_plot", root = path_to_forresdat_data)
+# onderstaande code werkt nog niet, want nog geen data opgeladen
+dendro_by_plot_git <- read_forresdat_table(tablename = "dendro_by_plot"
+                                           , join_plotinfo = TRUE
+                                           , plottype = "all"
+                                           , git_ref_type = "branch"
+                                           , git_reference = "develop")
+# Error: table dendro_by_plot is not present in forresdat
 
+qintact_snag_git <- read_forresdat_table(tablename = "qintact_snag"
+                                           , join_plotinfo = FALSE
+                                           # , plottype = "all"
+                                           , git_ref_type = "branch"
+                                           , git_reference = "develop")
+
+# vgl
 dendro_by_plot_git <- dendro_by_plot_git %>% 
   select(plot_id, year, everything()) %>% 
   select(names(dendro_by_plot))
@@ -1181,13 +1187,25 @@ dendro_by_plot == dendro_by_plot_git
 head(dendro_by_plot %>% arrange(plot_id, period)); head(dendro_by_plot_git %>% arrange(plot_id, period))
 
 
-dendro_by_plot_species_git <- read_vc(file = "dendro_by_plot_species", root = path_to_forresdat_data)
+dendro_by_plot_species_git <- read_forresdat_table(tablename = "dendro_by_plot_species"
+                                           , join_plotinfo = TRUE
+                                           , plottype = "all"
+                                           , git_ref_type = "branch"
+                                           , git_reference = "develop")
 nrow(dendro_by_plot_species) == nrow(dendro_by_plot_species_git)
 
-dendro_by_diam_plot_git <- read_vc(file = "dendro_by_diam_plot", root = path_to_forresdat_data)
+dendro_by_diam_plot_git <- read_forresdat_table(tablename = "dendro_by_diam_plot"
+                                           , join_plotinfo = TRUE
+                                           , plottype = "all"
+                                           , git_ref_type = "branch"
+                                           , git_reference = "develop")
 nrow(dendro_by_diam_plot) == nrow(dendro_by_diam_plot_git)
 
-logs_by_decay_plot_git <- read_vc(file = "logs_by_decay_plot", root = path_to_forresdat_data)
+logs_by_decay_plot_git <- read_forresdat_table(tablename = "logs_by_decay_plot"
+                                           , join_plotinfo = TRUE
+                                           , plottype = "all"
+                                           , git_ref_type = "branch"
+                                           , git_reference = "develop")
 nrow(logs_by_decay_plot) == nrow(logs_by_decay_plot_git)
 
 ```
@@ -1239,11 +1257,15 @@ versus "vol_alive_m3_ha" en "vol_dead_standing_m3_ha"
 
 ```{r save_dendro_git, eval = FALSE}
 # geen plotinfo naar git
-save_results_git(
+save_results_forresdat(
   results = dendro,
   repo_path = path_to_git_forresdat,
-  strict = TRUE
+  metadata_path = paste0(path_to_metadata, "_metadata_plotlevel_results_dendro.xlsx"),
+  push = FALSE,
+  strict = TRUE,
+  branch = "develop"
 )
+
 ```
 
 ```{r save_dendro_git_manueel, eval = FALSE}

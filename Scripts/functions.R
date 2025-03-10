@@ -94,18 +94,18 @@ load_height_models_local <- function(path_to_height_models) {
       filename = list.files(path = path_to_height_models, pattern = "xlsx")
     ) %>%
     mutate(
-      no_extension = str_extract(.data$filename, "^(.+)(?=\\.)"),
-      x = str_split(.data$no_extension, "_"),
-      plottype = sapply(.data$x, `[`, 3),
-      period = as.numeric(sapply(.data$x, `[`, 4)),
-      path_file = paste0(path_to_height_models, .data$filename)
+      no_extension = str_extract(filename, "^(.+)(?=\\.)"),
+      x = str_split(no_extension, "_"),
+      plottype = sapply(x, `[`, 3),
+      period = as.numeric(sapply(x, `[`, 4)),
+      path_file = paste0(path_to_height_models, filename)
     ) %>%
-    select(-.data$no_extension, -.data$x) %>%
+    select(-no_extension, -x) %>%
     mutate(
-      data = map(.data$path_file, add_models)
+      data = map(path_file, add_models)
     ) %>%
-    unnest(cols = c(.data$data)) %>%
-    select(-.data$filename, -.data$path_file) %>%
+    unnest(cols = c(data)) %>%
+    select(-filename, -path_file) %>%
     distinct()
   if (nrow(heightmodels) == 0) {
     warning("No height models (.xlsx files) found on the given path.")

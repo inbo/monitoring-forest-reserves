@@ -156,7 +156,9 @@ from_access_to_forresdat(
              "qCrownVolRedu","qBranchLenghtReduction"),
   repo_path = path_to_git_forresdat,
   metadata_path = paste0(path_to_metadata, "_metadata_lookuplists.xlsx"),
-  strict = TRUE
+  push = FALSE,
+  strict = TRUE,
+  branch = "develop"
 )
 # !!!! argument "strict": keep default TRUE to update data without structural changes,
 #    change to FALSE only if tables are structurally changed
@@ -444,8 +446,6 @@ plotinfo <- plotinfo_
 
 # Export plotinfo
 
-10/3/2025: NIET naar forresdat
-
 ```{r plotinfo_save_git, eval=FALSE}
 save_results_forresdat(
   results = list(plotinfo = plotinfo)
@@ -453,6 +453,8 @@ save_results_forresdat(
   , metadata_path = paste0(path_to_metadata, "_metadata_plotinfo.xlsx")
   , strict = TRUE
   # , strict = FALSE
+  , push = FALSE
+  , branch = "develop"
   )
 
 ```
