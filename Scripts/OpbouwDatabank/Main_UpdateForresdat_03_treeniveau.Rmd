@@ -1,5 +1,5 @@
 ---
-title: "Update forresdat - dendro op stam- en boomniveau"
+title: "Update forresdat 3 - dendro op stam- en boomniveau"
 author: "Anja Leyman"
 date: "`r Sys.Date()`"
 output: 
@@ -32,6 +32,11 @@ library(here)
 # libraries & invoergegevens
 source(here::here("scripts/Setup.R"))
 ```
+
+```{r Setup2}
+path_to_html_teamdrive <- paste0(path_to_dataverwerking_teamdrive, "25_Overkoepelend")
+```
+
 
 > juiste forrescalc kiezen:   
 - om weg te schrijven naar forresdat - branch main => met juiste release van het package: dan `install.packages("forrescalc")`  
@@ -72,10 +77,11 @@ Reeds aangepast in onderstaande R-code, maar code nog niet opnieuw gerund
 
 ```{r results='hold', eval=TRUE}
 path_to_forresdat_data
+path_to_dataverwerking
+path_to_dataverwerking_teamdrive
 path_to_analysis_set_db
 path_to_plotlevel_csv
 path_to_treelevel_csv
-path_to_output_gdrive
 path_to_meetgegevens
 
 ```
@@ -767,7 +773,8 @@ save_results_csv (
 
 # afgerond voor export naar access
 tree_id_round <- tree_id_less_var %>% 
-  mutate(round_df(., 4))
+  mutate_at(c("calc_height_m"), round, 2) %>% 
+  mutate_at(vars(matches("_ha|_m3|_m2")), round, 4)
 
 # save_results_access (
 #   results = list(trees_calc = data_dendro_calc_round),
@@ -798,7 +805,8 @@ save_results_csv (
 
 # afgerond voor export naar access
 tree_id_wide_round <- tree_id_wide %>% 
-  mutate(round_df(., 4))
+  # mutate_at(c("calc_height_m"), round, 2) %>% 
+  mutate_at(vars(matches("_ha|_m3|_m2")), round, 4)
 
 save_results_access (
   results = list(trees_wide = tree_id_wide_round),
@@ -886,7 +894,8 @@ save_results_csv (
 
 # afgerond voor export naar access
 stem_id_round <- stem_id_less_var %>% 
-  mutate(round_df(., 4))
+  # mutate_at(c("calc_height_m"), round, 2) %>% 
+  mutate_at(vars(matches("_ha|_m3|_m2")), round, 4)
 
 # save_results_access (
 #   results = list(trees_calc = data_dendro_calc_round),
@@ -917,5 +926,23 @@ save_results_csv(
     output_dir = path_to_treelevel_gdrive
     )
 
+```
+
+
+
+# Copy html to teamdrive
+
+Na knitting - manueel
+
+```{r eval = FALSE}
+# Specify the path of the file you want to copy
+source_file <- here::here(paste0("Scripts/OpbouwDatabank/Main_UpdateForresdat_03_treeniveau.html"))
+
+# Specify the destination directory where you want to copy the file
+destination_dir <- path_to_html_teamdrive
+
+# Copy the file to the destination directory
+file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
+# ? file.copy
 ```
 

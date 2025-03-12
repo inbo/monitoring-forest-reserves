@@ -1,5 +1,5 @@
 ---
-title: "Update forresdat - lookuplists en plotinfo"
+title: "Update forresdat 1 - lookuplists en plotinfo"
 author: "Anja Leyman"
 date: "`r Sys.Date()`"
 output: 
@@ -34,6 +34,12 @@ library(here)
 source(here::here("scripts/Setup.R"))
 
 ```
+
+
+```{r Setup2}
+path_to_html_teamdrive <- paste0(path_to_dataverwerking_teamdrive, "25_Overkoepelend")
+```
+
 
 
 > juiste forrescalc kiezen:   
@@ -477,3 +483,20 @@ save_results_csv(
 
 **Na update van forresdat, project "forresdat" openen en alles naar de cloud pushen**
 **Eventueel ook access op gdrive plaatsen**
+
+
+# Copy html to teamdrive
+
+Na knitting - manueel
+
+```{r eval = FALSE}
+# Specify the path of the file you want to copy
+source_file <- here::here(paste0("Scripts/OpbouwDatabank/Main_UpdateForresdat_01_lkuplists_plotinfo.html"))
+
+# Specify the destination directory where you want to copy the file
+destination_dir <- path_to_html_teamdrive
+
+# Copy the file to the destination directory
+file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
+# ? file.copy
+```

@@ -1,5 +1,5 @@
 ---
-title: "Update forresdat - dendro op plotniveau"
+title: "Update forresdat 2 - dendro op plotniveau"
 author: "Anja Leyman"
 date: "`r Sys.Date()`"
 output: 
@@ -34,6 +34,12 @@ library(here)
 source(here::here("scripts/Setup.R"))
 
 ```
+
+
+```{r Setup2}
+path_to_html_teamdrive <- paste0(path_to_dataverwerking_teamdrive, "25_Overkoepelend")
+```
+
 
 > juiste forrescalc kiezen:   
 - om weg te schrijven naar forresdat - branch main => met juiste release van het package: dan `install.packages("forrescalc")`  
@@ -137,7 +143,7 @@ data_shoots <- load_data_shoots(database = path_to_fieldmap_db, extra_variables 
 data_stems  <- compose_stem_data(data_dendro, data_shoots, extra_variables = TRUE)
 
 # height_model <- load_height_models()
-# sneller en bij problemen met forresheights github, lokle modellen gebruiken
+# sneller en bij problemen met forresheights github, lokale modellen gebruiken
 path_to_height_models <- "C:/03_BR/1_DataVerwerkingBR/Data/Hoogtemodellen/"
 height_model <- load_height_models_local(path_to_height_models)
 # mean(height_model$P1) == mean(height_model2$P1)
@@ -1312,3 +1318,20 @@ save_results_csv(
 
 **Na update van forresdat, project "forresdat" openen en alles naar de cloud pushen**
 **Eventueel ook access op gdrive plaatsen**
+
+
+# Copy html to teamdrive
+
+Na knitting - manueel
+
+```{r eval = FALSE}
+# Specify the path of the file you want to copy
+source_file <- here::here(paste0("Scripts/OpbouwDatabank/Main_UpdateForresdat_02_dendro.html"))
+
+# Specify the destination directory where you want to copy the file
+destination_dir <- path_to_html_teamdrive
+
+# Copy the file to the destination directory
+file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
+# ? file.copy
+```
