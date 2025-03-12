@@ -37,14 +37,9 @@ source(here::here("scripts/Setup.R"))
 
 
 > juiste forrescalc kiezen:   
-- om weg te schrijven naar forresdat => met juiste release: dan `install.packages("forrescalc")`  
-- laatste correcties van forrescalc => juiste branch selecteren in forrescalc en opnieuw builden
+- om weg te schrijven naar forresdat - branch main => met juiste release van het package: dan `install.packages("forrescalc")`  
+- laatste correcties van forrescalc => juiste branch selecteren in forrescalc en opnieuw builden - wegschrijven kan naar forresdat - branch "develop"
 (10/3/25: branch 'bugfix' met corr van read_forresdat waarbij we de develop branch kunnen selecteren ipv main)
-
-**Update 18/12/2024: enkel naar csv lokaal en op gdrive, niet naar forresdat**
-**Update 10/3/2025: enkel naar csv lokaal en op gdrive, niet naar forresdat**
-Dus: selecteren van juiste forrescalc branch (bugfix), maar dan kan ik niet wegschrijven naar forresdat, 
-want daarvoor moet ik de juiste release gebruiken!!!
 
 ```{r forrescalc_to_write_to_forresdat, eval = FALSE}
 # !!! eerst zeker 'install.packages("forrescalc")
@@ -413,7 +408,7 @@ t_ <- t %>%
 
 ```
 
-# Correctie Kersselaerspleyn
+# Correctie plotinfo Kersselaerspleyn
 
 ## Survey_deadw - CP's 1eSET
 

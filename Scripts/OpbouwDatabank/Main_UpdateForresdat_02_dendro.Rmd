@@ -36,13 +36,13 @@ source(here::here("scripts/Setup.R"))
 ```
 
 > juiste forrescalc kiezen:   
-- om weg te schrijven naar forresdat => met juiste release: dan `install.packages("forrescalc")`  
-- laatste correcties van forrescalc => juiste branch selecteren in forrescalc en opnieuw builden
+- om weg te schrijven naar forresdat - branch main => met juiste release van het package: dan `install.packages("forrescalc")`  
+- laatste correcties van forrescalc => juiste branch selecteren in forrescalc en opnieuw builden - wegschrijven kan naar forresdat - branch "develop"
 (10/3/25: branch 'bugfix' met corr van read_forresdat waarbij we de develop branch kunnen selecteren ipv main)
 
-```{r juiste_forrescalc, eval = FALSE}
+```{r forrescalc_to_write_to_forresdat, eval = FALSE}
 # !!! eerst zeker 'install.packages("forrescalc")
-# zodat data goede release krijgt!
+# zodat forresdat-data goede release krijgt!
 # zie mail 7/10/24 van Els L.
 # soms een andere branch nodig als Els nog iets moet fixen, maar als ik naar forresdat 
 # wil wegschrijven, moet ik officiële versie van forrescalc gebruiken
@@ -50,7 +50,6 @@ source(here::here("scripts/Setup.R"))
 install.packages("forrescalc")
 
 ```
-
 
 
 # Vraagstelling
@@ -97,9 +96,6 @@ en Zwaenepoel werden vervangen door
 
 # Load plotinfo
 
-Verder werken met plotinfo uit Main_01, want correcties mbt `survey_deadw` doorgevoerd
-(Zoniën UITBR_1995 - 2000).
-
 Plotinfo inladen: `plottype`, naam `forest_reserve` en info over survey's.
 (plotinfo op gdrive en forresdat: enkel processed plots!)
 
@@ -116,7 +112,7 @@ plotinfo <- read.csv2(paste0(path_to_plotlevel_csv, "plotinfo.csv")) %>%
 ```
 
 
-# Load dendro data - voorlopig OK - 18/12/2024
+# Load dendro data - voorlopig OK - 10/3/2025
 
 Standaard wordt enkel processed data ingeladen mbv de load-functies.
 We willen voor onze output ook enkel deze processed data mee (voor non-processed 
@@ -141,7 +137,7 @@ data_shoots <- load_data_shoots(database = path_to_fieldmap_db, extra_variables 
 data_stems  <- compose_stem_data(data_dendro, data_shoots, extra_variables = TRUE)
 
 # height_model <- load_height_models()
-# sneller en bij problemen met forresheights github, eigen functie gebruiken
+# sneller en bij problemen met forresheights github, lokle modellen gebruiken
 path_to_height_models <- "C:/03_BR/1_DataVerwerkingBR/Data/Hoogtemodellen/"
 height_model <- load_height_models_local(path_to_height_models)
 # mean(height_model$P1) == mean(height_model2$P1)
@@ -177,7 +173,7 @@ Volgende reservaten daadwerkelijk over twee jaartallen heen opgemeten:
 - Bos Terrijst CA - 1eSET: OK
 - Heirnisse - 2eSET: 5 plots 9/2014: OK
 - Everzwijnbad - 3eSET: 1 plot (118) pas op 5/5/2023 opgemeten
-- Wijnendale - 3eSET: 1 plot (425) pas volgend jaar in nov (07/11/2023) opgemeten
+- Wijnendale - 3eSET: 2 plots (425 + 503) pas volgend jaar in nov (07/11/2023) opgemeten => mail naar Peter: moet 7/11/2022 zijn, gecorrigeerd, maar code nog niet opnieuw laten lopen
 - Zoniën HARRAS_1995 - 3eSET: 3 plots nog opgemeten 14/5/2020, rest in 2019 opgemeten
 - Zoniën UITBR_2010 - 3eSET: 52 plots jan 2020 tot april 2020 en 12 plots in mei 2020
 
