@@ -410,7 +410,7 @@ Nu zijn daar 3de decade wijnendale, everzwijnbad, with heide, heirnisse, janshei
 Zoniën KERN_1983 afgesplitst van Zonien UITBR_1995
 Kluisbos?
 
-```{r}
+```{r results='hide'}
 plotinfo %>% filter(plottype == "CP") %>% select(forest_reserve) %>% unique()
 ```
 
@@ -629,7 +629,7 @@ Om één record per boom te verkrijgen met info uit beide periodes, dient functi
 Dit werkt enkel bij een unieke tree_id.
 **DAAROM: tijdelijk verwijderen van deze met een dubbele tree-id**
 
-> mail op 12/3/25 naar Peter om dubbele coppice_id's te cehcken
+> mail op 12/3/25 naar Peter om dubbele coppice_id's te checken
 (zie G:\Gedeelde drives\Team_Boseco_BR\PRJ_BR_Gegevensverwerking\30_Datacontrole)
 
 Zie hierna:
@@ -650,6 +650,8 @@ check_dubbele_tree_id
 # 2   51000 1_51000_4_a        1                  2
 # 3   53000 1_53000_258_b      1                  2
 
+```
+```{r results='hide'}
 check_dubbele_tree_id %>% distinct(plot_id)
 # 13 rows
 
@@ -669,6 +671,7 @@ write.xlsx(check_dubbele_tree_id2,
            file = paste0(path_to_dataverwerking,
                          "Data_controle/coppice_id/coppice_id_te_checken_20250311.xlsx"))
 ```
+
 
 
 ```{r dubbele_ids_verwijderen}
@@ -700,12 +703,74 @@ tree_id_long <- tree_id %>%
 
 
 ```{r tree_id_wide_zonder_dubbele_ids, results='hide'}
-tree_id_wide <- make_table_wide(table_long = tree_id_long,
-                                    column_to_repeat = "survey_number",
-                                    columns_for_comparison = c("alive_dead", "dbh_mm", "vol_tot_m3"))
+tree_id_wide <- make_table_wide(table_long = tree_id_long
+                                , column_to_repeat = "survey_number"
+                                , columns_for_comparison = 
+                                  c("alive_dead", "dbh_mm", "vol_tot_m3"))
 
 names(tree_id_wide)
 ```
+**Jaartal survey's toevoegen**    
+Dit jaartal moet uit `plotinfo` gehaald worden, want als boom er niet meer staat (omgevallen), 
+is er in de tabel met bomen ook geen `year_dendro` meer voor di eboom en dat jaartal, 
+terwijl er wél een opname was.
+We nemen voor `survey_Y1` het jaar van de eerste survey voor dat gebied, dus NIET het jaartal van 
+de eerste decade/periode van monitoringnetwerk.
+Dat is het meest logische (idem als shapefile Marc, zie `strata_location`), maar houdt wel in dat
+`survey_Y1` kan varieren van 1986 (old core zoniën) tot 2020 (Kluisbos).
+
+<!-- ! ev. NA bij jaartallen '0' van maken? cfr shapefile Marc? NEE -->
+<!-- ? wat met NA's van bomen die er niet meer zijn => moet een getal zijn, anders een probleem -->
+<!-- beste om dat toch NA te laten!!! -->
+<!-- En andere jaartallen ook NA, anders wordt er mogelijks mee gerekend ... -->
+
+```{r year_survey, results='hide'}
+names(plotinfo)
+
+# aantal surveys
+n_surveys <- plotinfo %>% 
+  group_by(forest_reserve, plot_id, plottype) %>% 
+  summarize(n_surveys = n()
+            , min_yr = min(year_dendro)
+            , max_yr = max(year_dendro)) %>% 
+  ungroup()
+
+# jaartallen surveys
+plotinfo_long <- plotinfo %>% 
+  select(forest_reserve, plot_id, plottype
+         , survey_number, year_dendro, survey_trees
+         , data_processed)
+
+plotinfo_wide <- make_table_wide(table_long = plotinfo_long
+                                , column_to_repeat = "survey_number"
+                                , columns_for_comparison = 
+                                   c("year_dendro")) %>% 
+  rename(survey_Y1 = "1", survey_Y2 = "2", survey_Y3 = "3", survey_Y4 = "4")
+names(plotinfo_wide)
+# survey_Y1 = jaar van eerste survey voor dat gebied, is meest logische (idem als shapefile Marc, zie strata_location)
+```
+
+```{r combine}
+tree_survey_wide <- tree_id_wide %>% 
+  left_join(plotinfo_wide) %>% 
+  left_join(n_surveys)
+head(tree_survey_wide)
+
+names(tree_survey_wide)
+```
+
+```{r}
+tree_survey_wide_ <- tree_survey_wide %>% 
+  select(forest_reserve, plot_id, plottype
+         , tree_id, species, ind_sht_cop
+         , n_surveys
+         , contains(c("survey_Y", "alive_dead", "dbh", "vol")))
+
+tree_id_wide <- tree_survey_wide_
+
+```
+
+
 
 
 # Export tree level data
@@ -817,7 +882,7 @@ save_results_access (
 ```
 
 Direct naar gdrive exporteren (csv): 
-naar **/PRJ_BOSECO_ALGEMEEN/PRJ_BR_AanvraagGegevens/!METADATA-ALL_PLOTS/_plot-level-data/**
+naar **/PRJ_BOSECO_ALGEMEEN/PRJ_BR_AanvraagGegevens/!METADATA-ALL_PLOTS/_tree-level-data/**
 
 ```{r save_trees_gdrive, eval = FALSE}
 save_results_csv(
