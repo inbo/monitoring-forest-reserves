@@ -32,8 +32,8 @@ library(here)
 
 # libraries & invoergegevens
 source(here::here("scripts/Setup.R"))
-source(here::here("scripts/ExtraFunctions.R"))
-source(here::here("scripts/ExtraFunctions_volume.R"))
+source(here::here("scripts/functions.R"))
+source(here::here("scripts/functions_volume.R"))
 ```
 
 
@@ -140,7 +140,7 @@ totaal_5_30_esd <- aantal_5_30_esd %>%
   summarize(sum_1 = sum(FRAXEX_),
             sum_2 = sum(FRAXEXZA))  %>%  #5-30?
   ungroup() %>%
-  mutate(tot_haagbeuk = sum_1)
+  mutate(tot_esdoorn = sum_1)
 
 totaal_5_30_esd
 
