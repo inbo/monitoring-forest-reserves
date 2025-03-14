@@ -677,6 +677,7 @@ Vervolgens data uit de gsheet:
 - EUNIS_EEA_category, EUNIS_EEA_foresttype  
 - PNV_Bohn  
 - Habtype  
+- S1_fisheyedate, LAI_1ste, VisSky_1st
 
 ```{r strata_overige_gsheet, results='hide'}
 names(input_gsheet)
