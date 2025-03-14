@@ -1,0 +1,212 @@
+---
+title: "Studienamiddag 'Toekomst van de beuk'"
+subtitle: "Groei en mortaliteit van beuk in bosreservaten"
+author: "Anja Leyman"
+date: "12/03/2025"  
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: TRUE
+      smooth_scroll: TRUE
+---
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 7,
+  fig.height = 3,
+  fig.align = TRUE)
+
+library(here)
+library(writexl)
+library(scales)
+library(sf)
+
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+```
+
+
+```{r Setup2}
+path_to_datarequest_cschijf <- paste0(path_to_datarequests, "INBO_beuk_groei_mortaliteit/")
+path_to_datarequest_teamdrive <- paste0(path_to_datarequests_gdrive, "INBO_beuk_groei_mortaliteit/")
+path_to_html_teamdrive <- path_to_datarequest_teamdrive
+
+```
+
+```{r}
+path_to_datarequests_gdrive # algemeen
+path_to_datarequest_cschijf
+path_to_datarequest_teamdrive # specifiek deze datavraag
+
+path_to_treelevel_csv
+path_to_treelevel_gdrive
+```
+
+
+
+# Vraagstelling
+
+Zie ook C:\03_BR\1_DataVerwerkingBR\_tmp_beuk
+
+Uit access-db een voorlopige tabel gemaakt, bij update forresdat nieuwe tabel met ook Wijnendale en Everzwijnbad en Jansheideberg 
+
+Arno vond verwarrend dat 1986 survey 1 noemt, dus zelfde survey-nr als de andere die pas 15 jaar later opgemeten zijn.
+
+Arno had al wat resultaten
+
+Bij update ook aangeven welke plots al dan niet hermeten zijn (+ ev. wanneeer) om onderscheid dood omgevallen (en niet meer in db) en niet opgemeten duidelijk te stellen
+
+Gecheckt of 1986 enkel bomen bevat die in 2000 nog rechtstonden, volgens Kris niet - gecheckt met Peter en blijkbaar toch alle bomen van 1986 in db
+
+
+# Import data
+
+Trees_wide aangemaakt met behulp van forrescalc (zie "Main_UpdateForresdat_03_treeniveau.html" in teamdrive "Team_Boseco_BR\PRJ_BR_Gegevensverwerking\25_Overkoepelend")
+
+```{r}
+plotinfo <- read.csv2(paste0(path_to_plotlevel_csv, "plotinfo.csv")) %>% 
+  select(-1)
+
+trees_wide <- read.csv2(paste0(path_to_treelevel_csv, "trees_wide.csv")) %>% 
+  select(-1)
+
+names(trees_wide)
+
+```
+
+
+```{r}
+plot_reserve <- plotinfo %>% 
+  group_by(forest_reserve, plot_id, plottype) %>% 
+  summarize(n_surveys = n()
+            , min_yr = min(year_dendro)
+            , max_yr = max(year_dendro)) %>% 
+  ungroup()
+
+beuk_wide <- trees_wide %>% 
+  filter(species == 7) %>% 
+  left_join(plot_reserve)
+
+unique(beuk_wide$forest_reserve)
+```
+
+```{r overview}
+# aantal surveys, aantal bomen
+
+summ_beuk <- beuk_wide %>% group_by(forest_reserve, plottype, n_surveys) %>% 
+  summarise(n_beuk = n()) %>% ungroup %>% 
+  arrange(desc(n_surveys), desc(n_beuk)) 
+
+summ_beuk %>% 
+  DT::datatable()
+
+write.csv2(summ_beuk, paste0(path_to_datarequest_cschijf, "n_surveys_n_beuk_per_BR.csv"))
+write.csv2(summ_beuk, paste0(path_to_datarequest_teamdrive, "n_surveys_n_beuk_per_BR.csv"))
+
+```
+
+
+
+```{r}
+names(beuk_wide)
+nrow(beuk_wide) # 11277
+```
+Beuk_wide zou ook voor de dode bomen een jaartal moeten hebben.
+"year_1"  "year_2"   "year_3" "year_4": zou op basis van plotinfo moeten bepaald worden, en niet op basis van de boom
+
+
+```{r}
+names(plotinfo)
+plotinfo_long <- plotinfo %>% 
+  select(forest_reserve, plot_id, plottype
+         , survey_number, year_dendro, survey_trees
+         , data_processed)
+
+plotinfo_wide <- make_table_wide(table_long = plotinfo_long
+                                , column_to_repeat = "survey_number"
+                                , columns_for_comparison = 
+                                   c("year_dendro")) %>% 
+  rename(survey_Y1 = "1", survey_Y2 = "2", survey_Y3 = "3", survey_Y4 = "4")
+names(plotinfo_wide)
+# survey_Y1 = jaar van eerste survey voor dat gebied, is meest logische (idem als shapefile Marc, zie strata_location)
+```
+
+```{r combine}
+beuk_survey_wide <- beuk_wide %>% 
+  left_join(plotinfo_wide)
+head(beuk_survey_wide)
+
+names(beuk_survey_wide)
+```
+```{r}
+beuk_survey_wide_def <- beuk_survey_wide %>% 
+  select(forest_reserve, plot_id, plottype
+         , tree_id, species, ind_sht_cop
+         , n_surveys, 
+         , contains(c("survey_Y", "alive_dead", "dbh", "vol")))
+```
+
+
+
+# Wegschrijven output
+
+
+
+```{r WegschrijvenOutput_csv, eval = FALSE}
+# idem als txt, maar voor gemak ook naar xls
+
+write_csv2(design_def_link %>% select(-forest_reserve_FM_adjusted, -plottype, -period)
+            , paste0(path_to_datarequest_teamdrive, "csv/INBO_Design.csv"))
+
+write_csv2(plotdata_def_link %>% select(-all_of(extra_vars))
+            , paste0(path_to_datarequest_teamdrive, "csv/INBO_Plots.csv"))
+
+
+```
+
+<br>
+
+# Read
+
+Checken of de geëxporteerde files goed in R ingelezen worden
+(er staat wel degelijk "NA" in de txt!)
+
+```{r check_read, eval = FALSE, results='hide'}
+#
+design_check <- read.table(paste0(path_to_datarequest_teamdrive, "INBO_Design.txt")
+                           , sep = " ", dec = ".")
+head(design_check)
+names(design_check)
+
+
+```
+
+# Copy html to teamdrive
+
+Na knitting - manueel
+
+```{r eval = FALSE}
+# Specify the path of the file you want to copy
+source_file <- here::here(paste0("Scripts/AanvraagGegevens/INBO_Wildcard_EuFoRIa/Wildcard_Flanders_plot_data.html"))
+
+# Specify the destination directory where you want to copy the file
+destination_dir <- path_to_html_teamdrive
+
+# Copy the file to the destination directory
+file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
+# ? file.copy
+```
