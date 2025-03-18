@@ -67,14 +67,6 @@ DOEL van dit script is een update van forresdat gegevens naar
 Kersselaerspleyn blijkt op meerdere vlakken uitzonderingen te bevatten.
 Deze uitzonderingen worden na het inladen van de data gecorrigeerd. 
 
-> OPGEPAST With heide
-Dendro date van With heide niet correct (1999 ipv 2000)
-Reeds aangepast in onderstaande R-code, maar code nog niet opnieuw gerund
-(in plot-level-data wel reeds aangepast)
-
-
-
-
 ```{r results='hold', eval=TRUE}
 path_to_forresdat_data
 path_to_dataverwerking
@@ -770,8 +762,49 @@ tree_id_wide <- tree_survey_wide_
 
 ```
 
+# Op boomniveau: lange tabel met unieke record per boom doorheen de tijd
 
+Op vraag van Arno ook de "lange" tabel waar `tree_survey_wide` op gebaseerd is, 
+exporteren als `trees_unique_id_long`.
 
+Dit is een tabel waar de dubbele/foute tree-id's uit gehaald zijn, zodat men zelf 
+een "wijde" tabel kan aanmaken afhankelijk van de onderzoeksvraag.
+
+Volgende velden worden opgenomen:
+
+- forest_reserve, plot_id, plottype
+- tree_id
+- species, ind_sht_cop
+- survey_nr
+- decade
+- year_dendro
+
+Belangrijk hierbij is te beseffen dat sommige bomen in een bepaalde periode niet 
+opgemeten zijn, omdat ze omgevallen zijn.
+Voor een volledig beeld moet men deze tabel dus combineren met tabel `plotinfo`. 
+
+```{r results='hide'}
+names(tree_id_long)
+
+tree_id_long <- tree_id %>%
+  left_join(plotinfo %>% select(forest_reserve, plot_id, period, survey_number, year_dendro)) %>% 
+  select(forest_reserve, plot_id, plottype
+         , tree_id
+         , decade = period, survey_number, year_dendro
+         , species, ind_sht_cop, alive_dead
+         , dbh_mm, vol_tot_m3) %>% 
+  arrange(decade)
+
+# check: max. 4 surveys?
+tree_id_long %>% 
+  group_by(tree_id) %>% 
+  summarize(n = n()) %>% 
+  ungroup() %>% 
+  filter(n > 4) %>% nrow() == 0
+
+summary(tree_id_long)
+  
+```
 
 # Export tree level data
 
@@ -783,7 +816,7 @@ tree_id_wide <- tree_survey_wide_
 **Volgende plots zijn niet helemaal correct (wegens één of meerdere dubbele tree-id's): **    
 
 - niet correcte unieke tree-id in `trees_calc`     
-- ontbrekende bomen in wijde tabel in `trees_wide`
+- ontbrekende bomen in wijde tabel in `trees_wide` en `trees_unique_id_long`
 
 
 ```{r}
@@ -881,6 +914,28 @@ save_results_access (
 
 ```
 
+
+```{r save_trees_unique_id_long_access_csv, eval = FALSE}
+# volgende functies heb ik zelf geschreven, zitten niet in het package!!!
+save_results_csv (
+    results = list(trees_unique_id_long = tree_id_long),
+    output_dir = path_to_treelevel_csv
+    )
+
+# afgerond voor export naar access
+tree_id_long_round <- tree_id_long %>% 
+  # mutate_at(c("calc_height_m"), round, 2) %>% 
+  mutate_at(vars(matches("_ha|_m3|_m2")), round, 4)
+
+save_results_access (
+  results = list(trees_unique_id_long = tree_id_long_round),
+  database = path_to_analysis_set_db,
+  remove_tables = TRUE
+  )
+
+```
+
+
 Direct naar gdrive exporteren (csv): 
 naar **/PRJ_BOSECO_ALGEMEEN/PRJ_BR_AanvraagGegevens/!METADATA-ALL_PLOTS/_tree-level-data/**
 
@@ -892,6 +947,11 @@ save_results_csv(
 
 save_results_csv(
     results = list(trees_wide = tree_id_wide),
+    output_dir = path_to_treelevel_gdrive
+    )
+
+save_results_csv(
+    results = list(trees_unique_id_long = tree_id_long),
     output_dir = path_to_treelevel_gdrive
     )
 

@@ -1,5 +1,6 @@
 ---
-title: "Aanvulling forresdat dendro KV Kersselaerspleyn 2000"
+title: "Dendro Zoniën KERN_1983 - survey 2000"
+subtitle: "Geturfde bomen < 30 cm dbh"
 author: "Anja Leyman"
 date: "`r Sys.Date()`"
 output: 
@@ -37,6 +38,11 @@ source(here::here("scripts/functions_volume.R"))
 ```
 
 
+```{r Setup2}
+path_to_html_teamdrive <- paste0(path_to_dataverwerking_teamdrive, "25_Overkoepelend")
+```
+
+
 # Vraagstelling
 DOEL van dit script is een correctie doorvoeren voor de dendro-resultaten voor de 
 kernvlakte van Kersselaerspleyn, dd 2000.
@@ -46,7 +52,7 @@ MAAR er werden wel streeplijsten aangemaakt voor DBH's tss 5 en 30 cm DBH.
 Deze werden meegenomen bij de dataverwerking door Luc DK in 2002 (met resulterend monitoringrapport), maar niet meer bij de dataverwerking in 2012 door Anja L.
 
 In monitoringrapport lees ik wel enkel N, G en V van bomen > 30 cm DBH.
-In grafiek 2.11 wordt wel een stamtal weergegeven van de lagere diameterklasses: visuele inschatting: 
+In grafiek 2.11 van het monitoringrapport wordt wel een stamtal weergegeven van de lagere diameterklasses: visuele inschatting: 
 25 + 90 + 100 = 215 extra
 
 
@@ -195,8 +201,9 @@ Dus het is niet zo vreemd dat er buiten de verjongingsgroepen nog eens zoveel ve
 <!-- Oppervlakte van de verjongingsgroepen: ca 6.5% van de totale kernvlakte  -->
 <!-- (benaderend in GIS: 0.2508 + 0.4372 = 0.688; 0.688/10.7485 = +/- 7% ) -->
 
-In grafiek 2.11 wordt een stamtal weergegeven van de lagere diameterklasses: visuele inschatting: 
-25 + 90 + 100 = 215/ha (dbh < 30 cm).
+In grafiek 2.11 van het monitoringrapport uit 2002 wordt een stamtal weergegeven van de 
+lagere diameterklasses.
+Visuele inschatting: 25 + 90 + 100 = ca 215/ha (dbh < 30 cm).
 
 Dit stemt overeen met wat ik net uit streeplijsten gehaald heb.
 
@@ -276,9 +283,12 @@ Zelf beslist:
 
 - alles < 30 cm (uit streeplijsten; enkel levende bomen)
 
-  * in afzonderlijke files met net iets andere diameterverdeling (5-10, 10-20, 20-30)
-  * *dendro_by_plot(_species)_KerssKV_5_30.csv*
-  * *dendro_by_diam_plot(_species)_KerssKV_5_30.csv*
+  * in afzonderlijke files met net iets andere diameterverdeling (5-10, 10-20, 20-30cm):
+
+      * Kerss_CA_5_30cm_by_plot(_species).csv
+      * Kerss_CA_5_30cm_by_diam_plot.csv
+      * Kerss_CA_5_30cm_by_diam_spec.csv
+
   * proxy voor G obv mid-point diam-klasse
   * proxy voor V obv tarief met één ingang
 
@@ -323,7 +333,7 @@ odbcClose(con)
 ```{r load_tarieven}
 # volumeberekening
 
-source(here::here("Scripts/ExtraFunctions_volume.r"))
+source(here::here("Scripts/functions_volume.r"))
 # tarieven zelf ook al direct ingelezen
 
 ```
@@ -501,15 +511,19 @@ dendro_plotinfo <- lapply(dendro, function(x) left_join(x, plotinfo %>% select(p
 ```
 
 
-
 ```{r save_dendro_git, eval = FALSE}
 # geen plotinfo naar git
-save_results_git(
+save_results_forresdat(
   results = dendro,
   repo_path = path_to_git_forresdat,
-  strict = TRUE
+  metadata_path = paste0(path_to_metadata, "_metadata_plotlevel_results_dendro.xlsx"),
+  push = FALSE,
+  strict = FALSE,
+  branch = "develop"
 )
+
 ```
+
 
 ```{r save_dendro_git_manueel, eval = FALSE}
 # manueel - eigen simpele functie - als save_results_git niet werkt
@@ -529,8 +543,14 @@ save_results_csv (
     )
 
 # afgerond voor export naar access
+round_df <- function(df, digits) {
+  df[] <- lapply(df, function(x) if(is.numeric(x)) round(x, digits) else x)
+  return(df)
+}
+
 dendro_round <- dendro_plotinfo %>% 
   lapply(., function(x) round_df(x, 2))
+
 
 save_results_access (
   results = dendro_round,
@@ -555,4 +575,20 @@ save_results_csv(
 **Na update van forresdat, project "forresdat" openen en alles naar de cloud pushen**
 **Eventueel ook access op gdrive plaatsen**
 
+
+# Copy html to teamdrive
+
+Na knitting - manueel
+
+```{r eval = FALSE}
+# Specify the path of the file you want to copy
+source_file <- here::here(paste0("Scripts/OpbouwDatabank/Aanvulling_forresdat_ZonienKERN_1983_survey2000.html"))
+
+# Specify the destination directory where you want to copy the file
+destination_dir <- path_to_html_teamdrive
+
+# Copy the file to the destination directory
+file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
+# ? file.copy
+```
 
