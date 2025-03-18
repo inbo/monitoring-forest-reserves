@@ -1,5 +1,5 @@
 ---
-title: "Update forresdat - verjonging"
+title: "Update forresdat 3 - verjonging"
 author: "Anja Leyman"
 date: "`r Sys.Date()`"
 output: 
@@ -29,22 +29,31 @@ knitr::opts_chunk$set(
 
 library(here)
 
-# libraries & invoergegevens
+# libraries & invoergegevens & functions
 source(here::here("scripts/Setup.R"))
-source(here::here("scripts/ExtraFunctions.R"))
-source(here::here("scripts/ExtraFunctions_volume.R"))
+
 ```
 
 
+```{r Setup2}
+path_to_html_teamdrive <- paste0(path_to_dataverwerking_teamdrive, "25_Overkoepelend")
+```
 
-```{r juiste_forrescalc}
+
+> juiste forrescalc kiezen:   
+- om weg te schrijven naar forresdat - branch main => met juiste release van het package: dan `install.packages("forrescalc")`  
+- laatste correcties van forrescalc => juiste branch selecteren in forrescalc en opnieuw builden - wegschrijven kan naar forresdat - branch "develop"
+(10/3/25: branch 'bugfix' met corr van read_forresdat waarbij we de develop branch kunnen selecteren ipv main)
+
+```{r forrescalc_to_write_to_forresdat, eval = FALSE}
 # !!! eerst zeker 'install.packages("forrescalc")
-# zodat data goede release krijgt!
+# zodat forresdat-data goede release krijgt!
 # zie mail 7/10/24 van Els L.
 # soms een andere branch nodig als Els nog iets moet fixen, maar als ik naar forresdat 
-# wil wegschrijven, moet ik officiële versie van forresclac gebruiken
+# wil wegschrijven, moet ik officiële versie van forrescalc gebruiken
 
 install.packages("forrescalc")
+
 ```
 
 
@@ -60,6 +69,7 @@ Kersselaerspleyn blijkt op meerdere vlakken uitzonderingen te bevatten.
 Deze uitzonderingen worden na het inladen van de data gecorrigeerd. 
 
 
+
 ```{r results='hold', eval=TRUE}
 path_to_forresdat_data
 path_to_analysis_set_db
@@ -70,14 +80,24 @@ path_to_meetgegevens
 
 ```
 
+
 # Load plotinfo
 
-Plotinfo samenstellen, zijnde plottype, naam forest_reserve en info over survey en data al dan niet processed.
+Plotinfo inladen: `plottype`, naam `forest_reserve` en info over survey's.
+(plotinfo op gdrive en forresdat: enkel processed plots!)
 
 ```{r }
-plotinfo <- read_vc(file = "plotinfo", root = path_to_forresdat_data)
-names(plotinfo)
+# mbv forresdat
+# plotinfo <- read_forresdat(file = "plotinfo", root = path_to_forresdat_data)
+# names(plotinfo)
+# ?read_forresdat
+
+# van c-schijf
+plotinfo <- read.csv2(paste0(path_to_plotlevel_csv, "plotinfo.csv")) %>% 
+  select(-1)
+
 ```
+
 
 # Load lookuplijsten
 
@@ -114,7 +134,7 @@ odbcClose(con)
 
 ```
 
-# Load regeneration - OK - 8/4/2022 - 19/1/2023
+# Load regeneration - OK - 8/4/2022 - 19/1/2023 - 18/3/2025
 
 ```{r load_reg}
 data_regeneration <-
@@ -125,13 +145,15 @@ data_regeneration <-
 
 ```
 
+
+
 # Check aantalsklasse (A1) vs exact aantal (A2)
 
 Volgens de standaard methodiek zou `aantal` steeds een aantalsklasse moeten zijn 
-bij seedlings (subcircle = A1) en een exact aantal bij established(subcircle = A2).
+bij seedlings (subcircle = A1) en een exact aantal bij established (subcircle = A2).
 Het is goed om het package in die zin op te bouwen.
 
-MAAR er zijn ook bosreservaten waar de standaard methodiek niet gevolgd werd (bv. Everzwijnbad)
+**MAAR** er zijn ook bosreservaten waar de standaard methodiek niet gevolgd werd (bv. Everzwijnbad)
 Dat zijn geen fouten in de dataset, maar gewoon iets andere afspraken toendertijd.
 
 Els heeft het package in die zin aangepast door in `load_data_regeneration()` 
@@ -141,19 +163,40 @@ in te vullen, wat voor de aanpassing de algemene regel was voor min, max en appr
 (zie issue #106)
 
 
+
+```{r relevant_colnames}
+select_colnames_reg <- data_regeneration %>% 
+  select(plot_id, subplot_id, plottype, forest_reserve
+         , period, year, subcircle
+         , height_class, species, number_class, nr_of_regeneration
+         , approx_nr_regeneration
+         , min_number_of_regeneration, max_number_of_regeneration
+         , rubbing_damage_number, rubbing_damage_perc
+         ) %>% 
+  colnames()
+```
+
+
+
 ```{r check_data_nr_A1A2}
 names(data_regeneration)
 
 data_regeneration %>% filter(!is.na(nr_of_regeneration) & !is.na(number_class)) %>% nrow()
 # 1211 van de 33000 // 177 van 2525 waar beide ingevuld staan
+# 2021 van de 38000
 
 test <- data_regeneration %>% filter(!is.na(nr_of_regeneration) & !is.na(number_class)) %>% 
   select(select_colnames_reg)
 table(test$subcircle)
 # A1 A2 
 # 89  1
+#   A1   A2 
+# 1249  128
 # komt meer voor bij seedlings: exact number dat vertaald is naar numberclass 
 # (is gebeurd bij de datacontrole of op terrein - zit niet in package)
+
+table(test$period)
+table(test$forest_reserve)
 ```
 
 Als beide beschikbaar zijn, zal package voor berekening van min, max en approx zich bij de A1 sowieso 
@@ -168,7 +211,11 @@ het package de klasse gebruiken (is OK, want geen andere keuze)
 checkA1 <- data_regeneration %>%
   filter(subcircle == "A1" & is.na(number_class)) %>% 
   select(select_colnames_reg)
-# 328 zonder number_class => dan wordt 
+# 328 zonder number_class => dan wordt exact number gebruikt
+# ? 2988
+table(checkA1$period)
+#    1    2    3 
+# 2228  757    3
 
 checkA2 <- data_regeneration %>% 
   filter(subcircle == "A2" & 
@@ -177,6 +224,10 @@ checkA2 <- data_regeneration %>%
   select(select_colnames_reg)
 # 71 waar enkel klasse vermeld staat, terwijl het een exact nummer zou moeten zijn
 # package zal dan automatisch de klasse gebruiken ==> OK
+# ? 1572
+table(checkA2$period)
+ #  1    2    3 
+ # 129 1437    6 
 ```
 
 
@@ -190,8 +241,8 @@ checkA2 <- data_regeneration %>%
 <!-- Daarom zou het goed zijn om in forrescalc de code zodanig aan te passen dat - als game_impact_reg/game_impact_veg == TRUE én GameDamage_number/BrowseIndex = NA - dit als een '0' beschouwd wordt. -->
 
 
-8/4/2024: package aangepast zdd rubbing_damage_number 0 wordt (ipv NA), 
-zodra pd.GameImpactRegObserved == 10 (ongeacht of species al dan niet ingevuld staat).
+8/4/2024: package aangepast zdd `rubbing_damage_number` 0 wordt (ipv NA) zodra 
+`pd.GameImpactRegObserved == 10` (ongeacht of species al dan niet ingevuld staat).
 
 
 ```{r check_rubbingnr_NA}
@@ -200,15 +251,7 @@ check_rubbingnr_NA <- data_regeneration  %>%
   left_join(plotinfo %>% select(plot_id, period, game_impact_reg)) %>% 
   filter(is.na(rubbing_damage_number)) %>% 
   filter(game_impact_reg == TRUE)
-table(check_rubbingnr_NA$period)
-#   3 
-# 807
-
-# lijkt alsof package enkel bij species = NA een "0" creëert
-check_rubbingnr_NA2 <- data_regeneration %>% 
-  select(select_colnames_reg) %>% 
-  left_join(plotinfo %>% select(plot_id, period, game_impact_reg)) %>% 
-  filter(game_impact_reg == TRUE)
+check_rubbingnr_NA %>% nrow() == 0
 
 ```
 
@@ -216,9 +259,9 @@ check_rubbingnr_NA2 <- data_regeneration %>%
 
 `rubbing_damage_perc`    
 
-- moet ook berekend worden obv aantalsklasses (als exact nr niet gekend): OK
+- moet ook berekend worden obv aantalsklasses (als exact nr niet gekend is): OK
 
-- max. 100%: aangepast in forrescalc - OK 8/4/2024
+- max. 100 %: aangepast in forrescalc - OK 8/4/2024 & 18/3/2025
 
 ```{r check_rubbing_perc}
 check_rubbing_perc <- data_regeneration %>% 
@@ -226,11 +269,14 @@ check_rubbing_perc <- data_regeneration %>%
   left_join(plotinfo %>% select(plot_id, period, game_impact_reg)) %>% 
   filter(game_impact_reg == TRUE) 
 
+check_rubbing_perc %>% filter(rubbing_damage_perc > 100) %>% nrow() == 0
+# 6 records waar exact nr voor rubbing en nr_class voor aantal
+
 table(check_rubbing_perc$rubbing_damage_perc)
-summary(check_rubbing_perc$rubbing_damage_perc)
+summary(data_regeneration$rubbing_damage_perc)
 
 check_rubbing_perc %>% filter(is.na(rubbing_damage_perc))
-# OK, zijn twee records waar géén soort waargenomen is 
+# OK, zijn 48 records waar géén soort waargenomen is 
 
 check_rubbing_perc %>% filter(is.na(rubbing_damage_perc) & 
                                 (number_class > 0 | nr_of_regeneration > 0)) %>% 
@@ -253,17 +299,22 @@ too_high_gamedamage <- check_rubbing_perc %>%
   filter(rubbing_damage_number > max_number_of_regeneration |
            rubbing_damage_number > nr_of_regeneration)
 
+too_high_gamedamage %>% nrow()
 ```
 
 ```{r eval = FALSE}
+# exporteren en laten nakijken door Peter
 write.xlsx(too_high_gamedamage
-           , paste0(path_to_datacontrol, "regeneration.xlsx")
-           , sheetName = "too_high_gamedamage"
+           , file = paste0(path_to_dataverwerking_teamdrive, 
+                         "30_Datacontrole/regeneration_20250318.xlsx")
            , showNA = FALSE
-           , append = TRUE) 
-# via mail aan Peter gevraagd en zelf 2CP's aangepast (10 naar 1) - 8/4/2024
+           , append = TRUE)
 
-# ?write.xlsx
+write.xlsx(too_high_gamedamage
+           , file = paste0(path_to_dataverwerking,
+                         "Data_controle/regeneration_20250318.xlsx")
+           , showNA = FALSE
+           , append = TRUE)
 
 ```
 
@@ -271,7 +322,7 @@ write.xlsx(too_high_gamedamage
 
 # Correctie Kersselaerspleyn: plotarea KV 
 
-> niet nodig voor regeneration_by_plot(_height_species).csv : alles wordt berekend op subplotniveau, met opp 0.01 ha 
+> niet nodig voor reg_by_plot(_height_species).csv : alles wordt berekend op subplotniveau, met opp 0.01 ha 
     plotarea_ha wordt aangepast bij begin van elke calc_reg-functie:
       plotarea_ha = ifelse(.data$plottype == "CA", 0.01, .data$plotarea_ha)
       
@@ -348,13 +399,14 @@ for (tablename in names(regeneration)) {
      assign(tablename, regeneration[[tablename]])
 } 
 
+# reg_by_plot_height_species: 38371 (18/3/2025) - 33678 vorige verwerking = 4693 extra records
 ```
 
 
 # Check NA's
 
 ```{r}
-names(regeneration_by_plot)
+names(reg_by_plot)
 ```
 
 ```{r}
@@ -362,7 +414,7 @@ col <- c("number_of_tree_species", "approx_nr_established_ha", "approx_nr_seedli
          "mean_number_established_ha", "lci_number_established_ha", "uci_number_established_ha",
          "mean_number_seedlings_ha" , "lci_number_seedlings_ha", "uci_number_seedlings_ha")
 
-regeneration_by_plot %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+reg_by_plot %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
 
 ```
 
@@ -371,7 +423,7 @@ col <- c("number_of_tree_species", "approx_nr_regeneration_ha",
          "mean_number_of_regeneration_ha", 
          "lci_number_of_regeneration_ha", "uci_number_of_regeneration_ha")
 
-regeneration_by_plot_height %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+reg_by_plot_height %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
 
 ```
 
@@ -381,7 +433,7 @@ col <- c("approx_nr_regeneration_ha",
          "mean_number_of_regeneration_ha", 
          "lci_number_of_regeneration_ha", "uci_number_of_regeneration_ha")
 
-regeneration_by_plot_height_species %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+reg_by_plot_height_species %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
 
 ```
 
@@ -391,7 +443,7 @@ col <- c("nr_of_subplots_with_regeneration", "perc_subplots_with_regeneration",
          "mean_number_established_ha", "lci_number_established_ha", "uci_number_established_ha",
          "mean_number_seedlings_ha" , "lci_number_seedlings_ha", "uci_number_seedlings_ha")
 
-regeneration_by_core_area_species %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+reg_by_core_area_species %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
 
 ```
 
@@ -402,14 +454,14 @@ col <- c("nr_of_subplots_with_regeneration", "perc_subplots_with_regeneration",
          "mean_number_of_regeneration_ha", 
          "lci_number_of_regeneration_ha", "uci_number_of_regeneration_ha")
 
-regeneration_by_core_area_height_species %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+reg_by_core_area_height_species %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
 
 ```
 
 
-## TEMP: foute nullen vs NA bij mean_reg_ha - NU OK 25/11/2022
+## TEMP: foute nullen vs NA bij mean_reg_ha - OPGELOST 
 
-> blijkt momenteel opgelost te zijn (25/11/2022)
+> is opgelost (25/11/2022 & 18/3/2025)
 
 Bv. plot 130 vs 133: 
 
@@ -423,207 +475,20 @@ heightclass = NA en species = NA (want geen verjonging)
 check0 <- data_regeneration %>% filter(period == 1 & plot_id %in% c(133, 130))
 # OK!
 
-check <- regeneration_by_plot %>% filter(period == 1 & plot_id %in% c(133, 130))
+check <- reg_by_plot %>% filter(period == 1 & plot_id %in% c(133, 130))
 # uci = NA is fout => aangepast zdd als sum & lci = 0, dan ci ook = 0 (ipv NaN)
 
-check2 <- regeneration_by_plot_height %>% filter(period == 1 & plot_id %in% c(133, 130))
+check2 <- reg_by_plot_height %>% filter(period == 1 & plot_id %in% c(133, 130))
 # uci = NA is fout => aangepast zdd als sum & lci = 0, dan ci ook = 0 (ipv NaN)
 
-check3 <- regeneration_by_plot_height_species %>% filter(period == 1 & plot_id %in% c(133, 130))
+check3 <- reg_by_plot_height_species %>% filter(period == 1 & plot_id %in% c(133, 130))
 # idem => misschien beter aanpassen in functie sum_interval!!
 ```
 
 
-```{r eval=FALSE}
-by_plot1 <- data_regeneration %>%
-    mutate(
-      plotarea_ha = ifelse(.data$plottype == "CA", 0.01, .data$plotarea_ha),
-      min_number_established_ha =
-        ifelse(is.na(.data$subcircle) | .data$subcircle == "A2",  
-               # als subcircle = NA, dan is aantal = 0
-               # MAAR dit geldt enkel als er géén verjonging is
-               # DUS als subcircle A1 is, en er is geen subcircle A2, dan hebben we hier NA!!
-               # en omgekeerd ook
-               # (subcircle wordt ook ingevuld bij core area's)
-               # maar hier kunnen we geen extra lijn aanmaken 
-               .data$min_number_of_regeneration / .data$plotarea_ha, NA),
-      max_number_established_ha =
-        ifelse(is.na(.data$subcircle) | .data$subcircle == "A2",
-               .data$max_number_of_regeneration / .data$plotarea_ha, NA),
-      min_number_seedlings_ha =
-        ifelse(is.na(.data$subcircle) | .data$subcircle == "A1",
-               .data$min_number_of_regeneration / .data$plotarea_ha, NA),
-      max_number_seedlings_ha =
-        ifelse(is.na(.data$subcircle) | .data$subcircle == "A1",
-               .data$max_number_of_regeneration / .data$plotarea_ha, NA),
-      approx_nr_established_ha =
-        ifelse(is.na(.data$subcircle) | .data$subcircle == "A2",
-               .data$approx_nr_regeneration / .data$plotarea_ha, NA),
-      approx_nr_seedlings_ha =
-        ifelse(is.na(.data$subcircle) | .data$subcircle == "A1",
-               .data$approx_nr_regeneration / .data$plotarea_ha, NA)
-    ) 
+## TEMP: fout percentage rubbing dammage - OPGELOST 
 
-by_plot2 <- data_regeneration %>%
-    mutate(
-      plotarea_ha = ifelse(.data$plottype == "CA", 0.01, .data$plotarea_ha),
-      min_number_established_ha =
-        ifelse(is.na(.data$subcircle) | .data$subcircle == "A2",
-               .data$min_number_of_regeneration / .data$plotarea_ha, NA),
-      max_number_established_ha =
-        ifelse(is.na(.data$subcircle) | .data$subcircle == "A2",
-               .data$max_number_of_regeneration / .data$plotarea_ha, NA),
-      min_number_seedlings_ha =
-        ifelse(is.na(.data$subcircle) | .data$subcircle == "A1",
-               .data$min_number_of_regeneration / .data$plotarea_ha, NA),
-      max_number_seedlings_ha =
-        ifelse(is.na(.data$subcircle) | .data$subcircle == "A1",
-               .data$max_number_of_regeneration / .data$plotarea_ha, NA),
-      approx_nr_established_ha =
-        ifelse(is.na(.data$subcircle) | .data$subcircle == "A2",
-               .data$approx_nr_regeneration / .data$plotarea_ha, NA),
-      approx_nr_seedlings_ha =
-        ifelse(is.na(.data$subcircle) | .data$subcircle == "A1",
-               .data$approx_nr_regeneration / .data$plotarea_ha, NA)
-    ) %>% 
-    group_by(
-      .data$plot_id, .data$year, .data$period, .data$subplot_id
-    ) %>%
-    summarise(
-      established_interval =
-        sum_intervals(
-          var_min = .data$min_number_established_ha,
-          var_max = .data$max_number_established_ha,
-          transformation = "log", na_rm = TRUE
-        ),
-      seedlings_interval =
-        sum_intervals(
-          var_min = .data$min_number_seedlings_ha,
-          var_max = .data$max_number_seedlings_ha,
-          transformation = "log", na_rm = TRUE
-        )
-    ) %>%
-    ungroup() 
-
-by_plot3 <- data_regeneration %>%
-    mutate(
-      plotarea_ha = ifelse(.data$plottype == "CA", 0.01, .data$plotarea_ha),
-      min_number_established_ha =
-        ifelse(is.na(.data$subcircle) | .data$subcircle == "A2",
-               .data$min_number_of_regeneration / .data$plotarea_ha, NA),
-      max_number_established_ha =
-        ifelse(is.na(.data$subcircle) | .data$subcircle == "A2",
-               .data$max_number_of_regeneration / .data$plotarea_ha, NA),
-      min_number_seedlings_ha =
-        ifelse(is.na(.data$subcircle) | .data$subcircle == "A1",
-               .data$min_number_of_regeneration / .data$plotarea_ha, NA),
-      max_number_seedlings_ha =
-        ifelse(is.na(.data$subcircle) | .data$subcircle == "A1",
-               .data$max_number_of_regeneration / .data$plotarea_ha, NA),
-      approx_nr_established_ha =
-        ifelse(is.na(.data$subcircle) | .data$subcircle == "A2",
-               .data$approx_nr_regeneration / .data$plotarea_ha, NA),
-      approx_nr_seedlings_ha =
-        ifelse(is.na(.data$subcircle) | .data$subcircle == "A1",
-               .data$approx_nr_regeneration / .data$plotarea_ha, NA)
-    ) %>% 
-    group_by(
-      .data$plot_id, .data$year, .data$period, .data$subplot_id
-    ) %>%
-    summarise(
-      established_interval =
-        sum_intervals(
-          var_min = .data$min_number_established_ha,
-          var_max = .data$max_number_established_ha,
-          transformation = "log", na_rm = TRUE
-        ),
-      seedlings_interval =
-        sum_intervals(
-          var_min = .data$min_number_seedlings_ha,
-          var_max = .data$max_number_seedlings_ha,
-          transformation = "log", na_rm = TRUE
-        ),
-      approx_nr_established_ha =
-        sum(.data$approx_nr_established_ha, na.rm = TRUE),
-      approx_nr_seedlings_ha = sum(.data$approx_nr_seedlings_ha, na.rm = TRUE)
-    ) %>%
-    ungroup() %>%
-    mutate(
-      mean_number_established_ha = .data$established_interval$sum,
-      lci_number_established_ha = .data$established_interval$lci,
-      uci_number_established_ha = .data$established_interval$uci,
-      mean_number_seedlings_ha = .data$seedlings_interval$sum,
-      lci_number_seedlings_ha = .data$seedlings_interval$lci,
-      # uci_number_seedlings_ha = 
-      #   ifelse(.data$seedlings_interval$sum == 0 
-      #          & .data$seedlings_interval$lci == 0
-      #          & is.na(.data$seedlings_interval$uci), 
-      #          0, .data$seedlings_interval$uci),
-      uci_number_seedlings_ha = .data$seedlings_interval$uci
-    ) %>% 
-  mutate(mean_number_established_ha = 
-           ifelse(is.na(.data$mean_number_established_ha) 
-                  & .data$mean_number_seedlings_ha > 0
-                  , 0
-                  , .data$mean_number_established_ha),
-         lci_number_established_ha = 
-           ifelse(is.na(.data$lci_number_established_ha) 
-                  & .data$mean_number_seedlings_ha > 0
-                  , 0
-                  , .data$lci_number_established_ha),
-         uci_number_established_ha = 
-           ifelse(is.na(.data$uci_number_established_ha) 
-                  & .data$mean_number_seedlings_ha > 0
-                  , 0
-                  , .data$uci_number_established_ha),
-         mean_number_seedlings_ha = 
-           ifelse(is.na(.data$mean_number_seedlings_ha) 
-                  & .data$mean_number_established_ha > 0
-                  , 0
-                  , .data$mean_number_seedlings_ha),
-         lci_number_seedlings_ha = 
-           ifelse(is.na(.data$lci_number_seedlings_ha) 
-                  & .data$mean_number_established_ha > 0
-                  , 0
-                  , .data$lci_number_seedlings_ha),
-         uci_number_seedlings_ha = 
-           ifelse(is.na(.data$uci_number_seedlings_ha) 
-                  & .data$mean_number_established_ha > 0
-                  , 0
-                  , .data$uci_number_seedlings_ha),
-         approx_nr_established_ha = 
-           ifelse(is.na(.data$approx_nr_established_ha) 
-                  & .data$approx_nr_seedlings_ha > 0
-                  , 0
-                  , .data$approx_nr_established_ha),
-         approx_nr_seedlings_ha = 
-           ifelse(is.na(.data$approx_nr_seedlings_ha) 
-                  & .data$approx_nr_established_ha > 0
-                  , 0
-                  , .data$approx_nr_seedlings_ha)
-  )
-         
-
-by_plot3 <- calculate_regeneration_plot(data_regeneration)
-
-```
-
-```{r eval=FALSE}
-names(by_plot1)
-
-check4 <- by_plot1 %>% filter(period == 1 & plot_id %in% c(133, 130, 138)) %>% 
-  select(plot_id, subcircle, date_regeneration, height_class, contains(c("min_number", "max_number", "approx")))
-
-check5 <- by_plot2 %>% filter(period == 1 & plot_id %in% c(133, 130))
-
-check6 <- by_plot3 %>% filter(period == 1 & plot_id %in% c(133, 130, 138))
-
-str(check6)
-```
-
-
-
-## TEMP: fout percentage rubbing dammage - OPGELOST (10/4/2024)
+> is opgelost ((10/4/2024 & 18/3/2025)
 
 Deels opgelost door bij `load_regeneration()` `GameImpactRegObserved = 10` te 
 gebruiken voor toekennen van 0 ipv NA.
@@ -634,46 +499,25 @@ Deels door nog wat extra aanpassingen bij de calc-functies (commits 10/4/2024, b
 (2) niet enkel A2
 (3) afgetopt op 100%
 
-Hierna enkele testen nog behouden, maar mogen misschien ook weg? 
-
 ```{r eval=FALSE}
-names(regeneration_by_plot)
+names(reg_by_plot)
 
-check0 <- regeneration_by_plot %>% 
+check0 <- reg_by_plot %>% 
   left_join(plotinfo %>% select(plot_id, period, game_impact_reg)) %>% 
-  filter(is.na(rubbing_damage_perc) & number_of_tree_species > 0) %>% 
+  filter(is.na(approx_rubbing_damage_perc_established) & 
+           is.na(approx_rubbing_damage_perc_seedlings) & 
+           number_of_tree_species > 0) %>% 
   filter(game_impact_reg == TRUE) 
 
-# niet gelegen aan data_regeneration, maar perc wordt opnieuw berekend  
-data_regeneration %>% filter(plot_id == 707) %>% 
-  filter(period == 2) %>% 
-  select(plot_id, period, subcircle, date_regeneration, height_class, species, number_class, nr_of_regeneration, contains(c("rubbing", "min_number", "max_number", "approx")))
+nrow(check0) == 0
 
 ```
 
 
-```{r check_reg_rubbing_plot, eval = FALSE}
-t <- by_plot %>% filter(not_na_rubbing > 0 & game_impact_reg == FALSE)
-# allemaal rubbing_nr = 0 !! is foute som (som van NA's = 1)
+# TEMP: check KV Kersselaerspleyn - OPGELOST
 
-by_plot %>% filter(not_na_rubbing == 0 & game_impact_reg == TRUE)                   
-# dat zijn deze zonder enige verjonging => deze mogen NA blijven
-by_plot %>% filter(not_na_rubbing == 0 & game_impact_reg == TRUE 
-                   & approx_nr_established_ha != 0 & approx_nr_seedlings_ha != 0) %>% 
-  nrow() == 0
-
-
-t <- by_plot %>% filter(game_impact_reg == FALSE)
-t <- by_plot %>% filter(game_impact_reg == TRUE)
-```
-
-
-
-# Check KV Kersselaerspleyn
-
-Kloppen de resultaten nu? (vóór 25/11/2022 een factor 10.75/1.4 verschil)
-JA
-
+> is opgelost (25/11/2022 & 18/3/2025)
+(vóór 25/11/2022 een factor 10.75/1.4 verschil)
 
 **Opbouw functie:**  
 - data_regeneration_CA <- data_regeneration %>% filter(.data$plottype == "CA")    
@@ -688,59 +532,49 @@ JA
         , NA)  
         ```
 
-==> hogerop plotarea_ha aangepast aan 1.4 ha en 7.5 ha (ipv 10.75 ha)
+==> hogerop `plotarea_ha` aangepast aan 1.4 ha en 7.5 ha (ipv 10.75 ha)
 
-
-```{r}
-#   data_regeneration_CA <- data_regeneration %>%
-#     filter(.data$plottype == "CA")
-#   by_ca_species <- calculate_regeneration_core_area_species(data_regeneration_CA)
-
-# is.na(subcircle): komt dat voor?
-# data_regeneration %>% filter(is.na(subcircle) & !is.na(species)) %>% nrow() == 0
-# NEE
-
-```
-
-```{r check_reg_Kerss_KV}
-check_Kerss <- regeneration_by_core_area_species %>% 
+```{r check_reg_Kerss_KV, eval = FALSE}
+check_Kerss <- reg_by_core_area_species %>% 
   filter(plot_id == 11000)
 
-check_Kerss <- regeneration_by_core_area_height_species %>% 
+check_Kerss <- reg_by_core_area_height_species %>% 
   filter(plot_id == 11000 & species == 7 & height_class == 3000)
 # period = 2, zelfde resultaat als dataverwerking 2010 - OK
 
-check_Kerss <- regeneration_by_core_area_height_species %>% 
-  filter(plot_id == 11000 & species == 7 & height_class == 1000)
+check_Kerss <- reg_by_core_area_height_species %>% 
+  filter(plot_id == 11000 & species == 7 & height_class == 1000 &
+           period == 2)
 # period = 2, zelfde resultaat als dataverwerking 2010 - OK
+
+check_Kerss$approx_nr_regeneration_ha
+# 2010: hooogteklasse 100; beuk --> 1.967
+
+
 ```
 
 Resultaten stemmen overeen met dataverwerking uit 2012.
-
-```{r check_n_subplots_reg}
-# controle n_subplots door runnen van deel van de functie -> OK!!
-# table(by_plot_species_reg$n_subplots)
-#    1   10   34   50   98  105  140  750 
-# 5475   40   36  186  324   56   31   15 
-```
-
 
 
 # Export
 
 ```{r join_plottype_surveynr_BR_reg}
-reg_plotinfo <- lapply(regeneration, function(x) left_join(x, plotinfo %>% select(plot_id, forest_reserve, plottype, period, survey_number), by = c("plot_id", "period")))
+reg_plotinfo <- lapply(regeneration, function(x) left_join(x, plotinfo %>% select(plot_id, forest_reserve, period, survey_number), by = c("plot_id", "period")))
 # lapply: same function over all elements of the list
 
 ```
 
 ```{r save_reg_git, eval = FALSE}
-save_results_git(
+# geen plotinfo naar git
+save_results_forresdat(
   results = regeneration,
   repo_path = path_to_git_forresdat,
+  metadata_path = paste0(path_to_metadata, "_metadata_plotlevel_results_reg.xlsx"),
+  push = FALSE,
   strict = TRUE,
-  # strict = FALSE
+  branch = "develop"
 )
+
 ```
 
 
@@ -761,6 +595,11 @@ save_results_csv (
 # afgerond voor export naar access
 # de df's van CP mogen op 0 afgerond worden (= 1ste drie dataframes)
 # de KV's op 2 cijfers na de komma
+
+round_df <- function(df, digits) {
+  df[] <- lapply(df, function(x) if(is.numeric(x)) round(x, digits) else x)
+  return(df)
+}
 
 reg_CP <- reg_plotinfo[c(1:3)]
 reg_CP <- reg_CP %>% 
@@ -796,3 +635,18 @@ save_results_csv(
 **Eventueel ook access op gdrive plaatsen**
 
 
+# Copy html to teamdrive
+
+Na knitting - manueel
+
+```{r eval = FALSE}
+# Specify the path of the file you want to copy
+source_file <- here::here(paste0("Scripts/OpbouwDatabank/Main_UpdateForresdat_04_regeneration.html"))
+
+# Specify the destination directory where you want to copy the file
+destination_dir <- path_to_html_teamdrive
+
+# Copy the file to the destination directory
+file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
+# ? file.copy
+```
