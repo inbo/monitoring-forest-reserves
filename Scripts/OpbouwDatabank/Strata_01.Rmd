@@ -14,31 +14,6 @@ output:
       smooth_scroll: FALSE
 ---
 
-# Vraagstelling
-
-DOEL van dit script is om alle beschikbare strata te bundelen in één databank.
-
-Zie [gdrive](https://drive.google.com/drive/folders/1z3l6VVCa1FIPiL1SkZu9VVQKF6Eeh7BN?usp=sharing) - PRJ_BR_AanvraagGegevens/!METADATA-ALL_PLOTS
-
-Brondata: 
-
-<!-- 1) de strata aangemaakt door Marc (via overlays in GIS) : "00_Bosreservaten_allecirkels-versieME-2020-11-18.xlsx":  -->
-<!-- zie gdrive "G:\Mijn Drive\6TeamData\PRJ_BOSECO_ALGEMEEN\PRJ_BR_AanvraagGegevens\!METADATA-ALL_PLOTS' -->
-
-1) strata aangemaakt door Marc Esprit (via overlays in GIS) : `boseco_alleproefvlakken_centraalpunt_lam72_metinfo.shp`  
-(terug te vinden op Q:\Projects\PRJ_BosEco\PRJ_PERS_ME_GIS\00_alle_proefvlakken\def\metinfo)
-
-2) strata samengezet door Kris VdK: `00_referentiefile-meestcompleet-Bosreservaten_allecirkels.gsheet`
-> moet nog aangepast worden, TSA niet steeds correct 
-Kris gaat afstemmen tss tabel en monitoringrapport (zie mail van 5/12/2024)
-
-
-3) strata berekend obv de metingen, op dit moment enkel de hoofdboomsoort (dominant tree)
-Op termijn kunen ook kenmerken zoals standtype (LH, NH, gemengd LH, kapvlakte, open plek), foresttype (eiken-beuken..°), .... naar analogie met de VBI.
-
-4) gegevens op niveau van bosreservaat (CP's en KV apart) door Kris VdK in kader van data-vraag EUFORIA: `INBO_info_forest_reserve.xlsx`, kopie van `Metadata_Permanent_Plots` van  [EUFORIA-network](https://drive.google.com/drive/folders/1F4bmaNFoXNpvkiqYbn7Dmq9LlodjwQGa) - Forest Reserves Working Group/Metadata_collection.
-
-
 ```{r Rm, eval = FALSE}
 rm(list=ls())
 ```
@@ -59,6 +34,40 @@ library(sf)
 source(here::here("scripts/Setup.R"))
 
 ```
+
+# Vraagstelling
+
+DOEL van dit script is om alle beschikbare strata te bundelen in één databank.
+
+Zie [gdrive](https://drive.google.com/drive/folders/1z3l6VVCa1FIPiL1SkZu9VVQKF6Eeh7BN?usp=sharing) - PRJ_BR_AanvraagGegevens/!METADATA-ALL_PLOTS
+
+
+# Brondata 
+
+<!-- 1) de strata aangemaakt door Marc (via overlays in GIS) : "00_Bosreservaten_allecirkels-versieME-2020-11-18.xlsx":  -->
+<!-- zie gdrive "G:\Mijn Drive\6TeamData\PRJ_BOSECO_ALGEMEEN\PRJ_BR_AanvraagGegevens\!METADATA-ALL_PLOTS' -->
+
+1) strata aangemaakt door Marc Esprit (via overlays in GIS) : `boseco_alleproefvlakken_centraalpunt_lam72_metinfo.shp`  
+(terug te vinden op Q:\Projects\PRJ_BosEco\PRJ_PERS_ME_GIS\00_alle_proefvlakken\def\metinfo)
+Veld Management en Beheer aangepast
+
+2) strata samengezet door Kris VdK: `00_referentiefile-meestcompleet-Bosreservaten_allecirkels.gsheet`
+Volgende velden aangepast nalv overleg Peter, Luc, Kris op 20/3/2025
+
+- Management_type: Kluisbos productiebos
+- plot_unmanaged_since: Kluisbos productiebos; sommige plots 
+- reserve_unmanaged_since: enkele foutjes
+
+> moet nog aangepast worden, TSA niet steeds correct 
+Kris gaat afstemmen tss tabel en Methodiekrapport (zie mail van 5/12/2024)
+
+
+3) strata berekend obv de metingen, op dit moment enkel de hoofdboomsoort (dominant tree)
+Op termijn kunen ook kenmerken zoals standtype (LH, NH, gemengd LH, kapvlakte, open plek), foresttype (eiken-beuken..°), .... naar analogie met de VBI.
+
+4) gegevens op niveau van bosreservaat (CP's en KV apart) door Kris VdK in kader van data-vraag EUFORIA: `INBO_info_forest_reserve.xlsx`, kopie van `Metadata_Permanent_Plots` van  [EUFORIA-network](https://drive.google.com/drive/folders/1F4bmaNFoXNpvkiqYbn7Dmq9LlodjwQGa) - Forest Reserves Working Group/Metadata_collection.
+
+5) jaartallen opgenomen in methodiekrapport
 
 
 # SVZ
@@ -116,6 +125,20 @@ df_strata_shp %>% inner_join(dubbele_plotids)
 # transecten van kernvlaktes, onderscheid via Unieknr
 ```
 
+> TMP: tijdelijk beheer van 6 plots in Kluisbos aanpassen, gevraagd aan Marc om dat in shapefile aan te passen
+in mail van 21/3/2025
+Zodra in orde nieuwe kopie naar mijn c-schijf
+
+```{r TMP_adjust_management_kluisbos}
+names(df_strata_shp)
+
+df_strata_shp_ <- df_strata_shp %>% 
+  mutate(Management = ifelse(plot_id %in% c(1512:1517), "unmanaged", Management),
+         Beheer = ifelse(plot_id %in% c(1512:1517), "0-beheer", Beheer))
+
+unique(df_strata_shp$Management)
+unique(df_strata_shp$Beheer)
+```
 
 
 ## Strata CP's samengezet door Kris VdK
@@ -261,18 +284,18 @@ names(link_WC_FM)
 
 
 
-### Monitoringrapport
+### Methodiekrapport
 
-Info overgenomen uit monitoringrapport.
+Info overgenomen uit methodiekrapport.
 ! "unmanaged_since" soms aangepast aan shapefile Marc bij onduidelijkheid in rapport.
 
 ```{r import_data_forest_reserve2}
-# uit monitoringrapport 
+# uit Methodiekrapport 
 con <- odbcConnectAccess2007(path_to_strata_db)
-  management_monitoringrapport <- sqlFetch(con, "info_forest_reserve_management", stringsAsFactors = FALSE)  # reserve establishment date
+  management_methodiekrapport <- sqlFetch(con, "info_forest_reserve_management", stringsAsFactors = FALSE)  # reserve establishment date
 odbcClose(con)
 
-names(management_monitoringrapport)
+names(management_methodiekrapport)
 ```
 
 ## Plotinfo forrescalc
@@ -593,9 +616,9 @@ Velden zoals
 - `Management` (en `Beheer`: vertaling): uit shapefile, voor alle plots
 - `Management_type`: uit gsheet - enkel cirkelplots
 - `Unmanaged_since` (wordt `plot_unmanaged_since`): uit gsheet - enkel cirkelplots
-- `reserve_establishment_yr`: uit monitoringrapport op niveau van bosreservaat
-- `last_commercial_intervention`: uit monitoringrapport op niveau van bosreservaat
-- unmanaged_since (wordt `reserve_unmanaged_since`): uit monitoringrapport op niveau van bosreservaat
+- `reserve_establishment_yr`: uit Methodiekrapport op niveau van bosreservaat
+- `last_commercial_intervention`: uit Methodiekrapport op niveau van bosreservaat
+- unmanaged_since (wordt `reserve_unmanaged_since`): uit Methodiekrapport op niveau van bosreservaat
 
 <!-- ! metadatatabel van Euforia echt verwarrend, want daar maar drie subsites: -->
 <!-- - Bosreservaat Joseph Zwaenepoel - Core Area -->
@@ -603,7 +626,7 @@ Velden zoals
 <!-- - Bosreservaat Joseph Zwaenepoel - Core Area Harras -->
 
 > Kris gaat `00_referentiefile-meestcompleet-Bosreservaten_allecirkels.gsheet` 
-corrigeren en beter afstemmen tss tabel (`plot_unmanaged_since`) en monitoringrapport (`reserve_unmanaged_since`) 
+corrigeren en beter afstemmen tss tabel (`plot_unmanaged_since`) en Methodiekrapport (`reserve_unmanaged_since`) 
 (zie mail van 5/12/2024)
 Nu nog even verder doen met zoals nu is.
 Weliswaar nog fouten mbt "onbeheerd sinds" van o.a. Harras en CP's die in oude KV (1983) liggen 
@@ -613,11 +636,11 @@ moet ook eens afgeklopt worden => overleg op 6/3/25
 ```{r}
 names(df_strata_shp[1:18])
 names(input_gsheet[1:4])
-names(management_monitoringrapport)
+names(management_methodiekrapport)
 
 ```
 
-**"Unmanaged_since" uit monitoringrapport is verschillend van info uit gsheet**
+**"Unmanaged_since" uit methodiekrapport is verschillend van info uit gsheet**
 
 Beide behouden, andere naam geven: `plot_unmanaged_since` en `reserve_unmanaged_since` .
 
@@ -647,12 +670,12 @@ Je hebt dus 4 'sites' :
 
 ### Eventueel nog toe te voegen
 
-?? Surface area in monitoringrapport : total reserve : 48.98 ha	Monitored area = 38,40 ha	 
+?? Surface area in Methodiekrapport : total reserve : 48.98 ha	Monitored area = 38,40 ha	 
 
 ? PNV uit onze PNV-kaart
 
 ? Vegetation types: bv. Endymio-Carpinetum, Endymio-Fagetum, Alno-Padion - EEA: 6.6.2 & 6.11.2
-cfr monitoringrapport
+cfr Methodiekrapport
 
 ? beheer: 3 klasses: zero management/startbeheer/exotenbeheer tss periode 1 en 2
 (zie plots_management_startbeheer_exotenbeheer.xlsx, ook geïmporteerd in db strata)
@@ -741,7 +764,7 @@ strata_overige <- strata_overige_shp %>%
 
 ```
 
-Uit monitoringrapport ook nog info over unmanaged_since en establishment_yr
+Uit methodiekrapport ook nog info over `unmanaged_since` en `establishment_yr`
 
 ```{r unmanaged_since_rapport}
 names(strata_overige) # bevat reeds "forest_reserve_fieldmap" en "plottype"
@@ -749,7 +772,7 @@ names(strata_overige) # bevat reeds "forest_reserve_fieldmap" en "plottype"
 # Joinen
 strata_overige_ <- strata_overige %>% 
   # left_join(plotinfo %>% select(plot_id, plottype, forest_reserve), by = c("plot_id")) %>% 
-  left_join(management_monitoringrapport %>% rename(reserve_unmanaged_since = unmanaged_since), by = c("forest_reserve_fieldmap" = "forest_reserve", "plottype")) %>% 
+  left_join(management_methodiekrapport %>% rename(reserve_unmanaged_since = unmanaged_since), by = c("forest_reserve_fieldmap" = "forest_reserve", "plottype")) %>% 
   select(-plottype, -plottype_old, -Id) %>% 
   select(1:8, Management_type,
          plot_unmanaged_since, reserve_unmanaged_since, 
@@ -759,6 +782,33 @@ names(strata_overige_)
 
 strata_overige <- strata_overige_
 ```
+
+
+```{r CORR_kluisbos_productiebos}
+# een deel van Kluisbos is productiebos (maar alles onder zelfd enoemer in fieldmap)
+# daar heeft reserve_unmanaged_since en reserve_establishment_yr geen enkele zin
+# => NA maken
+
+# bijkomend een verschil in last_commercial_intervention tss productiebos en reservaat
+# in reserve: thinning in 1990s (?)
+# in managed forest: thinning in 2016-17
+
+strata_overige_ <- strata_overige %>% 
+  mutate(reserve_unmanaged_since = ifelse(SubArea %in% c("Kluisbos Communal Forest", "Kluisbos State Forest")
+                                          , NA, reserve_unmanaged_since)
+         , reserve_establishment_yr = ifelse(SubArea %in% c("Kluisbos Communal Forest", "Kluisbos State Forest")
+                                          , NA, reserve_establishment_yr)
+         , last_commercial_intervention = ifelse(SubArea %in% c("Kluisbos Communal Forest", "Kluisbos State Forest")
+                                          , "2016-2017", last_commercial_intervention)
+         , last_commercial_intervention = ifelse(SubArea == "Kluisbos SFR" |
+                                                   plot_id %in% c(1512:1517)
+                                          , "1990's", last_commercial_intervention)
+         )
+
+
+strata_overige <- strata_overige_
+```
+
 
 
 # Dynamische strata
