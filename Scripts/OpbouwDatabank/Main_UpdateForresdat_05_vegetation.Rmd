@@ -1,5 +1,5 @@
 ---
-title: "Update forresdat - vegetatie"
+title: "Update forresdat 5 - vegetatie"
 author: "Anja Leyman"
 date: "`r Sys.Date()`"
 output: 
@@ -29,21 +29,30 @@ knitr::opts_chunk$set(
 
 library(here)
 
-# libraries & invoergegevens
+# libraries & invoergegevens & functions
 source(here::here("scripts/Setup.R"))
 
 ```
 
 
+```{r Setup2}
+path_to_html_teamdrive <- paste0(path_to_dataverwerking_teamdrive, "25_Overkoepelend")
+```
 
-```{r juiste_forrescalc}
+> juiste forrescalc kiezen:   
+- om weg te schrijven naar forresdat - branch main => met juiste release van het package: dan `install.packages("forrescalc")`  
+- laatste correcties van forrescalc => juiste branch selecteren in forrescalc en opnieuw builden - wegschrijven kan naar forresdat - branch "develop"
+(10/3/25: branch 'bugfix' met corr van read_forresdat waarbij we de develop branch kunnen selecteren ipv main)
+
+```{r forrescalc_to_write_to_forresdat, eval = FALSE}
 # !!! eerst zeker 'install.packages("forrescalc")
-# zodat data goede release krijgt!
+# zodat forresdat-data goede release krijgt!
 # zie mail 7/10/24 van Els L.
 # soms een andere branch nodig als Els nog iets moet fixen, maar als ik naar forresdat 
-# wil wegschrijven, moet ik officiële versie van forresclac gebruiken
+# wil wegschrijven, moet ik officiële versie van forrescalc gebruiken
 
 install.packages("forrescalc")
+
 ```
 
 
@@ -69,16 +78,40 @@ path_to_meetgegevens
 
 ```
 
+
 # Load plotinfo
 
-Plotinfo samenstellen, zijnde plottype, naam forest_reserve en info over survey en data al dan niet processed.
+Plotinfo inladen: `plottype`, naam `forest_reserve` en info over survey's.
+(plotinfo op gdrive en forresdat: enkel processed plots!)
 
 ```{r }
-plotinfo <- read_vc(file = "plotinfo", root = path_to_forresdat_data)
-names(plotinfo)
+# mbv forresdat
+# plotinfo <- read_forresdat(file = "plotinfo", root = path_to_forresdat_data)
+# names(plotinfo)
+# ?read_forresdat
+
+# van c-schijf
+plotinfo <- read.csv2(paste0(path_to_plotlevel_csv, "plotinfo.csv")) %>% 
+  select(-1)
+
 ```
 
-# Load vegetation - OK - 19/1/2023
+
+# Load lookuplijsten
+
+```{r load_lkp}
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+
+  qHerbSpecies240810<- sqlFetch(con, "qHerbSpecies240810", stringsAsFactors = FALSE)
+  qCoverHerbs <- sqlFetch(con, "qCoverHerbs", stringsAsFactors = FALSE)
+  qBrowsIndex <- sqlFetch(con, "qBrowsIndex", stringsAsFactors = FALSE)
+  
+odbcClose(con)
+
+```
+
+
+# Load vegetation - OK - 19/1/2023 - 18/3/2025
 
 ```{r load_veg}
 data_vegetation <-
@@ -113,74 +146,77 @@ for (tablename in names(vegetation)) {
 # Controle plot-level-data
 
 ```{r}
-# plot 1176, periode 1: niet in veg_by_plot => Els gevraagd om dit te corrigeren (nov 2022)
 data_vegetation %>% filter(plot_id == 1176 & period == 1)
 data_herblayer %>% filter(plot_id == 1176)
 data_herblayer %>% filter(plot_id == 1176 & period == 1)
 
-vegetation_by_plot %>% filter(plot_id == 1176 & period == 1)
+veg_by_plot %>% filter(plot_id == 1176 & period == 1)
 
 ```
-
-
-Tijdelijk hier oplossen
-
-```{r correctie_add_plot1176}
-col_names <- colnames(vegetation_by_plot)
-plot1176 <- data.frame(matrix(nrow = 0, ncol = length(col_names))) 
-colnames(plot1176) <- col_names
-nrow(plot1176)
-names(plot1176)
-
-# meeste is NA
-for (i in 1:ncol(plot1176))
-  {
-      plot1176[1,i]<-NA
-  }
-
-# dan enkel deze die geen NA zijn, invullen
-plot1176$plot_id <- 1176
-plot1176$period <- 1
-plot1176$number_of_species <- 0
-plot1176$subplot_id <- 1
-plot1176$cumm_herb_coverage_class_average_perc <- 0
-plot1176$year_main_survey <- 2007
-plot1176$date_vegetation <- as.Date("2007-06-28")
-plot1176$moss_cover_mid <- 0.5
-plot1176$waterlayer_cover_mid <- 0.5
-
-# samenvoegen
-vegetation_by_plot_ <- rbind(vegetation_by_plot, plot1176)
-
-vegetation_by_plot <- vegetation_by_plot_
-
-```
-
-
-
 
 
 # Check NA's
 
-```{r}
-names(vegetation_by_plot)
-summary(vegetation_by_plot)
+```{r results='hide'}
+names(veg_by_plot)
+summary(veg_by_plot)
 # veel covers niet ingevuld ...
 ```
 
 ```{r}
 col <- c("number_of_species", "cumm_herb_coverage_class_average_perc")
 
-vegetation_by_plot %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+veg_by_plot %>% filter_at(col, any_vars(is.na(.))) %>% 
+  filter(number_of_species != 0) %>% nrow() == 0
+# 122 met cumm_herb_coverage_class_average_perc = NA, allemaal aantal soorten = 0
 
 ```
 
+Doordat in herblayer een record met species = NA wordt toegevoegd voor elke plot waar een opname gebeurd
+is, zijn er hier rare NA's
+
+
+Op te lossen is alvast feit dat bij bv plot 41000 (species = NA MAAR browsing is 100)
+wegens load_data_herblayer:
+ IIf(Herb.browse_index_id IS NULL AND pd.GameImpactVegObserved = 10,
+             100, Herb.browse_index_id) AS browse_index_id,
+             
+daar zou extra vwdde moeten zijn dat er een soort is?
+anderzijds bij percentage browing misschein wel ok
+
+
+Dan zijn er 2 plots waar tijdens 1e set niet alle subplots opgemeten werden, 
+waardoor er 40 subplots zijn met soort = NA én jaart al = NA
+
+
+(11000: ook 40 plots met species = AN, maar daar wel een jaartal => dat duidt onderscheid met waar
+dan wél een opname gebeurd is)
+
+Op te kuisen!!!
+            
 ```{r}
-names(vegetation_by_core_area_species)
+names(veg_by_core_area_species)
 
-col <- c("number_of_subplots_with_vegetation", "perc_of_subplots", "mean_coverage_class_average_perc")
+col <- c("number_of_subplots_with_species", "perc_of_subplots", "mean_coverage_class_average_perc")
 
-vegetation_by_core_area_species %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+t <- veg_by_core_area_species %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+# 4 records met mean_coverage_class_average_perc = NA wegens species = NA
+
+t1 <- data_herblayer %>% filter(plottype == "CA" & is.na(species))
+# bv. 11000 - periode 1: 750 subplots 
+
+
+# bv. plot 41000: species = NA en browsing ;s 100
+# wegens load_data_herblayer:
+# IIf(Herb.browse_index_id IS NULL AND pd.GameImpactVegObserved = 10,
+#             100, Herb.browse_index_id) AS browse_index_id,
+
+# 31000 en 43000: 40 subplots zodnder species peroide 1 = omdat ze niet opgemeten zijn
+# jaartal is ook NA
+
+# 11000: idem, maar daar is wel een jaartal ingevuld?
+
+t2 <- data_herblayer %>% filter(plottype == "CP" & is.na(species))
 
 ```
 
@@ -226,7 +262,7 @@ data_herblayer <- data_herblayer_
 (de andere plot-level-resultaten mbt vegetatie zijn OK, daar komt browsing niet in voor)
 
 ```{r corr_browseindex_CA}
-check_CA_browsing <- vegetation_by_core_area_species %>% 
+check_CA_browsing <- veg_by_core_area_species %>% 
   left_join(plotinfo %>% select(plot_id, period, game_impact_veg),
             by = c("plot_id", "period")) %>% 
   filter(is.na(perc_of_subplots_browsed)) %>% 
@@ -243,9 +279,9 @@ table(check_CA_browsing$plot_id, check_CA_browsing$period)
 data_herblayer_CA <- data_herblayer %>%
     filter(.data$plottype == "CA")
 
-vegetation_by_core_area_species_ <- calculate_vegetation_core_area_species(data_herblayer_CA)
+veg_by_core_area_species_ <- calculate_vegetation_core_area_species(data_herblayer_CA)
 
-vegetation_by_core_area_species <- vegetation_by_core_area_species_
+veg_by_core_area_species <- veg_by_core_area_species_
 
 ```
 
@@ -253,8 +289,8 @@ vegetation_by_core_area_species <- vegetation_by_core_area_species_
 
 ```{r combine_veg}
 vegetation_ <- list(
-      vegetation_by_plot = vegetation_by_plot,
-      vegetation_by_core_area_species = vegetation_by_core_area_species
+      veg_by_plot = veg_by_plot,
+      veg_by_core_area_species = veg_by_core_area_species
     )
 
 vegetation <- vegetation_
@@ -262,49 +298,66 @@ vegetation <- vegetation_
 
 
 
-# Controle KV Kerss
+# TEMP controle KV Zoniën KERN_1983 - OPGELOST
 
-n_subplots is fout: 710 ipv 750 (2eset wel OK, 140)
+In de kernvlakte "Zoniën KERN_1983" werden slechts in 710 van de 750 subplots effectief soorten 
+genoteerd. Dus 40 subplots zonder kruidlaag. 
+ <!-- (< monitoringrapport 2000: "In eerste instantie werden de 710 niet-lege opnamen  -->
+ <!-- (i.c. zonder kruidlaag) door TWINSPAN geanalyseerd") -->
 
-calculate_vegetation_core_area_species <- function(data_herblayer, data_vegetation) {
-  by_core_area_species <- data_herblayer %>%
-    group_by(.data$plot_id, .data$period) %>%
+Initieel werd `n_subplots` fout berekend bij periode 1: 710 ipv 750 (2eset wel OK, 140)
+19/3/2025: opgelost door aan herblayer ook de lege subplots toe te voegen (species = NA), 
+<!-- bij "query_herblayer" wordt immers vertrokken van plots en vegetation-layer,  -->
+<!-- met een left_join van herblayer -->
+
+```{r eval=FALSE}
+by_core_area_species <- data_herblayer %>%
+    group_by(.data$plot_id, .data$period, .data$plottype) %>%
     mutate(
-      n_subplots = n_distinct(.data$subplot_id)
+      n_subplots = n_distinct(.data$subplot_id))
 
-OPGEPAST: `n_subplots` zou moeten bepaald worden op "data_vegetation", want in herblayer 
-zitten enkel de subplots waar een soort waargenomen werd
+t3 <- by_core_area_species %>% 
+  filter(plot_id == 11000 & is.na(species) & period == 1)
+nrow(t3) == 40 
+unique(t3$n_subplots) == 750
 
-> aan els gevraagd om dit aan te passen in PR van reg_AL (29/11/2022)
-Hier niet aangepast, geeft geen immens grote afwijking, tijdelijk zo laten ...
+# Forrescalc-code:
 
-Bij regeneration wordt van regeneration-subplots vertrokken, dus daar is het aantal subplots wel correct.
+# calculate_vegetation_core_area_species <- function(data_herblayer, data_vegetation) {
+#   by_core_area_species <- data_herblayer %>%
+#     group_by(.data$plot_id, .data$period) %>%
+#     mutate(
+#       n_subplots = n_distinct(.data$subplot_id))
+
+# load_data_herblayer <- ...
+#  query_herblayer <- ....
+        #  FROM ((((Plots
+        #           INNER JOIN PlotDetails_%1$deSet pd ON Plots.ID = pd.IDPlots)
+        #           INNER JOIN Vegetation%2$s Veg ON Plots.ID = Veg.IDPlots)
+        #           LEFT JOIN (
+        #             SELECT Herblayer.IDPlots,
+```
 
 ```{r check_n_subplots_veg, eval = FALSE}
 # controle n_subplots door runnen van deel van de functie -> OK!!
 table(by_core_area_species$n_subplots)
-#     1    10    34    50    97    98   105   140   710 
-# 26466   174   101   724    34   917   194   111    76 
+# 1    10    34    50    98   105   140   750 
+# 30312   441   653 11253 28567  6163  2285  4570
 
-# ? 97 
-# plot 41000, period 3, subplot 00.60, ID 22 is leeg en wordt daarom niet meegerekend
-
-# ? 710 ipv 750?
-# waarom bij reg geen probleem?
-table(by_plot_species_reg$n_subplots)
 ```
 
-```{r check_veg_Kerss_KV}
-check_Kerss <- vegetation_by_core_area_species %>% 
+```{r check_veg_Kerss_KV, eval = FALSE}
+check_Kerss <- veg_by_core_area_species %>% 
   filter(plot_id == 11000)
 
-check_Kerss <- vegetation_by_core_area_species %>% 
+veg_by_core_area_species %>% 
   filter(plot_id == 11000 & species == 71)  # beuk
 # period = 2, zelfde resultaat als dataverwerking 2010 - OK
+# 123 subpolots -	 0,879 perc_subplots - 0.9 mean_coverage_class_average_perc 
 
 ```
 
-Resultaten stemmen overeen met dataverwerking uit 2012, muv percentage subplots, period 1.
+Resultaten stemmen overeen met dataverwerking uit 2012.
 
 
 
@@ -318,11 +371,13 @@ veg_plotinfo <- lapply(vegetation, function(x) left_join(x, plotinfo %>% select(
 
 ```{r save_veg_git, eval = FALSE}
 # geen plotinfo naar git
-save_results_git(
+save_results_forresdat(
   results = vegetation,
   repo_path = path_to_git_forresdat,
-  strict = TRUE 
-  # strict = FALSE
+  metadata_path = paste0(path_to_metadata, "_metadata_plotlevel_results_veg.xlsx"),
+  push = FALSE,
+  strict = TRUE,
+  branch = "develop"
 )
 ```
 
@@ -344,6 +399,12 @@ save_results_csv (
 # afgerond voor export naar access
 # de df's van CP mogen op 0 afgerond worden (= 1ste drie dataframes)
 # de KV's op 2 cijfers na de komma
+
+round_df <- function(df, digits) {
+  df[] <- lapply(df, function(x) if(is.numeric(x)) round(x, digits) else x)
+  return(df)
+}
+
 veg_round <- veg_plotinfo %>% 
   lapply(., function(x) round_df(x, 2))
 
@@ -354,27 +415,27 @@ veg_round <- veg_plotinfo %>%
 #   )
 
 # Functie "save_results_access" (< package) geeft problemen met dates => hierna manueel
-vegetation_by_plot <- vegetation_by_plot %>% 
+veg_by_plot <- veg_by_plot %>% 
   mutate(date_vegetation = as.Date(gsub(' SAST','',date_vegetation))) 
   # gsub (SAST) is om tijdzone weg te halen, anders wordt een dag vroeger weergegeven
 
 
 con <- odbcConnectAccess2007(path_to_analysis_set_db)
 
-# vegetation_by_plot
+# veg_by_plot
 dbtables <- sqlTables(con)
-if ("vegetation_by_plot" %in% dbtables$TABLE_NAME) {
-        sqlDrop(con, "vegetation_by_plot")
+if ("veg_by_plot" %in% dbtables$TABLE_NAME) {
+        sqlDrop(con, "veg_by_plot")
       }
-sqlSave(con, dat = vegetation_by_plot, tablename = "vegetation_by_plot", varTypes = c(date_vegetation="datetime"))
+sqlSave(con, dat = veg_by_plot, tablename = "veg_by_plot", varTypes = c(date_vegetation="datetime"))
 
 
-# vegetation_by_core_area_species
+# veg_by_core_area_species
 dbtables <- sqlTables(con)
-if ("vegetation_by_core_area_species" %in% dbtables$TABLE_NAME) {
-        sqlDrop(con, "vegetation_by_core_area_species")
+if ("veg_by_core_area_species" %in% dbtables$TABLE_NAME) {
+        sqlDrop(con, "veg_by_core_area_species")
       }
-sqlSave(con, dat = vegetation_by_core_area_species, tablename = "vegetation_by_core_area_species")
+sqlSave(con, dat = veg_by_core_area_species, tablename = "veg_by_core_area_species")
 
 odbcClose(con)
 ```
@@ -435,10 +496,13 @@ herb_plotinfo <- lapply(herblayer_list, function(x) left_join(x, plotinfo %>% se
 
 ```{r save_herb_git, eval = FALSE}
 # geen plotinfo naar git
-save_results_git(
+save_results_forresdat(
   results = herblayer_list_git,
   repo_path = path_to_git_forresdat,
-  strict = TRUE
+  metadata_path = paste0(path_to_metadata, "_metadata_plotlevel_results_veg.xlsx"),
+  push = FALSE,
+  strict = TRUE,
+  branch = "develop"
 )
 
 # check: echt niet veranderd??
@@ -504,3 +568,18 @@ save_results_csv(
 **Eventueel ook access op gdrive plaatsen**
 
 
+# Copy html to teamdrive
+
+Na knitting - manueel
+
+```{r eval = FALSE}
+# Specify the path of the file you want to copy
+source_file <- here::here(paste0("Scripts/OpbouwDatabank/Main_UpdateForresdat_05_vegetation.html"))
+
+# Specify the destination directory where you want to copy the file
+destination_dir <- path_to_html_teamdrive
+
+# Copy the file to the destination directory
+file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
+# ? file.copy
+```
