@@ -1160,7 +1160,7 @@ deadw_by_decay_plot_species <- deadw_by_decay_plot_species_
 ```{r eval = FALSE}
 # onderstaande code werkt nog niet, want nog geen data opgeladen
 dendro_by_plot_git <- read_forresdat_table(tablename = "dendro_by_plot"
-                                           , join_plotinfo = TRUE
+                                           , join_plotinfo = FALSE
                                            , plottype = "all"
                                            , git_ref_type = "branch"
                                            , git_reference = "develop")

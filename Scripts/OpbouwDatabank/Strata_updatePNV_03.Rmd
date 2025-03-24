@@ -50,6 +50,7 @@ soil <- sqlFetch(con, "strata_soil")
 management <- sqlFetch(con, "strata_remaining")
 odbcClose(con)
 
+qPNV <- read_xlsx(paste0(path_to_strata, "legende_PNV.xlsx"))
 ```
 
 
@@ -134,6 +135,27 @@ con <- odbcConnectAccess2007(path_to_strata_db)
 sqlDrop(con, "strata_soil")
 sqlSave(con, strata_bodem, "strata_soil")
 
+# sqlDrop(con, "qPNV")
+# sqlSave(con, qPNV, "qPNV")
+
 odbcClose(con)
 ```
+
+
+Direct naar gdrive exporteren (csv): 
+naar **/PRJ_BOSECO_ALGEMEEN/PRJ_BR_AanvraagGegevens/00_METADATA-ALL_PLOTS/_strata_csv/**
+
+```{r save_strata_gdrive, eval = FALSE}
+pnv <- list(
+  strata_soil = strata_bodem,
+  qPNV = qPNV
+    )
+
+save_results_csv(
+    results = pnv,
+    output_dir = paste0(path_to_output_gdrive, "00_METADATA-ALL_PLOTS/_strata_csv/")
+    )
+
+```
+
 

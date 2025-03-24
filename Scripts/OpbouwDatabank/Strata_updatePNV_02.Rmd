@@ -51,11 +51,12 @@ source(here::here("scripts/Setup.R"))
 link_pnv_soil <- read_xlsx(paste0(path_to_strata, "NARA BODEMSERIE PNV VOOR ANJA.xlsx")) %>% 
   filter(ORI == "BR")
 
+qPNV <- read_xlsx(paste0(path_to_strata, "legende_PNV.xlsx"))
+
 con <- odbcConnectAccess2007(path_to_strata_db)
 soil <- sqlFetch(con, "strata_soil")
 management <- sqlFetch(con, "strata_remaining")
 odbcClose(con)
-
 
 # forest_reserve_plots_missing_pnv_aangevuld.csv
 extra_pnv <- read.csv2("C:/03_BR/1_DataVerwerkingBR/Data/Strata/input/forest_reserve_plots_missing_pnv_aangevuld.csv")
