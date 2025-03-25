@@ -126,7 +126,8 @@ dubbele_plotids <- df_strata_shp %>%
   filter(aantal > 1)
 
 df_strata_shp %>% inner_join(dubbele_plotids)
-# transecten van kernvlaktes, onderscheid via Unieknr
+# transecten van kernvlaktes, onderscheid via Unieknr 
+# ! enkel van belang bij bodem, alle andere strata zijn zelfde voor volledige kernvlakte
 ```
 
 > TMP: tijdelijk beheer van 6 plots in Kluisbos aanpassen, gevraagd aan Marc om dat in shapefile aan te passen
@@ -275,6 +276,27 @@ info_EUFORIA <- info_EUFORIA_ %>%
   select(forest_reserve_FM_adjusted, everything(), -`LPI_ID / SPI_ID`, -comment, -subarea)
 ```
 
+```{r}
+names(LINK_EUFORIA_fieldmap)
+
+LINK_EUFORIA_fieldmap <- LINK_EUFORIA_fieldmap %>% 
+  select(-comment, -subarea, -For_typ_1, - For_typ_2)
+
+
+nrow(LINK_EUFORIA_fieldmap) == nrow(info_EUFORIA)
+```
+
+
+```{r}
+names(LINK_EUFORIA_wildcard)
+
+LINK_EUFORIA_wildcard <- LINK_EUFORIA_wildcard %>% 
+  select(-For_typ_1, - For_typ_2)
+  
+
+```
+
+
 ### Wildcard  
 
 Tabel die link weergeeft tussen de naamgeving in Wildcard en Fieldmap.
@@ -323,6 +345,9 @@ plotdata0 <- info_survey %>%
   
 ```{r results = 'hide', eval = FALSE}
 names(link_WC_FM)
+
+link_WC_FM <- link_WC_FM %>% 
+  select(-comment, -subarea)
 ```
 
 
@@ -399,19 +424,25 @@ list_reserves <- plotinfo %>%
   unique()
 ```
 
-
 # Samenstellen resulterende tabellen
 
-In elke tabel wordt `Unieknr`, `plot_id`, `SiteName`, `SubArea` en `forest_reserve_fieldmap` als standaard variabele mee opgenomen, met uitzondering van de tabellen `info_survey` en `dominant tree`.  
+`Unieknr` wordt enkel behouden in de tabel "strata_bodem", meer specifiek bij plot_id 11000 (Zoniën KERN_1983),
+omdat daar de transecten niet steeds eenzelfde bodemtype hebben (historiek, locatie, beheer en klimaat zijn wel hetzelfde).
 
-`forest_reserve_fieldmap`: enkel beschikbaar voor processed data (processed mbv forrescalc)
+Alle andere tabellen behouden enkel `plot_id`.
+De link met `forest_reserve` kan gelegd worden via de tabel `info_survey` of de tabel `link_plotid_subarea`.
 
-*Even getwijfeld om de velden SiteName en SubArea enkel in tabel `info_survey` mee te nemen, om koppeling in latere R-scripts eenvoudig te houden. Maar omdat de naam in forresdat (forest_reserve) toch anders is, maakt het niet uit. Koppeling doen obv plot_id.*
-*!! Anderzijds: als er meerdere strata gekoppeld moeten worden, hebben we toch dat probleem. Daarom bij inladen van strata zo snel mogelijk enkel de relevante info weerhouden*
 
-```{r}
-basic_variables <- c("Unieknr", "plot_id", "SiteName", "SubArea", "forest_reserve_fieldmap")
-```
+<!-- als standaard variabele mee opgenomen, met uitzondering van de tabellen `info_survey` en `dominant tree`. -->
+
+<!-- `forest_reserve_fieldmap`: enkel beschikbaar voor processed data (processed mbv forrescalc) -->
+
+<!-- *Even getwijfeld om de velden SiteName en SubArea enkel in tabel `info_survey` mee te nemen, om koppeling in latere R-scripts eenvoudig te houden. Maar omdat de naam in forresdat (forest_reserve) toch anders is, maakt het niet uit. Koppeling doen obv plot_id.* -->
+<!-- *!! Anderzijds: als er meerdere strata gekoppeld moeten worden, hebben we toch dat probleem. Daarom bij inladen van strata zo snel mogelijk enkel de relevante info weerhouden* -->
+
+<!-- ```{r} -->
+<!-- basic_variables <- c("Unieknr", "plot_id", "SiteName", "SubArea", "forest_reserve_fieldmap") -->
+<!-- ``` -->
 
 
 # Statische strata
@@ -431,12 +462,19 @@ Voor klimaat (neerslag en temp) heb ik Current climate_30s_EU.lyr gebruikt. Bij 
 names(df_strata_shp)
 names(list_reserves)
 
-strata_klimaat <- df_strata_shp %>%
-  left_join(list_reserves) %>% 
-  select(all_of(basic_variables), contains(c("Regen", "Temp")))
+strata_klimaat <- df_strata_shp %>% 
+  filter(!Unieknr %in% c(32000, 11001:11006)) %>% 
+  select(plot_id, contains(c("Regen", "Temp")))
 
 names(strata_klimaat)
 head(strata_klimaat)
+
+# 
+t <- strata_klimaat %>% 
+  group_by(plot_id, Regen_jaar, Temp_jaar) %>% 
+  summarize(n  =  n()) %>% 
+  ungroup()
+
 ```
 
 
@@ -462,10 +500,9 @@ Referentie: Digitale bodemkaart van het Vlaams Gewest: bodemtypes, substraten, f
 ```{r strata_bodem}
 names(df_strata_shp)
 strata_bodem <- df_strata_shp %>%
-  left_join(list_reserves %>% select(-plottype)) %>%
-  select(basic_variables, 65:110) %>%    # shp via vpn
+  select(plot_id, 65:111) %>%    # shp via vpn
   # select(basic_variables, 52:100) %>%     # shp c-schijf
-  select(basic_variables,
+  select(plot_id,
          # international (WRB Soil Units 40k)
          soil_unit = Soil_unit,
          reference_soil_group = Referenc_1,
@@ -498,8 +535,8 @@ head(strata_bodem)
 
 ```{r strata_historiek_obv_shp_marc}
 strata_hist <- df_strata_shp %>% 
-  left_join(list_reserves %>% select(-plottype)) %>%
-  select(basic_variables, 30:64)
+  filter(!Unieknr %in% c(32000, 11001:11006)) %>% 
+  select(plot_id, 30:64)
 
 names(strata_hist)
 unique(strata_hist$Boshis_sam)
@@ -601,7 +638,7 @@ strata_hist_ <- strata_hist_ %>%
                                  & str_sub(hist_beknopt, 2, 2) == "0" ~ 2,
                                  hist_beknopt == "'1111" ~ 1
                                  )) %>% 
-  select(Unieknr, plot_id, SiteName, everything(), boslftd_cde) 
+  select(plot_id, everything(), boslftd_cde) 
 table(strata_hist_$boslftd_cde)
 ```
 
@@ -637,8 +674,8 @@ strata_hist_def <- strata_hist_
 ```{r strata_locatie}
 names(df_strata_shp)
 strata_locatie <- df_strata_shp %>% 
-  left_join(list_reserves %>% select(-plottype)) %>%
-  select(basic_variables, 4:10, 24:29,
+  filter(!Unieknr %in% c(32000, 11001:11006)) %>% 
+  select(plot_id, 4:10, 24:29,
          survey_Y1, survey_Y2, survey_Y3, survey_Y4, survey_Y5)
 
 names(strata_locatie)
@@ -892,6 +929,33 @@ strata_overige <- strata_overige_
 ```
 
 
+## Link plotid en subarea
+
+In shapefile Marc is naast de naam van het bosreservaat en het plottype, ook 
+SiteName en SubArea opgenomen.
+Deze blijken niet overeen te komen met de sites opgenomen in EUFORIA of wildcard.
+
+Andrzijds wordt hier wel extra onderscheid gemaakt bij bv. Kluisbos tussen het gemeentebos, 
+openbaar bos en bosreservaat.
+Dus die link is wel interessant.
+Maar beter op te nemen in een afzonderlijke tabel `link_plotid_subarea`.
+
+```{r link_plotid_subarea}
+names(df_strata_shp)
+link_plotid_subarea <- df_strata_shp %>%
+  filter(!Unieknr %in% c(32000, 11001:11006)) %>% 
+  left_join(list_reserves) %>% 
+  select(forest_reserve_fieldmap, plot_id, SiteName, SubArea)
+  
+```
+
+
+De link tussen plot-id en sites/subsites zoals opgenomen in de wildcard database
+wordt gelegd in het script "Wildcard_Flanders_plot_data.Rmd" in folder 
+"Scripts/INBO_Wildcard_EuFoRIa/AanvraagGegevens".
+
+Ook die tabel wordt weggeschreven naar de strata-db onder de naam "link_plotid_wildcard"
+
 
 # Dynamische strata
 
@@ -903,8 +967,8 @@ Info over dominante boomsoort als afzonderlijke tabel behouden, want is een dyna
 
 Dus één record per periode!
 
-Naast `MaxStamtal`, `MaxBasalArea` en `MaxStamtalSpeciesName`, `MaxBasalAreaSpeciesName`
-ook interessant om percentage te kennen: `Perc_MaxStamtal`, `Perc_MaxBasalArea` (22/2/2024 ingevoerd)
+Naast `MaxTreeNumber`, `MaxBasalArea` en `MaxTreeNumberSpeciesName`, `MaxBasalAreaSpeciesName`
+ook interessant om percentage te kennen: `Perc_MaxTreeNumber`, `Perc_MaxBasalArea` (22/2/2024 ingevoerd)
 
 ```{r bms_plotlevel_results}
 # dendro_by_plot_species <- read_vc(file = "dendro_by_plot_species", root = path_to_forresdat_data)
@@ -914,10 +978,10 @@ names(dendro_by_plot_species)
 
 dominant_tree <- dendro_by_plot_species %>% 
   arrange(desc(basal_area_alive_m2_ha)) %>% 
-  group_by(plot_id, period) %>% 
-  summarize(MaxStamtal=max(number_of_trees_ha),
+  group_by(plot_id, period, year) %>% 
+  summarize(MaxTreeNumber=max(number_of_trees_ha),
             MaxBasalArea=max(basal_area_alive_m2_ha),
-            MaxStamtalSpeciesID=species[which.max(number_of_trees_ha)[1]],     
+            MaxTreeNumberSpeciesID=species[which.max(number_of_trees_ha)[1]],     
             MaxBasalAreaSpeciesID=species[which.max(basal_area_alive_m2_ha)[1]],  
             ) %>% 
   ungroup() %>% 
@@ -926,14 +990,14 @@ dominant_tree <- dendro_by_plot_species %>%
 summary(dominant_tree)
 
 # zijn er waar stamtal of basal area 0 is voor alle soorten
-dominant_tree %>% filter(MaxStamtal == 0 & !is.na(MaxStamtalSpeciesID)) %>% nrow() == 1
-dominant_tree %>% filter(MaxStamtal == 0 & !is.na(MaxStamtalSpeciesID))
+dominant_tree %>% filter(MaxTreeNumber == 0 & !is.na(MaxTreeNumberSpeciesID)) %>% nrow() == 1
+dominant_tree %>% filter(MaxTreeNumber == 0 & !is.na(MaxTreeNumberSpeciesID))
 # ja, één plot: 475
 # ??waarom deze Lork? wellicht eerste soort => correctie in volgende chunck
 
 ```
 
-```{r link_species}
+```{r link_species, results='hide'}
 # qspecies <- read_vc(file = "qSpecies", root = path_to_forresdat_data) %>% 
   # select(ID, Value1)
 qspecies <- read.csv2(paste0(path_to_lulists_gdrive, "qspecies.csv")) %>% 
@@ -942,25 +1006,31 @@ qspecies <- read.csv2(paste0(path_to_lulists_gdrive, "qspecies.csv")) %>%
 # names(dominant_tree)
 
 dominant_tree_ <- dominant_tree %>% 
-  left_join(qspecies, by = c("MaxStamtalSpeciesID" = "ID")) %>% 
-  rename(MaxStamtalSpeciesName = Value1) %>% 
+  left_join(qspecies, by = c("MaxTreeNumberSpeciesID" = "ID")) %>% 
+  rename(MaxTreeNumberSpeciesName = Value1) %>% 
   left_join(qspecies, by = c("MaxBasalAreaSpeciesID" = "ID")) %>% 
   rename(MaxBasalAreaSpeciesName = Value1)
 
 # correctie voor plots zonder bomen
-col <- c("MaxStamtalSpeciesID", "MaxBasalAreaSpeciesID", 
-         "MaxStamtalSpeciesName", "MaxBasalAreaSpeciesName")
+col <- c("MaxTreeNumberSpeciesID", "MaxBasalAreaSpeciesID", 
+         "MaxTreeNumberSpeciesName", "MaxBasalAreaSpeciesName")
 
 for (i in col){
-  dominant_tree_[[i]] <- ifelse(dominant_tree_$MaxStamtal == 0, NA, dominant_tree_[[i]])
+  dominant_tree_[[i]] <- ifelse(dominant_tree_$MaxTreeNumber == 0, NA, dominant_tree_[[i]])
 }
 
 # is aanpassing gelukt? 
-dominant_tree_ %>% filter(MaxStamtal == 0 & !is.na(MaxStamtalSpeciesID)) %>% nrow() == 0
+dominant_tree_ %>% filter(MaxTreeNumber == 0 & !is.na(MaxTreeNumberSpeciesID)) %>% nrow() == 0
 # JA
 
 dominant_tree <- dominant_tree_ %>% 
-  filter(!is.na(MaxStamtalSpeciesID))
+  filter(!is.na(MaxTreeNumberSpeciesID))
+
+# ? 14 records minder
+t <- dominant_tree_ %>% 
+  anti_join(dominant_tree)
+unique(t$plot_id)
+# 475 en enamebos => OK
 ```
 
 
@@ -982,7 +1052,7 @@ dominant_tree_ %>%
   nrow() == 0
 
 dominant_tree_ %>% 
-  mutate(check = round(number_of_trees_ha, 1) < MaxStamtal) %>% 
+  mutate(check = round(number_of_trees_ha, 1) < MaxTreeNumber) %>% 
   filter(check) %>% 
   nrow() == 0
 
@@ -990,13 +1060,13 @@ dominant_tree_ %>%
 names(dominant_tree_)
 # calc percentage
 dominant_tree_ <- dominant_tree_ %>% 
-  mutate(Perc_MaxStamtal = round(100*MaxStamtal/round(number_of_trees_ha, 1), 1),
+  mutate(Perc_MaxTreeNumber = round(100*MaxTreeNumber/round(number_of_trees_ha, 1), 1),
          Perc_MaxBasalArea = round(100*MaxBasalArea/round(basal_area_alive_m2_ha,1), 1)
          # 2x afronden anders soms 100.1 %
          ) %>% 
-  select(plot_id, period,
-         MaxStamtalSpeciesID, MaxStamtalSpeciesName,
-         MaxStamtal, Perc_MaxStamtal, 
+  select(plot_id, period, year,
+         MaxTreeNumberSpeciesID, MaxTreeNumberSpeciesName,
+         MaxTreeNumber, Perc_MaxTreeNumber, 
          # number_of_trees_ha,
          MaxBasalAreaSpeciesID, MaxBasalAreaSpeciesName,
          MaxBasalArea, Perc_MaxBasalArea
@@ -1006,6 +1076,7 @@ dominant_tree_ <- dominant_tree_ %>%
 summary(dominant_tree_)
 
 dominant_tree <- dominant_tree_ 
+names(dominant_tree)
 ```
 
 
@@ -1173,8 +1244,8 @@ Eén record per plot.
 names(df_strata_shp)
 
 plotinfo_shp <- df_strata_shp %>% 
-  left_join(list_reserves %>% select(-plottype)) %>% 
-  select(basic_variables, plottype_txt = PlotType, plotsize_dendro = DendroPlot, plotsize_veg = VegePlot, survey_Y1, survey_Y2, survey_Y3, survey_Y4, survey_Y5)
+  filter(!Unieknr %in% c(32000, 11001:11006)) %>% 
+  select(plot_id, plottype_txt = PlotType, plotsize_dendro = DendroPlot, plotsize_veg = VegePlot, survey_Y1, survey_Y2, survey_Y3, survey_Y4, survey_Y5)
 
 # plotinfo_shp %>% filter(PlotSize != DendroPlot)
 
@@ -1268,8 +1339,7 @@ names(plotinfo_shp)  # Unieknr => plot_id niet uniek
 
 plotinfo_def <- plotinfo2 %>% 
   left_join(plotinfo_shp, by = c("plot_id")) %>% 
-  select(Unieknr, plot_id, forest_reserve, 
-         plottype, plottype_txt,
+  select(forest_reserve, plot_id, plottype, plottype_txt,
          survey_trees, survey_deadw, survey_lis, survey_reg, survey_veg, data_processed,
          period, survey_number, year_dendro = year, date_dendro = Date_Dendro,
          rA1_m, rA2_m, rA3_m, rA4_m,
@@ -1360,6 +1430,7 @@ strata <- list(
       link_wildcard_fieldmap = link_WC_FM,
       link_EUFORIA_fieldmap = LINK_EUFORIA_fieldmap,
       link_EUFORIA_wildcard = LINK_EUFORIA_wildcard,
+      link_plotid_subarea = link_plotid_subarea,
       plots_excluded_from_network = plots_to_exclude
     )
 
@@ -1417,10 +1488,41 @@ Ook naar forresdat sinds 24/3/2025
 
 > kan pas als metadata in orde is
 
-```{r save_strata_git, eval = FALSE}
-# geen plotinfo naar git
+```{r save_relations_git, eval = FALSE}
+# relations_other_projects
+relations <- list(
+      info_euforia = info_EUFORIA,
+      link_wildcard_fieldmap = link_WC_FM,
+      link_euforia_fieldmap = LINK_EUFORIA_fieldmap,
+      link_euforia_wildcard = LINK_EUFORIA_wildcard,
+      link_plotid_subarea = link_plotid_subarea
+    ) 
+
 save_results_forresdat(
-  results = strata,
+  results = relations,
+  repo_path = path_to_git_forresdat,
+  metadata_path = paste0(path_to_metadata, "_metadata_relations_other_projects.xlsx"),
+  push = FALSE,
+  strict = TRUE,
+  branch = "develop"
+)
+
+```
+
+
+```{r save_strata_git, eval = FALSE}
+# strikte strata
+strata_strikt <- list(
+      q_hist = qHist,
+      # strata_soil = strata_bodem,  # !! bevat ook PNV dat in ander script toegevoegd wordt
+      strata_climate = strata_klimaat,
+      strata_history = strata_hist_def,
+      strata_location = strata_locatie,
+      dominant_tree = dominant_tree,
+      plots_excluded_from_network = plots_to_exclude
+    )
+save_results_forresdat(
+  results = strata_strikt,
   repo_path = path_to_git_forresdat,
   metadata_path = paste0(path_to_metadata, "_metadata_strata.xlsx"),
   push = FALSE,
