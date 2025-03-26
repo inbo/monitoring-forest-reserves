@@ -1885,7 +1885,7 @@ plotdata_def_link <- plotdata_def %>%
 nrow(plotdata_def_link) == nrow(plotdata_def) 
 ```
 
-```{r EXTRA_link_plots_wildcard_voor_strata_db, results='hide'}
+```{r EXTRA_link_plots_wildcard_voor_strata_db, results='hide', eval = FALSE}
 names(plotdata0)
 names(link_WC_FM)
 
