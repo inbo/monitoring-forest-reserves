@@ -232,11 +232,6 @@ con <- odbcConnectAccess2007(path_to_strata_db)
     select(Unieknr, plot_id, SiteName, SubArea, forest_reserve_fieldmap)
 odbcClose(con)
 
-# unieknr 11001 tem 11006 zijn delen van Kerss
-info_survey_ <- info_survey_ %>% 
-  filter(!Unieknr %in% c(11001, 11002, 11003, 11004, 11005, 11006))
-
-
 # strata_soil enkel nodig om SubArea van Sevendonck te onderscheiden (A vs Q)
 # andere subarea's zijn enkel verwarrend en hier niet nodig
 subarea_sevendonck <- strata_soil %>% 
@@ -251,7 +246,8 @@ subarea_sevendonck <- strata_soil %>%
 # <!-- (dat blijkt nu toch niet zo te zijn, maar we laten het zo voor wildcard) -->
 # **=> we don't include the inventory of 1986**
 info_survey <- info_survey_ %>% 
-  filter(!(plot_id == 11000 & period == 0))
+  filter(!(plot_id == 11000 & period == 0)) %>% 
+  rename(forest_reserve_fieldmap = forest_reserve)
 ```
 
 ## Strata
@@ -295,7 +291,7 @@ t <- unmanaged %>%
 # names(info_survey)
 poplar_kluisbos <- info_survey %>% 
   left_join(dominant_tree) %>% 
-  filter(forest_reserve == "Kluisbos" & MaxBasalAreaSpeciesName == "Populier species") %>% 
+  filter(forest_reserve_fieldmap == "Kluisbos" & MaxBasalAreaSpeciesName == "Populier species") %>% 
   select(plot_id)
 
 unique(poplar_kluisbos$plot_id)
@@ -315,14 +311,12 @@ SPI_ID	Plot ID in Sampling plot inventory (SPI) grid within the site (reserve).
 
 ```{r results = 'hide'}
 names(info_survey)
-info_survey <- info_survey %>% 
-  rename(forest_reserve_fieldmap = forest_reserve)
 
 # tijdelijk nog geen link leggen - mogelijks aan Yannick overlaten
 plotdata0 <- info_survey %>%
   # enkel plots waar XY van berekend is => inner_join
   # (niet 52000 en 61000: immers enkel 1eSet een opname, dan niet meer)
-  inner_join(info_XY %>% select(Unieknr, XLon_wgs84, YLat_wgs84, Z_m_TAW), by = c("Unieknr")) %>% 
+  inner_join(info_XY %>% select(plot_id, XLon_wgs84, YLat_wgs84, Z_m_TAW), by = c("plot_id")) %>% 
   # left_join(link_WC_FM, by = c(forest_reserve_fieldmap", plottype))
   left_join(info_beheer) %>% 
   filter(Management == "unmanaged") %>% 
@@ -1890,6 +1884,49 @@ plotdata_def_link <- plotdata_def %>%
 
 nrow(plotdata_def_link) == nrow(plotdata_def) 
 ```
+
+```{r EXTRA_link_plots_wildcard_voor_strata_db, results='hide'}
+names(plotdata0)
+names(link_WC_FM)
+
+link_plotid_wildcard <- plotdata0 %>% 
+  select(plot_id, plottype, forest_reserve_fieldmap, forest_reserve_FM_adjusted) %>% 
+  unique() %>% # 848
+  left_join(link_WC_FM %>% select(-comment, -subarea, -`LPI_ID / SPI_ID`)
+            , by = c("forest_reserve_FM_adjusted", "plottype")) %>% 
+  select(plot_id, forest_reserve_fieldmap, 
+         SITE_ID, SITE_NAME, WILDCARD_sub_ID, composed_site_id)
+
+# als list
+tmp_to_stratadb <- list(link_plotid_wildcard = link_plotid_wildcard)
+
+# access op c-schijf
+save_results_access (
+  results = tmp_to_stratadb,
+  database = path_to_strata_db,
+  remove_tables = TRUE
+  )
+
+# gdrive als csv
+save_results_csv(
+    results = tmp_to_stratadb,
+    output_dir = paste0(path_to_output_gdrive, "00_METADATA-ALL_PLOTS/_strata_csv/")
+    )
+
+# gitrepo forresdat
+save_results_forresdat(
+  results = tmp_to_stratadb,
+  repo_path = path_to_git_forresdat,
+  metadata_path = paste0(path_to_metadata, "_metadata_relations_other_projects.xlsx"),
+  push = FALSE,
+  strict = TRUE,
+  branch = "develop"
+)
+```
+
+
+
+
 
 ```{r results='hide'}
 # check
