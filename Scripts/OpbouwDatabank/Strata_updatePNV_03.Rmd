@@ -78,7 +78,7 @@ check %>% group_by(Unieknr, plot_id) %>%  summarize(n = n()) %>%
 
 check_OB <- check %>% 
   inner_join(check3) %>% 
-  left_join(management %>% select(Unieknr, plot_id, SiteName)) %>% 
+  left_join(management %>% select(plot_id, SiteName)) %>% 
   unique()
 
 table(check_OB$SiteName)

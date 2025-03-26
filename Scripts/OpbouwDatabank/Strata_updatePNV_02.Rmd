@@ -54,7 +54,7 @@ link_pnv_soil <- read_xlsx(paste0(path_to_strata, "NARA BODEMSERIE PNV VOOR ANJA
 qPNV <- read_xlsx(paste0(path_to_strata, "legende_PNV.xlsx"))
 
 con <- odbcConnectAccess2007(path_to_strata_db)
-soil <- sqlFetch(con, "strata_soil")
+soil <- sqlFetch(con, "strata_soil") %>% select(-PNV)
 management <- sqlFetch(con, "strata_remaining")
 odbcClose(con)
 
@@ -97,7 +97,7 @@ check %>% group_by(Unieknr, plot_id) %>%  summarize(n = n()) %>%
 
 check_OB <- check %>% 
   inner_join(check3) %>% 
-  left_join(management %>% select(Unieknr, plot_id, SiteName)) %>% 
+  left_join(management %>% select(plot_id, SiteName)) %>% 
   unique()
 
 table(check_OB$SiteName)
