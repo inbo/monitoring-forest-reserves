@@ -267,7 +267,7 @@ info_EUFORIA_ <- info_EUFORIA %>%
             by = c("reserve_name_euforia" = "reserve_name"
                    , "res_ID_inst", "institute", "plottype"
                    , "For_typ_1", "For_typ_2")) %>% 
-  select(forest_reserve = forest_reserve_fieldmap, plottype
+  select(forest_reserve_fieldmap, plottype
          , updated_EUFORIA = Updated, everything())
 
 names(info_EUFORIA_)
@@ -358,28 +358,23 @@ Info overgenomen uit methodiekrapport en aangevuld met info uit "00_referentiefi
 ```{r import_data_forest_reserve2}
 # uit Methodiekrapport 
 con <- odbcConnectAccess2007(path_to_strata_db)
-  management_methodiekrapport <- sqlFetch(con, "forest_reserve_management", stringsAsFactors = FALSE)  # reserve establishment date
+  management_methodiekrapport <- sqlFetch(con, "methodiekrapport_info_beheer", stringsAsFactors = FALSE)  # reserve establishment date
 odbcClose(con)
 
 names(management_methodiekrapport)
+
 ```
 
 
 **? verschil met EUFORIA database** 
 
-- Everzwijnbad: op niveau van plots doorgegegevn aan Euforia --> 1995 ipv 2000
-- Sevendonck Alnus en Quercus samen bij Euforia --> 1995 (wij Alnus: 1987)
-<!-- - Core area's: `plots_unmanaged_since` wijkt soms af van de cirkelplots -->
-
-Lijkt OK!
-
-```{r}
+```{r diff_euforia}
 names(info_EUFORIA)
 
 check <- info_EUFORIA %>% 
-  select(forest_reserve_FM_adjusted, plottype, year_reserve
+  select(forest_reserve_fieldmap, plottype, year_reserve
          , year_abandonment) %>% 
-  left_join(management_methodiekrapport %>% select(forest_reserve_FM_adjusted, plottype
+  left_join(management_methodiekrapport %>% select(forest_reserve_fieldmap, plottype
                                                    , reserve_establishment_yr
                                                    , reserve_unmanaged_since
                                                    , plots_unmanaged_since))
@@ -389,17 +384,20 @@ check %>% filter(year_abandonment != plots_unmanaged_since) %>%
   select(-year_reserve, - reserve_establishment_yr) %>% 
   rename(year_abandonment_EUFORIA = year_abandonment) %>% 
   filter(plottype == "CP")
-# wij hebben sevendonck Alnus afgesplitst van Sevendocnk Quercus, volledig reesrvaat idd 1995
+# Ename en Kolmont
 
 check %>% filter(year_abandonment != reserve_unmanaged_since) %>% 
   select(-year_reserve, - reserve_establishment_yr) %>% 
   rename(year_abandonment_EUFORIA = year_abandonment) %>% 
   filter(plottype == "CP")
-# Everzwijnbad: op niveau van plots doorgegegevn aan Euforia: OK
+# Everzwijnbad: op niveau van plots doorgegegeven aan Euforia: OK
 ```
 
+- Everzwijnbad: op niveau van plots doorgegegeven aan Euforia --> 1995 ipv 2000 - OK
 
-
+- Ename: 2000 doorgegeven aan Euforia versus 1990 in methodiekrapport? --> gemaild naar Yannick en Kris op 26/3/2025
+Antwoord: `year_abandonment_EUFORIA` moet ook 1990 worden => aangepast in eigen excel-file op c-schijf
+<!-- - Core area's: `plots_unmanaged_since` wijkt soms af van de cirkelplots -->
 
 
 ## Plotinfo forrescalc
@@ -423,6 +421,7 @@ list_reserves <- plotinfo %>%
          forest_reserve_fieldmap = forest_reserve) %>% 
   unique()
 ```
+
 
 # Samenstellen resulterende tabellen
 
@@ -500,9 +499,9 @@ Referentie: Digitale bodemkaart van het Vlaams Gewest: bodemtypes, substraten, f
 ```{r strata_bodem}
 names(df_strata_shp)
 strata_bodem <- df_strata_shp %>%
-  select(plot_id, 65:111) %>%    # shp via vpn
+  select(Unieknr, plot_id, 65:111) %>%    # shp via vpn
   # select(basic_variables, 52:100) %>%     # shp c-schijf
-  select(plot_id,
+  select(plot_id, Unieknr, 
          # international (WRB Soil Units 40k)
          soil_unit = Soil_unit,
          reference_soil_group = Referenc_1,
@@ -555,59 +554,8 @@ Zelf aanmaken van bosleeftijdscode cfr bosleeftijdskaart, door 0 en 1 toe te voe
 
 Volgens Marc is dit immers correcter dan overlay met de bosleeftijdskaart (mail 24/10/2022).
 
-
 <!-- 'k Vind bij mij ook geen antwoord-e-briefje over je opmerkingen na je overlay van "alle proefvlakken" met de boshistoriek. Je vond verschillen tussen wat er in de shp-tabel stond en wat je extraheerde uit de nieuwe boshistoriek. Er zijn inderdaad verschillen: (als ik me goed herinner) waren er 2 fouten - heb ik gecorrigeerd. -->
 <!-- De andere verschillen gaan over grensgevallen: "alle proefvlakken" is hier nauwkeuriger (punt per punt bekeken). Ik heb polygonen van de afzonderlijke lagen uit de boshistoriek gecorrigeerd (vnl. DG3 is eerder onnauwkeurig), maar ik heb nog geen nieuwe boshistoriek (overlay) gemaakt.  -->
-
-```{r boslftd_afgeleid_van_shp_marc, eval = FALSE}
-# Hierna controle en begrip dataset - niet meer nodig 
-# names(strata_hist)
-# 
-# strata_hist_ <- strata_hist %>%
-#   mutate(Ferr_bos = ifelse(str_detect(Ferr, "B") & Ferr != "H/B" & !str_detect(Ferr, "\\+"), 1, 0)
-#          , VDM_bos = ifelse(str_detect(VDM, "B") & VDM != "H/B" & !str_detect(VDM, "\\+"), 1, 0)
-#          , DG3_bos = ifelse(str_detect(DG3, "B") & DG3 != "H/B", 1, 0)
-#          , NGI2_bos = ifelse(str_detect(NGI2, "B") & NGI2 != "H/B", 1, 0)
-#   ) %>%
-#   mutate(Boshis_sam_beknopt = paste0("\'", Ferr_bos, VDM_bos, DG3_bos, NGI2_bos)) %>%
-#   mutate(Boshis_sam_extract = paste0("\'", as.character(str_sub(Boshis_sam, 1,2))
-#                                      , as.character(str_sub(Boshis_sam, 6,6))
-#                                      , as.character(str_sub(Boshis_sam, 9,9))
-#                                      ),
-#          Boscontr_marc = paste0("\'", boscontr1)
-#          ) %>%
-#   select(-c(5:7), -contains(c("DG1", "DG2", "MGI", "NGI1", "Gkad"))) %>%
-#   mutate(zelfde_hist = ifelse(Boshis_sam_beknopt == Boshis_sam_extract, TRUE, FALSE)) %>% 
-#   mutate(zelfde_hist2 = ifelse(Boshis_sam_beknopt == Boscontr_marc, TRUE, FALSE))
-
-# strata_hist_ <- strata_hist %>% 
-#   mutate(Ferr_bos = ifelse(str_detect(Ferr, "B") & Ferr != "H/B" & !str_detect(Ferr, "\\+"), 1, 0)
-#          , VDM_bos = ifelse(str_detect(VDM, "B") & VDM != "H/B" & !str_detect(VDM, "\\+"), 1, 0)
-#          , DG3_bos = ifelse(str_detect(DG3, "B") & DG3 != "H/B", 1, 0)
-#          , NGI2_bos = ifelse(str_detect(NGI2, "B") & NGI2 != "H/B", 1, 0)
-#   ) %>% 
-#   mutate(Boshis_sam_beknopt = paste0(Ferr_bos, VDM_bos, DG3_bos, NGI2_bos)) %>% 
-#   mutate(Boshis_sam_extract = paste0(str_sub(Boshis_sam, 1,2)
-#                                      , str_sub(Boshis_sam, 6,6)
-#                                      , str_sub(Boshis_sam, 9,9)
-#                                      )
-#          ) %>% 
-#   select(-c(5:7), -contains(c("DG1", "DG2", "MGI", "NGI1", "Gkad"))) %>% 
-#   mutate(zelfde_hist = ifelse(Boshis_sam_beknopt == Boshis_sam_extract, TRUE, FALSE))
-
-# check_verschil <- strata_hist_ %>% 
-#   filter(zelfde_hist == FALSE | zelfde_hist2 == FALSE)
-# 
-# 
-# write.csv2(check_verschil, here::here("output/Muizenbos_hist_afwijkend.csv"))
-# 
-# check_NA <- strata_hist_ %>% 
-#   filter(is.na(zelfde_hist))
-# 0
-# logisch, want voor elke plot een historiek bepaald door Marc
-
-
-```
 
 
 ### Bosleeftijd
@@ -664,6 +612,7 @@ names(strata_hist_)
 
 
 strata_hist_def <- strata_hist_ 
+summary(strata_hist_def)
 
 ```
 
