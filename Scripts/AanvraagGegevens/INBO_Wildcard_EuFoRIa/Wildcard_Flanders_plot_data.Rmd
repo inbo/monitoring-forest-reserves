@@ -55,7 +55,7 @@ path_to_datacontrol <- paste0(path_to_project_teamdrive, "/datacontrole/")
 
 <!-- De eerste analyse gebeurde op de fieldmapdb van 13/6/2024,  -->
 <!-- maar in db van 5/12/2024 zijn de 4 sites van Zoniën duidelijk afgelijnd,  -->
-<!-- dus moeten we toch van de meest recente db vertrekken (MDB_BR_X8_inbo2020_20241205) -->
+<!-- dus moeten we toch van deze db vertrekken (MDB_BR_X8_inbo2020_20241205) -->
 
 ```{r TEMP_db}
 # path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_X8_inbo2020_20240613/")
@@ -63,6 +63,10 @@ path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_X8_inbo2020_20241205/")
 
 dbFieldmap <- "FieldMapData_MDB_BR_X8_inbo2020.accdb"
 path_to_fieldmap_db <- paste0(path_to_fieldmap, dbFieldmap)
+
+print(paste0("Brondata: ", path_to_fieldmap))
+
+# deze databank bevat nog geen "processed" data van Withoefse heide periode 3
 ```
 
 
@@ -1885,6 +1889,9 @@ plotdata_def_link <- plotdata_def %>%
 nrow(plotdata_def_link) == nrow(plotdata_def) 
 ```
 
+Als extra wordt in onderstaande code de relatie tussen Wildcard naamgeving en de plot_id's uit de 
+fieldmap-databank weggeschreven naar de strata-db en naar forresdat.
+
 ```{r EXTRA_link_plots_wildcard_voor_strata_db, results='hide', eval = FALSE}
 names(plotdata0)
 names(link_WC_FM)
@@ -2043,17 +2050,8 @@ ipv veld "BOUNDARY" in DESIGN.txt (gevraagd aan Yannick (mail 25/9/2024)):
 summary(lying_link)
 # 45 NA's voor D1/2: OK, want intacte bomen
 # 87 NA's voor decay - OK, kan
-names(lying)
-names(lying0)
-lying0 %>% filter(is.na(calc_volume_m3)) %>% nrow() == 0
-# t <- lying0 %>% 
-#   filter(is.na(calc_volume_m3)) %>% 
-#   select(forest_reserve, plottype
-#          , plot_id, period, year, lying_deadw_id
-#          , intact_fragm
-#          , species
-#          , contains(c("calc", "total", "diam", "vol")))
-# t %>% distinct(forest_reserve, plottype)
+names(lying_link)
+lying_link %>% filter(is.na(VOLUME)) %>% nrow() == 0
 # period 3: nog niet bijgewerkt (calc_volume inside plot en bijwerken calc_volume)
 # ok 25/9/2024
 
@@ -2235,6 +2233,8 @@ lying_check <- read.table(paste0(path_to_datarequest_teamdrive, "INBO_Lying.txt"
                            , sep = " ", dec = ".")
 head(lying_check)
 names(lying_check)
+
+lying_check %>% filter(is.na(VOLUME)) %>% nrow() == 0
 
 #
 # cwd_check <- read.table(paste0(path_to_datarequest_teamdrive, "INBO_CWD.txt")
