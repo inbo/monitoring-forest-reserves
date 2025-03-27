@@ -94,6 +94,18 @@ qSpecies <- qSpecies %>% select(ID, name_nl = Value1, name_sc = Value2)
 qHeightClass <- qHeightClass %>% select(ID, heightclass_txt = Value1)
 ```
 
+# Inladen strata
+
+OPGEPAST: sommige plots nog beheerd na start van monitoringnetwerk
+
+```{r }
+con <- odbcConnectAccess2007(path_to_strata_db)
+strata_remaining <- sqlFetch(con, "strata_remaining", stringsAsFactors = FALSE)
+plots_excluded_from_network <- sqlFetch(con, "plots_excluded_from_network", stringsAsFactors = FALSE)
+# = plots waar beheer gebeurd is ergens na start van monitoringnetwerk
+odbcClose(con)
+
+```
 
 # Inladen plotinfo
 

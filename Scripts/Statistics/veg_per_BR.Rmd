@@ -104,6 +104,21 @@ plotinfo <- read_forresdat("plotinfo", repo_path = path_to_git_forresdat, join_p
 
 ```
 
+
+# Inladen strata
+
+OPGEPAST: sommige plots nog beheerd na start van monitoringnetwerk
+
+```{r }
+con <- odbcConnectAccess2007(path_to_strata_db)
+strata_remaining <- sqlFetch(con, "strata_remaining", stringsAsFactors = FALSE)
+plots_excluded_from_network <- sqlFetch(con, "plots_excluded_from_network", stringsAsFactors = FALSE)
+# = plots waar beheer gebeurd is ergens na start van monitoringnetwerk
+odbcClose(con)
+
+```
+
+
 # Enkel bosplots
 
 Zie functie get_forest_plot
