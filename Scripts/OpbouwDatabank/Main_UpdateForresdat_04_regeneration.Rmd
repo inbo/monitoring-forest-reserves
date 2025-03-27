@@ -578,14 +578,6 @@ save_results_forresdat(
 ```
 
 
-```{r save_reg_git_manueel, eval = FALSE}
-# manueel - eigen simpele functie
-save_results_tsv(regeneration, 
-                 root = path_to_forresdat_data,
-                 strict = FALSE)
-```
-
-
 ```{r save_reg_access_csv, eval = FALSE}
 save_results_csv (
   results = reg_plotinfo,

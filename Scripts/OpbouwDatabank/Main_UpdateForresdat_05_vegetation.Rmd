@@ -82,7 +82,7 @@ path_to_meetgegevens
 # Load plotinfo
 
 Plotinfo inladen: `plottype`, naam `forest_reserve` en info over survey's.
-(plotinfo op gdrive en forresdat: enkel processed plots!)
+(plotinfo: enkel processed plots!)
 
 ```{r }
 # mbv forresdat
@@ -169,199 +169,105 @@ col <- c("number_of_species", "cumm_herb_coverage_class_average_perc")
 veg_by_plot %>% filter_at(col, any_vars(is.na(.))) %>% 
   filter(number_of_species != 0) %>% nrow() == 0
 # 122 met cumm_herb_coverage_class_average_perc = NA, allemaal aantal soorten = 0
+veg_by_plot %>% filter_at(col, any_vars(is.na(.))) %>% nrow()
+```
+
+In `data_herblayer` wordt een record met species = NA toegevoegd voor elke plot waar een opname gebeurd
+is. Dus elke plot met een veg-opname is opgenomen in `data_herblayer` = `herblayer_by_plot`.
+
+```{r check_species_NA}
+n_distinct(data_herblayer$plot_id, data_herblayer$period) == 
+  n_distinct(data_vegetation$plot_id, data_vegetation$period)
+# Doordat in herblayer een record met species = NA wordt toegevoegd voor elke plot waar een opname gebeurd
+# is, zijn er hier rare NA's
+
+data_herblayer %>% filter(is.na(species)) %>% nrow() ==
+  veg_by_plot %>% filter(number_of_species == 0) %>% nrow()
 
 ```
 
-Doordat in herblayer een record met species = NA wordt toegevoegd voor elke plot waar een opname gebeurd
-is, zijn er hier rare NA's
+Aanpassing in forrescalc gedaan (branch "bugfix_AL2") functie `load_data_herblayer`:
+toevoegen van "AND Herb.species IS NOT NULL"
 
-
-Op te lossen is alvast feit dat bij bv plot 41000 (species = NA MAAR browsing is 100)
-wegens load_data_herblayer:
- IIf(Herb.browse_index_id IS NULL AND pd.GameImpactVegObserved = 10,
+```
+ IIf(Herb.browse_index_id IS NULL AND pd.GameImpactVegObserved = 10
+    AND Herb.species IS NOT NULL,
              100, Herb.browse_index_id) AS browse_index_id,
-             
-daar zou extra vwdde moeten zijn dat er een soort is?
-anderzijds bij percentage browing misschein wel ok
+```
+
+(ervoor: plot 410000, period 3, species = NA én browse_index_id = 100 = "geen vraatschade")
+
+```{r browse_index_species_NA}
+names(veg_by_core_area_species)
+names(data_herblayer)
+
+data_herblayer %>% filter(plot_id == 41000 & is.na(species))
+data_herblayer %>% filter(plot_id == 41000 & subplot_id == 22)
+# period 3, browse-index = 100 "Geen vraatschade", maar er is ook geen soort genoteerd!!
+# dat zou eerder NA moeten zijn
+# bij period 1 & 2 geen opname gebeurd => browse-index = NA
+
+# als dit doorgerekend wordt naar veg_by_core_area_species, ook niet OK
+veg_by_core_area_species %>% filter(plot_id == 41000 & is.na(species))
+# number_of_subplots_with_species = 1  (species = NA)
+# number_of_subplots_browsed = 0
+# HEEFT GEEN BETEKENIS!!!
+
+# komt dit ook voor bij bv. cirkelplots? NEE
+data_herblayer %>% filter(is.na(species) & !is.na(browse_index_id) & plottype == "CP") %>% 
+  nrow() == 0
+data_herblayer %>% left_join(plotinfo) %>% 
+  filter(is.na(species) & game_impact_veg == TRUE) %>% 
+  nrow() == 0
+```
 
 
-Dan zijn er 2 plots waar tijdens 1e set niet alle subplots opgemeten werden, 
-waardoor er 40 subplots zijn met soort = NA én jaart al = NA
-
-
-(11000: ook 40 plots met species = AN, maar daar wel een jaartal => dat duidt onderscheid met waar
-dan wél een opname gebeurd is)
-
-Op te kuisen!!!
-            
-```{r}
+```{r subplots_without_species}
 names(veg_by_core_area_species)
 
 col <- c("number_of_subplots_with_species", "perc_of_subplots", "mean_coverage_class_average_perc")
 
-t <- veg_by_core_area_species %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+veg_by_core_area_species %>% filter_at(col, any_vars(is.na(.))) %>% nrow()
+t <- veg_by_core_area_species %>% filter_at(col, any_vars(is.na(.)))
 # 4 records met mean_coverage_class_average_perc = NA wegens species = NA
-
 t1 <- data_herblayer %>% filter(plottype == "CA" & is.na(species))
-# bv. 11000 - periode 1: 750 subplots 
+unique(t1$plot_id)
+# [1] 11000 31000 43000 41000
+# [1] 11000 41000
 
-
-# bv. plot 41000: species = NA en browsing ;s 100
-# wegens load_data_herblayer:
-# IIf(Herb.browse_index_id IS NULL AND pd.GameImpactVegObserved = 10,
-#             100, Herb.browse_index_id) AS browse_index_id,
-
-# 31000 en 43000: 40 subplots zodnder species peroide 1 = omdat ze niet opgemeten zijn
-# jaartal is ook NA
-
-# 11000: idem, maar daar is wel een jaartal ingevuld?
-
-t2 <- data_herblayer %>% filter(plottype == "CP" & is.na(species))
 
 ```
 
-# TEMP: browse_index niet ingevuld: NA ipv 100 (no browsing)
 
-!! browse_index : NA in herblayer_by_plot, terwijl het 100 (= no browsing) zou moeten zijn (game_impact_veg  = TRUE bij plotinfo )
+- plot 11000 - periode 1: 750 subplots, maar slechts 710 mét kruidlaag
+=> 40 plot zonder species => `mean_coverage_class_average_perc` = NA - OK
+(`number_of_subplots_with_species` = 40)
+!! jaartal = 2000 = OK, want er was een opname
 
-!! heeft te maken met onvolledig aanvullen van FM-DC: NA zou 100 moeten worden bij voorafgaandelijke datacontrole
+- plot 41000: `species` = NA => `mean_coverage_class_average_perc` = NA - OK
 
-? bij welke bosreservaten komt dit voor? 
-Enkel 31000 41000 43000 (Hannecart en Rodebos)
+- plot 31000 en 43000: 40 subplots zonder species    
 
-> Hierna tijdelijke correctie (gevraagd aan Peter 17/1/2023)
+REDEN: in periode 1 werden deze 40 subplots niet opgemeten
+maar dat is niet opgenomen in plotdetails (veg_survey = TRUE), want dat is info 
+op plotniveau, niet de subplots    
+(11000: ook 40 plots met species = NA, maar daar wel een jaartal => dat duidt onderscheid met waar
+dan wél een opname gebeurd is)
+
+OPLOSSING: als jaartal = NA, dan moeten die records verwijderd worden uit data_herblayer
+=> aangepast in branch "bugfix_AL2" (27/3/2025)
+Bij berekening van `veg_by_core_area_species` worden deze dan ook niet meer meegenomen
+
 
 ```{r}
-check_brows_0 <- data_herblayer %>% 
-  left_join(plotinfo %>% select(plot_id, period, game_impact_veg)) %>% 
-  filter(is.na(browse_index_id)) %>% 
-  filter(game_impact_veg == TRUE) 
-           
-table(check_brows_0$plot_id, check_brows_0$period)
-#           2    3
-#   21000 1112    0
-#   31000    0  491
-#   41000    0  907
-#   43000    0  687
-```
-
-```{r corr_browseindex_NA}
-data_herblayer_ <- data_herblayer %>% 
-  left_join(plotinfo %>% select(plot_id, period, game_impact_veg),
-            by = c("plot_id", "period")) %>% 
-  mutate(browse_index_id = ifelse(is.na(browse_index_id) & game_impact_veg == TRUE,
-                                  100,
-                                  browse_index_id)) %>% 
-  select(-game_impact_veg)
-
-
-data_herblayer <- data_herblayer_
-```
-
-> Na correctie data_herblayer ook veg_by_core_area_species opnieuw laten berekenen
-(de andere plot-level-resultaten mbt vegetatie zijn OK, daar komt browsing niet in voor)
-
-```{r corr_browseindex_CA}
-check_CA_browsing <- veg_by_core_area_species %>% 
-  left_join(plotinfo %>% select(plot_id, period, game_impact_veg),
-            by = c("plot_id", "period")) %>% 
-  filter(is.na(perc_of_subplots_browsed)) %>% 
-  filter(game_impact_veg == TRUE) 
-
-table(check_CA_browsing$plot_id, check_CA_browsing$period)  
-  #       2  3
-  # 21000 29  0
-  # 31000  0 49
-  # 41000  0 29
-  # 43000  0 56
-
-# herberekenen met gecorrigeerde data_herblayer
-data_herblayer_CA <- data_herblayer %>%
-    filter(.data$plottype == "CA")
-
-veg_by_core_area_species_ <- calculate_vegetation_core_area_species(data_herblayer_CA)
-
-veg_by_core_area_species <- veg_by_core_area_species_
-
-```
-
-> Alle vegetatie-resultaten terug in een lijst stoppen
-
-```{r combine_veg}
-vegetation_ <- list(
-      veg_by_plot = veg_by_plot,
-      veg_by_core_area_species = veg_by_core_area_species
-    )
-
-vegetation <- vegetation_
+t2 <- data_herblayer %>% filter(plottype == "CP" & is.na(species))
+# plot 1176: OK, geen kruidlaag aanwezig 
 ```
 
 
+# Export vegetation - OK - 27/3/2025
 
-# TEMP controle KV Zoniën KERN_1983 - OPGELOST
-
-In de kernvlakte "Zoniën KERN_1983" werden slechts in 710 van de 750 subplots effectief soorten 
-genoteerd. Dus 40 subplots zonder kruidlaag. 
- <!-- (< monitoringrapport 2000: "In eerste instantie werden de 710 niet-lege opnamen  -->
- <!-- (i.c. zonder kruidlaag) door TWINSPAN geanalyseerd") -->
-
-Initieel werd `n_subplots` fout berekend bij periode 1: 710 ipv 750 (2eset wel OK, 140)
-19/3/2025: opgelost door aan herblayer ook de lege subplots toe te voegen (species = NA), 
-<!-- bij "query_herblayer" wordt immers vertrokken van plots en vegetation-layer,  -->
-<!-- met een left_join van herblayer -->
-
-```{r eval=FALSE}
-by_core_area_species <- data_herblayer %>%
-    group_by(.data$plot_id, .data$period, .data$plottype) %>%
-    mutate(
-      n_subplots = n_distinct(.data$subplot_id))
-
-t3 <- by_core_area_species %>% 
-  filter(plot_id == 11000 & is.na(species) & period == 1)
-nrow(t3) == 40 
-unique(t3$n_subplots) == 750
-
-# Forrescalc-code:
-
-# calculate_vegetation_core_area_species <- function(data_herblayer, data_vegetation) {
-#   by_core_area_species <- data_herblayer %>%
-#     group_by(.data$plot_id, .data$period) %>%
-#     mutate(
-#       n_subplots = n_distinct(.data$subplot_id))
-
-# load_data_herblayer <- ...
-#  query_herblayer <- ....
-        #  FROM ((((Plots
-        #           INNER JOIN PlotDetails_%1$deSet pd ON Plots.ID = pd.IDPlots)
-        #           INNER JOIN Vegetation%2$s Veg ON Plots.ID = Veg.IDPlots)
-        #           LEFT JOIN (
-        #             SELECT Herblayer.IDPlots,
-```
-
-```{r check_n_subplots_veg, eval = FALSE}
-# controle n_subplots door runnen van deel van de functie -> OK!!
-table(by_core_area_species$n_subplots)
-# 1    10    34    50    98   105   140   750 
-# 30312   441   653 11253 28567  6163  2285  4570
-
-```
-
-```{r check_veg_Kerss_KV, eval = FALSE}
-check_Kerss <- veg_by_core_area_species %>% 
-  filter(plot_id == 11000)
-
-veg_by_core_area_species %>% 
-  filter(plot_id == 11000 & species == 71)  # beuk
-# period = 2, zelfde resultaat als dataverwerking 2010 - OK
-# 123 subpolots -	 0,879 perc_subplots - 0.9 mean_coverage_class_average_perc 
-
-```
-
-Resultaten stemmen overeen met dataverwerking uit 2012.
-
-
-
-# Export vegetation
+Ook naar git exporteren
 
 ```{r join_plotinfo_veg}
 veg_plotinfo <- lapply(vegetation, function(x) left_join(x, plotinfo %>% select(plot_id, forest_reserve, plottype, period, survey_number), by = c("plot_id", "period")))
@@ -379,13 +285,6 @@ save_results_forresdat(
   strict = TRUE,
   branch = "develop"
 )
-```
-
-```{r save_veg_git_manueel, eval = FALSE}
-# manueel - eigen simpele functie - als save_results_git niet werkt
-save_results_tsv(vegetation, 
-                 root = path_to_forresdat_data, 
-                 strict = FALSE)
 ```
 
 
@@ -441,7 +340,6 @@ odbcClose(con)
 ```
 
 
-
 Direct naar gdrive exporteren (csv): 
 naar **/PRJ_BOSECO_ALGEMEEN/PRJ_BR_AanvraagGegevens/!METADATA-ALL_PLOTS/_plot-level-data/**
 
@@ -454,7 +352,7 @@ save_results_csv(
 ```
 
 
-# Export herblayer - OK - 19/1/2023
+# Export herblayer - OK - 19/1/2023 - 27/3/2025
 
 Ook herblayer naar forresdat wegschrijven
 
@@ -486,13 +384,11 @@ herblayer_list_git <- list(herblayer_by_plot = herblayer %>% select(-browse_inde
 
 ```
 
-
 ```{r join_plotinfo_herb}
 herb_plotinfo <- lapply(herblayer_list, function(x) left_join(x, plotinfo %>% select(plot_id, forest_reserve, plottype, period, survey_number), by = c("plot_id", "period")))
 # lapply: same function over all elements of the list
 
 ```
-
 
 ```{r save_herb_git, eval = FALSE}
 # geen plotinfo naar git
@@ -510,14 +406,6 @@ save_results_forresdat(
 # check %>% filter(plot_id == 41000 & period == 3 & browse_index_id == 100)
 # herblayer %>% filter(plot_id == 41000 & period == 3 & browse_index_id == 100)
 ```
-
-```{r save_herb_git_manueel, eval = FALSE}
-# manueel - eigen simpele functie - als save_results_git niet werkt
-save_results_tsv(herblayer_list_git, 
-                 root = path_to_forresdat_data, 
-                 strict = FALSE)
-```
-
 
 ```{r save_herb_access_csv, eval = FALSE}
 # volgende functie heb ik zelf geschreven, zit niet in het package!
