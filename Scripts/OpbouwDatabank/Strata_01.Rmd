@@ -789,7 +789,8 @@ Eerst data uit de shapefile: `Management` en `Beheer` (beschikbaar voor alle plo
 strata_overige_uit_shp <- df_strata_shp %>% 
   # left_join(list_reserves) %>%  #plottype en forest_reserve_fieldmap
   # select(forest_reserve_fieldmap, plot_id, plottype, Management, Beheer)
-  select(plot_id, Management, Beheer)
+  select(plot_id, Management, Beheer) %>% 
+  unique()
 # ev. SiteName, SubArea
   
 unique(strata_overige_uit_shp$Management)
@@ -1487,6 +1488,8 @@ strata <- list(
       link_plotid_subarea = link_plotid_subarea
     )
 
+# strata <- list(strata_remaining = strata_overige)
+
 save_results_csv(
     results = strata,
     output_dir = paste0(path_to_output_gdrive, "00_METADATA-ALL_PLOTS/_strata_csv/")
@@ -1537,12 +1540,14 @@ strata_strict <- list(
       info_survey = plotinfo_def
     )
 
+# strata_strict <- strata
+
 save_results_forresdat(
   results = strata_strict,
   repo_path = path_to_git_forresdat,
   metadata_path = paste0(path_to_metadata, "_metadata_strata.xlsx"),
   push = FALSE,
-  strict = FALSE,
+  strict = TRUE,
   branch = "develop"
 )
 
