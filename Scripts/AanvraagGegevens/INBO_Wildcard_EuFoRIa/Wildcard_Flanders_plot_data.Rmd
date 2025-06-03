@@ -2,7 +2,7 @@
 title: "Wildcard - Flemish forest reserve network"
 subtitle: "Design, plot en tree data"
 author: "Anja Leyman"
-date: "25/02/2025"  
+date: "02/06/2025"  
 output: 
   html_document:
     keep_md: FALSE
@@ -45,7 +45,7 @@ source(here::here("scripts/Setup.R"))
 path_to_project_teamdrive <- paste0(path_to_output_gdrive, "EUFORIA_WILDCARD_2024")
 
 # path_to_datarequest <- paste0(path_to_project, "/output/")
-path_to_datarequest_teamdrive <- paste0(path_to_project_teamdrive, "/output_R/")
+path_to_datarequest_teamdrive <- paste0(path_to_project_teamdrive, "/output_R/versie_gecorrigeerde_consistent_id/")
 path_to_html_teamdrive <- path_to_datarequest_teamdrive
 # path_to_html <- path_to_datarequest
 
@@ -59,7 +59,8 @@ path_to_datacontrol <- paste0(path_to_project_teamdrive, "/datacontrole/")
 
 ```{r TEMP_db}
 # path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_X8_inbo2020_20240613/")
-path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_X8_inbo2020_20241205/")
+# path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_X8_inbo2020_20241205/")
+path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_X8_inbo2020_20250123/")
 
 dbFieldmap <- "FieldMapData_MDB_BR_X8_inbo2020.accdb"
 path_to_fieldmap_db <- paste0(path_to_fieldmap, dbFieldmap)
@@ -176,7 +177,7 @@ path_to_datarequest_teamdrive
 - standing trees (L+D) in LPI-plot 11000 measured 
 in 1986 and 2000 have a treshold of 30 cm DBH (instead of 5 cm)
 
-- standing trees (L+D) measured in 1986 only contains trees still standing in 2000
+- standing trees (L+D) measured in LPI-plot 11000 in 1986 only contains trees still standing in 2000
 <!-- (dat blijkt nu toch niet zo te zijn, maar we laten het zo voor wildcard) -->
 **=> we don't include the inventory of 1986**
 
@@ -220,6 +221,7 @@ plotinfo <- read.csv2(paste0(path_to_plotlevel_gdrive, "plotinfo.csv")) %>%
 
 # ! enkel de processed data - dd 11/9/2024: nu ook Wijnendale en Everzwijnbad 3de decade erbij
 names(plotinfo)
+# rm(plotinfo)
 ```
 
 **We gaan enkel verder met de processed data.**   
@@ -461,15 +463,25 @@ plotdata %>% filter(plot_id == 11000)
 plotdata %>% filter(plot_id == 205)
 plotdata %>% filter(plot_id == 101)
 ```
-CONSISTENT_ID_STANDING: aanpassen voor "Zoniën UITBR_1995" & "Zoniën KERN_1983", 
+
+
+CONSISTENT_ID_STANDING: aanpassen voor "Zoniën UITBR_1995"
 CP's survey 2: niet gekoppeld, want rA3 gaat van 9m (survey 1) naar 12m (survey 2 en 3) 
 => "CONSISTENT_ID_STANDING": "NA" voor de 1ste periode (= standaard), én "N" voor de 2de periode
 
-```{r uitz_consistent_id_Kerss_CP}
+**FOUT gecorrigeerd 21/5/2025**
+Initieel was ook voor "Zoniën KERN_1983" dezelfde redenering gevolgd,
+MAAR deze plots werden niet opgemeten in 2000, enkel uitgesneden uit de kernvlakte
+Deze worden hier niet aangeleverd, dus 2010 is daar de eerste survey
+
+
+```{r uitz_consistent_id_extension1995_CP}
 plotdata <- plotdata %>% 
   mutate(CONSISTENT_ID_STANDING = 
-           ifelse(forest_reserve_fieldmap %in% c("Zoniën UITBR_1995", "Zoniën KERN_1983") & 
-                    survey_number == 2 & plottype == "CP"
+           ifelse(forest_reserve_fieldmap %in% c("Zoniën UITBR_1995") & 
+                    # forest_reserve_fieldmap %in% c("Zoniën UITBR_1995", "Zoniën KERN_1983") &     # WAS FOUT
+                    # survey_number == 2 & plottype == "CP"
+                    survey_number == 2  # 2010
                   , "N"
                   , CONSISTENT_ID_STANDING)
   )
@@ -483,7 +495,7 @@ survey 1 (1986) niet meegenomen => survey 2 (2000) moet ook nog NA zijn
 => "CONSISTENT_ID_STANDING": "NA" voor 2000 (1e keer gemeten)
 => "CONSISTENT_ID_LYING": "NA" voor 2000 (geen lying gemeten) en 2010 (1e keer lying gemeten)
 
-CONSISTENT_ID_STANDING: aanpassen voor CP's "Zoniën KERN_1983": in survey 1 niet opgemeten, 
+CONSISTENT_ID_LYING: aanpassen voor CP's "Zoniën KERN_1983": in survey 1 niet opgemeten, 
 pas vanaf survey 2 opgemeten
 
 ```{r uitz_consistent_id_Kerss_OldCore}
@@ -491,8 +503,14 @@ plotdata <- plotdata %>%
   mutate(# Zoniën KERN_1983 - CA
     CONSISTENT_ID_STANDING = 
          ifelse(plot_id == 11000 & 
-                  survey_number == 2
+                  survey_number == 2   # 2000
                 , NA
+                , CONSISTENT_ID_STANDING)
+    # pas toegeveog 21/5/2025
+    , CONSISTENT_ID_STANDING = 
+         ifelse(plot_id == 11000 & 
+                  survey_number == 3   # 2010
+                , "N"   # want shift in treshold tss 2000 en 2010
                 , CONSISTENT_ID_STANDING)
     , CONSISTENT_ID_LYING = 
          ifelse(plot_id == 11000 & 
@@ -501,20 +519,34 @@ plotdata <- plotdata %>%
                 , CONSISTENT_ID_LYING)
     , CONSISTENT_ID_LYING = 
          ifelse(plot_id == 11000 & 
-                  survey_number == 3
+                  survey_number == 3   # 2010
                 , NA
                 , CONSISTENT_ID_LYING)
     # Zoniën KERN_1983 - CP
     , CONSISTENT_ID_LYING = 
          ifelse(forest_reserve_fieldmap == "Zoniën KERN_1983" & 
-                  plottype == "CP" &  survey_number == 2
+                  plottype == "CP" &  survey_number == 2   # 2010
                 , NA
                 , CONSISTENT_ID_LYING)
-    , CONSISTENT_ID_LYING = 
-         ifelse(forest_reserve_fieldmap == "Zoniën KERN_1983" & 
-                  plottype == "CP" &  survey_number == 2
-                , NA
-                , CONSISTENT_ID_LYING)
+    )
+     
+```
+
+**Correctie 21/5/2025**
+Ook bij LPI_ID 31000 (site Hannecart) and LPI_ID 43000 (site Rodebos): CONSISTENT_ID_STANDING
+
+for vegetation data I accounted for the fact that the area go larger, 
+but I forgot to correct CONSISTENT_ID. So for both LPI-plots CONSISTENT_ID_STANDING 
+should be "N" for the second inventory on the plot-level instead of "Y".
+And on tree-level
+
+```{r uitz_consistent_id_Hannecart_Rodebos}
+plotdata <- plotdata %>% 
+  mutate(CONSISTENT_ID_STANDING = 
+         ifelse((plot_id == 31000 | plot_id == 43000) & 
+                  survey_number == 2  #2010
+                , "N"
+                , CONSISTENT_ID_STANDING)
     )
      
 ```
@@ -703,6 +735,11 @@ data_shoots <- load_data_shoots(database = path_to_fieldmap_db
                                 , extra_variables = TRUE)
 ```
 
+**!! Attention**: treshold standing trees in 2000 was 30 cm DBH, but there were also two regeneration groups with treshold 5 cm DBH
+**=> we need to filter these smaller trees out**
+(913 records)
+
+
 ```{r treshold30}
 # ! Attention: treshold standing trees in 2000 was 30 cm DBH, but there were also two regeneration groups with treshold 5 cm DBH
 # **=> we need to filter these smaller trees out**
@@ -715,7 +752,16 @@ data_dendro <- data_dendro0 %>%
   filter(!(plot_id == 11000 & year == 2000 & dbh_mm < 300))
 
 nrow(data_dendro0) == nrow(t) + nrow(data_dendro)
+
 ```
+
+**!! GEVOLG**: soms verwijst een `old_id` naar één van deze "verwijderde" bomen
+Als we deze nu al verwijderen, dan wordt er geen correcte unieke tree_id aangemaakt
+We weten pas nadat we `create_unique tree_id()` gerund hebben, welke geen link hebben naar
+vorige periode.
+
+Verderop hier rekening mee houden.
+
 
 
 ## Unique tree-id 
@@ -746,10 +792,41 @@ data_dendro <- create_unique_tree_id(data_dendro)
 names(data_dendro)
 ```
 
-
 ```{r }
 data_dendro %>% filter(is.na(tree_id)) %>% nrow() == 0
+
+# !! 1323 plot_id 11000 zonder id bv. oldid 3900 uit 2000
+t <- data_dendro %>% filter(is.na(tree_id)) %>% 
+  select(plot_id, period
+         , tree_id, tree_measure_id, old_id, coppice_id
+         , ind_sht_cop, alive_dead, species)
 ```
+
+
+**!! OPGEPAST**: doordat we hoger de bomen met dbh < 30 cm verwijdered hebben uit 
+plot 11000 (periode 1 - jaar 2000), zijn er nu bomen zonder (unieke) `tree_id`
+(waar `old_id` verwees naar één van deze "verwijderde" bomen)
+
+Daarom bij deze bomen `old_id` leeg maken en `create_unique tree_id()` opnieuw runnen. 
+
+
+```{r}
+names(data_dendro)
+data_dendro %>% filter(is.na(tree_id)) %>% nrow() == 
+  data_dendro %>% filter(is.na(tree_id) & !is.na(old_id)) %>% nrow()
+
+data_dendro_ <- data_dendro %>% 
+  mutate(old_id = ifelse(is.na(tree_id) & !is.na(old_id), NA,
+                         old_id)) %>% 
+  select(-tree_id)
+
+data_dendro_ <- create_unique_tree_id(data_dendro_)
+data_dendro_ %>% filter(is.na(tree_id)) %>% nrow() == 0
+```
+```{r}
+data_dendro <- data_dendro_
+```
+
 
 ```{r}
 # check - ok
@@ -816,12 +893,16 @@ t2 <- not_included %>% group_by(forest_reserve, plottype, year) %>%
 # nrows?
 nrow(standing0) == nrow(data_stems_calc) - sum(t2$n_trees)
 nrow(list_plots) == 1717
+nrow(list_plots) == 1848 # 1848-1717=131
 
 info_survey %>% anti_join(list_plots) %>% nrow() == 174
+t <- info_survey %>% anti_join(list_plots)
 # table(t$forest_reserve_fieldmap)
-# De heide    Ename Kluisbos 
-#       52       55       67
+# De heide    Ename Kluisbos Sevendonck Withoefse heide T 
+#       52       55       61      4           1
 # dat zijn ename, kluisbos en de heide
+# en ook 2(x2) plots Sevendonck 1137 en 1140 die nu gekapt zijn => uit netwerk
+# en transect with heide
 ```
 ## Variables
 
@@ -956,13 +1037,13 @@ t2 <- not_included %>% group_by(forest_reserve, plottype, year) %>%
 
 # nrows?
 nrow(lying0) == nrow(data_deadwood) - sum(t2$n_trees)
-nrow(list_plots) == 1717
+nrow(list_plots) == 1717 # 1848?
 ```
 
 ## Data control
 
 ```{r tmp}
-# 9/6 records met diameter < 10 cm => laten checken door Peter
+# 9/6 records met diameter < 10 cm => laten checken door Peter - OPGELOST
 error_D1D2 <- lying0 %>% 
   filter(max_diam_mm < 100) 
 
@@ -1470,7 +1551,7 @@ data_vegetation0 <-
 
 data_vegetation <- data_vegetation0 %>% 
   inner_join(list_plots) # `by = join_by(plot_id, plottype, period)
-nrow(data_vegetation) #5731
+nrow(data_vegetation) #5731/6084
 
 
 # verschil processed TRUE/FALSE: -----
@@ -1532,12 +1613,13 @@ data_herblayer0 <-
 data_herblayer <- data_herblayer0 %>% 
   inner_join(list_plots) # `by = join_by(plot_id, plottype, period)
   
-nrow(data_herblayer) # 76103
+nrow(data_herblayer) # 76103/80754
 
 table(data_herblayer$period)
 #     1     2     3 
 # 33990 32153  9960
-
+#     1     2     3 
+# 33968 32213 1457
 ```
 
 ```{r eval=FALSE}
@@ -2200,6 +2282,8 @@ write_csv2(qHerbSpecies, paste0(path_to_datarequest_teamdrive, "csv/qHerbSpecies
 
 <br>
 
+
+
 # Read
 
 Checken of de geëxporteerde files goed in R ingelezen worden
@@ -2217,6 +2301,7 @@ plots_check <- read.table(paste0(path_to_datarequest_teamdrive, "INBO_Plots.txt"
                            , sep = " ", dec = ".")
 head(plots_check)
 names(plots_check)
+table(plots_check$CONSISTENT_ID_STANDING)
 
 
 #

@@ -2,7 +2,7 @@
 title: "Wildcard - Flemish forest reserve network"
 subtitle: "Queries"
 author: "Anja Leyman"
-date: "25/02/2025"  
+date: "02/06/2025"  
 output: 
   html_document:
     keep_md: FALSE
@@ -45,7 +45,8 @@ source(here::here("scripts/Setup.R"))
 path_to_project_teamdrive <- paste0(path_to_output_gdrive, "EUFORIA_WILDCARD_2024")
 
 # path_to_datarequest <- paste0(path_to_project, "/output/")
-path_to_datarequest_teamdrive <- paste0(path_to_project_teamdrive, "/output_R/")
+path_to_datarequest_teamdrive <- paste0(path_to_project_teamdrive, "/output_R/versie_gecorrigeerde_consistent_id/")
+
 path_to_html_teamdrive <- path_to_datarequest_teamdrive
 # path_to_html <- path_to_datarequest
 
@@ -59,7 +60,8 @@ path_to_datacontrol <- paste0(path_to_project_teamdrive, "/datacontrole/")
 
 ```{r TEMP_db}
 # path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_X8_inbo2020_20240613/")
-path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_X8_inbo2020_20241205/")
+# path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_X8_inbo2020_20241205/")
+path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_X8_inbo2020_20250123/")
 
 dbFieldmap <- "FieldMapData_MDB_BR_X8_inbo2020.accdb"
 path_to_fieldmap_db <- paste0(path_to_fieldmap, dbFieldmap)
@@ -111,6 +113,41 @@ lying <- read.table(paste0(path_to_datarequest_teamdrive, "INBO_Lying.txt")
                     , sep = " ", dec = ".")
 ```
 
+```{r TMP_load_data_OLD, results='hide', eval = FALSE}
+# oudere versie
+path_to_datarequest_teamdrive <- paste0(path_to_project_teamdrive, "/output_R/versie_feb2025/")
+
+
+# 
+design2 <- read.table(paste0(path_to_datarequest_teamdrive, "INBO_Design.txt")
+                           , sep = " ", dec = ".")
+
+plots2_ <- read.table(paste0(path_to_datarequest_teamdrive, "INBO_Plots.txt")
+                           , sep = " ", dec = ".")
+# only A4-circle + CA (no A3)
+plots2 <-  plots2_ %>% filter(CIRCLE_NO == 1 | is.na(CIRCLE_NO))
+plots_LPI2 <- plots2_ %>% filter(is.na(CIRCLE_NO))
+plots_A3_2 <-  plots2_ %>% filter(CIRCLE_NO == 2)
+plots_A4_2 <-  plots2_ %>% filter(CIRCLE_NO == 1)
+
+standing2 <- read.table(paste0(path_to_datarequest_teamdrive, "INBO_Standing.txt")
+                           , sep = " ", dec = ".")
+
+lying2 <- read.table(paste0(path_to_datarequest_teamdrive, "INBO_Lying.txt")
+                    , sep = " ", dec = ".")
+```
+
+```{r TMP_verschil, eval = FALSE}
+design_diff <- design %>% 
+  anti_join(design2)
+
+plots_diff <- plots %>% 
+  anti_join(plots2)
+
+plots_diff2 <- plots2 %>% 
+  anti_join(plots)
+
+```
 <br>
 
 # Important information
