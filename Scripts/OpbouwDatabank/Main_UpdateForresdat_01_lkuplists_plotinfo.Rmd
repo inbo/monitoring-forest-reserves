@@ -123,6 +123,8 @@ en Zwaenepoel werden vervangen door
 - 10/3/2025: update van de reeds verwerkte data, vooral vanuit vraag naar trees wide beuk
 (trees_weide_beuk: tabel met ook Wijnendale, Everzwijnbad en Jansheideberg)
 
+- 4/6/2025: foutje plot 414 tresholds
+
 
 # Update lookuplijsten - INDIEN GEWIJZIGD
 
@@ -479,6 +481,8 @@ save_results_csv(
     results = list(plotinfo = plotinfo),
     output_dir = path_to_plotlevel_gdrive
   )
+
+odbcCloseAll()
 ```
 
 **Na update van forresdat, project "forresdat" openen en alles naar de cloud pushen**
