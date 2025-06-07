@@ -720,6 +720,13 @@ Van alle liggend dood hout de diameters berekenen ter hoogte van de lijnen voor 
 
 Daarom hebben we de XY-coordinaten en de min en max diameter nodig van het liggende dood hout
 
+Deze verkrijgen we door 
+1) in datacollector bij "Plots - Settings - Fieldmap Settings - Map layers handling" te kiezen voor shapefiles ipv geodatabase.
+2) in project manager via "Tools - Export data" de data te exporteren naar een (andere) access-db 
+("Deadwood.accdb" ev. en dan overbodige tabellen deleten)
+
+Dan worden in die nieuwe access-db de tabellen "Deadwood_details" gegenereerd.
+Die tabellen bevatten per deadwood fragment, twee records met telkens plotid, id deadwood, id, x, y, z, diam
 
 ```{r}
 names(data_deadwood)
@@ -730,11 +737,17 @@ min(data_deadwood$max_diam_mm)
 
 ```
 
-```{r}
+> enkel 3de set (uit aanvraag Everbeek)
 
+```{r xy}
+path_to_xy <- file.path(path_to_fieldmap, "deadwood.accdb")
+
+con <- odbcConnectAccess2007(path_to_xy)
+  deadw_XY <- sqlFetch(con, "Deadwood_3eSET_Details", stringsAsFactors = FALSE)
+odbcClose(con)
+
+names(deadw_XY)
 ```
-
-
 
 
 
