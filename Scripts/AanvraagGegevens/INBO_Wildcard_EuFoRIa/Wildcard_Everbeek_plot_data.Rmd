@@ -58,10 +58,10 @@ path_to_datacontrol <- paste0(path_to_project_teamdrive, "/datacontrole/")
 <!-- dus moeten we toch van deze db vertrekken (MDB_BR_X8_inbo2020_20241205) -->
 
 ```{r db}
-path_to_fieldmap <- paste0(path_to_datarequests, "EUFORIA_WILDCARD_2024/WP3_Everbeek/WILDCARD_EVERBEEK_inbo2025/")
+path_to_fieldmap <- paste0(path_to_datarequests, "EUFORIA_WILDCARD_2024/WP3_Everbeek/WILDCARD_EVERBEEK_inbo2025")
 
 dbFieldmap <- "FieldMapData_WILDCARD_EVERBEEK_inbo2025.accdb"
-path_to_fieldmap_db <- paste0(path_to_fieldmap, dbFieldmap)
+path_to_fieldmap_db <- file.path(path_to_fieldmap, dbFieldmap)
 
 print(paste0("Brondata: ", path_to_fieldmap))
 ```
@@ -343,10 +343,214 @@ names(trees)
 
 Volopname vanaf 10 cm
 
-```{r}
-data_deadwood <- load_data_deadwood(database = path_to_fieldmap_db, processed = TRUE)
+> opmerking uit lijst: hangend!!! 
+
+## Calc inside plot
+
+
+Fragmenten - update van volume in FM
+
+**Elke keer te doen bij nieuwe db** 
+
+In Fieldmap zijn er twee velden opgenomen, die "manueel" bijgewerkt moeten worden.
+Makkelijkste is om dit hier op te vangen in een updatequery.
+
+Het gaat om de velden 
+- `calc_volume_m3`
+- `calc_length`
+
+Deze velden zijn exacte copies van de velden 
+- `volume_m3` (als IntactFragment = 20)
+- `length_m`
+
+Maar omdat deze laatste twee velden per ongeluk gewijzigd kunnen worden in FM-DC 
+(te berekenen als "Total Volume" of "Volume inside plot"), is het veiliger om 
+deze waardes vast te klikken in `calc_volume_m3` & `calc_length`.
+
+Dat doen we hier mbv een updatequery, nadat we zeker zijn dat de waardes correct 
+berekend zijn in FM-DC ("inside plot").
+
+Ok, bijgewerkt op 7/6/2025 => moet niet meer opnieuw gebeuren
+
+```{r sql_update_calc_deadw_inside_plot, eval = FALSE}
+# !! ENKEL UITVOEREN NADAT IN DC "volume inside plot" BEREKEND IS
+
+# enkel deadw_3eSET
+qry_update_calc_vol <- paste0("UPDATE Deadwood_3eSET SET Deadwood_3eSET.CalcVolume_m3 = Deadwood_3eSET.Volume_m3 WHERE ((Deadwood_3eSET.CalcVolume_m3 Is Null) AND (Deadwood_3eSET.IntactFragment=20))") %>%
+           noquote()
+
+qry_update_calc_length <- "UPDATE Deadwood_3eSET SET Deadwood_3eSET.CalcLength_m = Deadwood_3eSET.Length_m WHERE ((Deadwood_3eSET.CalcLength_m) Is Null)" %>%
+           noquote()
+  
+conn <- odbcConnectAccess2007(path_to_fieldmap_db)
+
+sqlQuery(conn,qry_update_calc_vol)
+sqlQuery(conn,qry_update_calc_length)
+
+odbcClose(conn)
 
 ```
+
+## Load data
+
+```{r}
+data_deadwood <- load_data_deadwood(database = path_to_fieldmap_db, processed = TRUE, extra_variables = TRUE) %>% 
+  filter(plottype != "OTHER")
+
+data_deadwood %>% filter(is.na(calc_volume_m3)) %>% nrow() == 0
+```
+
+
+## Diameter op rand van plot
+> bekijken hoe diameters op rand van plot
+Van alle liggend dood hout de diameters berekenen ter hoogte van de lijnen voor LIS 
+
+Deze verkrijgen we door 
+1) in datacollector bij "Plots - Settings - Fieldmap Settings - Map layers handling" te kiezen voor shapefiles ipv geodatabase.
+2) zorgen dat coordinaten in "local" staan ipv global
+3) in project manager via "Tools - Export data" de data te exporteren naar een (andere) access-db 
+("Deadwood.accdb" hier, waarbij ik overbodige tabellen gedelete heb (fm-db vs1 staat in local))
+
+Dan worden in die nieuwe access-db de tabellen "Deadwood_details" gegenereerd.
+Die tabellen bevatten per deadwood fragment, twee records met telkens plotid, id deadwood, id, x, y, z, diam
+
+```{r xy}
+path_to_xy <- file.path(path_to_fieldmap, "deadwood.accdb")
+
+con <- odbcConnectAccess2007(path_to_xy)
+  deadw_XY_orig <- sqlFetch(con, "Deadwood_3eSET_Details", stringsAsFactors = FALSE)
+odbcClose(con)
+
+names(deadw_XY_orig)
+```
+
+
+```{r}
+## data organiseren zodat er één record per log is
+DW <- deadw_XY_orig %>% 
+  dplyr::select(IDPlots, IDDeadwood = IDDeadwood_3eSET, ID, X_m, Y_m, Z_m, Diam_mm) %>%
+  group_by(IDPlots, IDDeadwood) %>%
+  summarise(d1=first(Diam_mm), d2=last(Diam_mm)
+            , x1=first(X_m), x2=last(X_m), y1=first(Y_m), y2=last(Y_m)
+            , z1=first(Z_m), z2=last(Z_m)) %>%
+  ungroup() 
+
+```
+
+```{r}
+## basis (D) en top (d) toewijzen
+DW$d <-ifelse(DW$d1<DW$d2, DW$d1, DW$d2)
+DW$xd <-ifelse(DW$d1<DW$d2, DW$x1, DW$x2)
+DW$yd <-ifelse(DW$d1<DW$d2, DW$y1, DW$y2)
+DW$zd <-ifelse(DW$d1<DW$d2, DW$z1, DW$z2)
+DW$D <-ifelse(DW$d1<DW$d2, DW$d2, DW$d1)
+DW$xD <-ifelse(DW$d1<DW$d2, DW$x2, DW$x1)
+DW$yD <-ifelse(DW$d1<DW$d2, DW$y2, DW$y1)
+DW$zD <-ifelse(DW$d1<DW$d2, DW$z2, DW$z1)  
+
+DW <- dplyr::select(DW, IDPlots, IDDeadwood, d, D, xd, yd, zd, xD, yD, zD)
+names(DW)
+
+```
+
+```{r}
+##### afknippen op straal -> straal toewijzen
+
+# rA4 <- select(overzichtplots, IDPlots, rA4)
+# data <- left_join(data, straal, by= "IDPlots")
+DW$rA4 <- 13
+```
+
+
+```{r}
+# 1.1 afknippen op straal rA4
+plot <- DW
+
+plot$INd <- sqrt(plot$xd^2+plot$yd^2)    #afstand tot middelpunt
+plot$IND <- sqrt(plot$xD^2+plot$yD^2)
+plot$rico <- (plot$yd-plot$yD) / (plot$xd-plot$xD)# rico van lijnstuk dood hout
+plot$b <- plot$yD-plot$xD*plot$rico # b in de formule y = rico*x + b
+plot$Discr <- (2*plot$rico*plot$b)^2 - 4*(1+plot$rico^2)*(-plot$rA4^2+plot$b^2)  # discriminant voor snijpunt cirkel en dood hout
+
+plot$xcirkel1 <- (-2*plot$rico*plot$b - sqrt(abs(plot$Discr)))/(2*(1+plot$rico^2)) #x waarde van kruising 1 (uitgaande dat Discr positief is)
+plot$xcirkel2 <- (-2*plot$rico*plot$b + sqrt(abs(plot$Discr)))/(2*(1+plot$rico^2)) #kruising 2 (uitgaande dat Discr positief is)
+
+```
+
+```{r}
+#4 situaties,element ligt erin, element ligt er deels in en deels uit en zowel d als D liggen er uit. In het laatste geval kan een deel van het element nog steeds in de cirkel liggen als Discr <0 (=rechte snijdt de cirkel op 2 plaatsen)
+plotin <- plot[plot$INd<=plot$rA4 & plot$IND<=plot$rA4,] 
+plotdout <- plot[plot$INd>plot$rA4 & plot$IND<=plot$rA4,]
+plotDout <- plot[plot$IND>plot$rA4 & plot$INd<=plot$rA4,]
+plotout <- plot[plot$IND>plot$rA4 & plot$INd>plot$rA4 & plot$Discr>0,]
+```
+
+
+```{r}
+# per situatie de nieuwe diameter en x, y berekenen
+plotdout$xdnew <- ifelse((plotdout$xcirkel1<plotdout$xd & plotdout$xcirkel1>plotdout$xD) | (plotdout$xcirkel1>plotdout$xd & plotdout$xcirkel1<plotdout$xD), plotdout$xcirkel1, plotdout$xcirkel2)
+plotdout$yd <- plotdout$rico*plotdout$xdnew + plotdout$b
+plotdout$d <- plotdout$D + (plotdout$xdnew - plotdout$xD) * (plotdout$d-plotdout$D)/(plotdout$xd-plotdout$xD)
+plotdout$zd <- plotdout$zD + (plotdout$xdnew - plotdout$xD) * (plotdout$zd-plotdout$zD)/(plotdout$xd-plotdout$xD)
+plotdout$xd <- plotdout$xdnew
+
+plotDout$xDnew <- ifelse((plotDout$xcirkel1<plotDout$xd & plotDout$xcirkel1>plotDout$xD) | (plotDout$xcirkel1>plotDout$xd & plotDout$xcirkel1<plotDout$xD), plotDout$xcirkel1, plotDout$xcirkel2)
+plotDout$yD <- plotDout$rico*plotDout$xDnew + plotDout$b
+plotDout$D <- plotDout$D + (plotDout$xDnew - plotDout$xD) * (plotDout$d-plotDout$D)/(plotDout$xd-plotDout$xD)
+plotDout$zD <- plotDout$zD + (plotDout$xDnew - plotDout$xD) * (plotDout$zd-plotDout$zD)/(plotDout$xd-plotDout$xD)
+plotDout$xD <- plotDout$xDnew
+
+
+plotout$d1 <- plotout$D + (plotout$xcirkel1 - plotout$xD) * (plotout$d-plotout$D)/(plotout$xd-plotout$xD)
+plotout$d2 <- plotout$D + (plotout$xcirkel2 - plotout$xD) * (plotout$d-plotout$D)/(plotout$xd-plotout$xD)
+plotout$d1 <- ifelse (plotout$d1<plotout$D & plotout$d1>plotout$d, plotout$d1, 0) #snijdt het lijnstuk werkelijk de cirkel of enkel de rechte voorbij het lijnsuk
+plotout$d2 <- ifelse (plotout$d1<plotout$D & plotout$d1>plotout$d, plotout$d2, 0)
+
+plotout$z1 <- plotout$zD + (plotout$xcirkel1 - plotout$xD) * (plotout$zd-plotout$zD)/(plotout$xd-plotout$xD)
+plotout$z2 <- plotout$zD + (plotout$xcirkel2 - plotout$xD) * (plotout$zd-plotout$zD)/(plotout$xd-plotout$xD)
+plotout$z1 <- ifelse (plotout$z1<plotout$zD & plotout$z1>plotout$zd, plotout$z1, 0) #snijdt het lijnstuk werkelijk de cirkel of enkel de rechte voorbij het lijnsuk
+plotout$z2 <- ifelse (plotout$z1<plotout$zD & plotout$z1>plotout$zd, plotout$z2, 0)
+
+plotout$d <- ifelse (plotout$d1 < plotout$d2, plotout$d1, plotout$d2)
+plotout$zd <- ifelse (plotout$d1 < plotout$d2, plotout$z1, plotout$z2)
+plotout$xd <- ifelse (plotout$d1 < plotout$d2, plotout$xcirkel1, plotout$xcirkel2)
+plotout$yd <- plotout$rico*plotout$xd + plotout$b
+
+plotout$D <- ifelse (plotout$d1 > plotout$d2, plotout$d1, plotout$d2)
+plotout$zD <- ifelse (plotout$d1 > plotout$d2, plotout$z1, plotout$z2)
+plotout$xD <- ifelse (plotout$d1 > plotout$d2, plotout$xcirkel1, plotout$xcirkel2)
+plotout$yD <- plotout$rico*plotout$xD + plotout$b
+
+```
+
+
+```{r}
+# de 4 datasets/situaties terug samenbrengen
+plotDout <- select(plotDout,-xDnew)
+plotdout <- select(plotdout,-xdnew)
+plotout <- select(plotout,-c(d1,d2,z1,z2))
+
+plot <- rbind(plotin, plotdout, plotDout, plotout)
+plot$L <- sqrt((plot$xd-plot$xD)^2+(plot$yd-plot$yD)^2+(plot$zd-plot$zD)^2) #nieuwe lengte bepalen
+
+```
+
+
+```{r}
+# komt L overeen met de in fieldmap berekend calc_length? - JA
+names(data_deadwood)
+names(plot)
+test <- data_deadwood %>% 
+  left_join(plot, by = c("plot_id" = "IDPlots", "lying_deadw_id" = "IDDeadwood")) %>% 
+  mutate(test_L = calc_length_m - L) %>% 
+  select(1:14, 44:45)
+
+test %>% filter(test_L > 0.1) %>% nrow == 0
+
+data_deadwood <- data_deadwood %>% 
+  left_join(plot, by = c("plot_id" = "IDPlots", "lying_deadw_id" = "IDDeadwood"))
+```
+
 
 ## Variables				
 
@@ -357,19 +561,16 @@ DECAY
 GROUND_CONT	
 DATE
 
-Yannick:
-"Indien het niet te veel moeite is zou het mogelijk zijn om mij ook een kaartje 
-te bezorgen van plot A2 met het liggend dood hout en de bijhorende ID's.
-Dat is het enige plot waarbij sommige stammen niet volledig op de grond lagen, 
-die info zou ik dan op het einde kunnen toevoegen."
 
 ```{r cwd_vars, results='hide'}
+names(data_deadwood)
+
 cwd <- data_deadwood %>% 
   left_join(plots_name_xy, by = c("plot_id")) %>% 
   left_join(plot_char %>% select(1:4)) %>% 
   # left_join(qSpecies, by = c("species" = "ID")) %>% 
   mutate(
-    GROUND_CONT = ifelse(SITE_ID == "A2", "yes or no", "yes")  # gaat Yannick nog aanvullen obv kaartje
+    GROUND_CONT = ifelse(common_remark == 40, "no", "yes")  # "hangend"
     , DECAY = case_when(
       decaystage %in% c(10, 11)~1,
       decaystage == 12~2,
@@ -377,13 +578,17 @@ cwd <- data_deadwood %>%
       decaystage == 14~4,
       decaystage == 15~5)
     , DATE = as.Date(date_dendro, format = "%d-%m-%Y")
+    , d = round(d,0), D = round(D,0)
     ) %>% 
   select(INSTITUTE, CHRONO_ID, SITE_ID, PLOT_ID
          , PIECE_ID = lying_deadw_id
-         , DIAM_LOW	= min_diam_mm, DIAM_UP = max_diam_mm
-         , LENGTH = total_length_m # ? of calc_length	
+         # , DIAM_LOW	= min_diam_mm, DIAM_UP = max_diam_mm
+         , DIAM_LOW	= d, DIAM_UP = D   # gecorrigeerd cfr script Arno obv XY-coord
+         , LENGTH = calc_length_m  # inside plot	
          , DECAY, GROUND_CONT
          , DATE
+         # extra
+         , volume_m3 = calc_volume_m3 # volume inside plot, ter info, wordt niet gevraagd
          )
 
 ```
