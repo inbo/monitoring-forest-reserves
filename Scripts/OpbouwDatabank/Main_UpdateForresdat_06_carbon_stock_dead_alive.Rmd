@@ -38,13 +38,21 @@ source(here::here("scripts/Setup.R"))
 # FACTORS
 dbFactorsWallonia <- "Data/ExterneData/Wallonie_Biomass.accdb"
 dbFactorsWallonia_path <- here::here(dbFactorsWallonia)
-
-
 ```
 
 
+```{r Setup2}
+path_to_html_teamdrive <- paste0(path_to_dataverwerking_teamdrive, "25_Overkoepelend")
+```
 
-```{r juiste_forrescalc, eval = FALSE}
+
+> juiste forrescalc kiezen:   
+- om weg te schrijven naar forresdat - branch main => met juiste release van het package: dan `install.packages("forrescalc")`  
+- laatste correcties van forrescalc => juiste branch selecteren in forrescalc en opnieuw builden - wegschrijven kan naar forresdat - branch "develop"
+(10/3/25: branch 'bugfix' met corr van read_forresdat waarbij we de develop branch kunnen selecteren ipv main)
+
+
+```{r forrescalc_to_write_to_forresdat, eval = FALSE}
 # !!! eerst zeker 'install.packages("forrescalc")
 # zodat data goede release krijgt!
 # zie mail 7/10/24 van Els L.
@@ -53,7 +61,6 @@ dbFactorsWallonia_path <- here::here(dbFactorsWallonia)
 
 install.packages("forrescalc")
 ```
-
 
 
 # Vraagstelling
@@ -1266,7 +1273,8 @@ names(analyseSet_plot2)
 # Finale analyseset
 
 ```{r}
-carbon_by_plot <- analyseSet_plot2
+carbon_by_plot <- analyseSet_plot2 %>% 
+  select(-forest_reserve)
 ```
 
 
@@ -1306,9 +1314,26 @@ carbon <- list(
 # Plotinfo toevoegen (aan csv-files)
 
 ```{r join_plottype_surveynr_BR}
-carbon_plotinfo <- lapply(carbon, function(x) left_join(x, plotinfo %>% select(plot_id, forest_reserve, plottype, period, survey_number), by = c("plot_id", "period")))
+carbon_plotinfo <- lapply(carbon
+                          , function(x) left_join(x, 
+                                                  plotinfo %>% 
+                                                    select(plot_id, forest_reserve, plottype, 
+                                                           period, survey_number)
+                                                  , by = c("plot_id", "period")))
 # lapply: same function over all elements of the list
 ```
+
+# Overview bosreservaten
+
+```{r }
+carbon_plotinfo[[1]] %>% 
+  group_by(forest_reserve, plottype, period, survey_number) %>% 
+  summarize(n = n()) %>% 
+  ungroup() %>% 
+  DT :: datatable(filter = 'top', options = list(dom = 'tip'),rownames = FALSE)
+
+```
+
 
 
 # Export plot-level-data
@@ -1327,18 +1352,15 @@ Opgepast met plots waar combinatie is met LIS (zie plotdetails_3eSET)
 
 ```{r save_carbon_git, eval = FALSE}
 # geen plotinfo naar git
-save_results_git(
+save_results_forresdat(
   results = carbon,
   repo_path = path_to_git_forresdat,
-  strict = TRUE
+  metadata_path = paste0(path_to_metadata, "_metadata_plotlevel_results_dendro.xlsx"),
+  push = FALSE,
+  strict = TRUE,
+  branch = "develop"
 )
-```
 
-```{r save_carbon_git_manueel, eval = FALSE}
-# manueel - eigen simpele functie - als save_results_git niet werkt
-save_results_tsv(carbon, 
-                 root = path_to_forresdat_data, 
-                 strict = FALSE)
 ```
 
 
@@ -1353,14 +1375,13 @@ save_results_csv (
 
 # afgerond voor export naar access
 carbon_round <- carbon_plotinfo %>% 
-  lapply(., function(x) round_df(x, 2))
+  lapply(., function(x) round_df(x, 2))   # forestmangr
 
 save_results_access (
   results = carbon_round,
   database = path_to_analysis_set_db,
   remove_tables = TRUE
   )
-
 ```
 
 Direct naar gdrive exporteren (csv): 
@@ -1377,3 +1398,20 @@ save_results_csv(
 
 **Na update van forresdat, project "forresdat" openen en alles naar de cloud pushen**
 **Eventueel ook access op gdrive plaatsen**
+
+
+# Copy html to teamdrive
+
+Na knitting - manueel
+
+```{r eval = FALSE}
+# Specify the path of the file you want to copy
+source_file <- here::here(paste0("Scripts/OpbouwDatabank/Main_UpdateForresdat_06_carbon_stock_dead_alive.html"))
+
+# Specify the destination directory where you want to copy the file
+destination_dir <- path_to_html_teamdrive
+
+# Copy the file to the destination directory
+file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
+# ? file.copy
+```
