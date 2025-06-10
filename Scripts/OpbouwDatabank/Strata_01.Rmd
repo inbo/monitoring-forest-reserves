@@ -1488,7 +1488,8 @@ strata <- list(
       link_plotid_subarea = link_plotid_subarea
     )
 
-# strata <- list(strata_remaining = strata_overige)
+#update 10/6/2025
+# strata <- list(info_survey = plotinfo_def)
 
 save_results_csv(
     results = strata,
@@ -1529,7 +1530,7 @@ save_results_forresdat(
 strata_strict <- list(
       q_hist = qHist,
       q_foresttype = qEUNIS,
-      # strata_soil = strata_bodem,  # !! bevat ook PNV dat in ander script toegeveogd wordt
+      # strata_soil = strata_bodem,  # !! bevat ook PNV dat in ander script toegevoegd wordt
       strata_climate = strata_klimaat,
       strata_history = strata_hist_def,
       strata_location = strata_locatie,
@@ -1540,7 +1541,8 @@ strata_strict <- list(
       info_survey = plotinfo_def
     )
 
-# strata_strict <- strata
+# update 10/6/2025 - info_survey = plotinfo_def
+# strata_strict <- strata  
 
 save_results_forresdat(
   results = strata_strict,
