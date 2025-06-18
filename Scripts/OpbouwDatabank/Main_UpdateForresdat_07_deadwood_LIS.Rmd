@@ -36,12 +36,18 @@ source(here::here("scripts/Setup.R"))
 ```
 
 
-> juiste forrescalc kiezen:   
-- om weg te schrijven naar forresdat => met juiste release: dan `install.packages("forrescalc")`  
-- laatste correcties van forrescalc => juiste branch selecteren in forrescalc en opnieuw builden
-(bv. branch 'bugfix' met corr van read_forresdat waarbij we de develop branch kunnen selecteren ipv main)
+```{r Setup2}
+path_to_html_teamdrive <- paste0(path_to_dataverwerking_teamdrive, "25_Overkoepelend")
+```
 
-```{r juiste_forrescalc, eval = FALSE}
+
+> juiste forrescalc kiezen:   
+- om weg te schrijven naar forresdat - branch main => met juiste release van het package: dan `install.packages("forrescalc")`  
+- laatste correcties van forrescalc => juiste branch selecteren in forrescalc en opnieuw builden - wegschrijven kan naar forresdat - branch "develop"
+(10/3/25: branch 'bugfix' met corr van read_forresdat waarbij we de develop branch kunnen selecteren ipv main)
+
+
+```{r forrescalc_to_write_to_forresdat, eval = FALSE}
 # !!! eerst zeker 'install.packages("forrescalc")
 # zodat data goede release krijgt!
 # zie mail 7/10/24 van Els L.
@@ -49,14 +55,14 @@ source(here::here("scripts/Setup.R"))
 # wil wegschrijven, moet ik officiële versie van forrescalc gebruiken
 
 install.packages("forrescalc")
-
 ```
+
 
 
 # Vraagstelling
 DOEL van dit script is een update van forresdat gegevens naar 
 
-- forresdat-folder als tsv (nadien nog te pushen naar github)
+- forresdat-folder als csv (nadien nog te pushen naar github)
 - BR_analysedb.accdb
 - output-folders "_plot-level-data" en "_tree-level-data" als csv
 - gdrive-folders "_plot-level-data" en "_tree-level-data" als csv
@@ -98,6 +104,13 @@ Plotinfo inladen: plottype, naam forest_reserve en info over survey en data al d
 plotinfo <- load_plotinfo(database = path_to_fieldmap_db, processed = FALSE)
 ```
 
+Waar is er al een LIS-opname gebeurd?
+
+We beperken ons tot `period == 3` 
+=> layers `LineIntersect_3eSet` en `LI_data_3eSet`
+Dus uitsluiten van proefprojecten in 2019 (period 2) zoals Kluisbos en Zonien, bv. plot 1601, 1201 en 1214
+(`LineIntersect` en `LI_data`)
+
 ```{r}
 plotinfo_summ <- plotinfo %>% 
   group_by(forest_reserve, plottype, period
@@ -106,51 +119,39 @@ plotinfo_summ <- plotinfo %>%
             , range_plotid = paste(min(plot_id), max(plot_id), sep= "-")) %>% 
   ungroup()
 
+# LIS
 plotinfo_summ %>% filter(survey_lis) %>% 
   DT :: datatable(filter = 'top', options = list(dom = 'tip'),rownames = FALSE) 
 ```
 
-
-
+Not processed (én LIS): Terrijst en Coolhem (12/6/2025)
 
 ```{r check_not_processed}
 plotinfo_summ %>% 
-  filter(survey_trees == TRUE & data_processed == FALSE)
+  filter(survey_lis == TRUE & data_processed == FALSE)
 
-# omgekeerd geen plots die processed zijn, en géén survey_trees
-plotinfo %>%  filter(data_processed & !survey_trees) %>% nrow() == 0
 ```
 
-Enkel nog derde set:   
-
-- CP's Withoefse heide (dd 13/7/2022) 
-- KV Kersselaerspleyn
-(- Heirnisse nog niet volledig geïmporteerd uit werkproject)
-
-
-# Enkel LIS-plots Wijnendale en Everzwijnbad
-
-We gaan verder met de plots waar 
-
-- een LIS-opname gebeurd is   
-- én een volopname deadwood
-- én de data processed is
 
 ```{r}
-plotinfo_LIS <- plotinfo %>% 
-  filter(survey_lis & data_processed & survey_deadw & survey_trees)
+list_plots <- plotinfo %>% 
+  filter(survey_lis & data_processed & survey_deadw & survey_trees
+         , period == 3) %>% 
+  select(forest_reserve, plottype, plot_id) 
 #316
 
-table(plotinfo_LIS$forest_reserve)
+table(list_plots$forest_reserve, list_plots$plottype)
 
 ```
 
-Nu enkel focussen op 3de set (Wijnendale en Everzwijnbad)
+```{r check_period2}
+LIS_period2 <- plotinfo %>% 
+  filter(survey_lis & data_processed & survey_deadw & survey_trees
+         , period == 2) %>% 
+  select(forest_reserve, plottype, plot_id) 
 
-
-```{r}
-list_plots <- plotinfo_LIS %>% filter(period == 3) %>% distinct(forest_reserve, plot_id) 
-# list_plots <- plotinfo %>% select(plot_id) %>% unique()
+table(LIS_period2$forest_reserve, LIS_period2$plottype)
+# "Zoniën UITBR_1995" "Zoniën KERN_1983"  "Heirnisse" (KV)        "Kluisbos"   
 ```
 
 
@@ -189,7 +190,7 @@ qVdagnVfm <- qVdagnVfm %>% select(ID, intact_fragment_txt = Value1)
 LIS 
 
 ```{r load_LIS, results='hide'}
-# enkel bij 3eSET beschikbaar
+# enkel 3eSET 
 query_LIS <- 
     "SELECT lis.IDPlots AS plot_id, 
     lis.IDLineIntersect_3eSet, 
@@ -204,7 +205,7 @@ query_LIS <-
 con <- odbcConnectAccess2007(path_to_fieldmap_db)
   data_LIS_ <- sqlQuery(con, query_LIS, stringsAsFactors = TRUE)
   qLIangle <- sqlFetch(con, "qLIangle", stringsAsFactors = TRUE) %>% 
-    select(ID, angle = Value2)
+    select(ID, Value1, angle = Value2)
 odbcClose(con)
 
 
@@ -239,28 +240,34 @@ summary(data_LIS) # ok
 Li<-45  # lengte van de drie transecten   
 
 deadw_LIS <- data_LIS %>%
-  mutate(diam_m = diam_mm/1000) %>% 
+  mutate(diam_m = diam_mm/1000
+         # , Diameter_cm = diam_mm/10     # cfrVBI
+         ) %>% 
   dplyr::group_by(plot_id, period, species, decaystage) %>%
   dplyr::summarise(
-    volume_m3_m2=pi^2/8/Li*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)) %>% 
-  ungroup()
+    volume_m3_m2=pi^2/8/Li*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
+    # , v3_VolumeLogs_ha=pi^2/8/Li*sum((Diameter_cm^2)/cos(angle*pi/180),na.rm=T)   # cfrVBI, zelfde resultaat
+    ) %>% 
+  ungroup() %>% 
+  mutate(volume_m3_ha = volume_m3_m2 * 10000)
 # bij mogelijkse verwarring tss VBI en BR: VBI rekent obv diam_cm en komt m3/ha uit, 
 # BR gebruikt diam_m en komt m3/m2 uit
 
- 
+
 ```
 
 ```{r results='hide'}
-deadw_LIS <- deadw_LIS %>%
+deadw_LIS_ <- deadw_LIS %>%
   left_join(qSpecies %>% select(-name_nl), by = c("species" = "ID")) %>% 
   left_join(qDecaystage, by = c("decaystage" = "ID"))
 
-names(deadw_LIS)
-table(deadw_LIS$decaystage)
+names(deadw_LIS_)
+table(deadw_LIS_$decaystage)
 
 #check
-deadw_LIS %>% filter(plot_id == 101)
+deadw_LIS_ %>% filter(plot_id == 101)
 
+deadw_LIS_ <- deadw_LIS
 ```
 
 
@@ -290,104 +297,59 @@ klopt wel degelijk...voor KV KP = BEkartering....
 
 ## CalcVolume/CalcLength bijwerken in moederdb - OK 30/09/2024
 
-In Fieldmap zijn er twee velden opgenomen, die "manueel" bijgewerkt moeten worden.
-Makkelijkste is om dit hier op te vangen in een updatequery.
+Zie script "Main_UpdateForresdat_02_dendro.Rmd": daar normaal reeds update gedaan
+(Paragraaf "Fragmenten - update van volume in FM" - regel 240)
 
-Het gaat om de velden 
-- `calc_volume_m3`
-- `calc_length`
+OK 10/3/2025 (versie MDB_BR_X8_inbo2020_20250123)
 
-Deze velden zijn exacte copies van de velden 
-- `volume_m3` (als IntactFragment = 20)
-- `length_m`
+```{r check_update}
+# update is OK als overal calc_lengte berekend is 
+# én per reservaat één verschil met total_length (n_outside > 0)
 
-Maar omdat deze laatste twee velden per ongeluk gewijzigd kunnen worden in FM-DC 
-(te berekenen als "Total Volume" of "Volume inside plot"), is het veiliger om 
-deze waardes vast te klikken in `calc_volume_m3` & `calc_length`.
+data_deadwood <- load_data_deadwood(database = path_to_fieldmap_db, processed = TRUE) %>% 
+  filter(period == 3)
+names(data_deadwood)
+range(data_deadwood$calc_length_m)
+data_deadwood %>% filter(is.na(calc_volume_m3)) %>% select(intact_fragm)
+# reden: IntactFragment=10
 
-Voor 3de set was `calc_volume_m3` niet steeds berekend (in acces).
-Dat doen we hier mbv een updatequery, nadat we zeker zijn dat de waardes correct 
-berekend zijn in FM-DC ("inside plot").
-Dit moet normaliter enkel gebeuren voor periode 3, periode 1 en 2 zijn bijgewerkt 
-in de moederdatabank zelf.
+range(data_deadwood$total_length_m)
 
-
-### versie 20240930 - OK
-
-Alle 178 plots zijn integraal uit "tmp_deadw_3eSET_afgesneden_MDB20240613",
-getransfereerd naar de MDB of overschreven in MDB.
-
-Er is een nieuwe versie van de MDB op CITRIX geplaatst;
-MDB_BR_X8_inbo2020_202409301650_NaImport178plotsVolumeInsidePlot
-
-Betreft volgende plots (3de SET):
-- CP's Wijnendale en Everzwijnbad (100, ..., 400, ...)
-- Rodebos KV1 41000
-- Rodebos KV2 43000
-- Wijnendalebos 71000
-- Everzwijnbad 81000
-- Kersselaerspleyn 11000
-
-2de SET reeds OK in moederdb
-
-```{r sql_update_calc_deadw_inside_plot, eval = FALSE}
-# !! ENKEL UITVOEREN NADAT IN DC "volume inside plot" BEREKEND IS
-# data_deadwood_old <- data_deadwood
-
-# layers_deadw <- c("Deadwood", "Deadwood_2eSET", "Deadwood_3eSET")
-# 
-# for (x in layers_deadw){
-# 
-# qry_update_calc_vol <- "UPDATE x 
-#       LEFT JOIN qVdagnVfm ON x.IntactFragment = qVdagnVfm.ID 
-#       SET x.CalcVolume_m3 = [Volume_m3] 
-#       WHERE (((x.CalcVolume_m3) Is Null) AND ((x.IntactFragment)=20))"
-# 
-# qry_update_calc_length <- "UPDATE x 
-#       LEFT JOIN qVdagnVfm ON x.IntactFragment = qVdagnVfm.ID 
-#       SET x.CalcLength_m = [Length_m] 
-#       WHERE ((x.CalcLength_m) Is Null)"
-#   
-# conn <- odbcConnectAccess2007(path_to_fieldmap_db)
-# # conn <- odbcConnectAccess2007(path_to_fieldmap_db), rows_at_time = 1)
-# 
-# sqlQuery(conn,qry_update_calc_vol)
-# sqlQuery(conn,qry_update_calc_length)
-# 
-# odbcClose(conn)
-# }
-
-# enkel deadw_3eSET
-qry_update_calc_vol <- paste0("UPDATE Deadwood_3eSET SET Deadwood_3eSET.CalcVolume_m3 = Deadwood_3eSET.Volume_m3 WHERE ((Deadwood_3eSET.CalcVolume_m3 Is Null) AND (Deadwood_3eSET.IntactFragment=20))") %>%
-           noquote()
-
-qry_update_calc_length <- "UPDATE Deadwood_3eSET SET Deadwood_3eSET.CalcLength_m = Deadwood_3eSET.Length_m WHERE ((Deadwood_3eSET.CalcLength_m) Is Null)" %>%
-           noquote()
-  
-conn <- odbcConnectAccess2007(path_to_fieldmap_db)
-
-sqlQuery(conn,qry_update_calc_vol)
-sqlQuery(conn,qry_update_calc_length)
-
-odbcClose(conn)
+data_deadwood %>% 
+  mutate(check_inside_plot = total_length_m - calc_length_m) %>% 
+  select(plot_id, plottype, forest_reserve
+         , total_length_m, calc_length_m
+         , check_inside_plot) %>% 
+  group_by(forest_reserve) %>% 
+  summarize(n_outside = sum(check_inside_plot != 0)) %>% 
+  ungroup()
 
 ```
+
+
+
+## ALTERNATIEF: zelf inside plot berekenen - NOT FOR NOW
+
+Met code van Arno kunnen we - obv XY van begin- en eindpunt - diameters berekenen op 
+plotrand en lengte tot plotrand.
+Op basis daarvan kunnen we dan volume inside plot berekenen.
+
+*!! Iets moeilijker bij kernvlaktes*, want 
+
+- daar kan vorm afwijken (niet enkel straal zoals bij cirkelplots)     
+- Moederdb: cirkelplots in lokale coordinaten, kernvlaktes in globale     
+
+Omzetten van lokaal naar globaal en vice versa gebeurt in FM-DC --> settings - georeferencing
+OPGEPAST: gebeurt plot per plot én enkel voor de actieve layers 
+> DAAROM kernvlaktes nog even uitstellen
+
+
+> DAAROM ook zelf inside plot berekenen nog even uitstellen, tot we ook weten dat dat voor kernvlaktes kan
 
 
 ## Load deadwood 
 
-```{r load_dendro}
-data_dendro <- load_data_dendrometry(database = path_to_fieldmap_db, 
-                                     extra_variables = TRUE, 
-                                     processed = TRUE) %>% 
-  filter(plot_id %in% list_plots$plot_id & period == 3)
-
-data_shoots <- load_data_shoots(database = path_to_fieldmap_db, extra_variables = TRUE)
-data_stems  <- compose_stem_data(data_dendro, data_shoots, extra_variables = TRUE)
-height_model <- load_height_models()
-
-```
-
+Enkel focus op de LIS-plots
 
 ```{r load_deadw}
 data_deadwood <- load_data_deadwood(database = path_to_fieldmap_db, processed = TRUE) %>% 
@@ -397,51 +359,18 @@ data_deadwood <- calc_intact_deadwood(data_deadwood)
 ```
 
 
+```{r load_dendro}
+# nodig om berekeningen op plotniveau te doen mbv forrescalc
+data_dendro <- load_data_dendrometry(database = path_to_fieldmap_db,
+                                     extra_variables = TRUE,
+                                     processed = TRUE) %>%
+  filter(plot_id %in% list_plots$plot_id & period == 3)
 
+data_shoots <- load_data_shoots(database = path_to_fieldmap_db, extra_variables = TRUE)
+data_stems  <- compose_stem_data(data_dendro, data_shoots, extra_variables = TRUE)
+height_model <- load_height_models()
 
-## Check intacte bomen
-
-Er werd afgesproken met Peter `intact` enkel nog te gebruiken voor de BE's of de KV's  
-(als bomen tenminste plotgrens van KV niet overschrijden). 
-
-In forrescalc wordt het volume van liggende, intacte bomen berekend obv tarieven (stam + kroon).
-
-In onderstaande code wordt gecheckt of er geen fouten geslopen zijn in het aanwijzen van intacte bomen (ook indien NIET NA).
-Immers afgesproken dat bomen NIET intact kunnen zijn, indien:      
-- er een substantieel deel buiten de plotgrenzen valt (> 1/2de)  
-- decay 14 of 15 => allemaal fragment   
-- decay 13: min_diameter > 150 (geen top aanwezig) => fragment (18 van de 42 intacte met decay 13)
- 
-(dit werd afgesproken met Peter via mail van 24/11/2022:  
-  - sowieso alle met decay 14 of 15 = fragment   
-  - decay 13: enkel deze met min_diameter > 150 als fragment)
-
-
-```{r check_intact}
-data_deadwood_intact <- data_deadwood %>% 
-  filter(intact_fragm == 10)
-#
-nrow(data_deadwood_intact) == 0
-# geen intacte, liggende bomen in CP's Wijnendale en Everzwijnbad
 ```
-```{r eval = FALSe}
-# indien nodig: file doormailen met mogelijke fragmenten
-posssible_fragment <- data_deadwood_intact %>% 
-  filter((calc_length_m < total_length_m/2)|
-           decaystage == 14|
-           (decaystage == 13 & min_diam_mm > 150) |
-           min_diam_mm > 150) %>% 
-  select(plot_id, plottype, forest_reserve, , period, date_dendro, lying_deadw_id,
-         species, decaystage, intact_fragm, calc_volume_m3, calc_length_m, total_length_m,
-         min_diam_mm, max_diam_mm)
-
-table(posssible_fragment$decaystage)
-
-write_csv2(posssible_fragment, here::here(paste0("output/posssible_fragment_xxx.csv")))
-```
-
-
-
 
 
 ## Calculate deadwood volopname
@@ -468,32 +397,36 @@ dendro <- calculate_dendrometry(data_dendro, data_deadwood, data_shoots, height_
 
 
 ```{r CreateSeparateDataframesDendro}
+names(dendro)
+
+
 for (tablename in names(dendro)) {
      assign(tablename, dendro[[tablename]])
 } 
 
+
 ```
 
 
-## Combineren LIS en FAS
+# Combineren LIS en FAS
 
 - LIS: alle dood hout, ook diameter > 30 cm
 - FAS: enkel dood hout met diameter > 30 cm
 
 => je kan op 3 manieren een volume berekenen:   
 
-- enkel LIS: alle diameters tot 10 cm maar minder nauwkeurig op plotniveau    
+- enkel LIS: alle diameters tot 30 cm maar minder nauwkeurig op plotniveau    
 - enkel FAS: diameters vanaf 30 cm en nauwkeurig op plotniveau    
 - combinatie van beiden maar dan is compensatie nodig. Voor de laatste ga je als volgt te werk:     
   1) verwijder alle metingen boven de 30 cm uit de LIS dataset (deze bomen zijn zeker meegenomen in FAS)    
   2) Bereken de theoretische LIS diameter van alle bomen in de FAS data zoals hieronder weergegeven. 
-  Waarden boven de 30 cm worden verwijderd (dat zijn geen dubbeltellingen meer gezien (1)). 
+  3) Waarden boven de 30 cm worden verwijderd (dat zijn geen dubbeltellingen meer gezien (1)). 
   De resterende diameters worden als negetieve waarden aan de LIS data toegevoegd. 
   Aan de hand van DeVries formule worden de diameters omgezet naar een volume per plot. 
   Negatieve diameters compenseren op die manier voor gemeten LIS diameters van bomen die ook in FAS data zitten. 
 
 
-### LIS < 30 cm
+## LIS < 30 cm
 
 Verwijder alle metingen boven de 30 cm uit de LIS dataset (deze bomen zijn zeker meegenomen in FAS)    
 
@@ -502,9 +435,12 @@ data_LIS_kleinerdan30 <- data_LIS %>%
   filter(diam_mm < 300 )
 ```
 
-### Theoretische LIS > 30 cm
+## Theoretische LIS > 30 cm
 
 Bereken de **theoretische LIS diameter** van alle bomen in de FAS data.
+Deze moeten afgetrokken worden van de LIS-data om geen dubbeltellingen te hebben
+
+**Werkwijze:**
 
 LIS met 3 lijnen: één naar Noorden van 3 tot 18m, 2 andere onder hoek van 120 graden
 
@@ -512,10 +448,83 @@ XY-coördinaten van top en bottom nodig:
 
 1) nieuw project met enkel LIS-plots: "C:/03_BR_db_monitoring/LIS_plots_20240930/FieldMapData_LIS_plots_20240930.accdb"
 2) In Project Manager werden via de tool "Export data" in de Acces dB (PlainSHP setting: DC - settings - general - map layers handling) de tabellen Deadwood_details gegenereerd (in access "LIS_exportdata.accdb")
-<!-- (c)A: volgen mij is "geodatabase" ook OK ipv PlainSHP setting -->
+<!-- (c)A: volgens mij is "geodatabase" ook OK ipv PlainSHP setting -->
 Via 3 query's zijn tabellen aangemaakt met  plotid, id deadwood, id, x, y, z, diam, lengte, volume, soort, afbraak en bosreservaat.
 Uit die query's zijn dan weer 3 xls tabellen geëxporteerd :
 DW_1eSet_XY, DW_2eSet_XY, DW_3eSet_XY
+
+
+
+### Aanmaak FM-project enkel LIS-plots
+
+DOEL: diameters van liggend dood hout ter hoogte van de drie transecten
+
+Deze diameters zijn nodig, om te weten of een stuk dood hout meegenomen is bij LIS
+
+
+Alle dood hout met een bepaalde minimum diameter (bosreservaten standaard min 10 cm) 
+dat een transect van LIS kruist, wordt genoteerd.
+Daarnaast volopname van zwaarder dood hout (bosreservaten standaard 30 cm).
+Dit betekent dat het zwaarder dood hout dubbel geteld wordt, toch als het een LIS transect kruist.
+Maar dat zwaarder dood hout heeft niet doodzakelijk een diameter van 30 cm ter hoogte van
+de LIS-transecten
+Bv. plot 103
+
+> in plotdetails extra variabelen opnemen: `MinDiamLIS`, `MaxDiamLIS` en `LengthTransectLIS`; 
+ter aanvulling van `TresholdDiamDeadwood_A4`/`TresholdDiamDeadwood_CoreArea`
+
+Code van Arno die ik gebruikte bij Everbeek om de diameter van het liggend dood hout te 
+berekenen op de plotrand en de lengte inside de plot te berekenen, kan ook gebruikt worden
+om volume inside plot te berekenen, zodat we niet moeten zorgen dat dat in datacollector gebeurt
+(en dan nog een updatequery om weg te schrijven naar `CalcVolume_m3` en `CalcLength_m`)
+
+? Maar is het niet te zwaar om de volledige moederdb te exporteren?
+Nee, lukt wel
+Achteraf overbodige tabellen deleten en db comprimerern/herstellen
+
+> bekijken hoe diameters op rand van plot
+Van alle liggend dood hout de diameters berekenen ter hoogte van de lijnen voor LIS 
+
+Deze verkrijgen we door 
+1) in datacollector bij "Plots - Settings - Fieldmap Settings - Map layers handling" te kiezen voor shapefiles ipv geodatabase. - niet nodig
+2) zorgen dat coordinaten in "local" staan ipv global  - voor CP's is dat al zo bij moederdb (niet voor KV!!)
+3) in project manager via "Tools - Export data" de data te exporteren naar een (andere) access-db 
+("Deadwood.accdb" , waarbij ik overbodige tabellen delete)
+
+Dan worden in die nieuwe access-db de tabellen "Deadwood_details" gegenereerd.
+Die tabellen bevatten per deadwood fragment, twee records met telkens plotid, id deadwood, id, x, y, z, diam
+
+(KV's nog in globale coördinaten => nu focussen op de cirkelplots)
+
+
+
+
+----
+
+met xy van begin en eindpunt kan ik snijpunt met plotrand berekenen
+en diameter op snijpunt met de drie transecten
+
+!! belangrijk hoe de transecten gelegen zijn en hoelang ze zijn
+
+
+
+dat heb ik nu niet nodig
+ik moet weten 
+
+
+
+
+
+-----
+
+We gaan verder met de plots waar 
+
+- een LIS-opname gebeurd is   
+- én een volopname deadwood
+- én de data processed is
+
+
+
 
 
 ```{r load_FAS_details}
