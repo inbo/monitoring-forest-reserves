@@ -318,6 +318,47 @@ data_deadwood %>% filter(is.na(calc_volume_m3)) %>% nrow()
 # 0
 ```
 
+```{r check_update}
+# update is OK als overal calc_lengte berekend is 
+# én per reservaat één verschil met total_length (n_outside > 0)
+
+data_deadwood <- load_data_deadwood(database = path_to_fieldmap_db, processed = TRUE) %>% 
+  filter(period == 3)
+names(data_deadwood)
+range(data_deadwood$calc_length_m)
+data_deadwood %>% filter(is.na(calc_volume_m3)) %>% select(intact_fragm)
+# reden: IntactFragment=10
+
+range(data_deadwood$total_length_m)
+
+data_deadwood %>% 
+  mutate(check_inside_plot = total_length_m - calc_length_m) %>% 
+  select(plot_id, plottype, forest_reserve
+         , total_length_m, calc_length_m
+         , check_inside_plot) %>% 
+  group_by(forest_reserve) %>% 
+  summarize(n_outside = sum(check_inside_plot != 0)) %>% 
+  ungroup()
+
+```
+
+
+### ALTERNATIEF: zelf inside plot berekenen - NOT FOR NOW
+
+Met code van Arno (zie Wildcard_Everbeek_plot_data.Rmd) kunnen we - obv XY van begin- en eindpunt - 
+diameters berekenen op plotrand en lengte tot plotrand.
+Op basis daarvan kunnen we dan volume inside plot berekenen.
+
+*!! Iets moeilijker bij kernvlaktes*, want 
+
+- daar kan vorm afwijken (niet enkel straal zoals bij cirkelplots)     
+- Moederdb: cirkelplots in lokale coordinaten, kernvlaktes in globale     
+
+Omzetten van lokaal naar globaal en vice versa gebeurt in FM-DC --> settings - georeferencing
+OPGEPAST: gebeurt plot per plot én enkel voor de actieve layers 
+> DAAROM zelf inside plot berekenen nog even uitstellen, tot we ook weten dat dat voor kernvlaktes kan
+
+
 ## Intacte bomen - NIET MEER NODIG
 
 Indien deadwood als intact (veld `IntactFragment`) aangevinkt staat, moeten er 
