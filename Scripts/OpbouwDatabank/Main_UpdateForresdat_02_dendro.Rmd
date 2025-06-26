@@ -318,20 +318,20 @@ data_deadwood %>% filter(is.na(calc_volume_m3)) %>% nrow()
 # 0
 ```
 
-```{r check_update}
+```{r check_update_period3, eval = FALSE}
 # update is OK als overal calc_lengte berekend is 
 # én per reservaat één verschil met total_length (n_outside > 0)
 
-data_deadwood <- load_data_deadwood(database = path_to_fieldmap_db, processed = TRUE) %>% 
+data_deadwood_p3 <- load_data_deadwood(database = path_to_fieldmap_db, processed = TRUE) %>% 
   filter(period == 3)
-names(data_deadwood)
-range(data_deadwood$calc_length_m)
-data_deadwood %>% filter(is.na(calc_volume_m3)) %>% select(intact_fragm)
+names(data_deadwood_p3)
+range(data_deadwood_p3$calc_length_m)
+data_deadwood_p3 %>% filter(is.na(calc_volume_m3)) %>% select(intact_fragm)
 # reden: IntactFragment=10
 
-range(data_deadwood$total_length_m)
+range(data_deadwood_p3$total_length_m)
 
-data_deadwood %>% 
+data_deadwood_p3 %>% 
   mutate(check_inside_plot = total_length_m - calc_length_m) %>% 
   select(plot_id, plottype, forest_reserve
          , total_length_m, calc_length_m
@@ -450,38 +450,37 @@ nrow(check_deadw) == 0
 
 ```
 
-# Correctie staande bomen - Zoniën KERN_1983  
+# CORRECTIE staande bomen - Zoniën KERN_1983  
 
-- Zoniën KERN_1983 - KV - 1986: 
-** geen shoots, geen deadwood, reg of veg
-** pas vanaf dbh 30 cm   
-
-
-- Zoniën KERN_1983 - KV - 2000: 
-** pas vanaf dbh 30 cm volopname  
-** boompjes met dbh 10-30 cm werden geteld
+- Zoniën KERN_1983 - KV - 1986:    
+  ** geen shoots, geen deadwood, reg of veg    
+  ** pas vanaf dbh 30 cm        
 
 
-**Methodiekrapport**:
+- Zoniën KERN_1983 - KV - 2000:    
+  ** pas vanaf dbh 30 cm volopname      
+  ** boompjes met dbh 10-30 cm werden geteld    
 
-*Dendrometrics*: 
+
+**Methodiekrapport**
+
+*Dendrometrics*:     
 Full survey of all trees (L+D) with DBH>30cm in 1986-87; revisited in 1991 to
 record windthrown trees due to windstorms of february 1991 (Vivian & Wiebke). Volume
-calculations with tariffs (Van den Berge et al. 1990; 1992).
+calculations with tariffs (Van den Berge et al. 1990; 1992).    
 
 In 2000/01 : re-survey of full area, with DBH threshold of 30 cm, trees of 10-30 cm counted,
-not positioned; smaller trees not surveyed in full area but in subsamples (see regeneration).
+not positioned; smaller trees not surveyed in full area but in subsamples (see regeneration).    
 
-2010 and 2020 : full survey of all trees (L+D) with DBH>5cm.
+2010 and 2020 : full survey of all trees (L+D) with DBH>5cm.    
 
-## Staande bomen 1ste decade KV Kersselaerspleyn pas vanaf 30 cm
 
-*Eigen verwerking*: 
+**Info uit dataverwerking 2010** 
 
-Concreet Kersselaerspleyn_IA_KV1986etc_INBO33: bevat alle jaartallen:
-	- 1986 
-	- 2000 (!! Pas gebiedsdekkend opgemeten vanaf 30 cm DBH => extra filter toevoegen bij de verwerking)
-	- 2010
+Concreet FM-project "Kersselaerspleyn_IA_KV1986etc_INBO33": bevat alle jaartallen:    
+	- 1986     
+	- 2000 (!! Pas gebiedsdekkend opgemeten vanaf 30 cm DBH => extra filter toevoegen bij de verwerking)     
+	- 2010     
 
 In 2000 werd gebiedsdekkend gemeten vanaf 30 cm DBH, en in twee verjongingsgroepen vanaf 5 cm.
 Daarnaast streeplijsten: samen met veg in 750 subsamples: 30-20, 20-10 en < 10 cm.
@@ -832,7 +831,7 @@ deadw_by_decay_plot_species %>% filter(plot_id == 1620 & period == 2) %>% dplyr:
 ```
 
 
-# Correctie Kersselaerspleyn liggend dood hout
+# CORRECTIE liggend dood hout - Zoniën KERN_1983 & UITBR_1995 
 
 Correctie op plot-niveau
 
@@ -861,9 +860,11 @@ en Zwaenepoel werden vervangen door
 
 
 
-## Logs in de CP's van Zoniën KERN_1983 & Zoniën UITBR_1995 - periode 1 (2000)
+## CP's Zoniën KERN_1983 & Zoniën UITBR_1995 - periode 1
 
-Zitten niet in fieldmap, maar er zijn wel gegevens uit het monitoringrapport, zie 
+Periode 1, opnamejaar 2000
+
+Zitten niet in fieldmap, maar er zijn wel *gegevens uit het monitoringrapport*, zie 
 "CP_Kerss_logs_2000.xlsx" (C:/03_BR/1_DataVerwerkingBR/Data/Meetgegevens/logs_CPs_Kerss_2000)
 
 Deze hier implementeren.
@@ -1028,7 +1029,11 @@ deadw_by_decay_plot_species <- deadw_by_decay_plot_species_
 
 
 
-## Logs in de KV van Zoniën KERN_1983 pas vanaf 40 cm opgemeten (2010 en 2020)
+## KV Zoniën KERN_1983 - periode 2 & 3
+
+Periode 2 & 3, opnamejaren 2010 en 2020
+
+*Pas vanaf 40 cm opgemeten (2010 en 2020)*
 
 Geen opnames van logs in 1ste decade (survey_deadw = FALSE).
 In 2de en 3de decade pas opgemeten vanaf 40 cm diameter.
@@ -1048,7 +1053,7 @@ check <- dendro_by_plot %>%
   filter(plot_id == 11000)
 ```
 
-```{r correctie_logs_KV_Kerss}
+```{r corr_data_zonder_diam}
 names(dendro_by_plot)
 # "vol_log_m3_ha"           "vol_deadw_m3_ha" 
 
@@ -1091,75 +1096,6 @@ dendro_by_plot_species <- dendro_by_plot_species_
 
 ```
 
-```{r}
-# diam
-dendro_by_diam_plot_ <- dendro_by_diam_plot %>% 
-  mutate(vol_log_m3_ha_min40cm = 
-           ifelse(plot_id == 11000, vol_log_m3_ha, NA),
-         vol_log_m3_ha = 
-           ifelse(plot_id == 11000, NA, vol_log_m3_ha)
-         # vol_deadw_m3_ha = 
-         #   ifelse(plot_id == 11000, NA, vol_deadw_m3_ha)
-           )
-
-dendro_by_diam_plot_ %>% 
-  filter(plot_id == 11000)
-
-dendro_by_diam_plot <- dendro_by_diam_plot_
-
-# diam - spec
-dendro_by_diam_plot_species_ <- dendro_by_diam_plot_species %>% 
-  mutate(vol_log_m3_ha_min40cm = 
-           ifelse(plot_id == 11000, vol_log_m3_ha, NA),
-         vol_log_m3_ha = 
-           ifelse(plot_id == 11000, NA, vol_log_m3_ha)
-         # vol_deadw_m3_ha = 
-         #   ifelse(plot_id == 11000, NA, vol_deadw_m3_ha)
-           )
-
-dendro_by_diam_plot_species_ %>% 
-  filter(plot_id == 11000)
-
-dendro_by_diam_plot_species <- dendro_by_diam_plot_species_
-```
-
-**OPGEPAST**: tabellen `dendro_by_diam_plot` en `dendro_by_diam_plot_species`: 
-diam-klasses 10-15cm/15-20cm/20-25cm/25-30cm/…: `vol_log_m3_ha_min40cm = NA` ipv `0` 
-
-We zouden kunnen opteren om `vol_log_m3_ha` aan te vullen voor de hogere diameterklasses, maar dat geeft enkel verwarring => DOEN WE NIET, alle diameterklasses blijven daar NA!
-
-```{r correctie_logs_KV_Kerss2}
-unique(dendro_by_diam_plot$dbh_class_5cm)
-
-check <- dendro_by_diam_plot %>% 
-  filter(plot_id == 11000 & year %in% c(2009, 2020))
-
-table(check$dbh_class_5cm)
-
-to_small <- c("5 - 10 cm", "10 - 15 cm", "15 - 20 cm", "20 - 25 cm", "25 - 30 cm", "30 - 35 cm", "35 - 40 cm")
-
-dendro_by_diam_plot_ <- dendro_by_diam_plot %>% 
-  mutate(vol_log_m3_ha_min40cm = ifelse(plot_id == 11000 & dbh_class_5cm %in% to_small,
-                                        NA,
-                                        vol_log_m3_ha_min40cm))
-
-check2 <- dendro_by_diam_plot_ %>% 
-  filter(plot_id == 11000 & year %in% c(2009, 2020) & dbh_class_5cm %in% to_small)
-
-dendro_by_diam_plot <- dendro_by_diam_plot_
-
-# idem voor xxxxx_species
-dendro_by_diam_plot_species_ <- dendro_by_diam_plot_species %>% 
-  mutate(vol_log_m3_ha_min40cm = ifelse(plot_id == 11000 & dbh_class_5cm %in% to_small,
-                                        NA,
-                                        vol_log_m3_ha_min40cm))
-
-check2 <- dendro_by_diam_plot_species_ %>% 
-  filter(plot_id == 11000 & year %in% c(2009, 2020) & dbh_class_5cm %in% to_small)
-
-dendro_by_diam_plot_species <- dendro_by_diam_plot_species_
-
-```
 
 
 ```{r}
@@ -1194,6 +1130,49 @@ deadw_by_decay_plot_species_ %>%
 
 deadw_by_decay_plot_species <- deadw_by_decay_plot_species_
 ```
+
+**OPGEPAST**: tabellen `dendro_by_diam_plot` en `dendro_by_diam_plot_species`: 
+géén variabele `vol_log_m3_ha_min40cm` nodig, zorgen dat `vol_log_m3_ha` en `vol_deadw_m3_ha` 
+NA zijn voor de diam-klasses 10-15cm/15-20cm/20-25cm/25-30cm/… 
+
+
+```{r corr_data_met_diam}
+# diam
+names(dendro_by_diam_plot)
+unique(dendro_by_diam_plot$dbh_class_5cm)
+kleiner_dan_40 <- c("5 - 10 cm", "10 - 15 cm", "15 - 20 cm", "20 - 25 cm"
+                    ,"25 - 30 cm", "30 - 35 cm", "35 - 40 cm")
+# dbh_class_5cm
+dendro_by_diam_plot_ <- dendro_by_diam_plot %>% 
+  mutate(vol_log_m3_ha = 
+           ifelse(plot_id == 11000 & dbh_class_5cm %in% kleiner_dan_40
+                  , NA, vol_log_m3_ha)
+         , vol_deadw_m3_ha = 
+           ifelse(plot_id == 11000 & dbh_class_5cm %in% kleiner_dan_40
+                  , NA, vol_deadw_m3_ha)
+           )
+
+dendro_by_diam_plot_ %>% 
+  filter(plot_id == 11000 & period == 2)
+
+dendro_by_diam_plot <- dendro_by_diam_plot_
+
+# diam - spec
+dendro_by_diam_plot_species_ <- dendro_by_diam_plot_species %>% 
+  mutate(vol_log_m3_ha = 
+           ifelse(plot_id == 11000 & dbh_class_5cm %in% kleiner_dan_40
+                  , NA, vol_log_m3_ha)
+         , vol_deadw_m3_ha = 
+           ifelse(plot_id == 11000 & dbh_class_5cm %in% kleiner_dan_40
+                  , NA, vol_deadw_m3_ha)
+           )
+
+dendro_by_diam_plot_species_ %>% 
+  filter(plot_id == 11000 & period == 2)
+
+dendro_by_diam_plot_species <- dendro_by_diam_plot_species_
+```
+
 
 
 # Vergelijking met oude data
@@ -1244,12 +1223,12 @@ dendro_by_diam_plot_git <- read_forresdat_table(tablename = "dendro_by_diam_plot
                                            , git_reference = "develop")
 nrow(dendro_by_diam_plot) == nrow(dendro_by_diam_plot_git)
 
-logs_by_decay_plot_git <- read_forresdat_table(tablename = "logs_by_decay_plot"
+deadw_by_decay_plot_git <- read_forresdat_table(tablename = "deadw_by_decay_plot"
                                            , join_plotinfo = TRUE
                                            , plottype = "all"
                                            , git_ref_type = "branch"
                                            , git_reference = "develop")
-nrow(logs_by_decay_plot) == nrow(logs_by_decay_plot_git)
+nrow(deadw_by_decay_plot) == nrow(deadw_by_decay_plot_git)
 
 ```
 
@@ -1305,19 +1284,11 @@ save_results_forresdat(
   repo_path = path_to_git_forresdat,
   metadata_path = paste0(path_to_metadata, "_metadata_plotlevel_results_dendro.xlsx"),
   push = FALSE,
-  strict = TRUE,
+  strict = FALSE,
   branch = "develop"
 )
 
 ```
-
-```{r save_dendro_git_manueel, eval = FALSE}
-# manueel - eigen simpele functie - als save_results_git niet werkt
-save_results_tsv(dendro, 
-                 root = path_to_forresdat_data, 
-                 strict = FALSE)
-```
-
 
 ```{r save_dendro_access_csv, eval = FALSE}
 # hier wel plotinfo (plottype, BR, surveynr mee wegschrijven)
