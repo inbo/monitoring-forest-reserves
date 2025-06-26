@@ -80,8 +80,12 @@ en 4 van 70m, zie figuur mail 7/12/2023).
 
 <!-- Insteek Arno: Het lijkt me logisch om ongeveer eenzelfde aandeel aan te houden als in de cirkelplots (45m/1000m²), dus ongeveer 440m. Idd beter beide richtingen en randen.  -->
 
-
 Veld `LineIntersect` in layer `PlotDetails_3eSet` geeft aan of er LIS gebruikt werd of niet (TRUE/10 or FALSE/20)
+
+> 23/6/2025: op dit moment berekenen wwe enkel voor de cirkelplots deadwood vanaf 10 cm.
+Voor de kernvlakte (Heirnisse, plot 91000) rekenen we enkel met de volopname en wordt dus enkel het deadwood volume
+vanaf 30 cm berekend.
+Het zijn enkel de cirkelplots die op zenodo komen. 
 
 
 ```{r results='hold', eval=TRUE}
@@ -204,6 +208,8 @@ odbcClose(con)
 
 LIS 
 
+Indien geen angle ingevoerd, veronderstellen we deze horizontaal (angle = 0)
+
 ```{r load_deadw_LIS, results='hide'}
 # enkel 3eSET 
 query_LIS <- 
@@ -251,7 +257,12 @@ data_LIS <- data_LIS %>%
 
 ```{r calc_LIS, results='hide'}
 colnames(data_LIS)
-summary(data_LIS) # ok
+summary(data_LIS) # !! 627 NA's voor angle 
+
+
+# we veronderstellen angle = 0 als niet ingevuld
+data_LIS <- data_LIS %>% 
+  mutate(angle = ifelse(is.na(angle), 0, angle))
 
 Li<-45  # lengte van de drie transecten   
 
@@ -316,59 +327,16 @@ nrow(check_deadw) == 0
 
 ```
 
-## Load plot-level deadwood FAS
 
-Plot-level-data inladen, hier niet opnieuw berekenen.
-Is reeds gebeurd in script Main_UpdateForresdat_02_dendro.Rmd
-
-Focus op de LIS-plots!!
-
-
-
-```{r read}
-# [1] "dendro_by_plot"              "dendro_by_plot_species"      "dendro_by_diam_plot"         "dendro_by_diam_plot_species"
-# [5] "deadw_by_decay_plot"         "deadw_by_decay_plot_species"
-
-list_plotlevel_data <- c("dendro_by_plot", "dendro_by_plot_species"
-                         , "dendro_by_diam_plot", "dendro_by_diam_plot_species"
-                         , "deadw_by_decay_plot", "deadw_by_decay_plot_species")
-
-# Maak een lege lijst aan
-plotlevel_data <- list()
-
-# tabName <- "dendro_by_plot"
-
-for (tabName in list_plotlevel_data) {
-  tabel <- read_forresdat_table(tablename = tabName
-                                  , join_plotinfo = FALSE
-                                  , plottype = "all"
-                                  , git_ref_type = "branch"
-                                  , git_reference = "develop") %>% 
-    inner_join(list_plots)
-  
-  # Voeg de tabel toe aan de lijst, met de naam als sleutel
-  plotlevel_data[[tabName]] <- tabel
-  }
-
-# ?read_forresdat
-
-for (tablename in names(plotlevel_data)) {
-     assign(tablename, plotlevel_data[[tablename]])
-} 
-
-
-```
-
-
-# Combineren LIS en FAS
+# Combineren LIS en FAS - enkel CP's
 
 Alle dood hout met een bepaalde minimum diameter (bosreservaten standaard min 10 cm) 
 dat een transect van LIS kruist, wordt genoteerd.
 Daarnaast volopname van zwaarder dood hout (bosreservaten standaard 30 cm).
-Dit betekent dat het zwaarder dood hout dubbel geteld wordt, toch als het een LIS transect kruist.
+Dit betekent dat het zwaarder dood hout dubbel geteld wordt als het een LIS transect kruist.
 Maar dat zwaarder dood hout heeft niet doodzakelijk een diameter van 30 cm ter hoogte van
 de LIS-transecten
-Bv. plot 103
+Bv. plot 135
 
 Samengevat:
 
@@ -377,20 +345,29 @@ Samengevat:
 
 => je kan op 3 manieren een volume berekenen:   
 
-- enkel LIS: alle diameters tot 30 cm maar minder nauwkeurig op plotniveau    
+- enkel LIS: alle diameters maar minder nauwkeurig op plotniveau     
 - enkel FAS: diameters vanaf 30 cm en nauwkeurig op plotniveau    
-- combinatie van beiden maar dan is compensatie nodig. Voor de laatste ga je als volgt te werk:     
-  1) verwijder alle metingen boven de 30 cm uit de LIS dataset (deze bomen zijn zeker meegenomen in FAS)
-  2) Bereken de theoretische LIS diameter van alle bomen in de FAS data zoals hieronder weergegeven. 
-  3) Waarden boven de 30 cm worden verwijderd (dat zijn geen dubbeltellingen meer gezien (1)). 
-  De resterende diameters worden als negetieve waarden aan de LIS data toegevoegd. 
-  Aan de hand van DeVries formule worden de diameters omgezet naar een volume per plot. 
-  Negatieve diameters compenseren op die manier voor gemeten LIS diameters van bomen die ook in FAS data zitten. 
+- combinatie van beiden maar dan is compensatie nodig: 
+  *Voltotal = VOL-FAS + VOL-LIS(d<30) - Compensatievol*
+  
+Om compensatie te berekenen gaan we als volgt te werk:     
+
+  (1) Verwijder alle metingen boven de 30 cm uit de LIS dataset (deze bomen zijn zeker meegenomen in FAS)  
+  
+  (2) Bereken de theoretische LIS diameter van alle bomen in de FAS data
+  
+  (3) Waarden boven de 30 cm worden verwijderd (dat zijn geen dubbeltellingen meer gezien (1))
+  
+  (4) De resterende diameters worden als negetieve waarden aan de LIS data toegevoegd 
+  
+  (5) Aan de hand van DeVries formule worden de diameters omgezet naar een volume per hectare. 
+  Negatieve diameters compenseren op die manier voor gemeten LIS diameters van bomen die 
+  ook in FAS data zitten. 
 
 
 ## LIS > 30 cm verwijderen
 
-Verwijder alle metingen boven de 30 cm uit de LIS dataset (deze bomen zijn zeker meegenomen in FAS)
+  (1) Verwijder alle metingen boven de 30 cm uit de LIS dataset (deze bomen zijn zeker meegenomen in FAS)
 
 ```{r}
 data_LIS_kleinerdan30 <- data_LIS %>%
@@ -400,8 +377,7 @@ data_LIS_kleinerdan30 <- data_LIS %>%
 
 ## Theoretische LIS diameter
 
-Bereken de **theoretische LIS diameter** van alle bomen in de FAS data.
-Deze moeten afgetrokken worden van de LIS-data om geen dubbeltellingen te hebben
+ (2) Bereken de theoretische LIS diameter van alle bomen in de FAS data
 
 **Werkwijze:**
 
@@ -495,8 +471,6 @@ names(data_FAS_xy)
 names(data_FAS)
 ```
 
-### Berekening compensatie
-
 ```{r d_D}
 DW <- dplyr::select(data_FAS_xy, plot_id, deadw_id, ID, period
                          , x_m, y_m, z_m, diam_mm) %>%
@@ -522,7 +496,6 @@ DW$zD <-ifelse(DW$d1<DW$d2, DW$z2, DW$z1)
 DW <- DW %>% 
   select(plot_id, deadw_id, period, d, D, xd, yd, zd, xD, yD, zD)
 ```
-
 
 ```{r}
 DW_ <- DW %>% 
@@ -589,12 +562,15 @@ deadw_FAS <- DW_ %>%
   )
 
 
-deadw_FAS %>% filter(plot_id == 103) %>% select(contains("diam"))
+deadw_FAS %>% filter(plot_id %in% c(103, 135)) %>% select(species, contains("diam"))
 
 ```
 
 
-Waarden boven de 30 cm worden verwijderd (deze zijn geen dubbeltellingen meer gezien (1). 
+### Waarden > 30 cm verwijderen
+
+ (3) Waarden boven de 30 cm worden verwijderd (dat zijn geen dubbeltellingen meer gezien (1))
+
 
 ```{r}
 deadw_FAS_comp <- deadw_FAS %>% 
@@ -605,84 +581,219 @@ deadw_FAS_comp <- deadw_FAS %>%
   )
 
 # check
-deadw_FAS_comp %>% filter(plot_id == 103) %>% select(contains("diam"))
+deadw_FAS_comp %>% filter(plot_id %in% c(103, 135)) %>% select(species, decaystage, contains("diam"))
 ```
 
+> (c) Arno: In bovenstaand script zit nog een probleem dat ik nog niet heb opgelost! 
+Als een boom perfect N-Z gelegen is dan is de rico oneindig (/0) maar geeft r NA. 
+Tot nu toe zijn er 3 bomen in de volledige dataset waar dit het geval is.  
+
+(c) A: op 23/6/2025 stelt probleem zich nog niet (probleem oplossen als het zich stelt)
+(? rico vervangen door bijna N-Z gericht)
+
+```{r check_rico}
+deadw_FAS_comp %>% filter(is.na(rico)) %>% nrow() == 0
+# TRUE
+```
+
+
+
+
+### Negatieve waarden toevoegen aan LIS ter compensatie
+
+ (4) De resterende diameters worden als negetieve waarden aan de LIS data toegevoegd 
 
 Voltotal = VOL-FAS + VOL-LIS(d<30) - Compensatievol
 
-```{r informatie_compensatie_totaal, eval = FALSE}
-# ter info over welk volume het gaat
 
-
-deadw_FAS_comp <- deadw_FAS_comp %>% 
-  mutate(DVfactor45 = pi^2/(45*8) * (rA4*rA4*pi)/10000) 
-#vast deel van De Vries (1986) formule om volume met line intersecten te berekenen 
-# voor 45 m transectline 
-# ? (rA4*rA4*pi)/10000 = opp. van de plot in hectare => hier formule met opp. van plot om een 
-# totaal volume (m3) te bekomen eerder dan een volume per ha (m3/ha)
-
-deadw_liney <- deadw_FAS_comp
-deadw_line2 <- deadw_FAS_comp
-deadw_line3 <- deadw_FAS_comp
-
-deadw_liney$d2 <- -(plot$diamy/10)^2   # d2=diameter (in m) in het kwadraat; obv diam_cm geeft m3/ha  
-deadw_line2$d2 <- -(plot$diaml2/10)^2
-deadw_line3$d2 <- -(plot$diaml3/10)^2
-deadw_all_lines <- rbind(deadw_liney, deadw_line2, deadw_line3)
-
-compensatie_vol <- deadw_all_lines %>%
-  group_by(plot_id, period, species, decaystage) %>%
-  summarise(vol=sum(d2)*first(DVfactor45)) 
-
-volume_m3_m2=pi^2/8/Li*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)) 
-volume_m3_ha=pi^2/8/Li*sum((diam_cm^2)/cos(angle*pi/180),na.rm=TRUE)) 
-# Voltotal = VOL-FAS + VOL-LIS(d>=30) + Compensatievol$vol
-
-# In bovenstaand script zit nog een probleem dat ik nog niet heb opgelost! 
-# Als een boom perfect N-Z gelegen is dan is de rico oneindig (/0) maar geeft r NA. 
-# Tot nu toe zijn er 3 bomen in de volledige dataset waar dit het geval is.  
-```
-
-
-De resterende diameters worden als **negatieve waarden** aan de LIS data toegevoegd. 
-
-
-```{r combine_lines_FAS}
-deadw_liney <- deadw_FAS %>% mutate(diam_FAS = -diamy)
-deadw_line2 <- deadw_FAS %>% mutate(diam_FAS = -diaml2)
-deadw_line3 <- deadw_FAS %>% mutate(diam_FAS = -diaml3)
+```{r }
+deadw_liney <- deadw_FAS_comp %>% mutate(diam_FAS = -diamy)
+deadw_line2 <- deadw_FAS_comp %>% mutate(diam_FAS = -diaml2)
+deadw_line3 <- deadw_FAS_comp %>% mutate(diam_FAS = -diaml3)
 
 comp_LIS_groterdan30 <- rbind(deadw_liney, deadw_line2, deadw_line3)
 # maak diameter negatief
-  
+# (c) Anja: diameters kunnen niet opgeteld worden, want dan klopt formule De Vries niet meer
+
+
+
 ```
 
 
-> namen nog op elkaar afstemmen
+> proberen koppelen van comp_LIS_groterdan30 aan LIS
+?iteratief
 
 
+```{r check_koppeling}
+comp_LIS_groterdan30_ <- comp_LIS_groterdan30 %>% 
+  filter(diam_FAS != 0) %>% 
+  mutate(IDLineIntersect_3eSet = ifelse(diamy != 0, 1
+                                        , ifelse(diaml2 != 0, 2, 3)))
+# nog 118 records van de 1683
+names(comp_LIS_groterdan30_)
 
-```{r combine_LIS_compFAS}
 names(data_LIS_kleinerdan30)
+
+
+koppeling_LIS_FAS <- comp_LIS_groterdan30_ %>% 
+  select(plot_id, deadw_id, IDLineIntersect_3eSet, diam_FAS
+         , period, species, decaystage) %>% 
+  left_join(data_LIS_kleinerdan30 %>% 
+              select(plot_id, IDLineIntersect_3eSet
+                     , period, species, decaystage
+                     , diam_mm_lis = diam_mm, angle_lis = angle)
+         , by = c("plot_id", "period", "IDLineIntersect_3eSet"
+                                          , "species", "decaystage"))
+  
+
+koppeling_LIS_FAS %>% filter(plot_id == 718)
+# enkel probleem wanneer er twee of geen koppelingen zijn
+# wat zo is bij deadw_id = 1 en 2 
+
+check_ongekoppeld <- koppeling_LIS_FAS %>% 
+  group_by(period, plot_id, deadw_id) %>% 
+  summarize(n_opties = sum(!is.na(diam_mm_lis))) %>% 
+  ungroup()
+
+check_ongekoppeld %>% filter(plot_id == 718)
+check_ongekoppeld %>% filter(plot_id == 825)
+check_ongekoppeld %>% filter(n_opties != 1) %>% nrow()
+# 92/170 => ca 54%
+
+
+koppeling_LIS_FAS_nietOK <- koppeling_LIS_FAS %>% 
+  inner_join(check_ongekoppeld %>% filter(n_opties != 1))  
+  #342
+  # filter(diam_FAS <= -100)
+  #305
+
+koppeling_LIS_FAS_OK <- koppeling_LIS_FAS %>% 
+  inner_join(check_ongekoppeld %>% filter(n_opties == 1)) %>% 
+  mutate(diff_diam = diam_mm_lis + diam_FAS)
+
+mean(koppeling_LIS_FAS_OK$diff_diam)
+# 4.8 => eerder afwijking naar onder, diam_FAS ietsje lager ingeschat, 
+# waardoor compensatie te lage volumes aftrekt en er een (kleine?) overschatting ontstaat
+# !! op heel kleine subset: maar 25 metingen
+
+
+median(koppeling_LIS_FAS_OK$diff_diam)
+```
+
+```{r}
+# idem, maar met abstractie van decaystage (hoeft niet zelfde te zijn)
+koppeling_LIS_FAS <- comp_LIS_groterdan30_ %>% 
+  select(plot_id, deadw_id, IDLineIntersect_3eSet, diam_FAS
+         , period, species, decaystage) %>% 
+  left_join(data_LIS_kleinerdan30 %>% 
+              select(plot_id, IDLineIntersect_3eSet
+                     , period, species, decaystage
+                     , diam_mm_lis = diam_mm, angle_lis = angle)
+         , by = c("plot_id", "period", "IDLineIntersect_3eSet"
+                                          , "species"))
+  
+
+koppeling_LIS_FAS %>% filter(plot_id == 718)
+# enkel probleem wanneer er twee of geen koppelingen zijn
+# wat zo is bij deadw_id = 1 en 2 
+
+check_ongekoppeld <- koppeling_LIS_FAS %>% 
+  group_by(period, plot_id, deadw_id) %>% 
+  summarize(n_opties = sum(!is.na(diam_mm_lis))) %>% 
+  ungroup()
+
+check_ongekoppeld %>% filter(plot_id == 718)
+check_ongekoppeld %>% filter(n_opties != 1) %>% nrow()
+# 92/170 => ca 54%
+
+
+koppeling_LIS_FAS_nietOK <- koppeling_LIS_FAS %>% 
+  inner_join(check_ongekoppeld %>% filter(n_opties != 1)) 
+  #342
+  # filter(diam_FAS <= -100)
+  #305
+
+koppeling_LIS_FAS_OK <- koppeling_LIS_FAS %>% 
+  inner_join(check_ongekoppeld %>% filter(n_opties == 1)) %>% 
+  mutate(diff_diam = diam_mm_lis + diam_FAS)
+
+mean(koppeling_LIS_FAS_OK$diff_diam)
+# -8 => eerder afwijking naar boven, diam_FAS ietsje hoger ingeschat, 
+# waardoor compensatie te hoge volumes aftrekt en er een (kleine?) onderschatting ontstaat
+# !! op heel kleine subset: maar 32 ONZEKERE koppelingen
+
+koppeling_LIS_FAS_OK %>% filter(decaystage.x == decaystage.y) %>% nrow() == 22
+nrow(koppeling_LIS_FAS_OK) == 32
+
+```
+
+
+(c)A: heel moeilijk te koppelen, soms twee of geen mogelijke koppelingen 
+bv. plot 718 (deadw_id = 1 en 2)
+Bv. plot 825: transect3: allemaal esdoorn, boom die snijdt is es en ander decaystage
+
+Wat mochten we enkel totalen berekenen, niet per species of decaystage.
+Dan krijgen we een algemeen beeld, met onzekerheden op alle vlak.
+
+
+Plot 459, deadw_id = 3: diam_FAS = 34 mm => wordt niet opgemeten met LIS => die ook verwijderen
+!! helemaal niet zeker dat die stukken op terrein ook kleiner dan 10 cm zijn!!!
+Probleem: bijna intacte bomen krijgen diameter 10 mm aan de top
+Bv. plot 825, deadw_id = 6
+Op basis daarvan wordt dan een theoretische diameter ter hoogte van de transecten berekend,
+maar die komt dan helemaal niet overeen met de opgemeten diameter
+In dit geval: diam_FAS = 46 mm en diam_lis = 230 mm
+
+Ik vind dus dat we lis en fas apart moeten houden
+Ofwel rapporteren we over > 30 cm obv FAS, groot BI als we op reservaatsniveau een uitspraak willen doen
+Ofwel rapporteren we over alles obv LIS, grote onnauwkeurigheid voor grote diameters
+
+Eigenlijk zou er een extra veld moeten zijn met diameter thv de transecten
+Maar dan kunnen we net zo goed zeggen van niet dubbel te tellen.
+
+We kunnen ook - als er veel zijn waarmee gekoppeld kan worden - de grootste diameter nemen.
+En als er geen zijn, dan decaystage laten vallen om mee te koppelen
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r combine_LIS_en_compFAS}
+names(data_LIS_kleinerdan30)
+data_LIS_kleinerdan30 <- data_LIS_kleinerdan30 %>% 
+  mutate(d_2 = diam_mm^2) %>% 
+  select(plot_id, period, species, decaystage
+         , diam_mm, d_2, angle)
+
 names(comp_LIS_groterdan30)
+comp_LIS_groterdan30 <- comp_LIS_groterdan30 %>% 
+  mutate(angle = 0
+         , d_2 = -diam_FAS^2) %>% # veronderstelling
+  select(plot_id, period, species, decaystage
+         , diam_mm = diam_FAS, d_2, angle)
 
 data_LIS_corr <- rbind(data_LIS_kleinerdan30, comp_LIS_groterdan30)
 
 ```
 
-Aan de hand van DeVries formule worden de diameters omgezet naar een volume per hectare. 
-Negatieve diameters compenseren op die manier voor gemeten LIS diameters van bomen die ook in FAS data zitten. 
+### Volume LIS berekenen
 
-
-
-
-
-> en dan volumes berekenen per plot/diameter/decaystage
-
-## Volume LIS berekenen
-
-Na compensatie voor dubbeltellingen, enkel wat effectief < 30 cm diameter is
+  (5) Aan de hand van DeVries formule worden de diameters omgezet naar een volume per hectare. 
+  Negatieve diameters compenseren op die manier voor gemeten LIS diameters van bomen die 
+  ook in FAS data zitten. 
+  
+=> dus NA compensatie voor dubbeltellingen, enkel wat effectief < 30 cm diameter is
 
 
 ```{r calc_LIS, results='hide'}
@@ -692,40 +803,152 @@ summary(data_LIS_corr) # ok
 Li<-45  # lengte van de drie transecten   
 
 deadw_LIS_corr <- data_LIS_corr %>%
-  mutate(diam_m = diam_mm/1000
+  mutate(d_2_m = d_2/1000000   # diam_m^2 met correct teken
          # , Diameter_cm = diam_mm/10     # cfrVBI
          ) %>% 
   dplyr::group_by(plot_id, period, species, decaystage) %>%
+  dplyr::summarise(
+    volume_m3_m2=pi^2/8/Li*sum((d_2_m)/cos(angle*pi/180),na.rm=TRUE)
+    # , v3_VolumeLogs_ha=pi^2/8/Li*sum((Diameter_cm^2)/cos(angle*pi/180),na.rm=T)   # cfrVBI, zelfde resultaat
+    ) %>% 
+  ungroup() %>% 
+  mutate(volume_m3_ha = volume_m3_m2 * 10000) %>% 
+  filter(plot_id < 10000)
+  
+#check
+deadw_LIS_corr %>% filter(plot_id %in% c(103, 135));
+deadw_LIS %>% filter(plot_id %in% c(103, 135))
+comp_LIS_groterdan30 %>% filter(plot_id %in% c(103, 135))
+
+# bij mogelijkse verwarring tss VBI en BR: VBI rekent obv diam_cm en komt m3/ha uit, 
+# BR gebruikt diam_m en komt m3/m2 uit
+check <- deadw_LIS_corr %>% 
+  filter(volume_m3_ha < 0)
+
+# 718
+deadw_LIS %>% filter(plot_id %in% c(718)) 
+comp_LIS_groterdan30 %>% filter(plot_id %in% c(718) & d_2 < 0)  # 4 records in FAS
+
+deadw_LIS_corr %>% filter(plot_id %in% c(718))
+
+
+```
+
+```{r enkel_CP, results='hide'}
+deadw_LIS_corr <- deadw_LIS_corr %>%
+  left_join(qSpecies %>% select(-name_nl), by = c("species" = "ID")) %>% 
+  left_join(qDecaystage, by = c("decaystage" = "ID")) 
+
+names(deadw_LIS_corr)
+table(deadw_LIS_corr$decaystage)
+
+#check
+deadw_LIS_corr %>% filter(plot_id %in% c(103, 135));
+deadw_LIS %>% filter(plot_id %in% c(103, 135))
+# geen 100% correctie, want bv. diameter als 250 gemeten, en theoretische FAS-diameter 256
+
+deadw_LIS_corr2 <- deadw_LIS_corr %>% 
+  mutate(volume_m3_m2 = pmin(0, volume_m3_m2)
+         , volume_m3_ha = pmin(0, volume_m3_ha)) # als compensatie negatief uitdraait
+
+# oppassen: soms is er voor de volledige boom een ander afbraakstadium genoteerd dan bij LIS;
+# dat is geen fout, kan lokaal iets anders zijn dan voor de volledige boom
+# wat als species niet goed ingevuld staat? 
+  
+deadw_LIS %>% filter(is.na(species) | is.na(decaystage))
+
+```
+
+
+```{r check_plotlevel}
+deadw_LIS_plot <- data_LIS %>%
+  mutate(diam_m = diam_mm/1000
+         # , Diameter_cm = diam_mm/10     # cfrVBI
+         ) %>% 
+  dplyr::group_by(plot_id, period) %>%
   dplyr::summarise(
     volume_m3_m2=pi^2/8/Li*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
     # , v3_VolumeLogs_ha=pi^2/8/Li*sum((Diameter_cm^2)/cos(angle*pi/180),na.rm=T)   # cfrVBI, zelfde resultaat
     ) %>% 
   ungroup() %>% 
   mutate(volume_m3_ha = volume_m3_m2 * 10000)
-# bij mogelijkse verwarring tss VBI en BR: VBI rekent obv diam_cm en komt m3/ha uit, 
-# BR gebruikt diam_m en komt m3/m2 uit
 
 
-```
 
-```{r results='hide'}
-deadw_LIS_corr <- deadw_LIS_corr %>%
-  left_join(qSpecies %>% select(-name_nl), by = c("species" = "ID")) %>% 
-  left_join(qDecaystage, by = c("decaystage" = "ID"))
-
-names(deadw_LIS_corr)
-table(deadw_LIS_corr$decaystage)
-
+deadw_LIS_corr_plot <- data_LIS_corr %>%
+  mutate(d_2_m = d_2/1000000   # diam_m^2 met correct teken
+         # , Diameter_cm = diam_mm/10     # cfrVBI
+         ) %>% 
+  dplyr::group_by(plot_id, period) %>%
+  dplyr::summarise(
+    volume_m3_m2=pi^2/8/Li*sum((d_2_m)/cos(angle*pi/180),na.rm=TRUE)
+    # , v3_VolumeLogs_ha=pi^2/8/Li*sum((Diameter_cm^2)/cos(angle*pi/180),na.rm=T)   # cfrVBI, zelfde resultaat
+    ) %>% 
+  ungroup() %>% 
+  mutate(volume_m3_ha = volume_m3_m2 * 10000) %>% 
+  filter(plot_id < 10000)
+  
 #check
-deadw_LIS_corr %>% filter(plot_id == 101)
+deadw_LIS_corr_plot %>% filter(plot_id %in% c(103, 135));
+deadw_LIS_plot %>% filter(plot_id %in% c(103, 135))
+comp_LIS_groterdan30 %>% filter(plot_id %in% c(103, 135))
+
+
+deadw_LIS_corr_plot %>% filter(plot_id %in% c(718));
+deadw_LIS_plot %>% filter(plot_id %in% c(718))
+comp_LIS_groterdan30 %>% filter(plot_id %in% c(718))
 
 ```
 
 
 
+
+> en dan volumes berekenen per plot/diameter/decaystage
 > invoegen in plot-level-data
 
 
+## Load plot-level deadwood FAS
+
+Plot-level-data inladen, hier niet opnieuw berekenen.
+Is reeds gebeurd in script Main_UpdateForresdat_02_dendro.Rmd
+
+Focus op de LIS-plots!!
+
+
+
+```{r read, warning=FALSE}
+# [1] "dendro_by_plot"              "dendro_by_plot_species"      "dendro_by_diam_plot"         "dendro_by_diam_plot_species"
+# [5] "deadw_by_decay_plot"         "deadw_by_decay_plot_species"
+
+list_plotlevel_data <- c("dendro_by_plot", "dendro_by_plot_species"
+                         , "dendro_by_diam_plot", "dendro_by_diam_plot_species"
+                         , "deadw_by_decay_plot", "deadw_by_decay_plot_species")
+
+# Maak een lege lijst aan
+plotlevel_data <- list()
+
+# tabName <- "dendro_by_plot"
+
+for (tabName in list_plotlevel_data) {
+  tabel <- read_forresdat_table(tablename = tabName
+                                  , join_plotinfo = FALSE
+                                  , plottype = "all"
+                                  , git_ref_type = "branch"
+                                  , git_reference = "develop") %>% 
+    inner_join(list_plots)
+  
+  # Voeg de tabel toe aan de lijst, met de naam als sleutel
+  plotlevel_data[[tabName]] <- tabel
+  }
+
+# ?read_forresdat
+
+for (tablename in names(plotlevel_data)) {
+     assign(tablename, plotlevel_data[[tablename]])
+} 
+
+
+```
 
 
 
