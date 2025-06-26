@@ -1284,7 +1284,7 @@ save_results_forresdat(
   repo_path = path_to_git_forresdat,
   metadata_path = paste0(path_to_metadata, "_metadata_plotlevel_results_dendro.xlsx"),
   push = FALSE,
-  strict = FALSE,
+  strict = TRUE,
   branch = "develop"
 )
 
