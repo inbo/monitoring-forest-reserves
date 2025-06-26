@@ -1138,8 +1138,13 @@ volume x soort-specifieke wood density (ton/m³) x factor deadwood decomposition
 
 Het liggende dood hout wordt vanaf 2022 deels opgemeten mbv LIS en deels obv volopname.
 
-Voor de huidige analyse gaan we nog even verder met de volopnames (!! voor Wijnendale en Everzwijnbad 
+Voor de huidige analyse gaan we nog even verder met de volopnames 
+(!! voor Wijnendale, Everzwijnbad, Heirnisse en Jansheideberg pas
 vanaf 30 cm opgemeten in 3de decade).
+
+> KV Zoniën KERN_1983 - periode 2 & 3 pas vanaf 40 cm opgemeten (2010 en 2020)
+Daar is vol_log_m3_ha = NA
+Dat zouden we moeten doortrekken voor de LIS-opnames: Wijnendale, Everzwijnbad, Heirnisse en Jansheideberg periode 3
 
 ### Biomassa obv decay en species
 
