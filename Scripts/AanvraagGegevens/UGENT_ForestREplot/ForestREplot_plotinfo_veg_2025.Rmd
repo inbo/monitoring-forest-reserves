@@ -152,10 +152,13 @@ list_reserves %>% select(dataset_ID, name, name_fieldmap, survey_1
 
 # Templates
 
+De templates zijn de xlsx-files door ForestREplot aangeleverd om in te vullen door ons.
+Reeds deels ingevuld door Arno en verder aangevuld door mij
+
 Zie "G:\Gedeelde drives\Team_Boseco_BR\PRJ_BR_AanvraagGegevens\UGENT_ForestREplot\templates_per_forest_reserve"
 
 ```{r}
-path_to_templates <- paste0(path_to_project, "/templates_per_forest_reserve/")
+path_to_templates <- paste0(path_to_project_teamdrive, "/templates_per_forest_reserve/")
 ```
 
 
@@ -166,7 +169,7 @@ path_to_templates <- paste0(path_to_project, "/templates_per_forest_reserve/")
 Vergelijkbaar met de aangeleverde metadata.     
 
 Nog enkele ontbrekende velden => per reservaat bekijken en ev. openstaande vragen doorspelen aan Kris VdK
-
+Grazing trend vervangen door -1, 0 of 1 en in afzonderlijke tabel beschrijven over welke dieren het gaat.
 
 
 ## Tabblad Plot_information
@@ -214,44 +217,58 @@ cover
 ## Load plot data
 
 ```{r load_plotinfo, results='hide'}
-plotinfo <- load_plotinfo(database = path_to_fieldmap_db, processed = FALSE) %>% 
+plotinfo <- load_plotinfo(database = path_to_fieldmap_db, processed = TRUE) %>% 
   filter(plottype %in% c("CP", "CA")) %>%   # "OTHER": Bauwensplots
   filter(survey_veg == TRUE) %>% 
   rename(name_fieldmap = forest_reserve)
 names(plotinfo)
 
-# plotinfo %>% filter(data_processed == FALSE) %>% nrow()
-table(plotinfo$data_processed)
-plotinfo %>% filter(data_processed == FALSE) %>% distinct(name_fieldmap)
-# zijn maar enkele plots => OK
+
+# check van non-processed reeds gebeurd in script 
 ```
 
 <!-- Withoefse heide nog niet verwerkt => strengere datacontrole -->
 <!-- Jansheideberg en Heirnisse 2024 zitten ook nog niet in moederdb -->
 
-Omdat info van de Bauwensplots niet in de strata-db van de monitoring zit, 
-vertrekken we hier van de originele shapefile aangemaakt door Marc Esprit, 
-en kopie geplaatt op mijn c-schijf.
+Bauwensplots moeten niet mee aangeleverd worden.
+Mocht dat toch op termijn toch nodig zijn, dan moeten we hier vertrekken van de originele shapefile aangemaakt door Marc Esprit, 
+en kopie geplaatst op mijn c-schijf.
 
-```{r load_strata_shapefile, results='hide'}
+```{r load_strata_shapefile_NIET, results='hide', eval = FALSE}
 # info Bauwensplots zit in de originele shapefile aangemaakt door Marc
 
 # rechtstreeks van  Amazon, na opstarten van VPN
 # fc_strata_shp <-read_sf("Z:/Projects/PRJ_BosEco/PRJ_PERS_ME_GIS/00_alle_proefvlakken/def/metinfo/boseco_alleproefvlakken_centraalpunt_lam72_metinfo.shp", crs = 31370) %>% rename(plot_id = PlotID)
 
 # OF kopie op mijn c-schijf
+
+
 fc_strata_shp <-read_sf("C:/03_BR/1_DataVerwerkingBR/Data/Strata/input/boseco_alleproefvlakken_centraalpunt_lam72_metinfo.shp", crs = 31370) %>% rename(plot_id = PlotID)
 
 df_strata_shp <- fc_strata_shp %>% st_drop_geometry()  # cfr forresdat
 names(df_strata_shp)
 
-df_strata_shp_ <- df_strata_shp %>% 
-  select(-(65:139), -(24:29)) %>% 
-  filter(!Unieknr %in% c(11001, 11002, 11003, 11004, 11005, 11006, 155001, 155002, 155003)) %>% 
+df_strata_shp_ <- df_strata_shp %>%
+  select(-(65:139), -(24:29)) %>%
+  filter(!Unieknr %in% c(11001, 11002, 11003, 11004, 11005, 11006, 155001, 155002, 155003)) %>%
   rename(hist_uitgebreid = Boshis_sam)
 n_distinct(df_strata_shp_$plot_id) == nrow(df_strata_shp_)
 
 df_strata_shp <- df_strata_shp_
+
+```
+
+
+```{r load_strata_db}
+con <- odbcConnectAccess2007(path_to_strata_db)
+  info_survey <- sqlFetch(con, "info_survey", stringsAsFactors = FALSE)
+  info_XY <- sqlFetch(con, "strata_location", stringsAsFactors = FALSE)
+  # info_beheer <- sqlFetch(con, "strata_remaining", stringsAsFactors = FALSE)
+  # dominant_tree <- sqlFetch(con, "dominant_tree", stringsAsFactors = FALSE)
+  # strata_soil <- sqlFetch(con, "strata_soil", stringsAsFactors = FALSE) %>% 
+  #   select(Unieknr, plot_id, SiteName, SubArea, forest_reserve_fieldmap)
+  strata_hist <- sqlFetch(con, "strata_history", stringsAsFactors = FALSE)
+odbcClose(con)
 
 ```
 
@@ -275,9 +292,26 @@ Deze shapefile bevat:
 data_vegetation_ <-
   load_data_vegetation(
     database = path_to_fieldmap_db,
-    processed = FALSE
+    processed = TRUE
   )
 
+```
+
+Gemaild naar Peter (8/7/2025): "volgens mij kleine typfout: plot 2006, veg_3eSET:
+subplot noemt daar 2001 ipv 1, waardoor link met de opnames ervoor niet klopt (scriptmatig).
+Kan je dat aanpassen in de moederdatabank?"
+
+Hierna scriptmatig opvangen, want niet zo eenvoudig in db aan te passen
+
+```{r corr_plot_2006}
+data_vegetation_ %>% filter(subplot_id == 2001)
+
+data_vegetation_ <- data_vegetation_ %>% 
+  mutate(subplot_id = ifelse(subplot_id == 2001, 1, subplot_id))
+```
+
+
+```{r plot_origID}
 data_vegetation <- data_vegetation_ %>% 
   mutate(year_veg = as.numeric(format(date_vegetation,'%Y'))) %>% 
   rename(name_fieldmap = forest_reserve) %>% 
@@ -287,6 +321,7 @@ data_vegetation <- data_vegetation_ %>%
 data_vegetation %>% filter(is.na(plotarea_ha)) %>% nrow() == 0
 names(data_vegetation)
 ```
+
 Enkel records van effectieve opnames, dus als year = NA, dan geen opname
 => niet verder meenemen
 
@@ -295,6 +330,7 @@ Enkel records van effectieve opnames, dus als year = NA, dan geen opname
 data_vegetation <- data_vegetation %>% 
   filter(!is.na(year_veg))
 ```
+
 
 ## Surveys
 
@@ -342,6 +378,8 @@ surveys_summ <- surveys %>%
   group_by(name_fieldmap, plottype, period_1, period_2, period_3) %>% 
   summarise(n_plots = n()) %>% 
   ungroup()
+
+surveys_summ %>% DT::datatable()
 ```
 
 
@@ -355,6 +393,7 @@ surveys_summ <- surveys %>%
 - Rodebos KV2: maar 10 subplots 3x gemeten en 20 jr tussen (40 2x gemeten)
 - Wijnendalebos CP: 5plots niet elke keer gemeten, 119 3x gemeten
 - With heide: 25 plots 2x gemeten met 20 jr tussen !! GEEN R2 (enkel R1)
+- Zonien KERN_1983: de 11 CP's maar 2x gemeten: 2011 en 2021
 
 
 We filteren de plots weg waar geen 20 jr tussen twee opnames zit
@@ -388,7 +427,8 @@ Bij de **overige sites** (muv With heide) geldt:
 ```{r filter_surveys}
 names(surveys)
 
-surveys_int_monit <- surveys %>% 
+# surveys_int_monit <- surveys %>% 
+surveys_def <- surveys %>% 
   filter(!is.na(period_1) & !is.na(period_3)) %>% 
   mutate(year_baseline_survey = period_1
          , year_resurvey_R1 = ifelse(name_fieldmap == "Withoefse heide"
@@ -397,32 +437,33 @@ surveys_int_monit <- surveys %>%
                                    , NA, period_3)) %>% 
   select(-contains("period_"))
 
-surveys_int_monit %>% 
+surveys_def %>% 
   group_by(name_fieldmap, plottype
            , year_baseline_survey, year_resurvey_R1, year_resurvey_R2) %>% 
   summarise(n_plots = n()) %>% 
   ungroup()
 
 #
-surveys_bauwens <- surveys %>% 
-  filter(name_fieldmap == "Bauwensplots" & !is.na(period_1) & !is.na(period_2)) %>% 
-  mutate(year_baseline_survey = NA,
-         year_resurvey_R1 = period_1,
-         year_resurvey_R2 = period_2) %>% 
-  select(-contains("period_"))
-
-surveys_bauwens %>% 
-  group_by(name_fieldmap, plottype
-           , year_baseline_survey, year_resurvey_R1, year_resurvey_R2) %>% 
-  summarise(n_plots = n()) %>% 
-  ungroup()
-
+# surveys_bauwens <- surveys %>% 
+#   filter(name_fieldmap == "Bauwensplots" & !is.na(period_1) & !is.na(period_2)) %>% 
+#   mutate(year_baseline_survey = NA,
+#          year_resurvey_R1 = period_1,
+#          year_resurvey_R2 = period_2) %>% 
+#   select(-contains("period_"))
 # 
-surveys_def <- rbind(surveys_int_monit, surveys_bauwens)
+# surveys_bauwens %>% 
+#   group_by(name_fieldmap, plottype
+#            , year_baseline_survey, year_resurvey_R1, year_resurvey_R2) %>% 
+#   summarise(n_plots = n()) %>% 
+#   ungroup()
+# 
+# # 
+# surveys_def <- rbind(surveys_int_monit, surveys_bauwens)
 ```
 
 !! **opnames 1991 KV Rodebos en Hannecart**: leveren we niet aan
 Immers kleinere subplots (volgens mij 2x2), geen cte plotgrootte
+Zitten ook nog niet in fieldmap
 
 !! **opnames KV Rodebos en Hannecart**: in periode 2 meer subplots opgemeten
 Hier behouden we enkel de subplots die in periode 1 opgemeten werden (10 plots), dat is het 
@@ -440,8 +481,9 @@ dat ook nog behouden)
 
 
 ```{r hist}
-hist <- df_strata_shp %>% 
-  # shapefile bevat geen "name_fieldmap"
+names(strata_hist)
+hist <- strata_hist %>% 
+  # strata_hist bevat geen "name_fieldmap"
   left_join(plotinfo %>% select(name_fieldmap, plot_id) %>% unique()) %>% 
   inner_join(list_reserves %>% select(dataset_ID, name, name_fieldmap), by = c("name_fieldmap")) %>% 
   mutate(ferraris = ifelse(hist_uitgebreid %in% c("1111111111")
@@ -461,30 +503,47 @@ hist1_ferraris <- hist %>%
          year_afforestation = NA,
          year_mid = NA)
 
+# obv shapefile
+# hist2_with <- hist %>% 
+#   filter(str_detect(name_fieldmap, "With")) %>% 
+#   mutate(former_landuse = "heathland"
+#          , year_afforestation = case_when(
+#            hist_uitgebreid %in% c("0000000011", "0000001011") ~ paste(NGI1_t, BSKT_t, sep="-"),
+#            hist_uitgebreid == "0000000111" ~ paste(MGI_t, NGI1_t, sep="-"),
+#            hist_uitgebreid == "0000001111" ~ paste(DG3_t, MGI_t, sep="-"),
+#            hist_uitgebreid == "0000011111" ~ paste(DG2_t, DG3_t, sep="-"),
+#            hist_uitgebreid == "0000111111"~ paste(DG1_t, DG2_t, sep="-"))
+#          , year_mid = case_when(
+#            hist_uitgebreid %in% c("0000000011", "0000001011") ~ (NGI1_t + BSKT_t)/2,
+#            hist_uitgebreid == "0000000111" ~ (NGI1_t + MGI_t)/2,
+#            hist_uitgebreid == "0000001111" ~ (MGI_t + DG3_t)/2,
+#            hist_uitgebreid == "0000011111" ~ (DG3_t + DG2_t)/2,
+#            hist_uitgebreid == "0000111111"~ (DG1_t + DG2_t)/2)
+#          )
 hist2_with <- hist %>% 
   filter(str_detect(name_fieldmap, "With")) %>% 
   mutate(former_landuse = "heathland"
          , year_afforestation = case_when(
-           hist_uitgebreid %in% c("0000000011", "0000001011") ~ paste(NGI1_t, BSKT_t, sep="-"),
-           hist_uitgebreid == "0000000111" ~ paste(MGI_t, NGI1_t, sep="-"),
-           hist_uitgebreid == "0000001111" ~ paste(DG3_t, MGI_t, sep="-"),
-           hist_uitgebreid == "0000011111" ~ paste(DG2_t, DG3_t, sep="-"),
-           hist_uitgebreid == "0000111111"~ paste(DG1_t, DG2_t, sep="-"))
+           hist_uitgebreid %in% c("11", "1011") ~ paste(NGI1_t, BSKT_t, sep="-"),
+           hist_uitgebreid == "111" ~ paste(MGI_t, NGI1_t, sep="-"),
+           hist_uitgebreid == "1111" ~ paste(DG3_t, MGI_t, sep="-"),
+           hist_uitgebreid == "11111" ~ paste(DG2_t, DG3_t, sep="-"),
+           hist_uitgebreid == "111111"~ paste(DG1_t, DG2_t, sep="-"))
          , year_mid = case_when(
-           hist_uitgebreid %in% c("0000000011", "0000001011") ~ (NGI1_t + BSKT_t)/2,
-           hist_uitgebreid == "0000000111" ~ (NGI1_t + MGI_t)/2,
-           hist_uitgebreid == "0000001111" ~ (MGI_t + DG3_t)/2,
-           hist_uitgebreid == "0000011111" ~ (DG3_t + DG2_t)/2,
-           hist_uitgebreid == "0000111111"~ (DG1_t + DG2_t)/2)
+           hist_uitgebreid %in% c("11", "1011") ~ (NGI1_t + BSKT_t)/2,
+           hist_uitgebreid == "111" ~ (NGI1_t + MGI_t)/2,
+           hist_uitgebreid == "1111" ~ (MGI_t + DG3_t)/2,
+           hist_uitgebreid == "11111" ~ (DG3_t + DG2_t)/2,
+           hist_uitgebreid == "111111"~ (DG1_t + DG2_t)/2)
          )
 
 hist3_hannecart <- hist %>% 
   filter(str_detect(name_fieldmap, "Hannec")) %>% 
   mutate(former_landuse = "grassland"
          , year_afforestation = case_when(
-           hist_uitgebreid == "0000001111" ~ paste(DG3_t, MGI_t, sep="-"))
+           hist_uitgebreid == "1111" ~ paste(DG3_t, MGI_t, sep="-"))
          , year_mid = case_when(
-           hist_uitgebreid == "0000001111" ~ (MGI_t + DG3_t)/2)
+           hist_uitgebreid == "1111" ~ (MGI_t + DG3_t)/2)
          )
 
 hist4_wijn <- hist %>% 
@@ -506,44 +565,44 @@ hist4_wijn <- hist %>%
 hist5_heirn <- hist %>% 
   filter(str_detect(name_fieldmap, "Heirnisse") & ferraris != "yes") %>% 
   mutate(former_landuse = case_when(
-           hist_uitgebreid == "0000001111" ~ "grassland",
-           hist_uitgebreid %in% c("0000111111", "0000011111") ~ "arable",
-           hist_uitgebreid == "0111111111" ~ "grassland",
-           hist_uitgebreid %in% c("0110111111") ~ "arable",
-           hist_uitgebreid %in% c("0111011111", "0110011111", "0110011110", "1110011111") &
+           hist_uitgebreid == "1111" ~ "grassland",
+           hist_uitgebreid %in% c("111111", "11111") ~ "arable",
+           hist_uitgebreid == "111111111" ~ "grassland",
+           hist_uitgebreid %in% c("110111111") ~ "arable",
+           hist_uitgebreid %in% c("111011111", "110011111", "110011110", "1110011111") &
              DG2 == "A" ~ "arable",
            #110011110: we veronderstellen dat dit 110011111 moet zijn
-           hist_uitgebreid %in% c("111011111", "0110011111", "110011110", "1110011111") &
+           hist_uitgebreid %in% c("111011111", "110011111", "110011110", "1110011111") &
              DG2 == "G" ~ "grassland")
          , year_afforestation = case_when(
-           hist_uitgebreid == "0000001111" ~ paste(DG3_t, MGI_t, sep="-"),
+           hist_uitgebreid == "1111" ~ paste(DG3_t, MGI_t, sep="-"),
            #110011110: we veronderstellen dat dit 110011111 moet zijn
-           hist_uitgebreid %in% c("0000011111", "1110011111", "0111011111", "0110011111", "0110011110", "0110011111", "0111011111") ~ paste(DG2_t, DG3_t, sep="-"),
-           hist_uitgebreid %in% c("0000111111", "0110111111") ~ paste(DG1_t, DG2_t, sep="-"),
-           hist_uitgebreid == "0111111111" ~ paste(Ferr_t, VDM_t, sep="-"))
+           hist_uitgebreid %in% c("11111", "1110011111", "111011111", "110011111", "110011110", "110011111", "111011111") ~ paste(DG2_t, DG3_t, sep="-"),
+           hist_uitgebreid %in% c("111111", "110111111") ~ paste(DG1_t, DG2_t, sep="-"),
+           hist_uitgebreid == "111111111" ~ paste(Ferr_t, VDM_t, sep="-"))
          , year_mid = case_when(
-           hist_uitgebreid == "0000001111" ~ (MGI_t + DG3_t)/2,
+           hist_uitgebreid == "1111" ~ (MGI_t + DG3_t)/2,
            #110011110: we veronderstellen dat dit 110011111 moet zijn
-           hist_uitgebreid %in% c("0000011111", "1110011111", "0111011111", "0110011111", "0110011110", "0110011111", "0111011111") ~ (DG3_t + DG2_t)/2,
-           hist_uitgebreid %in% c("0000111111", "0110111111") ~ (DG2_t + DG1_t)/2,
-           hist_uitgebreid == "0111111111" ~ (Ferr_t + VDM_t)/2)
+           hist_uitgebreid %in% c("11111", "1110011111", "111011111", "110011111", "110011110", "110011111", "111011111") ~ (DG3_t + DG2_t)/2,
+           hist_uitgebreid %in% c("111111", "110111111") ~ (DG2_t + DG1_t)/2,
+           hist_uitgebreid == "111111111" ~ (Ferr_t + VDM_t)/2)
          )
 
-hist6_bauw <- hist %>% 
-  filter(str_detect(name_fieldmap, "Bauwens") & ferraris != "yes") %>%  
-  mutate(former_landuse = "arable"
-         , year_afforestation = case_when(
-           hist_uitgebreid %in% c("1110011111") ~ paste(DG2_t, DG3_t, sep="-"),
-           hist_uitgebreid %in% c("1110111111") ~ paste(DG1_t, DG2_t, sep="-"))
-         , year_mid = case_when(
-           hist_uitgebreid %in% c("1110011111") ~ (DG3_t + DG2_t)/2,
-           hist_uitgebreid %in% c("1110111111") ~ (DG2_t + DG1_t)/2
-  )) 
+# hist6_bauw <- hist %>% 
+#   filter(str_detect(name_fieldmap, "Bauwens") & ferraris != "yes") %>%  
+#   mutate(former_landuse = "arable"
+#          , year_afforestation = case_when(
+#            hist_uitgebreid %in% c("1110011111") ~ paste(DG2_t, DG3_t, sep="-"),
+#            hist_uitgebreid %in% c("1110111111") ~ paste(DG1_t, DG2_t, sep="-"))
+#          , year_mid = case_when(
+#            hist_uitgebreid %in% c("1110011111") ~ (DG3_t + DG2_t)/2,
+#            hist_uitgebreid %in% c("1110111111") ~ (DG2_t + DG1_t)/2
+#   )) 
 ```
 
 ```{r combine_hist}
 hist_total <- do.call(rbind, list(hist1_ferraris, hist2_with, hist3_hannecart,
-                                  hist4_wijn, hist5_heirn, hist6_bauw))
+                                  hist4_wijn, hist5_heirn))   # hist6_bauw
 nrow(hist_total) == nrow(hist)   # hist bevat ook bauwensplots
 
 #
@@ -560,7 +619,7 @@ hist_total <- hist_total %>%
 
 XY afzonderlijk voor CP en KV,
 
-Z gemeenschapopelijk uit shapefile van Marc op plotniveau
+Z gemeenschappelijk uit shapefile van Marc op plotniveau
 
 ### Centrum plot
 
@@ -571,14 +630,14 @@ Bevat ook Z_m => daarom van alle plots nodig, ook de kernvlaktes
 ```{r results='hide'}
 # subplot_id nodig
 names(surveys_def)
-names(df_strata_shp)
+# names(df_strata_shp)
+names(info_XY)
 
-coord_centre <- df_strata_shp %>% 
-  # shapefile bevat geen "name_fieldmap"
+coord_centre <- info_XY %>% 
+  # info_XY bevat geen "name_fieldmap"
   inner_join(surveys_def, by = c("plot_id")) %>% 
   select(name_fieldmap, plot_id, subplot_id, plot_origID, plottype
-         , X_centre = XLon_wgs84, Y_centre = YLat_wgs84, Z_centre = Z_m_TAW
-         , VegePlot)
+         , X_centre = XLon_wgs84, Y_centre = YLat_wgs84, Z_centre = Z_m_TAW)
 
 ```
 
@@ -660,7 +719,11 @@ names(coord_all)
 ```{r combine, results='hide'}
 names(list_reserves) # onafh van periode
 names(hist_total) # plotniveau - onafh van periode
-names(coord_all)  # ook size veg-plot - onafh van periode
+names(coord_all)  
+names(info_survey) # ook plotsize_veg én periode
+veg_plot_size <- info_survey %>% 
+  select(plot_id, plotsize_veg) %>% unique
+names(veg_plot_size)
 names(surveys_def) # subplot-niveau (plot_origID) - mét periode => enkel heropnames!
 
 plotinfo_def <- hist_total %>%  
@@ -668,19 +731,20 @@ plotinfo_def <- hist_total %>%
   inner_join(surveys_def)  %>% 
   # latitude	longitude	WGS 1984 altitude  
   left_join(coord_all) %>% 
+  left_join(veg_plot_size) %>% 
    # plotsize
-  mutate(plot_size = ifelse(str_detect(VegePlot, "16 x 16 m")
+  mutate(plot_size = ifelse(str_detect(plotsize_veg, "16 x 16 m")
                            , 256
-                           , ifelse(str_detect(VegePlot, "10 x 10 m")
+                           , ifelse(str_detect(plotsize_veg, "10 x 10 m")
                                     , 100
-                                    , ifelse(str_detect(VegePlot, "5 x 5 m")
+                                    , ifelse(str_detect(plotsize_veg, "5 x 5 m")   # Bauwensplots
                                              , 25, NA)
                            )
   )) %>% 
   # VegePLot voor plot 11000 is NA, moet 10x1m worden
   mutate(plot_size = ifelse(plot_id == 11000, 100, plot_size)) 
 
-table(plotinfo_def$VegePlot)
+table(plotinfo_def$plotsize_veg)
 
 plotinfo_def %>% filter(is.na(plot_size)) %>% nrow() == 0
 nrow(plotinfo_def)  # 847 
@@ -696,7 +760,7 @@ t <- plotinfo_def %>%
            , year_baseline_survey, year_resurvey_R1, year_resurvey_R2) %>% 
   summarise(n = n()) %>% 
   ungroup()
-# 847
+# 847 / 996
 ```
 
 ```{r results='hide'}
@@ -735,7 +799,7 @@ qCoverHerbs <- qCoverHerbs %>% select(ID, cover = Value1)
 data_herblayer_ <-
   load_data_herblayer(
     database = path_to_fieldmap_db,
-    processed = FALSE
+    processed = TRUE
   )
 
 data_herblayer <- data_herblayer_ %>% 
@@ -752,23 +816,23 @@ nrow(data_herblayer)# 42203/25263
 table(data_herblayer$period)
 #    1    2    3 
 # 8518 9415 7330
+# 8/7/2025:
+#     1     2     3 
+# 10461 11660 11744 
 
 ```
 
-We hebben enkel de plots weerhouden, waar een heropname gebeurd is.
-Hierna filteren we de periodes weg waar geen opnames gebeurd zijn.
+We hebben enkel de plots weerhouden, waar een (her)opname gebeurd is met 20 jaar tussen.
+Ook de tussenliggende opnames werden weerhouden.
 
 
 ```{r}
+data_herblayer %>% filter(is.na(year)) %>% nrow() == 0 # 25 plots With heide: geen opname in periode 2
+
 data_herblayer_def <- data_herblayer %>% 
-  filter((dataset_ID != "EU_85" & period %in% c(1, 2, 3)) |
-           (dataset_ID == "EU_85" & period %in% c(1, 2))
-  )
-
-data_herblayer_def %>% filter(is.na(year)) %>% nrow() == 25 # 25 plots With heide: geen opname in periode 2
-
-data_herblayer_def <- data_herblayer_def %>% 
   filter(!is.na(year))
+
+nrow(data_herblayer_def) == nrow(data_herblayer)
 ```
 
 
@@ -813,13 +877,13 @@ Dat varieert van reservaat tot reservaat:
 - baseline is overal periode 1
 - resurvey is overal periode 2 en/of 3
 
-Uitzondering zijn de Bauwenplots waar baseline 1954 is (zit al in databank en waar 2014 dus heropname is).
-De opnames van 2000 en 2014 zijn dan R1 en R2
+<!-- Uitzondering zijn de Bauwenplots waar baseline 1954 is (zit al in databank en waar 2014 dus heropname is). -->
+<!-- De opnames van 2000 en 2014 zijn dan R1 en R2 -->
 
-Daarom splits ik beide datasets op:
+<!-- Daarom splits ik beide datasets op: -->
 
-- dataset/veg_sampling intensieve monitoring   
-- dataset/veg_sampling Bauwensplots     
+<!-- - dataset/veg_sampling intensieve monitoring    -->
+<!-- - dataset/veg_sampling Bauwensplots      -->
   
 
 Bij intensieve monitoring sites is de `baseline_survey` altijd periode 1    
@@ -861,7 +925,7 @@ veg_sampling_int_monit <- veg_sampling_int_monit %>%
 ```
 
 
-```{r only_with, results='hide'}
+```{r only_with_heide, results='hide'}
 veg_sampling_with <- veg_sampling %>% 
   filter(dataset_ID == "EU_93") %>% 
   select(-year, -coverage_id, - coverage_class_average_perc) %>% 
@@ -895,7 +959,7 @@ veg_sampling_with <- veg_sampling_with %>%
 ```
 
 
-```{r only_bauwens, results='hide'}
+```{r only_bauwens_NIET, results='hide', eval = FALSE}
 veg_sampling_bauwens <- veg_sampling %>% 
   filter(dataset_ID == "EU_85") %>% 
   select(-year, -coverage_id, - coverage_class_average_perc) %>% 
@@ -1230,31 +1294,31 @@ behalve bij Jansheide en Heirnisse, omdat ik daar de data van 2024 nog niet heb
 Site per site exporteren: 
 
 - Rodebos      
-```{r Rodebos}
+```{r Rodebos_ok}
 EUxx <- "EU_90"
 ```
 
 - Hannecart      
-```{r Hannecart}
+```{r Hannecart_ok}
 EUxx <- "EU_88"
 ```
 
 - Jansh      
-```{r Jansh}
+```{r Jansh_ok}
 EUxx <- "EU_89"
 ```
-!! Jansheideberg: nog geen export, want 2024 zit nog niet in de databank
-hoogte, aantal plots en year nog checken op tabblad "siteinfo"
+
+Narcissus in kernvlakte opgemeten in 2005 ipv 2004, hoofdopname toch 2004
 
 - Heirnisse      
-```{r Heirnisse}
+```{r Heirnisse_ok}
 EUxx <- "EU_86"
 ```
 !! Heirnisse: nog geen export, want 2024 zit nog niet in de databank
 hoogte, aantal plots en year nog checken op tabblad "siteinfo"
 
 - Everzw      
-```{r Everzw}
+```{r Everzw_ok}
 EUxx <- "EU_87"
 ```
 
