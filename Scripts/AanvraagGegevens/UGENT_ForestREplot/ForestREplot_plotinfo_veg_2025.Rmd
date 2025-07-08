@@ -69,6 +69,8 @@ Voor elke van deze reservaten werd ons een afzonderlijke template bezorgd die wi
 Er wordt ook gevraagd om de tussenliggende datasets aan te leveren (mail van 1/11/2024)
 (eerst was sprake van enkel de eerste en laatste dataset, niet de tussenliggende opnames ...)
 
+Bauwensplots: de data 1954-2000 zit al in forestRePlot, en de extra opname in 2014 is 'te kort' na de opname 2000. Daarom de dataset 1954-2014 nu niet extra aanbieden, want dat wordt verwarrend. Mochten we in 2028 een extra opname doen, dan kunnen we de deeldataset 2000-2028 nog indienen.
+
 
 ```{r results='hold', eval=TRUE}
 path_to_fieldmap_db
@@ -88,52 +90,64 @@ Volgende bosreservaten werden weerhouden
 # library(datapasta)
 # df_paste()
 
-list_reserves <- data.frame(
-  stringsAsFactors = FALSE,
-                                    dataset_ID = c("EU_85","EU_86","EU_87",
+list_reserves <- data.frame(stringsAsFactors = FALSE,
+                                    dataset_ID = c("EU_86","EU_87",
                                                    "EU_88","EU_89","EU_90","EU_90",
-                                                   "EU_91","EU_92","EU_93"),
-                                          name = c("Meerdaalwoud","De Heirnisse",
+                                                   "EU_91","EU_91",
+                                                   "EU_92","EU_93"),
+                                          name = c("De Heirnisse",
                                                    "Everzwijnbad (Meerdaalwoud)",
                                                    "Hannecartbos",
-                                                   "Jansheideberg (Hallerbos)","Rodebos",
-                                                   "Rodebos","Sonian forest",
+                                                   "Jansheideberg (Hallerbos)",
+                                                   "Rodebos", "Rodebos",
+                                                   "Sonian forest", "Sonian forest",
                                                    "Wijnendalebos",
                                                    "Withoefse heide"),
-                                 name_fieldmap = c("Bauwensplots","Heirnisse",
+                                 name_fieldmap = c("Heirnisse",
                                                    "Everzwijnbad","Hannecart",
-                                                   "Jansheideberg","Rodebos KV1",
-                                                   "Rodebos KV2",
-                                                   "Kersselaerspleyn","Wijnendalebos",
+                                                   "Jansheideberg",
+                                                   "Rodebos KV1", "Rodebos KV2",
+                                                   "Zoniën KERN_1983", "Zoniën UITBR_1995",
+                                                   "Wijnendalebos",
                                                    "Withoefse heide"),
-                                  number_plots = c("21",
-                                                   "166","146","10/50",
+                                  number_plots = c("166","146","10/50",
                                                    "131","20/108/148","20/108/148",
-                                                   NA,"221","29"),
-                                 plot_size_min = c(NA,
-                                                   100L,100L,20L,100L,20L,
-                                                   20L,100L,100L,256L),
-                                 plot_size_max = c(NA,
-                                                   256L,256L,100L,256L,100L,
-                                                   100L,256L,256L,256L),
-                                      survey_1 = c(1954L,2003L,2002L,1991L,2004L,
-                                                   1991L,1991L,2000L,2002L,
+                                                   NA,"53","221","29"),
+                                 plot_size_min = c(100L,100L,20L,100L,20L,
+                                                   20L,100L,256L,100L,256L),
+                                 plot_size_max = c(256L,256L,100L,256L,100L,
+                                                   100L,256L,256L,256L,256L),
+                                      survey_1 = c(2003L,2002L,1991L,2004L,
+                                                   1991L,1991L,2000L,2000L,2002L,
                                                    2003L)
                             )
 
+# Bauwensplots <- data.frame(stringsAsFactors = FALSE,
+#                            dataset_ID = c("EU_85"),
+#                            name = c("Meerdaalwoud"),
+#                            name_fieldmap = c("Bauwensplots"),
+#                            number_plots = c("21"),
+#                            plot_size_min = c(NA),
+#                            plot_size_max = c(NA),
+#                            survey_1 = c(1954L)
+#                             )
 
 ```
 
-Sonian forest is enkel Kersselaerspleyn, want Zwaenepoel is nog maar één keer opgemeten in 2020
-en Harras enkel in 2009 en 2019.
+Sonian forest is enkel "Zoniën KERN_1983" en "Zoniën UITBR_1995" (voorheen Kersselaerspleyn), 
+want "Zoniën UITBR_2010" (voorheen Zwaenepoel) is nog maar één keer opgemeten in 2020
+en "Zoniën HARRAS_1995" enkel in 2009 en 2019.
 
 ```{r}
-list_reserves %>% select(dataset_ID, name, name_fieldmap, survey_1, plot_size_min) %>% DT::datatable()
+list_reserves %>% select(dataset_ID, name, name_fieldmap, survey_1
+                         , plot_size_min
+                         , number_plots) %>% DT::datatable()
 ```
 
-> OPGEPAST
-*Withoefse heide* nog niet verwerkt => strengere datacontrole
-*Jansheideberg en Heirnisse* 2024 zitten ook nog niet in moederdb
+<!-- > OPGEPAST -->
+<!-- *Withoefse heide* nog niet verwerkt => strengere datacontrole -->
+<!-- *Jansheideberg en Heirnisse* 2024 zitten ook nog niet in moederdb -->
+<!-- 7/7/2025: in tussentijd wel verwerkt en in moederdb -->
 
 
 # Templates
@@ -201,7 +215,7 @@ cover
 
 ```{r load_plotinfo, results='hide'}
 plotinfo <- load_plotinfo(database = path_to_fieldmap_db, processed = FALSE) %>% 
-  filter(plottype %in% c("CP", "CA", "OTHER")) %>% 
+  filter(plottype %in% c("CP", "CA")) %>%   # "OTHER": Bauwensplots
   filter(survey_veg == TRUE) %>% 
   rename(name_fieldmap = forest_reserve)
 names(plotinfo)
@@ -209,10 +223,11 @@ names(plotinfo)
 # plotinfo %>% filter(data_processed == FALSE) %>% nrow()
 table(plotinfo$data_processed)
 plotinfo %>% filter(data_processed == FALSE) %>% distinct(name_fieldmap)
+# zijn maar enkele plots => OK
 ```
 
-Withoefse heide en Bauwensplots nog niet verwerkt => strengere datacontrole
-Jansheideberg en Heirnisse 2024 zitten ook nog niet in moederdb
+<!-- Withoefse heide nog niet verwerkt => strengere datacontrole -->
+<!-- Jansheideberg en Heirnisse 2024 zitten ook nog niet in moederdb -->
 
 Omdat info van de Bauwensplots niet in de strata-db van de monitoring zit, 
 vertrekken we hier van de originele shapefile aangemaakt door Marc Esprit, 
@@ -332,7 +347,7 @@ surveys_summ <- surveys %>%
 
 **Overzicht:**
 
-- Bauwensplots: maar 150 subplots twee keer heropgemeten (174 wél 2x gemeten)
+<!-- - Bauwensplots: maar 150 subplots twee keer heropgemeten (174 wél 2x gemeten) -->
 - Everzwijnbad: 1 plot niet opgemeten in periode 1
 - Hannecart: maar 10 subplots met 20 jr tussen (3x gemeten)
 - Kerss CA: 140 subplots 3x gemeten
@@ -367,8 +382,8 @@ Bij de **overige sites** (muv With heide) geldt:
 - year_baseline_survey = period_1    
 - year_resurvey_R1 = period_3
 
-> de opname van 2024 van Jansheideberg en Heirnisse ontbreekt nog
-(daar moet nog datacontrole op gebeuren oa dendro, ik wacht op initiatief van Peter)
+<!-- > de opname van 2024 van Jansheideberg en Heirnisse ontbreekt nog -->
+<!-- (daar moet nog datacontrole op gebeuren oa dendro, ik wacht op initiatief van Peter) -->
 
 ```{r filter_surveys}
 names(surveys)

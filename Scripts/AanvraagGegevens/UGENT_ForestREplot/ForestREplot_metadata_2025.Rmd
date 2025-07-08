@@ -120,6 +120,7 @@ names(plotinfo)
 
 # plotinfo %>% filter(data_processed == FALSE) %>% nrow()
 table(plotinfo$data_processed)
+# enkele plot svan With heide, Wijnendale en CoolhemQ - klopt
 ```
 ```{r strata}
 con <- odbcConnectAccess2007(path_to_strata_db)
@@ -132,10 +133,6 @@ con <- odbcConnectAccess2007(path_to_strata_db)
   strata_hist <- sqlFetch(con, "strata_history", stringsAsFactors = FALSE)
 odbcClose(con)
 
-# unieknr 11001 tem 11006 zijn delen van Kerss
-info_survey_ <- info_survey_ %>% 
-  filter(!Unieknr %in% c(11001, 11002, 11003, 11004, 11005, 11006))
-
 ```
 
 
@@ -147,7 +144,7 @@ Withoefse heide: geen heropname in 2de decade
 data_vegetation <-
   load_data_vegetation(
     database = path_to_fieldmap_db,
-    processed = FALSE
+    processed = TRUE
   )
 
 data_vegetation <- data_vegetation %>% 
@@ -155,7 +152,8 @@ data_vegetation <- data_vegetation %>%
   mutate(year_veg = as.numeric(format(date_vegetation,'%Y')))
 
 data_vegetation %>% filter(is.na(plotarea_ha)) %>% nrow() == 0
-data_vegetation %>% filter(is.na(total_herb_cover_id)) %>% nrow() # plots 1eSET
+data_vegetation %>% filter(is.na(total_herb_cover_id)) %>% nrow() # plots 1eSET + enkel 2eSET
+t <- data_vegetation %>% filter(is.na(total_herb_cover_id))
 ```
 
 
@@ -247,10 +245,12 @@ dominant_tree_per_reserve <- dominant_tree_ %>%
 ```{r ancient_forest}
 names(strata_hist)
 hist_per_reserve <- strata_hist %>% 
+   # left_join(info_beheer %>% select(plot_id, forest_reserve_fieldmap)) %>% 
+  left_join(plotinfo %>% select(plot_id, forest_reserve_fieldmap = forest_reserve) %>% unique()) %>% 
   group_by(forest_reserve_fieldmap, hist_beknopt, boslftd) %>% 
   summarize(n_plots = n(),
-            CP = sum(plot_id < 10000) > 0,
-            CA = sum(plot_id > 10000) > 0,
+            n_CP = sum(plot_id < 10000),
+            n_CA = sum(plot_id > 10000),
             plot_ids = paste(plot_id, collapse = ";"),
             n_plots_ferraris = sum(hist_beknopt == "'1111"),
             n_plots = n()
