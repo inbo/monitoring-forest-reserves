@@ -1479,7 +1479,7 @@ Naar `r path_to_html` (c-schijf)
 
 ```{r eval = FALSE}
 # Specify the path of the file you want to copy
-source_file <- here::here(paste0("Scripts/AanvraagGegevens/UGENT_ForestREplot/ForestREplot_plotinfo_veg_2024.html"))
+source_file <- here::here(paste0("Scripts/AanvraagGegevens/UGENT_ForestREplot/ForestREplot_plotinfo_veg_2025.html"))
 
 # Specify the destination directory where you want to copy the file
 destination_dir <- path_to_html
