@@ -206,8 +206,6 @@ en het gemiddelde `rubbing_damage_number_ha`.
 dataset <- reg_by_plot
 
 table(dataset$forest_reserve, dataset$period)
-  #                 1   2   3
-  # Wijnendalebos 119 119 119
 ```
 
 

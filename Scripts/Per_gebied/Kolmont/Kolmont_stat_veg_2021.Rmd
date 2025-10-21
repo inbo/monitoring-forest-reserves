@@ -100,43 +100,16 @@ plotinfo <- read_excel(paste0(path_to_datarequest, "plotinfo.xlsx")) %>%
 
 ```
 
-# Enkel bosplots
-
-Zie Wijnendale_stat_dendr => "plots to exclude"
-
-**OPGEPAST**: er werden een aantal plots NIET heropgemeten in 2012 & 2022
-=> om vergelijking volledig correct te maken, deze niet meer meenemen bij de verwerking
-
-Het gaat om volgende plots:    
--	400, 424, 426 die op een pad liggen dat toch behouden zal blijven     
--	482: open plek (kapvlakte) die open gehouden wordt   
-
-
-```{r plots_to_exclude}
-plots_to_exclude <- c(400, 414, 424, 426, 482)
-
-```
-
-```{r open_ruimte}
-# Wijnendale: geen open ruimtes buiten 482 (geen die afh. zijn van periode)
-open_ruimte <- data.frame(forest_reserve = rep("Wijnendalebos",3),
-                 plot_id = rep(482, 3),
-                 period = c(1,2,3),
-                 number_of_tree_species = rep(0,3),
-                 stringsAsFactors = FALSE)
-```
-
 ## Vegetation
 
 ```{r load_veg_all}
-vegetation_by_plot <- read_excel(
-  paste0(path_to_datarequest, "vegetation_by_plot.xlsx")
+veg_by_plot <- read_excel(
+  paste0(path_to_datarequest, "veg_by_plot.xlsx")
   ) %>% 
   select(-1) %>%   
   # select(-contains("eg"), -contains("min40cm")) %>%  # (veg en reg)
   left_join(plotinfo) %>% 
-  filter(plottype == "CP" & !plot_id %in% plots_to_exclude) %>% 
-  anti_join(open_ruimte, by = c("plot_id", "period"))
+  filter(plottype == "CP")
 
 herblayer_by_plot <- read_excel(
   paste0(path_to_datarequest, "herblayer_by_plot.xlsx")
@@ -144,8 +117,7 @@ herblayer_by_plot <- read_excel(
   select(-1) %>%   
   # select(-contains("eg"), -contains("min40cm")) %>%  # (veg en reg)
   left_join(plotinfo) %>% 
-  filter(plottype == "CP" & !plot_id %in% plots_to_exclude) %>% 
-  anti_join(open_ruimte, by = c("plot_id", "period"))
+  filter(plottype == "CP")
 ```
 
 
@@ -169,22 +141,20 @@ Ev. wel een gemiddelde bedekking van
 
 
 ```{r data1}
-dataset <- vegetation_by_plot %>%
+dataset <- veg_by_plot %>%
   select(-contains(c("_min", "_max")))
 
 table(dataset$forest_reserve, dataset$period)
-  #                 1   2   3
-  # Wijnendalebos 119 119 119
+
 ```
 
 Geen plots zonder enige bedekking.
-Wel soms een bedekking niet genoteerd (NA) => zie summary
 
-```{r subplots_ok, eval = FALSE}
+```{r n_subplots_ok, eval = FALSE}
 dataset %>% filter(number_of_species == 0) %>% nrow() == 0
-
 summary(dataset)
 
+# één subplot per plot - JA
 dataset %>% group_by(plot_id, period) %>% summarize(n_subplots = n_distinct(subplot_id)) %>% 
   ungroup() %>% filter(n_subplots > 1) %>% nrow == 0
 ```
@@ -310,7 +280,7 @@ write.xlsx(resultaat
 Statistics voor intervals cfr Els: variance bijna steeds Inf en mean = 0
 => geen bruikbare resultaten
 
-Ev. later uit te klaren met ELs ...
+Ev. later uit te klaren met Els ...
 
 
 ## Herblayer_by_plot
@@ -332,7 +302,7 @@ dataset2 <- herblayer_by_plot
 table(dataset2$forest_reserve, dataset2$period)
 ```
 
-```{r n_subplots_OK, eval = FALSE}
+```{r n_subplots_ok2, eval = FALSE}
 names(dataset2)
 range(dataset2$subplot_id)
 
@@ -437,7 +407,7 @@ gedeeld door het aantal plots waar de soort voorkomt
 
 ```{r, results='hide'}
 dataset2 %>% filter(is.na(coverage_class_average_perc)) %>% nrow() == 0
-
+names(dataset2)
 karakt_bedekking <- dataset2 %>% 
   group_by(forest_reserve, period, species) %>% 
   summarize(sum_cover = sum(coverage_class_average_perc)) %>% 
