@@ -81,8 +81,8 @@ library(usethis)
 # !! toch best inladen, want soms nodig voor eigen code (buiten de functies van forrescalc)
 library(forrescalc)
 library(frictionless)
-
-
+library(writexl)
+library(scales)
 
 ### Extra functies tov package forrescalc ----
 source(here::here("Scripts/functions.r"))
