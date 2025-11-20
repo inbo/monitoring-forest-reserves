@@ -46,7 +46,7 @@ forestreserve_short <- "Wijnendale"
 forestreserve_folder <- paste0(path_to_reserves, "4b_Wijnendale")
 
 path_to_datarequest <- paste0(forestreserve_folder, "/verwerking_2024_1e2e3eSET/output_forrescalc/")
-path_to_datarequest_teamdrive <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverwerking/per_gebied/2024_", forestreserve_short, "/04_statistieken_BR/")
+path_to_datarequest_teamdrive <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverwerking/20_Per_gebied/2024_", forestreserve_short, "/04_statistieken_BR/")
 path_to_html_teamdrive <- path_to_datarequest_teamdrive
 
 # plots_to_exclude <- c(701, 707, 709, 727, 728, 738, 739, 740, 759, 760)
@@ -473,7 +473,28 @@ Een species of diam-klasse die niet voorkomt, staat niet in resulterende tabel
 dataset2 <- dendro_by_plot_species 
 # table(dataset2$forest_reserve, dataset2$period)
 ```
+
+
 ```{r add_zeros_all_species}
+dataset2_0 <- add_zeros(dataset = dataset2 %>% 
+                          select(forest_reserve, plot_id, period, species, contains(c("_ha", "stems"))),
+                        comb_vars = c("plot_id", "species", "period"),
+                        grouping_vars = c("forest_reserve"),
+                        defaults_to_na = c("stems_per_tree")
+                        ) 
+
+nrow(dataset2_0) # 750
+
+
+
+
+
+
+
+
+
+
+
 dataset2_0 <- add_zeros(dataset = dataset2 %>% 
                           select(plot_id, period, species, contains(c("_ha", "stems"))),
                         comb_vars = c("plot_id", "species"),
@@ -489,6 +510,15 @@ dataset2_0 <- add_zeros(dataset = dataset2 %>%
 summary(dataset2_0)
 
 ```
+
+
+
+
+
+
+
+
+
 ```{r}
 variables_for_statistics2 <- dataset2_0 %>% 
   select(contains(c("_ha", "stems"))) %>% 
