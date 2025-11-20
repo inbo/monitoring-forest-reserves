@@ -45,7 +45,7 @@ path_to_datarequest_teamdrive <- paste0(path_to_teamdrive_gebied, "/04_statistie
 
 # Vraagstelling
 
-Statistieken op niveau van bosreservaat, obv de cirkelplots.
+Statistieken op niveau van bosreservaat `r forestreserve`, obv de cirkelplots.
 
 Alle basis variabelen van de monitoring:
 - veg
@@ -178,10 +178,11 @@ dataset %>% filter(is.na(cumulated_canopy_cover_mid)) %>% nrow()
 # [1] 0
 
 ```
-
-```{r variables, results='hide'}
+```{r results='hide'}
 names(dataset)
+```
 
+```{r variables}
 variables_for_statistics <- dataset %>% 
   select(contains(c("mid", "perc", "number_of_species"))) %>% 
   names()
@@ -207,7 +208,7 @@ resultaat <- create_statistics(
          stratum_name2 = NA)
 
 resultaat %>% filter(is.na(mean)) %>% nrow()   
-# 2: soildisturbance_game_cover_mid voor periode 1 & 2 - OK
+# 1: soildisturbance_game_cover_mid voor periode 1 - OK
 
 # voor export naar excel ipv access-db
 resultaat <- resultaat %>% 
@@ -252,7 +253,7 @@ path_to_datarequest_teamdrive
 
 ```
 
-```{r export1}
+```{r export1, results='hide'}
 resultaat %>% distinct(variable)
 # cumm_herb_coverage_class_average_perc				
 # cumulated_canopy_cover_mid				
@@ -263,7 +264,6 @@ resultaat %>% distinct(variable)
 # soildisturbance_game_cover_mid				
 # tree_cover_mid				
 # waterlayer_cover_mid
-
 
 write.xlsx(resultaat
            , paste0(path_to_datarequest, "stat_veg.xlsx")
@@ -407,7 +407,7 @@ Karakteristieke bedekking = som van bedekkingen in de plots waar soort voorkomt,
 gedeeld door het aantal plots waar de soort voorkomt
 
 
-```{r, results='hide'}
+```{r results='hide'}
 dataset2 %>% filter(is.na(coverage_class_average_perc)) %>% nrow() == 0
 names(dataset2)
 karakt_bedekking <- dataset2 %>% 
@@ -478,7 +478,7 @@ Na knitting - manueel
 
 ```{r eval = FALSE}
 # Specify the path of the file you want to copy
-source_file <- here::here(paste0("Scripts/Per_gebied/", forestreserve_short, "/", forestreserve_short, "_stat_veg_2021.html"))
+source_file <- here::here(paste0("Scripts/Per_gebied/", forestreserve_short, "/", forestreserve_short, "_stat_veg_2025.html"))
 
 # Specify the destination directory where you want to copy the file
 destination_dir <- path_to_datarequest_teamdrive

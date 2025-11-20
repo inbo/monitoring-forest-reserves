@@ -51,7 +51,7 @@ path_to_datarequest_teamdrive <- paste0(path_to_teamdrive_gebied, "/04_statistie
 
 # Vraagstelling
 
-Statistieken op niveau van bosreservaat, obv de cirkelplots.
+Statistieken op niveau van bosreservaat `r forestreserve`, obv de cirkelplots.
 
 Alle basis variabelen van de monitoring:
 - reg
