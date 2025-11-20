@@ -209,7 +209,7 @@ table(dataset$forest_reserve, dataset$period)
 ```
 
 
-```{r results = 'hide'}
+```{r eval = FALSE}
 reg_by_plot %>% filter(plot_id == 1701) %>% view()
 ```
 
