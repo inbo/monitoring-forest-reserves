@@ -43,7 +43,7 @@ forestreserve_short <- "Wijnendale"
 # plot_type <- "CA"
 # plot_type <- "CP"
 
-forestreserve_folder <- paste0(path_to_reserves, "4b_Wijnendale")
+forestreserve_folder <- paste0(path_to_reserves, "0_Wijnendale")
 
 path_to_datarequest <- paste0(forestreserve_folder, "/verwerking_2024_1e2e3eSET/output_forrescalc/")
 path_to_datarequest_teamdrive <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverwerking/20_Per_gebied/2024_", forestreserve_short, "/04_statistieken_BR/")
@@ -483,42 +483,9 @@ dataset2_0 <- add_zeros(dataset = dataset2 %>%
                         defaults_to_na = c("stems_per_tree")
                         ) 
 
-nrow(dataset2_0) # 750
-
-
-
-
-
-
-
-
-
-
-
-dataset2_0 <- add_zeros(dataset = dataset2 %>% 
-                          select(plot_id, period, species, contains(c("_ha", "stems"))),
-                        comb_vars = c("plot_id", "species"),
-                        grouping_vars = c("period")
-                        ) %>%
-  # left_join(qSpecies %>% dplyr::select(species = ID, speciesTxt = Value1)) %>% 
-  left_join(plotinfo %>% select(plot_id, period, forest_reserve))
-
-# INITIELE FOUT: pas achteraf terug bosreservaat toevoegen
-# anders voor elk bosreservaar alle plots 
-# bv. Wijnendale: plot 101, 201 ... ipv enkel 401
-
-summary(dataset2_0)
+nrow(dataset2_0) # 11424
 
 ```
-
-
-
-
-
-
-
-
-
 ```{r}
 variables_for_statistics2 <- dataset2_0 %>% 
   select(contains(c("_ha", "stems"))) %>% 
@@ -547,12 +514,13 @@ resultaat2 <- create_statistics(
   variables = variables_for_statistics2,
   # variables = "basal_area_alive_m2_ha",
   include_year_range = FALSE,
-  na_rm = FALSE,
+  na_rm = TRUE,  # nodig voor stems_per_tree, is immers NA als soort niet voorkomt in plot
+  # en als NA's behouden blijven, dan is resultaat ook NA 
     interval_information = suppressMessages(read_csv2(system.file("extdata/class_data.csv",
     package = "forrescalc")))
   ) %>% 
   select(-logaritmic) %>% 
-  filter(mean != 0 & !is.na(mean)) %>% 
+  # filter(mean != 0 & !is.na(mean)) %>% 
   forestmangr::round_df(., 2) %>% 
   left_join(qSpecies, by = c("species" = "ID")) %>% 
   mutate(strata = "species",
@@ -617,16 +585,12 @@ dataset3 <- dendro_by_diam_plot
 ```
 
 ```{r add_zeros_all_dbhs}
-dataset3_0 <- add_zeros(dataset = dataset3 %>% 
-                          select(plot_id, period, dbh_class_5cm, contains("_ha")),
-                        comb_vars = c("plot_id", "dbh_class_5cm"),
-                        grouping_vars = c("period")
-                        ) %>%
-  # left_join(qSpecies %>% dplyr::select(species = ID, speciesTxt = Value1)) %>% 
-  left_join(plotinfo %>% select(plot_id, period, forest_reserve))
-
-summary(dataset3_0)
-
+dataset3_0 <- add_zeros(dataset = dataset3 %>%
+                          select(forest_reserve, plot_id, period, dbh_class_5cm, contains(c("_ha"))),
+                        comb_vars = c("plot_id", "dbh_class_5cm", "period"),
+                        grouping_vars = c("forest_reserve")
+                        )
+# 8925
 ```
 
 ```{r}
@@ -645,7 +609,7 @@ n_BR <- length(unique(dataset3$forest_reserve))
 n_dbh <- length(unique(dataset3$dbh_class_5cm))
 n_period <- length(unique(dataset3$period))
 n <- n_BR * n_dbh * n_period * length(variables_for_statistics3)
-n # 702
+n # 675
 
 resultaat3 <- create_statistics(
   dataset = dataset3_0,
@@ -657,7 +621,7 @@ resultaat3 <- create_statistics(
     package = "forrescalc")))
   ) %>% 
   select(-logaritmic) %>% 
-  filter(mean != 0 & !is.na(mean)) %>% 
+  # filter(mean != 0 & !is.na(mean)) %>% 
   forestmangr::round_df(., 2) %>% 
   mutate(strata = "dbh_class",
          stratum_name = dbh_class_5cm,
@@ -721,16 +685,13 @@ dataset4 <- dendro_by_diam_plot_species
 
 ```{r add_zeros_all_dbhs_species}
 dataset4_0 <- add_zeros(dataset = dataset4 %>% 
-                          select(plot_id, period, dbh_class_5cm, species, contains("_ha")),
-                        comb_vars = c("plot_id", "dbh_class_5cm", "species"),
-                        grouping_vars = c("period")
-                        ) %>%
-  # left_join(qSpecies %>% dplyr::select(species = ID, speciesTxt = Value1)) %>% 
-  left_join(plotinfo %>% select(plot_id, period, forest_reserve))
-
-
-# !! soorten en diameterklasses die niet voorkomen verwijderen alvores statistics toe te passen, zie functie
+                          select(forest_reserve, plot_id, period, dbh_class_5cm
+                                 , species, contains("_ha")),
+                        comb_vars = c("plot_id", "dbh_class_5cm", "species", "period"),
+                        grouping_vars = c("forest_reserve")
+                        )
 ```
+
 ```{r}
 variables_for_statistics4 <- dataset4_0 %>% 
   select(contains(c("_ha", "stems"))) %>% 
@@ -747,8 +708,9 @@ n_species <- length(unique(dataset4$species))
 n_dbh <- length(unique(dataset4$dbh_class_5cm))
 n_period <- length(unique(dataset4$period))
 n <- n_BR * n_species * n_dbh * n_period * length(variables_for_statistics4)
-n # 22464
-# DAAROM: 0 en NA (xxxx_min40cm) verwijderen
+n # 21600
+# veel records, daarom hier geopteerd om 0 en NA (xxxx_min40cm) te verwijderen 
+# mbv filter in onderstaande code, zie "GEEN NULLEN"
 
 resultaat4 <- create_statistics(
   dataset = dataset4_0,
@@ -763,6 +725,7 @@ resultaat4 <- create_statistics(
     package = "forrescalc")))
   ) %>% 
   select(-logaritmic) %>% 
+  ### GEEN NULLEN 
   filter(mean != 0 & !is.na(mean)) %>% 
   forestmangr::round_df(., 2) %>% 
   left_join(qSpecies, by = c("species" = "ID")) %>% 
@@ -777,8 +740,8 @@ resultaat4 <- resultaat4 %>%
   select(-contains(c("log"))) # lege velden
 
 nrow(resultaat4); n
-# [1] 3198
-# [1] 27456
+# [1] 3197
+# [1] 21600
 ```
 
 ```{r check_add_zeros4}
@@ -795,7 +758,7 @@ check_NGV <- totaal_NGV_per_BR %>%
   mutate(verschil = G - mean)
 
 range(check_NGV$verschil) # ok
-# -0.07  0.44
+# -0.07  0.00
 ```
 
 ```{r table4}
@@ -837,13 +800,6 @@ Kan zelf opgeteld worden.
 
 Totaal volume dood hout staat wel in `dendro_by_plot.`
 
-
-<!-- Hier moeten we bij dataset 5 ook de plots toevoegen waar in géén van beide periodes dood hout voorkomt -->
-<!-- want gemiddelde moet obv alle plots berekend worden, ook deze zonder logs -->
-
-<!-- Bij soort is dat niet, want elke plot bevat wel één of andere soort (of een diameterklasse) -->
-<!-- Maar niet elke plot bevat één of andere dood hout element!!!! -->
-
 ```{r survey_deadw}
 table(bosplots$survey_deadw)
 # Wijnendale: enkel TRUE
@@ -857,24 +813,29 @@ table(bosplots$survey_deadw)
 
 
 ```{r data5}
-dataset5 <- deadw_by_decay_plot 
+dataset5 <- deadw_by_decay_plot %>% 
+  filter(decaystage_cde != 16 | is.na(decaystage_cde))
+
+# bevat ook NVT_levend (decaystage 16), omdat deadwood by decay_plot 
+# berekend wordt obv dataset staande bomen met initieel ook decaystage 16
+# bij deadw_by_decay_plot_species staan die nullen (decaystage 16) er niet meer in
 ```
+
 
 ```{r add_zeros_all_decaystages}
 names(dataset5)
 
 dataset5_0 <- add_zeros(dataset = dataset5 %>% 
-                          select(plot_id, period, decaystage_cde, contains("_ha")),
-                        comb_vars = c("plot_id", "decaystage_cde"),
-                        grouping_vars = c("period")
+                          select(forest_reserve, plot_id, period, decaystage_cde, contains("_ha")),
+                        comb_vars = c("plot_id", "decaystage_cde", "period"),
+                        grouping_vars = c("forest_reserve")
                         ) %>%
   left_join(qDecaystage, by = c("decaystage_cde" = "ID")) %>% 
-  rename(afbraak = Value1, 
-         decaystage = Value2) %>% 
-  left_join(plotinfo %>% select(plot_id, period, forest_reserve))
+  rename(afbraak_txt = Value1, 
+         decaystage_txt = Value2)
 
 nrow(dataset5_0)
-# 2856
+# 2499
 ```
 
 ```{r}
@@ -890,11 +851,10 @@ variables_for_statistics5
 ```{r stat5}
 # !! één resultaat per decaystage en per BR
 n_BR <- length(unique(dataset5$forest_reserve))
-n_decay <- length(unique(dataset5$decaystage))
+n_decay <- length(unique(dataset5$decaystage_cde))
 n_period <- length(unique(dataset5$period))
 n <- n_BR * n_decay * n_period * length(variables_for_statistics5)
-n # 72
-
+n # 63
 
 resultaat5 <- create_statistics(
   dataset = dataset5_0,
@@ -917,7 +877,7 @@ resultaat5 <- create_statistics(
          strata2 = NA,
          stratum_name2 = NA)
 
-nrow(resultaat5) # 72
+nrow(resultaat5); n # 63
 ```
 
 ```{r check_add_zeros5}
@@ -974,17 +934,15 @@ dataset6 <- deadw_by_decay_plot_species
 names(dataset6)
 
 dataset6_0 <- add_zeros(dataset = dataset6 %>% 
-                          select(plot_id, period, decaystage_cde, species, contains("_ha")),
-                        comb_vars = c("plot_id", "decaystage_cde", "species"),
-                        grouping_vars = c("period")
+                          select(forest_reserve, plot_id, period, decaystage_cde, species, contains("_ha")),
+                        comb_vars = c("plot_id", "decaystage_cde", "species", "period"),
+                        grouping_vars = c("forest_reserve")
                         ) %>%
   left_join(qDecaystage, by = c("decaystage_cde" = "ID")) %>% 
   rename(afbraak = Value1, 
-         decaystage = Value2) %>% 
-  # left_join(qSpecies %>% dplyr::select(species = ID, speciesTxt = Value1)) %>% 
-  left_join(plotinfo %>% select(plot_id, period, forest_reserve))
+         decaystage_txt = Value2) 
 
-nrow(dataset6_0) # 81872
+nrow(dataset6_0) # 91392
 ```
 
 ```{r}
@@ -1001,11 +959,13 @@ variables_for_statistics6
 # !! één resultaat per decaystage, soort en BR
 n_BR <- length(unique(dataset6$forest_reserve))
 n_species <- length(unique(dataset6$species))
-n_decay <- length(unique(dataset6$decaystage))
+n_decay <- length(unique(dataset6$decaystage_cde))
 n_period <- length(unique(dataset6$period))
 n <- n_BR * n_species * n_decay * n_period * length(variables_for_statistics6)
 n # 2304
-# DAAROM: 0 en NA (xxxx_min40cm) verwijderen
+# veel records, daarom hier geopteerd om 0 en NA (xxxx_min40cm) te verwijderen 
+# mbv filter in onderstaande code, zie "GEEN NULLEN"
+
 
 resultaat6 <- create_statistics(
   dataset = dataset6_0,
@@ -1017,6 +977,7 @@ resultaat6 <- create_statistics(
     package = "forrescalc")))
   ) %>% 
   select(-logaritmic) %>% 
+  ### GEEN NULLEN
   filter(mean != 0 & !is.na(mean)) %>% 
   forestmangr::round_df(., 2) %>% 
   left_join(qSpecies, by = c("species" = "ID")) %>% 
@@ -1028,7 +989,7 @@ resultaat6 <- create_statistics(
          strata2 = "species",
          stratum_name2 = name_nl)
 
-nrow(resultaat6) # 493
+nrow(resultaat6);n # 493
 
 ```
 
@@ -1075,25 +1036,13 @@ write.xlsx(resultaat6
 
 ```
 
-
-
-# Overige statistieken
-
-## Meerstammigheid per soort
-Stems per tree: zit in dendro_by_plot(_species) => OK
-
-Initieel was hier ook 0 van gemaakt (main02) indien geen bomen aanwezig, dat is 
-gecorrigeerd.
-Enkel 0 voor de variabelen per ha en number_of_species.
-
-
 # Copy html to teamdrive
 
 Na knitting - manueel
 
 ```{r eval = FALSE}
 # Specify the path of the file you want to copy
-source_file <- here::here("Scripts/Per_gebied/Wijnendale_stat_dendro_2024.html")
+source_file <- here::here("Scripts/Per_gebied/Wijnendale/Wijnendale_stat_dendro_2024.html")
 
 # Specify the destination directory where you want to copy the file
 destination_dir <- path_to_datarequest_teamdrive

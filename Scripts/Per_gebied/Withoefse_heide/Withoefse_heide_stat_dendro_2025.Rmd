@@ -569,7 +569,7 @@ resultaat4 <- create_statistics(
     package = "forrescalc")))
   ) %>% 
   select(-logaritmic) %>% 
-    # GEEN NULLEN 
+  ### GEEN NULLEN 
   filter(mean != 0 & !is.na(mean)) %>% 
   forestmangr::round_df(., 2) %>% 
   left_join(qSpecies, by = c("species" = "ID")) %>% 
@@ -811,7 +811,7 @@ resultaat6 <- create_statistics(
     package = "forrescalc")))
   ) %>% 
   select(-logaritmic) %>% 
-    # GEEN NULLEN
+  ### GEEN NULLEN
   filter(mean != 0 & !is.na(mean)) %>% 
   forestmangr::round_df(., 2) %>% 
   left_join(qSpecies, by = c("species" = "ID")) %>% 
