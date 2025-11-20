@@ -39,6 +39,16 @@ source(here::here("scripts/Setup.R"))
 
 ```
 
+> OPGEPAST: er zat een bug in forrescalc => branch bugfix_Al_2025 op dit moment (19/11/2025),
+tot gemerged met bugfix ...
+
+
+
+
+
+
+
+
 ```{r Setup2, include = FALSE}
 forest_reserve <- "Withoefse_heide"
 source(here::here("scripts/Per_gebied/", forest_reserve, "/setup_paths_gebied.R"))
@@ -259,6 +269,13 @@ check_rubbingnr_NA <- data_regeneration  %>%
 
 nrow(check_rubbingnr_NA) == 0
 
+check_rubbingnr_NA3 <- data_regeneration  %>% 
+  select(select_colnames_reg) %>% 
+  left_join(plotinfo %>% select(plot_id, period, game_impact_reg)) %>% 
+  filter(!is.na(rubbing_damage_number)) %>% 
+  filter(game_impact_reg == FALSE)
+
+nrow(check_rubbingnr_NA3) == 0
 # 
 
 # wat als er geen soort is? dan moet number en percentage = NA - OK
@@ -300,6 +317,10 @@ check_rubbing_perc %>% filter(is.na(rubbing_damage_perc) &
 ```{r calc_reg}
 regeneration <- calculate_regeneration(data_regeneration)
 
+# by_plot <- calc_reg_plot(data_regeneration)
+# by_plot_height <- calc_reg_plot_height(data_regeneration)
+# by_plot_species <- calc_reg_plot_species(data_regeneration)
+# by_plot_height_species <- calc_reg_plot_height_species(data_regeneration)
 ```
 
 
@@ -331,7 +352,7 @@ reg_by_plot_height %>% filter(is.na(approx_nr_regeneration_ha)) %>% nrow() == 0
 
 # Check perc_rubbing op plot-niveau
 
-Initiële fout deels opgelost door bij `load_regeneration()` 
+Initiële fout deels opgelost door bij `load_data_regeneration()` 
 `GameImpactRegObserved = 10` te gebruiken voor toekennen van 0 ipv NA.
 
 Deels door nog wat extra aanpassingen bij de calc-functies 
@@ -343,6 +364,13 @@ Deels door nog wat extra aanpassingen bij de calc-functies
 
 Hierna nog enkele testen.
 
+**FOUT 19/11/2025: opgelost in bugfix_AL2025, nog te mergen naar bugfix**
+Probleem enkel bij `calc_reg_plot_height()` en `calc_reg_core_area_height_spec()`
+`Data_regeneration` had correcte NA bij browsing (`load_data_reg` dus ok),
+maar dat werd niet goed doorvertaald door de calc functies waardoor er onterecht 
+nullen ontstonden terwijl er geen game impact genoteerd was
+(issue #163 in forrescalc)
+
 
 ```{r}
 # CP
@@ -352,6 +380,21 @@ check_rubbing_perc_NA <- reg_by_plot_height %>%
   filter(game_impact_reg == TRUE) 
 
 check_rubbing_perc_NA %>% nrow() == 0
+
+# wat als pd.GameImpactRegObserved = 20 (FALSE)
+check_rubbing_perc_NA2 <- reg_by_plot %>%
+  left_join(plotinfo %>% select(plot_id, period, game_impact_reg)) %>%
+  filter(game_impact_reg == FALSE) %>% 
+  filter(!is.na(approx_rubbing_damage_perc_established))
+check_rubbing_perc_NA2 %>% nrow() == 0
+# OK
+
+check_rubbing_perc_NA2 <- reg_by_plot_height %>%
+  left_join(plotinfo %>% select(plot_id, period, game_impact_reg)) %>%
+  filter(game_impact_reg == FALSE) %>% 
+  filter(!is.na(rubbing_damage_number_ha))
+check_rubbing_perc_NA2 %>% nrow() == 0
+# ok
 
 # CA
 check_rubbing_perc_NA <- reg_by_core_area_height_species %>% 
