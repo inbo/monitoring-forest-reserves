@@ -397,7 +397,8 @@ table(dataset2$forest_reserve, dataset2$period)
 dataset2_0 <- add_zeros(dataset = dataset2 %>% 
                           select(plot_id, period, species, contains(c("_ha", "stems"))),
                         comb_vars = c("plot_id", "species"),
-                        grouping_vars = c("period")
+                        grouping_vars = c("period"),
+                        defaults_to_na = c("stems_per_tree")
                         ) %>%
   # left_join(qSpecies %>% dplyr::select(species = ID, speciesTxt = Value1)) %>% 
   left_join(plotinfo %>% select(plot_id, period, forest_reserve))
@@ -406,8 +407,30 @@ dataset2_0 <- add_zeros(dataset = dataset2 %>%
 # anders voor elk bosreservaar alle plots 
 # bv. Wijnendale: plot 101, 201 ... ipv enkel 401
 
+!! OPGEPAST
+# (c) Anja: 18/11/2025: toch nog eens bekijken, want in help bij functie staat als vb om toch forest_reesrve bij gtoupunt vars te nemen
+# Eens uitgetest bij With heide (wel maar één BR), en geen verschil in de stat-uitkomst
+# alternatief cfr de info bij de functie: 
+# "periode" bij comb_vars en "forest_reserve" als grouping_vars 
+# dan krijg je bv.in periode 1 waar geen Berk voorkomt, in geen enkele plot), 
+# toch in elke plot ook berk met aantal = 0
+# als je dan statistics berekent, krijg je hetzelfde resultaat als bij dataset2_0
+# (geen vermelding van Berk met waardes 0)
+        # dataset2_0test <- add_zeros(dataset = dataset2 %>%
+        #                           select(forest_reserve, plot_id, period, species, contains(c("_ha", "stems"))),
+        #                         comb_vars = c("plot_id", "species", "period"),
+        #                         grouping_vars = c("forest_reserve")
+        #                         )
 
+# library(waldo) 
+# waldo::compare(resultaat2, resultaat2test)
+# (resultaat2test obv dataset2_0test)
 ```
+
+
+
+
+
 ```{r}
 variables_for_statistics2 <- dataset2_0 %>% 
   select(contains(c("_ha", "stems"))) %>% 
@@ -436,7 +459,7 @@ resultaat2 <- create_statistics(
   variables = variables_for_statistics2,
   # variables = "basal_area_alive_m2_ha",
   include_year_range = FALSE,
-  na_rm = FALSE,
+  na_rm = TRUE,   # van belang voor stems_per_tree, is NA als soort niet voorkomt in plot
     interval_information = suppressMessages(read_csv2(system.file("extdata/class_data.csv",
     package = "forrescalc")))
   ) %>% 
