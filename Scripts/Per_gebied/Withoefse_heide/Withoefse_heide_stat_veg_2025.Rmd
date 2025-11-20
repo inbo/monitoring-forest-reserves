@@ -198,7 +198,11 @@ resultaat <- create_statistics(
   variables = variables_for_statistics,
   include_year_range = FALSE,
   na_rm = TRUE   # regelmatig een NA bij één of andere bedekking, vaak op reservaatsniveau
-  # ingevulde bedekkingen beter toch meenemen (door na_rm = TRUE) en kijken naar n_obs 
+  # door na_rm = TRUE te zetten (wegfilteren van de NA's vooraleer er statistiek op toe te passen)
+  # heb je beter zicht op hoeveel bedekkingen er effectief genoteerd werden
+  #  --> kijken naar n_obs 
+  # TRUE vs FALSE: verschil is dat bij "soildisturbance_game_cover_mid" nObs = 1 ipv 25
+  # correcter dus om na_rm = TRUE te nemen (1 -of eigenlijk géén- waarnemingen, en daarom dus NA)
   ) %>% 
   forestmangr::round_df(., 2) %>% 
   # rename(strata = forest_reserve) %>% 
@@ -206,6 +210,9 @@ resultaat <- create_statistics(
          stratum_name = NA,
          strata2 = NA,
          stratum_name2 = NA)
+
+# library(waldo)
+# waldo::compare(resultaat, resultaat_na)
 
 resultaat %>% filter(is.na(mean)) %>% nrow()   
 # 1: soildisturbance_game_cover_mid voor periode 1 - OK
