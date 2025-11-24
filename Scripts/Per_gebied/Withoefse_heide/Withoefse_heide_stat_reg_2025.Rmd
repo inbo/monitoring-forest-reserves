@@ -16,11 +16,11 @@ output:
 ---
 
 
-> **OPGEPAST**: plot 212: geen verjonging, 0 soorten. Is dat wel correct.
-> Gevraagd aan Peter (mail 19/11/25)
-Op dit moment uitgaan van "NA", eerder dan 0 soorten => in alle tabellen die plot wegfilteren
-(anders `survey_reg_YN = FALSE`: aanpassen in  plotdetails in moederdb)
-
+<!-- **OPGEPAST**: plot 212: geen verjonging, 0 soorten.  -->
+<!-- Gevraagd aan Peter (mail 19/11/25), moet NA zijn (antw 20/11/2025) -->
+<!-- Op 24/11/2025 in moederdb-en op mijn c-schijf (en bij Peter) `survey_reg_YN = FALSE`  -->
+<!-- in plotdetails_2eSET. -->
+<!-- Code al opnieuw gerund, is OK met die aanpassing in plotdetails -->
 
 ```{r Rm, eval = FALSE}
 rm(list=ls())
@@ -167,17 +167,13 @@ tbls <- map(tbl_namen, \(x) inlezen_functie(x))
 names(tbls) <- tbl_namen
 ```
 
-> **OPGEPAST**: plot 212: geen verjonging, 0 soorten. Is dat wel correct.
-> Gevraagd aan Peter (mail 19/11/25)
-Op dit moment uitgaan van "NA", eerder dan 0 soorten => in alle tabellen die plot wegfilteren
-(anders `survey_reg_YN = FALSE`: aanpassen in  plotdetails in moederdb)
+```{r TEMP_plot212_NA, eval = FALSE}
+# plot 212: reg niet genoteerd in periode 2 
+# aangepast in plotdetails_2eSET (24/11/2025): is nu NA 
 
-
-```{r TEMP_plot212_NA}
-# plot 212: reg niet genoteerd in periode 2 => 0 soorten, maar klopt niet => wegfilteren
-tbls_ <- map(tbls, \(x) x %>% filter(!(x$plot_id == 212 & x$period == 2)))
-
-tbls <- tbls_
+        # tbls_ <- map(tbls, \(x) x %>% filter(!(x$plot_id == 212 & x$period == 2)))
+        # 
+        # tbls <- tbls_
 ```
 
 
@@ -412,7 +408,7 @@ dataset2_0 <- add_zeros(dataset = dataset2 %>%
                                  # game_impact_reg
                                  ),
                         comb_vars = c("plot_id", "height_class"),
-                        # period als grouping_var, anders wordt plot212 periode 2 terug toegevoegd
+                        # period als grouping_var, anders wordt plot 212 periode 2 terug toegevoegd
                         grouping_vars = c("forest_reserve", "period"),   
                         # add_zero_no_na = c("game_impact_reg"),
                         # remove_na_records_in_comb_vars = c("rubbing_damage_number_ha")
