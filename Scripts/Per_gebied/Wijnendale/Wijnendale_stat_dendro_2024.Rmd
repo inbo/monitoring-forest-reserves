@@ -504,7 +504,6 @@ n_species <- length(unique(dataset2$species))
 n_period <- length(unique(dataset2$period))
 n <- n_BR * n_species * n_period * length(variables_for_statistics2)
 n # 1056
-# DAAROM: 0 en NA (xxxx_min40cm) verwijderen
 
 resultaat2 <- create_statistics(
   dataset = dataset2_0,
