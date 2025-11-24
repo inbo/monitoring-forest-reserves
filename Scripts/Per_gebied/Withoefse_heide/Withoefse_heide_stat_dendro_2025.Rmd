@@ -196,6 +196,138 @@ for (tablename in names(tbls)) {
 ```
 
 
+# Enkel bosplots
+
+Dendro per BR: enkel obv de bosplots  
+=> eerst de open ruimtes verwijderen (zonder bomen én zonder verjonging)   
+=> link met regeneration_by_plot nodig
+
+**Plot 475** Wijnendale periode 1: enkel dood hout; omdat er in periode 2 
+wel soorten genoteerd werden zit plot mee in `dendro_by_plot`
+
+**Plot 482**: enige plot die als "open ruimte" over blijft: is echter een plot die 
+enkel in periode 1 opgemeten werd (geen bomen), en erna niet meer 
+=> goed om die NIET mee te nemen
+
+```{r}
+regeneration_by_plot <- read_excel(paste0(path_to_datarequest, "regeneration_by_plot.xlsx")) %>% 
+  select(-1) %>% 
+  filter(plottype == "CP")
+
+```
+
+```{r open_ruimte}
+open_ruimte <- dendro_by_plot %>% 
+  filter(number_of_tree_species == 0) %>% # 1 plot (plot 475)
+  filter(vol_deadw_m3_ha == 0) %>%  # dan valt plot 475 weg => is bosplot, maar in periode 1 zonder bomen/verjonging, mét dood hout
+  left_join(regeneration_by_plot) %>% 
+  filter((approx_nr_established_ha == 0 & approx_nr_seedlings_ha == 0) 
+         | (is.na(approx_nr_established_ha) & is.na(approx_nr_seedlings_ha))
+  ) 
+
+nrow(open_ruimte) # 0
+table(open_ruimte$forest_reserve, open_ruimte$period)
+
+open_ruimte <- open_ruimte %>% 
+  select(forest_reserve, plot_id, period, number_of_tree_species)
+
+```
+
+
+```{r bosplots}
+bosplots <- dendro_by_plot %>% 
+  filter(plottype == "CP") %>% 
+  select(forest_reserve, plot_id, period, number_of_tree_species
+         , survey_trees, survey_deadw) %>% 
+  anti_join(open_ruimte)
+
+# !! hier wordt ook periode in rekening gebracht, dus als op één moment open 
+# ruimte en op ander moment niet, dan wordt plot één keer wel en één keer niet meegenomen
+```
+
+# Herinladen data 
+
+- enkel cirkelplots   
+- zonder de "plots to exclude": plots `r plots_to_exclude`    
+- zonder de open ruimte: dat zijn `r nrow(open_ruimte)` plots in geval van `r forestreserve`.
+
+(c)A: er bestaat ook read_package (https://docs.ropensci.org/frictionless/)
+package <- read_package("https://zenodo.org/records/10053702/files/datapackage.json")
+
+resources(package) : geeft overzicht van de tabellen in het datapackage
+<!-- > [1] "reference-data" "gps"            "acceleration" -->
+
+read_resource(package, "gps")  : om één tabel in te laden
+
+```{r load_dendro_all}
+dendro_by_plot <- read_excel(
+  paste0(path_to_datarequest, "dendro_by_plot.xlsx")
+  ) %>% 
+  select(-1) %>%   
+  # select(-contains("eg"), -contains("min40cm")) %>%  # (veg en reg)
+  left_join(plotinfo) %>% 
+  filter(plottype == "CP" & !plot_id %in% plots_to_exclude) %>% 
+  anti_join(open_ruimte, by = c("plot_id", "period"))
+
+dendro_by_diam_plot <- read_excel(
+  paste0(path_to_datarequest, "dendro_by_diam_plot.xlsx")
+  ) %>% 
+  select(-1) %>% 
+  left_join(plotinfo) %>% 
+  filter(plottype == "CP") %>% 
+  filter(!plot_id %in% plots_to_exclude) %>% 
+  anti_join(open_ruimte, by = c("plot_id", "period"))
+
+dendro_by_diam_plot_species <- read_excel(
+  paste0(path_to_datarequest, "dendro_by_diam_plot_species.xlsx")
+  ) %>% 
+  select(-1) %>% 
+  left_join(plotinfo) %>% 
+  filter(plottype == "CP") %>% 
+  filter(!plot_id %in% plots_to_exclude) %>% 
+  anti_join(open_ruimte, by = c("plot_id", "period")) %>%
+  left_join(qSpecies, by = c("species" = "ID"))
+
+dendro_by_plot_species <- read_excel(
+  paste0(path_to_datarequest, "dendro_by_plot_species.xlsx")
+  ) %>% 
+  select(-1) %>% 
+  left_join(plotinfo) %>% 
+  filter(plottype == "CP") %>% 
+  filter(!plot_id %in% plots_to_exclude) %>% 
+  anti_join(open_ruimte, by = c("plot_id", "period")) %>%
+  left_join(qSpecies, by = c("species" = "ID"))
+
+deadw_by_decay_plot <- read_excel(
+  paste0(path_to_datarequest, "deadw_by_decay_plot.xlsx")
+  ) %>% 
+  select(-1) %>% 
+  left_join(plotinfo) %>% 
+  filter(plottype == "CP") %>% 
+  filter(!plot_id %in% plots_to_exclude) %>% 
+  anti_join(open_ruimte, by = c("plot_id", "period")) %>% 
+  left_join(qDecaystage, by = c("decaystage" = "ID")) %>% 
+  rename(decaystage_cde = decaystage,
+         afbraak = Value1, 
+         decay_stage = Value2) 
+
+deadw_by_decay_plot_species <- read_excel(
+  paste0(path_to_datarequest, "deadw_by_decay_plot_species.xlsx")
+  ) %>% 
+  select(-1) %>% 
+  left_join(plotinfo) %>% 
+  filter(plottype == "CP") %>% 
+  filter(!plot_id %in% plots_to_exclude) %>% 
+  anti_join(open_ruimte, by = c("plot_id", "period")) %>%
+  left_join(qSpecies, by = c("species" = "ID")) %>% 
+  left_join(qDecaystage, by = c("decaystage" = "ID")) %>% 
+  rename(decaystage_cde = decaystage,
+         afbraak = Value1, 
+         decay_stage = Value2) 
+
+```
+
+
 
 # Statistieken
 
