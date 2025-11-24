@@ -17,10 +17,9 @@ output:
 
 
 <!-- **OPGEPAST**: plot 212: geen verjonging, 0 soorten.  -->
-<!-- Gevraagd aan Peter (mail 19/11/25), moet NA zijn (antw 20/11/2025) -->
-<!-- Op 24/11/2025 in moederdb-en op mijn c-schijf (en bij Peter) `survey_reg_YN = FALSE`  -->
-<!-- in plotdetails_2eSET. -->
-<!-- Code al opnieuw gerund, is OK met die aanpassing in plotdetails -->
+<!-- Gevraagd aan Peter (mail 19/11/25), kan inderdaad 0 zijn, ligt aan rand van ven
+(antw 20/11/2025) -->
+<!-- Code al opnieuw gerund -->
 
 ```{r Rm, eval = FALSE}
 rm(list=ls())
@@ -168,8 +167,8 @@ names(tbls) <- tbl_namen
 ```
 
 ```{r TEMP_plot212_NA, eval = FALSE}
-# plot 212: reg niet genoteerd in periode 2 
-# aangepast in plotdetails_2eSET (24/11/2025): is nu NA 
+# plot 212: even gedcaht dat reg niet genoteerd was in periode 2
+# maar blijkt nu toch wellicht geen verjonging te zijn
 
         # tbls_ <- map(tbls, \(x) x %>% filter(!(x$plot_id == 212 & x$period == 2)))
         # 
@@ -228,6 +227,7 @@ table(dataset$forest_reserve, dataset$period)
 
 ```{r eval = FALSE}
 reg_by_plot %>% filter(plot_id == 200) %>% view()
+reg_by_plot %>% filter(plot_id == 212) %>% view()
 ```
 
 ```{r variables1}
@@ -334,6 +334,7 @@ dataset2 <- reg_by_plot_height
 
 ```{r eval = FALSE}
 reg_by_plot_height %>% filter(plot_id == 200) %>% view()
+reg_by_plot_height %>% filter(plot_id == 212) %>% view()
 ```
 
 ```{r n_subplots2, results='hide'}
@@ -376,7 +377,8 @@ voorkomen)
 heightclasses_BR <- dataset2 %>% 
   group_by(forest_reserve, period, height_class) %>% 
   summarize(n_tree_species = sum(number_of_tree_species)) %>% 
-  ungroup()
+  ungroup() %>% 
+  filter(!is.na(height_class))   # is na als geen verjonging genoteerd werd (bv. plot 212)
 
 # controle: toch overal 3, 4 of 2 klasses?
 heightclasses_BR %>% 
@@ -597,7 +599,8 @@ dataset4 %>% group_by(plot_id) %>% summarize(n_subplots = n_distinct(subplot_id)
 species_BR <- dataset4 %>% 
   group_by(forest_reserve, species) %>% 
   summarize(n_plots = n()) %>% 
-  ungroup()
+  ungroup() %>% 
+  filter(!is.na(species))
 
 ```
 
@@ -644,9 +647,8 @@ dataset4_0 <- add_zeros(dataset = dataset4 %>%
                         ) %>%
   left_join(plotinfo %>% 
               select(plot_id, period, game_impact_reg)) %>% 
-  ### inner-join hier overbodig (want maar één bosreservaat)
-  # inner_join(species_BR %>% select(-n_plots),
-  #            by = c("forest_reserve", "species", "period")) %>%
+  inner_join(species_BR %>% select(-n_plots),
+             by = c("forest_reserve", "species", "period")) %>%
      mutate(rubbing_damage_nr_established_ha = ifelse(game_impact_reg == FALSE
                                            , NA
                                            , rubbing_damage_nr_established_ha),
@@ -755,7 +757,7 @@ check_reg <- mean_reg_per_BR %>%
   mutate(verschil = reg_ha - mean)
 
 range(check_reg$verschil, na.rm = TRUE)
-# [1] -1.000000e-02 -5.684342e-14
+# [1] -0.01  0.02
 ```
 
 ```{r check_add_zeros4_rubbing, results='hide'}
@@ -861,9 +863,8 @@ dataset3_0 <- add_zeros(dataset = dataset3 %>%
   # left_join(qSpecies %>% dplyr::select(species = ID, speciesTxt = Value1)) %>% 
   left_join(plotinfo %>% 
               select(plot_id, period, game_impact_reg)) %>% 
-  ### inner-join hier overbodig (want maar één bosreservaat)
-  # inner_join(heightclasses_BR %>% select(-n_tree_species)) %>% 
-  # inner_join(species_BR %>% select(-n_heightclasses)) %>% 
+  inner_join(heightclasses_BR %>% select(-n_tree_species)) %>%
+  inner_join(species_BR %>% select(-n_heightclasses)) %>%
   mutate(rubbing_damage_number_ha = ifelse(game_impact_reg == FALSE
                                            , NA
                                            , rubbing_damage_number_ha)) %>% 

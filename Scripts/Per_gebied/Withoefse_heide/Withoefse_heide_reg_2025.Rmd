@@ -229,7 +229,7 @@ dit is zo als er geen verjonging genoteerd werd in de plot
 ```{r}
 species_NA <- data_regeneration %>% filter(is.na(species) | is.na(height_class))
 nrow(species_NA) 
-# 0 => in elke plot verjonging
+# 1 => plot 212
 
 ```
 Voor `r forest_reserve` gaat het om volgende plots:
