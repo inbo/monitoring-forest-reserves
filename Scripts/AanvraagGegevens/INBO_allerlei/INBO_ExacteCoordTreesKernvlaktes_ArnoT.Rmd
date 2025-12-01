@@ -285,8 +285,11 @@ write_csv2(trees, file.path(path_to_datarequest, "trees_kernvlaktes_met_XY.csv")
 write_csv2(stems, file.path(path_to_datarequest, "stems_kernvlaktes_met_XY.csv")) 
 
 unique(trees$forest_reserve)
-write_csv2(trees %>% filter(forest_reserve %in% c("Zoniën HARRAS_1995", "Zoniën KERN_1983")), file.path(path_to_datarequest, "trees_zonien_met_XY.csv")) 
-write_csv2(stems %>% filter(forest_reserve %in% c("Zoniën HARRAS_1995", "Zoniën KERN_1983")), file.path(path_to_datarequest, "stems_zonien_met_XY.csv")) 
+write_csv2(trees %>% filter(forest_reserve %in% c("Zoniën HARRAS_1995", "Zoniën KERN_1983")), file.path(path_to_datarequest, "trees_KV_zonien_met_XY.csv")) 
+write_csv2(stems %>% filter(forest_reserve %in% c("Zoniën HARRAS_1995", "Zoniën KERN_1983")), file.path(path_to_datarequest, "stems_KV_zonien_met_XY.csv")) 
+
+# ook enkel de GPSReferencePoints (XY van KV's)
+write_csv2(GPSReferencePoints %>% filter(IDPlots > 10000), file.path(path_to_datarequest, "GPSReferencePoints_KV.csv")) 
 ```
 
 
