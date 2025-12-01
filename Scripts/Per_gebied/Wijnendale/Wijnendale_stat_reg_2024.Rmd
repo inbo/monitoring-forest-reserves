@@ -40,8 +40,6 @@ source(here::here("scripts/Setup.R"))
 forestreserve <- "Wijnendalebos"
 forestreserve_short <- forestreserve
 forestreserve_short <- "Wijnendale"
-# plot_type <- "CA"
-plot_type <- "CP"
 
 forestreserve_folder <- paste0(path_to_reserves, "0_Wijnendale")
 
