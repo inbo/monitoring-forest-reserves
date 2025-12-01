@@ -161,6 +161,13 @@ vegetation_by_plot <- read_excel(
 
 herblayer_by_plot <- read_excel(
   paste0(path_to_datarequest, "herblayer_by_plot.xlsx")
+          # bij het inlezen van Excel-bestanden in R met read_excel() uit het readxl-pakket: 
+        # als de eerste rij (header) of de eerste niet-lege rij van een kolom leeg is, 
+        # probeert R het type te raden en kiest vaak logical. 
+        # Daardoor worden alle waarden daarna geforceerd naar TRUE/FALSE/NA.
+        # Standaard kijkt read_excel() maar naar de eerste 1000 rijen om het type te raden. 
+        # Als de eerste rij leeg is, kan dat misgaan. Je kunt dit verhogen:
+  , guess_max = 10000
   ) %>% 
   select(-1) %>%   
   # select(-contains("eg"), -contains("min40cm")) %>%  # (veg en reg)
@@ -172,7 +179,9 @@ herblayer_by_plot <- read_excel(
 
 # Statistieken
 
-## Veg_by_plot
+## Statistieken op niveau bosreservaat 
+
+Obv `veg_by_plot`
 
 ? Waarin geïnteresseerd op reservaatsniveau?
 
@@ -334,14 +343,15 @@ Statistics voor intervals cfr Els: variance bijna steeds Inf en mean = 0
 Ev. later uit te klaren met ELs ...
 
 
-## Herblayer_by_plot
+## Statistieken op soortniveau
 
-In combinatie met veg_by_plot
+Obv `herblayer_by_plot` in combinatie met `veg_by_plot`
 
 Per soort:   
 
 - aantal plots waar soort voorkomt !! best procentueel, want exact aantal plots niet gekend door gebruiker
 - karakteristieke bedekking = som van bedekkingen over alle plots heen/aantal plots waar de soort voorkomt
+- vraatschade: per soort het percentage plots met minor (< 1/20) of explicit browsing (>= 1/20)
 
 
 Enkel bosplots bekijken!
@@ -374,7 +384,7 @@ dataset2 %>% filter(is.na(coverage_class_average_perc)) %>% nrow() == 0
 n_plots_per_species <- dataset2 %>% 
   filter(!is.na(coverage_class_average_perc)) %>% 
   group_by(forest_reserve, period, species) %>% 
-  summarize(n_plots = n()) %>% 
+  summarize(n_plots_species = n()) %>% 
   ungroup()
 
 names(n_plots_per_species)
@@ -387,7 +397,7 @@ n_plots_per_BR <- dataset %>%   # veg_by_plot
 
 species_perc_plots <- n_plots_per_species %>% 
   left_join(n_plots_per_BR) %>% 
-  mutate(perc_plots = 100*n_plots/n_total_plots)
+  mutate(perc_plots = 100*n_plots_species/n_total_plots)
 
 # percentage steeds kleiner dan 100?
 species_perc_plots %>% filter(perc_plots > 100) %>% nrow() == 0
@@ -413,7 +423,7 @@ resultaat2 <- species_perc_plots %>%
 
 
 ```{r table2}
-resultaat2 %>% select(forest_reserve, period, name_nl, n_plots, 
+resultaat2 %>% select(forest_reserve, period, name_nl, n_plots_species, 
                       n_total_plots, perc_plots) %>% 
   DT::datatable(options = list(dom = 'tip')
                 , rownames = FALSE
@@ -464,7 +474,7 @@ karakt_bedekking <- dataset2 %>%
   summarize(sum_cover = sum(coverage_class_average_perc)) %>% 
   ungroup() %>% 
   left_join(species_perc_plots) %>% 
-  mutate(karakt_bedekking = sum_cover/n_plots)
+  mutate(karakt_bedekking = sum_cover/n_plots_species)
   
 ```
 
@@ -488,7 +498,7 @@ names(resultaat3)
 
 
 ```{r table3}
-resultaat3 %>% select(forest_reserve, period, name_nl, sum_cover, n_plots, 
+resultaat3 %>% select(forest_reserve, period, name_nl, sum_cover, n_plots_species, 
                       karakt_bedekking) %>% 
   DT::datatable(options = list(dom = 'tip')
                 , rownames = FALSE
@@ -521,13 +531,109 @@ write.xlsx(resultaat3
            , append = TRUE) 
 ```
 
+
+
+### Vraatschade
+
+Aantal plots en percentage plots met meer of minder vraatschade: 
+
+- Geen vraatschade	  
+- Vraatschade waarneembaar (minder 1/20)	  
+- Vraatschade duidelijk (meer dan 1/20)	  
+- Perc_plots_met vraatschade	  
+- Perc_plots_met vraatschade_>20%   
+
+
+Obv aantal plots waar de soort voorkomt
+
+Percentage plots met vraatscvhaden = aantal plots met vraatschade, 
+gedeeld door het aantal plots waar de soort voorkomt
+
+
+```{r results='hide'}
+dataset2 %>% filter(is.na(browse_index) & game_impact_veg == 10) %>% nrow() == 0
+names(dataset2)
+table(dataset2$browse_index, dataset2$browse_index_id)
+
+vraatschade <- dataset2 %>% 
+  filter(game_impact_veg == TRUE) %>%  # enkel waar vraat opgemeten is
+  group_by(forest_reserve, period, species) %>% 
+  summarize(n_plots_browsing = sum(browse_index != "No browsing")
+            , n_plots_minor_browsing = sum(browse_index == "Browsing observed (less than 1/20)")
+            , n_plots_explicit_browsing = sum(browse_index == "Browsing explicit (more than 1/20)")
+            ) %>% 
+  ungroup() %>% 
+  left_join(species_perc_plots %>% select(forest_reserve, period, species, n_plots_species)
+            , by = c("forest_reserve", "period", "species")) %>% 
+  mutate(perc_plots_browsing = 100 * n_plots_browsing/n_plots_species
+         , perc_plots_minor_browsing = 100 * n_plots_minor_browsing/n_plots_species
+         , perc_plots_explicit_browsing = 100 * n_plots_explicit_browsing/n_plots_species)
+  
+```
+
+```{r resultaat4, results='hide'}
+names(vraatschade)
+resultaat4 <- vraatschade %>% 
+  left_join(qHerbSpecies, by = c("species" = "ID")) %>% 
+  forestmangr::round_df(., 2) 
+# %>% 
+#   mutate(variable = "karakt_bedekking"
+#          , n_obs = n_total_plots
+#          , mean = karakt_bedekking
+#          , variance = NA, lci = NA, uci = NA
+#          , strata = "species"
+#          , stratum_name = name_nl
+#          , strata2 = NA
+#          , stratum_name2 = NA) 
+  
+names(resultaat4)
+```
+
+
+```{r table4}
+resultaat4 %>% select(name_nl, period
+                      , contains("plots")
+                      , -perc_plots_browsing
+                      ) %>% 
+  DT::datatable(options = list(dom = 'tip')
+                , rownames = FALSE
+                , filter = "top")
+
+
+
+```
+
+We exporteren de resultaten naar een excel-file "veg_stat" met 
+per tabblad de basisfile bv. veg_per_plot, ...
+
+```{r}
+path_to_datarequest
+path_to_datarequest_teamdrive
+
+```
+
+```{r export4}
+write.xlsx(resultaat4
+           , paste0(path_to_datarequest, "stat_veg.xlsx")
+           , sheetName = "browsing"
+           , showNA = FALSE
+           , append = TRUE) 
+
+write.xlsx(resultaat4
+           , paste0(path_to_datarequest_teamdrive, "stat_veg.xlsx")
+           , sheetName = "browsing"
+           , showNA = FALSE
+           , append = TRUE) 
+```
+
+
 # Copy html to teamdrive
 
 Na knitting - manueel
 
 ```{r eval = FALSE}
 # Specify the path of the file you want to copy
-source_file <- here::here("Scripts/Per_gebied/Wijnendale_stat_veg_2024.html")
+source_file <- here::here(paste0("Scripts/Per_gebied/", forestreserve_short, "/", forestreserve_short, "_stat_veg_2024.html"))
 
 # Specify the destination directory where you want to copy the file
 destination_dir <- path_to_datarequest_teamdrive

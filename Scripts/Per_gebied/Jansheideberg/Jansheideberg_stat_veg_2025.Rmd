@@ -1,6 +1,6 @@
 ---
 title: "Statistieken obv cirkelplots"
-subtitle: "Kolmont - vegetatie"
+subtitle: "Jansheideberg - vegetatie"
 author: "Anja Leyman"
 date: "`r Sys.Date()`"
 output:
@@ -35,15 +35,17 @@ source(here::here("scripts/Setup.R"))
 
 ```
 
+
 ```{r Setup2, include = FALSE}
-forest_reserve <- "Kolmont"
+forest_reserve <- "Jansheideberg"
 source(here::here("scripts/Per_gebied/", forest_reserve, "/setup_paths_gebied.R"))
 path_to_datarequest_teamdrive <- paste0(path_to_teamdrive_gebied, "/04_statistieken_BR/")
 ```
 
+
 # Vraagstelling
 
-Statistieken op niveau van bosreservaat, obv de cirkelplots.
+Statistieken op niveau van bosreservaat `r forestreserve`, obv de cirkelplots.
 
 Alle basis variabelen van de monitoring:
 - veg
@@ -113,7 +115,7 @@ veg_by_plot <- read_excel(
 
 herblayer_by_plot <- read_excel(
   paste0(path_to_datarequest, "herblayer_by_plot.xlsx")
-          # bij het inlezen van Excel-bestanden in R met read_excel() uit het readxl-pakket: 
+        # bij het inlezen van Excel-bestanden in R met read_excel() uit het readxl-pakket: 
         # als de eerste rij (header) of de eerste niet-lege rij van een kolom leeg is, 
         # probeert R het type te raden en kiest vaak logical. 
         # Daardoor worden alle waarden daarna geforceerd naar TRUE/FALSE/NA.
@@ -125,6 +127,20 @@ herblayer_by_plot <- read_excel(
   # select(-contains("eg"), -contains("min40cm")) %>%  # (veg en reg)
   left_join(plotinfo) %>% 
   filter(plottype == "CP")
+
+
+# read.xlsx is veel trager, sheetIndex of SheetName verplicht
+# herblayer_by_plot <- read.xlsx(
+#   paste0(path_to_datarequest, "herblayer_by_plot.xlsx")
+#   # , sheetIndex = 1
+#   , sheetName = "Sheet1"
+#   ) %>% 
+#   select(-1) %>%   
+#   # select(-contains("eg"), -contains("min40cm")) %>%  # (veg en reg)
+#   left_join(plotinfo) %>% 
+#   filter(plottype == "CP")
+
+
 ```
 
 
@@ -147,6 +163,10 @@ Ev. wel een gemiddelde bedekking van
 - moslaag
 - soildisturbance !! indien opgemeten
 - cumulated canopy_cover
+
+Indien nodig zouden we ook vraatschade op reservaatsniveau kunnen berekenen, ongeacht de soort.
+Maar ik ben niet zeker of dat nut heeft.
+Nu enkel op soortniveau gegevens gegenereerd.
 
 
 ```{r data1}
@@ -185,10 +205,11 @@ dataset %>% filter(is.na(cumulated_canopy_cover_mid)) %>% nrow()
 # [1] 0
 
 ```
-
-```{r variables, results='hide'}
+```{r results='hide'}
 names(dataset)
+```
 
+```{r variables}
 variables_for_statistics <- dataset %>% 
   select(contains(c("mid", "perc", "number_of_species"))) %>% 
   names()
@@ -204,7 +225,11 @@ resultaat <- create_statistics(
   variables = variables_for_statistics,
   include_year_range = FALSE,
   na_rm = TRUE   # regelmatig een NA bij één of andere bedekking, vaak op reservaatsniveau
-  # ingevulde bedekkingen beter toch meenemen (door na_rm = TRUE) en kijken naar n_obs 
+  # door na_rm = TRUE te zetten (wegfilteren van de NA's vooraleer er statistiek op toe te passen)
+  # heb je beter zicht op hoeveel bedekkingen er effectief genoteerd werden
+  #  --> kijken naar n_obs 
+  # TRUE vs FALSE: verschil is dat bij "soildisturbance_game_cover_mid" nObs = 1 ipv 25
+  # correcter dus om na_rm = TRUE te nemen (1 -of eigenlijk géén- waarnemingen, en daarom dus NA)
   ) %>% 
   forestmangr::round_df(., 2) %>% 
   # rename(strata = forest_reserve) %>% 
@@ -213,8 +238,11 @@ resultaat <- create_statistics(
          strata2 = NA,
          stratum_name2 = NA)
 
+# library(waldo)
+# waldo::compare(resultaat, resultaat_na)
+
 resultaat %>% filter(is.na(mean)) %>% nrow()   
-# 2: soildisturbance_game_cover_mid voor periode 1 & 2 - OK
+# 1: soildisturbance_game_cover_mid voor periode 1 - OK
 
 # voor export naar excel ipv access-db
 resultaat <- resultaat %>% 
@@ -259,7 +287,7 @@ path_to_datarequest_teamdrive
 
 ```
 
-```{r export1}
+```{r export1, results='hide'}
 resultaat %>% distinct(variable)
 # cumm_herb_coverage_class_average_perc				
 # cumulated_canopy_cover_mid				
@@ -270,7 +298,6 @@ resultaat %>% distinct(variable)
 # soildisturbance_game_cover_mid				
 # tree_cover_mid				
 # waterlayer_cover_mid
-
 
 write.xlsx(resultaat
            , paste0(path_to_datarequest, "stat_veg.xlsx")
@@ -415,7 +442,7 @@ Karakteristieke bedekking = som van bedekkingen in de plots waar soort voorkomt,
 gedeeld door het aantal plots waar de soort voorkomt
 
 
-```{r, results='hide'}
+```{r results='hide'}
 dataset2 %>% filter(is.na(coverage_class_average_perc)) %>% nrow() == 0
 names(dataset2)
 karakt_bedekking <- dataset2 %>% 
@@ -479,7 +506,6 @@ write.xlsx(resultaat3
            , showNA = FALSE
            , append = TRUE) 
 ```
-
 
 
 
@@ -583,7 +609,7 @@ Na knitting - manueel
 
 ```{r eval = FALSE}
 # Specify the path of the file you want to copy
-source_file <- here::here(paste0("Scripts/Per_gebied/", forestreserve_short, "/", forestreserve_short, "_stat_veg_2021.html"))
+source_file <- here::here(paste0("Scripts/Per_gebied/", forestreserve_short, "/", forestreserve_short, "_stat_veg_2025.html"))
 
 # Specify the destination directory where you want to copy the file
 destination_dir <- path_to_datarequest_teamdrive
