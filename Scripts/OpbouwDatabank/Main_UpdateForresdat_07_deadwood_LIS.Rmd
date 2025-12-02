@@ -301,7 +301,7 @@ deadw_LIS_ <- deadw_LIS
 # Deadwood volopname
 
 Voor het volume liggend dood hout uit de volopname maken we gebruik van forrescalc.
-Zie script "Main_UpdateForresdat_02_dendro.Rmdé
+Zie script "Main_UpdateForresdat_02_dendro.Rmd
 
 
 ## Load deadwood FAS
