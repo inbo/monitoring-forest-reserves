@@ -770,7 +770,22 @@ LIS_tss_10_en_30 <- dendro_by_plot %>%
   left_join(deadw_LIS_corr_plot %>% select(-volume_m3_m2), by = c("plot_id", "period")) %>% 
   left_join(deadw_LIS_corr_plot2 %>% select(-volume_m3_m2), by = c("plot_id", "period")) %>% 
   filter(period == 3 & plottype == "CP") %>% 
-  select(plot_id, vol_LIS_m3_ha_10_30cm, volume_m3_ha.x, volume_m3_ha.y)
+  select(plot_id, vol_LIS_10_30cm_m3_ha, volume_m3_ha.x, volume_m3_ha.y)
 ```
  
 
+# Copy html to teamdrive
+
+Na knitting - manueel
+
+```{r eval = FALSE}
+# Specify the path of the file you want to copy
+source_file <- here::here(paste0("Scripts/Per_gebied/", forestreserve_short, "/", forestreserve_short, "_deadwood_comb_LIS_FAS_2025.html"))
+
+# Specify the destination directory where you want to copy the file
+destination_dir <- path_to_datarequest_teamdrive
+
+# Copy the file to the destination directory
+file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
+# ? file.copy
+```
