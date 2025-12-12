@@ -59,11 +59,19 @@ path_to_datacontrol <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverwerking/20_P
 ```
 
 
-TIJDELIJK `path_to_fieldmap_db` aanpassen naar export van wijnendale en everzwijnbad uit moederdb (4/3/2024)
+<!-- TIJDELIJK `path_to_fieldmap_db` aanpassen naar export van wijnendale en everzwijnbad uit moederdb (4/3/2024) -->
 
-```{r Path_tmp}
-path_to_fieldmap_db <- "C:/03_BR_db_monitoring/3_db_Els_deel2_Wijn_Ever/FieldMapData_3_db_Els_deel2_Wijn_Ever.accdb"
+<!-- ```{r Path_tmp} -->
+<!-- path_to_fieldmap_db <- "C:/03_BR_db_monitoring/3_db_Els_deel2_Wijn_Ever/FieldMapData_3_db_Els_deel2_Wijn_Ever.accdb" -->
 
+<!-- ``` -->
+
+TIJDELIJK `path_to_fieldmap_db` naar situatie mrt 2025 (voor aanpassing nalv andere benadering hakhout)
+
+```{r}
+path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_X8_inbo2020_20250311/")
+dbFieldmap <- "FieldMapData_MDB_BR_X8_inbo2020.accdb"
+path_to_fieldmap_db <- paste0(path_to_fieldmap, dbFieldmap)
 ```
 
 
@@ -248,13 +256,21 @@ data_shoots <- load_data_shoots(database = path_to_fieldmap_db
 data_stems  <- compose_stem_data(data_dendro, data_shoots
                                  , extra_variables = TRUE)
 
-height_model <- load_height_models() %>%
-  filter(forest_reserve == forestreserve)
-
 data_deadwood <- load_data_deadwood(database = path_to_fieldmap_db
                                     # , plottype = plot_type
                                     , forest_reserve = forestreserve
                                     , processed = TRUE)
+```
+
+```{r eval = FALSE}
+height_model <- load_height_models() %>%
+  filter(forest_reserve == forestreserve)
+
+save(height_model, file = "height_model.RData")
+```
+
+```{r}
+load("height_model.RData")
 ```
 
 ```{r check_heightmodels, results = 'hide'}
@@ -273,7 +289,7 @@ missing_heightmodel <- data_stems %>%
 Er zijn `r nrow(missing_heightmodel)` ontbrekende hoogtemodellen.
 
 
-# Volume liggend dood hout  
+# Volume liggend dood hout (FAS)  
 
 ## Fragmenten versus intacte bomen
 
@@ -417,6 +433,640 @@ for (tablename in names(dendro)) {
 ```
 
 
+
+# Implementatie "vol_log_above30cm_m3_ha"
+
+- Correctie `vol_log_m3_ha` logs in plotdata nalv LIS     
+- Nieuw veld `vol_log_above30cm_m3_ha`, **voorlopig enkel berekend voor LIS-plots**    
+
+> vrij makkelijk te implementeren in forrescalc
+zie [issue 166](https://github.com/inbo/forrescalc/issues/166) 
+
+
+> idealiter zou forrescalc ook voor de oudere opnames "vol_log_above30cm_m3_ha" moeten berekenen
+om makkelijker vgln te maken
+Zie [issue 167](https://github.com/inbo/forrescalc/issues/167), minder prioritair,
+gaan we hier niet doen
+> (nu weliswaar dendro per diameterklasse, maar vraagt extra berekeningen)
+
+
+Sinds 2022 is LIS in gebruik om dood hout opnames te vereenvoudigen.
+
+- LIS wordt gebruikt bij diameters < 30 cm    
+- Volopname (FAS) blijft in gebruik bij diameters >= 30 cm    
+
+Everzwijnbad en Wijnendale waren de eerste reservaten waar LIS gebruikt werd in de cirkelplots 
+(3 x 15 m lijn). 
+Intussen ook gebruikt bij Jansheideberg en Heirnisse.
+Heirnisse is het eerste reservaat waar LIS in de kernvlakte gebruikt werd (560 m: 2 lijnen van 140m 
+en 4 van 70m, zie figuur mail 7/12/2023).
+
+Forrescalc verwerkt momenteel (2/12/2025) enkel FAS.
+
+**DAAROM: aanpassing plotdata berekend in forrescalc nalv andere grens volopname**
+
+```{r}
+plotinfo %>% filter(survey_lis) %>% distinct(period, plottype)
+# LIS enkel periode 3 en CP
+```
+
+```{r}
+test_DW1 <- data_deadwood %>% 
+  group_by(period, plottype) %>% 
+  summarize(min_diam = min(max_diam_mm)) %>% 
+  ungroup()
+
+test_DW1
+# OK: periode 3 pas vanaf 30 cm opgemeten
+```
+
+We zien dat er in de cirkelplots en de kernvlakte effectief pas opgemeten wordt vanaf 30 cm.
+
+```{r eval = FALSE}
+test_DW2 <- dendro_by_diam_plot %>% 
+  group_by(period, plottype, dbh_class_5cm) %>% 
+  summarize(n = n()
+            , logs = sum(vol_log_m3_ha, na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  filter(plottype == "CP" & period == 3)
+view(test_DW2)
+```
+
+Forrescalc gaat er nog vanuit dat er opgemeten wordt vanaf 10 cm, waardoor de 
+volumes (`vol_log_m3_ha`) per diameterklasse foutief op nul gezet worden.
+Dat moet NA zijn.
+
+Van belang bij:
+
+- dendro_by_diam_plot
+- dendro_by_diam_plot_species
+
+Maar ook bij de andere resultaten is het belangrijk om aan te geven dat `vol_log_m3_ha` 
+én `vol_deadw_m3_ha` voor het liggende dood hout enkel de fractie > 30 cm omvat:
+
+- dendro_by_plot
+- dendro_by_species
+
+Onderstaande tabellen bevatten enkel `vol_log_m3_ha` 
+(naast vol_dead_standing; niet gesommeerd tot `vol_deadw_m3_ha`): 
+
+- deadw_by_decay_plot
+- deadw_by_decay_plot_species
+
+Er moeten dus 8 dataframes aangepast worden voor CP's periode 3.
+
+Daarbij gaan we 
+
+1) bij dataframes zonder info over diameterklasse: een extra veld aanmaken `vol_log_above30cm_m3_ha` en
+`vol_log_m3_ha` op NA zetten
+2) bij dataframes mét info over diameterklasse: `vol_log_m3_ha` op NA zetten in de diameterklasses < 30 cm
+3) veld `vol_deadw_m3_ha` overal verwijderen, want is verwarrend (onduidelijk welk 
+volume logs wordt gebruikt)
+
+
+> bijkomend (moet nog in forrescalc geïmplementeerd worden): records waar decaystage = NA én alle 
+volumes = 0, wegfilteren
+Nu (2/12/22025) opgenomen in correctie 1
+
+Zie [issue 168](https://github.com/inbo/forrescalc/issues/168)
+  
+  <!-- if ("decaystage" %in% colnames(tabel)) { -->
+  <!--   tabel <- tabel %>%  -->
+  <!--     filter(!((is.na(decaystage) | decaystage == 16) & vol_dead_standing_m3_ha == 0 & -->
+  <!--                vol_log_m3_ha == 0)) -->
+  <!--   } -->
+
+!! Komt enkel voor bij periode 3, reden is dat daar veel levende bomen zonder afbraakstadium 
+staan (zou afbraak = 16 - NVT moeten zijn) 
+=> zowel decay = NA (periode 3) als decay = 16 (periode 1 en 2) wegfilteren
+Nu (2/12/22025) dus opgenomen in functie `correctie_1`
+
+```{r corr1}
+# Correctie 1: 
+# 1) dataframes zonder info over diameterklasse: een extra veld aanmaken `vol_log_above30cm_m3_ha` 
+# en `vol_log_m3_ha` op NA zetten
+
+corr_1 <- list(dendro_by_plot = dendro_by_plot
+               , dendro_by_plot_species = dendro_by_plot_species
+               , deadw_by_decay_plot = deadw_by_decay_plot
+               , deadw_by_decay_plot_species = deadw_by_decay_plot_species)
+
+# info <- plotinfo
+# tab <- deadw_by_decay_plot_species
+
+correctie_1 <- function(tab, info = plotinfo) {
+  
+  tabel <- tab
+  
+  if ("decaystage" %in% colnames(tabel)) {
+    tabel <- tabel %>% 
+      filter(!((is.na(decaystage) | decaystage == 16) & vol_dead_standing_m3_ha == 0 &
+                 vol_log_m3_ha == 0))
+    }
+  
+  tabel <- tabel %>% 
+    left_join(info %>% select(plot_id, period, survey_lis)
+              , by = c("plot_id", "period")) %>% 
+    mutate(vol_log_above30cm_m3_ha = ifelse(survey_lis, vol_log_m3_ha, NA)
+           , vol_log_m3_ha = ifelse(survey_lis, NA, vol_log_m3_ha)
+           ) %>% 
+    select(-survey_lis)
+  
+  if ("vol_deadw_m3_ha" %in% colnames(tabel)) {
+    tabel <- tabel %>% 
+      select(-vol_deadw_m3_ha)
+  }
+  
+    tabel <- tabel %>%
+    relocate(vol_log_above30cm_m3_ha, .after = vol_log_m3_ha)
+
+  tabel
+  }
+
+# test voor één tabel
+# test <- correctie_1(dendro_by_plot, plotinfo)
+# test <- correctie_1(tab = deadw_by_decay_plot_species, info = plotinfo)
+
+
+# voor alle tabellen mbv "map"
+# tbls <- map(tbl_namen, ~ inlezen_functie(.x))
+tbls <- map(corr_1, \(x) correctie_1(x, plotinfo))
+
+for (tablename in names(tbls)) {
+     assign(tablename, tbls[[tablename]])
+}
+```
+
+
+
+```{r corr2}
+# Corr 2
+# 2) dataframes mét info over diameterklasse: `vol_log_m3_ha` op NA zetten in de
+# diameterklasses < 30 cm
+
+corr_2 <- list(dendro_by_diam_plot = dendro_by_diam_plot
+            , dendro_by_diam_plot_species = dendro_by_diam_plot_species)
+
+unique(dendro_by_diam_plot$dbh_class_5cm)
+diam_klasses_under_30cm <- c("5 - 10 cm", "10 - 15 cm", "15 - 20 cm", "20 - 25 cm", "25 - 30 cm")
+
+# dendro_by_diam_plot_ <- dendro_by_diam_plot %>% 
+#   mutate(vol_log_m3_ha= ifelse(plottype == "CP" & period == 3 &
+#                                  dbh_class_5cm %in% diam_klasses_under_30cm
+#                                , NA, vol_log_m3_ha)
+#          )
+
+correctie_2 <- function(tab, info = plotinfo) {
+  
+  tabel <- tab %>% 
+    left_join(info %>% select(plot_id, period, survey_lis)
+              , by = c("plot_id", "period")) %>% 
+    mutate(vol_log_m3_ha= ifelse(survey_lis & dbh_class_5cm %in% diam_klasses_under_30cm
+                               , NA, vol_log_m3_ha)
+         ) %>% 
+    select(-survey_lis)
+  
+  tabel
+  }
+
+# test voor één tabel
+# test <- correctie_2(tab = dendro_by_diam_plot, info = plotinfo)
+
+# voor alle tabellen mbv "map"
+# tbls <- map(tbl_namen, ~ inlezen_functie(.x))
+tbls <- map(corr_2, \(x) correctie_2(x, plotinfo))
+
+for (tablename in names(tbls)) {
+     assign(tablename, tbls[[tablename]])
+}
+```
+
+# Berekening plotdata LIS 
+
+Naast `vol_logs_m3_ha` en `vol_logs_above30cm_m3_ha` ook volgende velden berekenen
+(enkel voor LIS-plots)      
+
+- `vol_LIS_m3_ha`: alles > 10 cm
+- `vol_LIS_above30cm_m3_ha`
+- `vol_LIS_10_30cm_m3_ha`
+
+<!-- gecheckt: vol_LIS_above30cm_m3_ha + vol_LIS_10_30cm_m3_ha = vol_LIS_m3_ha -->
+
+We voegen deze data toe aan   
+
+- `dendro_by_plot`  
+- `dendro_by_plot_species`   
+- `deadw_by_decay_plot`   
+- `deadw_by_decay_plot_species`      
+               
+
+Dus niet aan `dendro_by_diam_plot(_species)`.   
+We hebben immers `vol_LIS_above30cm_m3_ha` en/of `vol_LIS_10_30cm_m3_ha`
+
+
+Dat geeft de gebruiker van de data de mogelijkheid om zelf data te combineren.
+
+**Belangrijk om te beseffen dat LIS-volumes geen indicatie geven van volume hout in een plot, **
+**enkel een ruwe inschatting op niveau van het volledige bosreservaat.**
+
+
+## Artikel Arno
+
+Arno T. schreef een [artikel](https://purews.inbo.be/ws/portalfiles/portal/104995693/1_s2.0_S037811272400255X_main.pdf)
+over LIS versus FAS.
+
+Artikel: *For each plot, we simulated LIS transects and calculated log intersect*
+*diameters based on a conical log shape.*
+
+(c) Anja: voor artikel van Arno was het belangrijk om de LIS-diameters te simuleren. 
+Om aan te tonen dat resultaat LIS voldoende vergelijkbaar is met resultaat FAS, 
+toch wat lageer diameters betreft.
+Maar voor de dataverwerking van een cmbinatie vna LIS en FAS, is het iet correct om 
+resultaten van beide te gaan combineren.
+De log intersects zijn gesimuleerd op basis van logs met een conical shape, wat niet
+de werkelijkheid is. 
+Echte LIS-diameters wijken dus af van de gesimuleerde, waardoor het idee om de logs boven 30 cm 
+met een negatieve diameter toe te voegen aan de LIS-berekening, geen steek houdt. 
+
+Artikel: *The LIS transects consisted of three radial lines at 120° intervals (the first pointing north) *
+*starting 3 m from the plot centre till the plot boundary (45 m total transect length in general).* 
+*Using three subtransects at 120° intervals overcomes effects of potential orientation *
+*bias of LWD (De Vries 1973, Van Wagner 1968).*
+ 
+ 
+## Inladen en berekenen
+
+- Veld `LineIntersect` in layer `PlotDetails_3eSet` geeft aan of er LIS gebruikt 
+werd of niet (TRUE/10 or FALSE/20)      
+- Indien geen angle ingevoerd, veronderstellen we deze horizontaal (angle = 0)      
+- volgende variabelen nodig:    
+    - lengte van de (drie) transecten samen (Li<-45; zou uit plotdetails moeten komen) 
+    - oriëntatie van de transecten enkel nodig als we de intersect diameters willen
+    berekenen van de zwaardere logs uit de Full Area Survey (FAS) - VOORLPOIG NIET
+
+<!-- code hierna komt uit script UpdateForresdat_07 -->
+
+> load_data_LIS() moet als functie toegevoegd worden aan forrescalc 
+
+Zie [issue 168](https://github.com/inbo/forrescalc/issues/168)
+
+
+> nu hier op snelle manier, maar kan properder (nu geen tijd in steken)
+
+
+```{r load_data_LIS, results='hide'}
+# enkel 3eSET 
+query_LIS <- 
+    "SELECT lis.IDPlots AS plot_id, 
+    lis.IDLineIntersect_3eSet, 
+    lis.ID, 
+    lis.TreeSpecies AS species,
+    lis.AliveDead,
+    lis.DecayStage AS decaystage,
+    lis.Diameter_mm AS diam_mm, 
+    lis.Angle as angle_cde
+    FROM LI_data_3eSet lis;"
+
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+  data_LIS_ <- sqlQuery(con, query_LIS, stringsAsFactors = TRUE) 
+  qLIangle <- sqlFetch(con, "qLIangle", stringsAsFactors = TRUE) %>% 
+    select(ID, Value1, angle = Value2)
+odbcClose(con)
+
+data_LIS <- data_LIS_ %>% 
+  mutate(period = 3) %>% 
+  left_join(plotinfo %>% select(plot_id, forest_reserve, period, survey_lis)) %>% 
+  filter(forest_reserve == forestreserve) %>% 
+  mutate(angle_cde = ifelse(is.na(angle_cde), 10, angle_cde)) %>% 
+  left_join(qLIangle, by = c("angle_cde" = "ID"))
+```
+
+```{r}
+names(data_LIS)
+nrow(data_LIS)  # 117
+range(data_LIS$plot_id)
+unique(data_LIS$AliveDead) == 12  # enkel dood
+unique(data_LIS$survey_lis) == TRUE
+
+```
+
+
+```{r results='hide'}
+data_LIS %>% filter(is.na(diam_mm)) %>% nrow()
+# 1 diameter missing !!
+# wordt verderop gewoon genegeerd (na.rm = TRUE)
+
+data_LIS %>% filter(is.na(angle_cde)) %>% nrow() == 0
+
+summary(data_LIS)
+```
+
+```{r calc_LIS, results='hide'}
+colnames(data_LIS)
+
+Li<-45  # lengte van de drie transecten   
+
+#
+LIS_by_decay_species <- data_LIS %>%
+  mutate(diam_m = diam_mm/1000
+         # , Diameter_cm = diam_mm/10     # cfrVBI
+         ) %>% 
+  dplyr::group_by(plot_id, period, species, decaystage) %>%
+  dplyr::summarise(
+    volume_m3_m2=pi^2/8/Li*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
+    # , v3_VolumeLogs_ha=pi^2/8/Li*sum((Diameter_cm^2)/cos(angle*pi/180),na.rm=T)   # cfrVBI, zelfde resultaat
+    ) %>% 
+  ungroup() %>% 
+  mutate(vol_LIS_m3_ha = volume_m3_m2 * 10000) %>% 
+  select(-volume_m3_m2)
+# bij mogelijkse verwarring tss VBI en BR: VBI rekent obv diam_cm en komt m3/ha uit, 
+# BR gebruikt diam_m en komt m3/m2 uit
+
+#
+LIS_by_decay <- data_LIS %>%
+  mutate(diam_m = diam_mm/1000
+         # , Diameter_cm = diam_mm/10     # cfrVBI
+         ) %>% 
+  dplyr::group_by(plot_id, period, decaystage) %>%
+  dplyr::summarise(
+    volume_m3_m2=pi^2/8/Li*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
+    # , v3_VolumeLogs_ha=pi^2/8/Li*sum((Diameter_cm^2)/cos(angle*pi/180),na.rm=T)   # cfrVBI, zelfde resultaat
+    ) %>% 
+  ungroup() %>% 
+  mutate(vol_LIS_m3_ha = volume_m3_m2 * 10000) %>% 
+  select(-volume_m3_m2)
+
+#
+LIS_by_species <- data_LIS %>%
+  mutate(diam_m = diam_mm/1000
+         # , Diameter_cm = diam_mm/10     # cfrVBI
+         ) %>% 
+  dplyr::group_by(plot_id, period, species) %>%
+  dplyr::summarise(
+    volume_m3_m2=pi^2/8/Li*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
+    # , v3_VolumeLogs_ha=pi^2/8/Li*sum((Diameter_cm^2)/cos(angle*pi/180),na.rm=T)   # cfrVBI, zelfde resultaat
+    ) %>% 
+  ungroup() %>% 
+  mutate(vol_LIS_m3_ha = volume_m3_m2 * 10000) %>% 
+  select(-volume_m3_m2)
+# bij mogelijkse verwarring tss VBI en BR: VBI rekent obv diam_cm en komt m3/ha uit, 
+# BR gebruikt diam_m en komt m3/m2 uit
+
+#
+LIS_by_plot <- data_LIS %>%
+  mutate(diam_m = diam_mm/1000
+         # , Diameter_cm = diam_mm/10     # cfrVBI
+         ) %>% 
+  dplyr::group_by(plot_id, period) %>%
+  dplyr::summarise(
+    volume_m3_m2=pi^2/8/Li*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
+    # , v3_VolumeLogs_ha=pi^2/8/Li*sum((Diameter_cm^2)/cos(angle*pi/180),na.rm=T)   # cfrVBI, zelfde resultaat
+    ) %>% 
+  ungroup() %>% 
+  mutate(vol_LIS_m3_ha = volume_m3_m2 * 10000) %>% 
+  select(-volume_m3_m2)
+
+```
+
+Twee opties: 
+
+- we behouden aparte dataframes `LIS_by_plot` en `LIS_by_decay(_species)`
+- we voegen extra velden toe aan `dendro_by_plot_species` en `deadwood_by_decay_species`.
+
+Weinig zinvol om LIS toe te voegen aan data per diameterklasse
+
+Eventueel wel LIS < 30 cm apart berekenen? 
+
+```{r calc_LIS_10_30cm}
+colnames(data_LIS)
+
+data_LIS_10_30cm <- data_LIS %>% 
+  filter(diam_mm < 300)
+
+Li<-45  # lengte van de drie transecten   
+
+#
+LIS_by_decay_species_10_30cm <- data_LIS_10_30cm %>%
+  mutate(diam_m = diam_mm/1000
+         ) %>% 
+  dplyr::group_by(plot_id, period, species, decaystage) %>%
+  dplyr::summarise(
+    volume_m3_m2=pi^2/8/Li*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
+    ) %>% 
+  ungroup() %>% 
+  mutate(vol_LIS_10_30cm_m3_ha = volume_m3_m2 * 10000) %>% 
+  select(-volume_m3_m2)
+
+#
+LIS_by_decay_10_30cm <- data_LIS_10_30cm %>%
+  mutate(diam_m = diam_mm/1000
+         ) %>% 
+  dplyr::group_by(plot_id, period, decaystage) %>%
+  dplyr::summarise(
+    volume_m3_m2=pi^2/8/Li*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
+    ) %>% 
+  ungroup() %>% 
+  mutate(vol_LIS_10_30cm_m3_ha = volume_m3_m2 * 10000) %>% 
+  select(-volume_m3_m2)
+
+#
+LIS_by_species_10_30cm <- data_LIS_10_30cm %>%
+  mutate(diam_m = diam_mm/1000
+         ) %>% 
+  dplyr::group_by(plot_id, period, species) %>%
+  dplyr::summarise(
+    volume_m3_m2=pi^2/8/Li*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
+    ) %>% 
+  ungroup() %>% 
+  mutate(vol_LIS_10_30cm_m3_ha = volume_m3_m2 * 10000) %>% 
+  select(-volume_m3_m2)
+
+#
+LIS_by_plot_10_30cm <- data_LIS_10_30cm %>%
+  mutate(diam_m = diam_mm/1000
+         ) %>% 
+  dplyr::group_by(plot_id, period) %>%
+  dplyr::summarise(
+    volume_m3_m2=pi^2/8/Li*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
+    ) %>% 
+  ungroup() %>% 
+  mutate(vol_LIS_10_30cm_m3_ha = volume_m3_m2 * 10000) %>% 
+  select(-volume_m3_m2)
+
+```
+## Opnemen in standaard dataframes
+
+**Aandachtspunt: NA's vervangen door nulwaarde**
+
+`vol_LIS_m3_ha = ifelse(survey_lis == TRUE & is.na(vol_LIS_m3_ha), 0, vol_LIS_m3_ha)`
+
+```{r}
+dendro_by_plot_ <- dendro_by_plot %>% 
+  left_join(plotinfo %>% select(plot_id, period, survey_lis)) %>% 
+  left_join(LIS_by_plot) %>% 
+  left_join(LIS_by_plot_10_30cm) %>% 
+  mutate(vol_LIS_m3_ha = ifelse(survey_lis == TRUE & is.na(vol_LIS_m3_ha), 0, vol_LIS_m3_ha)
+         , vol_LIS_10_30cm_m3_ha = ifelse(survey_lis == TRUE & is.na(vol_LIS_10_30cm_m3_ha)
+                                          , 0, vol_LIS_10_30cm_m3_ha)) %>% 
+  mutate(vol_LIS_above30cm_m3_ha = vol_LIS_m3_ha - vol_LIS_10_30cm_m3_ha)
+
+
+t <- dendro_by_plot_ %>% 
+  filter(survey_lis) %>% 
+  select(plot_id, contains("above"), everything())
+
+mean(t$vol_log_above30cm_m3_ha); mean(t$vol_LIS_above30cm_m3_ha)
+```
+
+```{r eval = FALSE, results='hide'}
+# vol_LIS_above30cm_m3_ha berekend vergeleken met vol_LIS_above30cm_m3_ha als verschil van vol_LIS_m3_ha en vol_LIS_10_30cm_m3_ha
+
+# is zelfde 
+      # LIS_by_plot_above30cm <- data_LIS %>% 
+      #   filter(diam_mm >= 300) %>%
+      #   mutate(diam_m = diam_mm/1000
+      #          ) %>% 
+      #   dplyr::group_by(plot_id, period) %>%
+      #   dplyr::summarise(
+      #     volume_m3_m2=pi^2/8/Li*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
+      #     ) %>% 
+      #   ungroup() %>% 
+      #   mutate(vol_LIS_above30cm_m3_ha = volume_m3_m2 * 10000) %>% 
+      #   select(-volume_m3_m2)
+
+# check
+dendro_by_plot_ %>% filter(vol_LIS_above30cm_m3_ha > 0) %>% 
+  select(plot_id, contains("above"), everything())
+
+# op plotniveau is LIS hoger als er een snijpunt is, dat compenseert voor de plots 
+# met zwaar dood hout die gemist worden door LIS
+
+dendro_by_plot_ %>% filter(vol_log_above30cm_m3_ha > 0) %>% 
+  select(plot_id, contains("above"), everything())
+
+```
+
+Op plotniveau is LIS hoger als er een snijpunt is, dat compenseert voor de plots 
+met zwaar dood hout die gemist worden door LIS
+
+Meest correcte is om beide apart te rapporteren, en afhankelijk van de doelstelling/meetvraag 
+te beslissen of beide gecombineerd worden.
+
+Sowieso beide NIET combineren op plotniveau, ev. wel op reservaatsniveau, en dan beide ook met hun BI ...
+
+Globaal mist LIS ca 25% (16 vs 11 m3/ha)
+
+```{r results='hide'}
+names(dendro_by_plot_)
+dendro_by_plot <- dendro_by_plot_ %>% 
+  select(-survey_lis)
+```
+
+```{r}
+#
+dendro_by_plot_species_ <- dendro_by_plot_species %>% 
+  left_join(plotinfo %>% select(plot_id, period, survey_lis)) %>%
+  left_join(LIS_by_species) %>% 
+  left_join(LIS_by_species_10_30cm) %>% 
+  mutate(vol_LIS_m3_ha = ifelse(survey_lis == TRUE & is.na(vol_LIS_m3_ha), 0, vol_LIS_m3_ha)
+         , vol_LIS_10_30cm_m3_ha = ifelse(survey_lis == TRUE & is.na(vol_LIS_10_30cm_m3_ha)
+                                          , 0, vol_LIS_10_30cm_m3_ha)) %>% 
+  mutate(vol_LIS_above30cm_m3_ha = vol_LIS_m3_ha - vol_LIS_10_30cm_m3_ha)
+
+names(dendro_by_plot_species_)
+dendro_by_plot_species <- dendro_by_plot_species_ %>% 
+  select(-survey_lis)
+
+#
+deadw_by_decay_plot_ <- deadw_by_decay_plot %>% 
+  left_join(plotinfo %>% select(plot_id, period, survey_lis)) %>%
+  left_join(LIS_by_decay) %>% 
+  left_join(LIS_by_decay_10_30cm) %>% 
+  mutate(vol_LIS_m3_ha = ifelse(survey_lis == TRUE & is.na(vol_LIS_m3_ha), 0, vol_LIS_m3_ha)
+         , vol_LIS_10_30cm_m3_ha = ifelse(survey_lis == TRUE & is.na(vol_LIS_10_30cm_m3_ha)
+                                          , 0, vol_LIS_10_30cm_m3_ha)) %>% 
+  mutate(vol_LIS_above30cm_m3_ha = vol_LIS_m3_ha - vol_LIS_10_30cm_m3_ha)
+
+names(deadw_by_decay_plot_)
+deadw_by_decay_plot <- deadw_by_decay_plot_ %>% 
+  select(-survey_lis)
+
+#
+deadw_by_decay_plot_species_ <- deadw_by_decay_plot_species %>% 
+  left_join(plotinfo %>% select(plot_id, period, survey_lis)) %>%
+  left_join(LIS_by_decay_species) %>% 
+  left_join(LIS_by_decay_species_10_30cm) %>% 
+  mutate(vol_LIS_m3_ha = ifelse(survey_lis == TRUE & is.na(vol_LIS_m3_ha), 0, vol_LIS_m3_ha)
+         , vol_LIS_10_30cm_m3_ha = ifelse(survey_lis == TRUE & is.na(vol_LIS_10_30cm_m3_ha)
+                                          , 0, vol_LIS_10_30cm_m3_ha)) %>% 
+  mutate(vol_LIS_above30cm_m3_ha = vol_LIS_m3_ha - vol_LIS_10_30cm_m3_ha)
+
+names(deadw_by_decay_plot_species_)
+deadw_by_decay_plot_species <- deadw_by_decay_plot_species_ %>% 
+  select(-survey_lis)
+
+```
+
+**Opgepast met nauwkeurigheid LIS**
+Voor de volledigheid zijn berekeningen gemaakt per soort, per afbraakstadium en voor 
+allebei gecombineerd, maar de onzekerheid hierop is heel groot.
+LIS is niet gemaakt om op plotniveau te rapporteren
+
+In de tabellen per diameterklasse wordt LIS niet meegenomen, er wordt wel onderscheid
+gemaakt tss boven en onder 30 cm.
+
+
+# Test: combineren LIS en FAS cfr artikel
+
+Zie script "Jansheideberg_deadwood_comb_LIS_FAS_2025.Rmd".
+
+```{r}
+save.image(file = here::here("Scripts/Per_gebied/Heirnisse/LIS_FAS.RData"))
+# load(here::here("Scripts/Per_gebied/Jansheideberg/LIS_FAS.RData"))
+```
+
+Alle dood hout met een bepaalde minimum diameter (bosreservaten standaard min 10 cm) 
+dat een transect van LIS kruist, wordt genoteerd.
+Daarnaast volopname van zwaarder dood hout (bosreservaten standaard 30 cm).
+
+Dit betekent dat het zwaarder dood hout dubbel geteld wordt als het een LIS transect kruist.
+Maar dat zwaarder dood hout heeft niet doodzakelijk een diameter van 30 cm ter hoogte van
+de LIS-transecten
+Bv. plot 830
+
+Volumebepaling enkel obv LIS is vooral onnauwkeurig vanaf hogere diameters.
+Daarom verkiezen we een combinatie van beide. 
+
+Maar is dat wel mogelijk?   
+- In theorie JA, enkel de dubbele hits verwijderen      
+- In praktijk NEE:    
+    - afbraakstadium en/of soort soms anders ingeschat      
+    - theoretische diameter van een log ter hoogte van een LIS-transect (log als kegel 
+beschouwd) kan sterk afwijken van de gemeten diameter, waardoor       
+
+
+Sowieso krijgen we NA compensatie voor dubbeltellingen, enkel wat effectief < 30 cm diameter
+in onze LIS-dataset.
+De LIS-dataset geeft dus info over volume < 30 cm en FAS-dataset over volume > 30 cm.
+
+Maar dat kunnen we ook halen uit `vol_LIS_10_30cm`.
+Daar zitten weliswaar ook de logs in die misschien elders wél zwaarder zijn dan 30 cm.
+Maar dat gaat ook in de andere richting: een log die een transect snijdt met diam < 100 mm wordt ook niet meegenomen, terwijl die mogelijks ook elders boven de 100mm uitkomt.
+
+Moeten we daar al die moeite voor doen?
+
+
+**BESLUIT**
+Als we volume van deadwood met diam tss 10 en 30 cm willen kennen, kunnen we
+net zo goed LIS berekenen obv de snijpunten < 30 cm.
+Is niet beter of slechter dan volume op basis van alle LIS-data berekenen en dan 
+"dubbels" ervan aftrekken.
+
+En geeft veel minder onduidelijkheid.
+
+**We schatten volume dood hout < 30 cm mbv LIS en >= 30 cm mbv FAS.**
+ 
+
 # Datacontrole
 
 ## NA's in data_dendro_calc
@@ -472,7 +1122,7 @@ select_colnames_stems
 ```{r missing_dbh}
 missing_dbh <- data_stems_calc %>% 
   filter(is.na(dbh_mm)) %>% 
-  select(select_colnames_stems)
+  select(all_of(select_colnames_stems))
 
 ```
 
@@ -585,15 +1235,17 @@ optie om ook uit develop branch data binnen te kunnen halen.
 
 
 ```{r eval = FALSE}
-dendro_by_plot_git <- read_forresdat(tablename = "dendro_by_plot"
-                                     , join_plotinfo = TRUE) %>% 
+dendro_by_plot_git <- read_forresdat_table(
+  tablename = "dendro_by_plot"
+  , git_ref_type = "branch", git_reference = "develop"
+  , join_plotinfo = TRUE) %>% 
   filter(forest_reserve == forestreserve)
 
-dendro_by_plot_new <- dendro_by_plot %>% filter(period != 3)
+dendro_by_plot_new <- dendro_by_plot # %>% filter(period != 3)
 
 dendro_by_plot_git <- dendro_by_plot_git %>% 
   select(plot_id, year, everything()) %>% 
-  select(names(dendro_by_plot))
+  select(names(dendro_by_plot[1:14]))
 
 nrow(dendro_by_plot_new) == nrow(dendro_by_plot_git)
 summary(dendro_by_plot_new)
@@ -603,21 +1255,13 @@ summary(dendro_by_plot_git)
 
 diff <- dendro_by_plot_new %>% anti_join(dendro_by_plot_git, by = c("plot_id", "period"))
 diff
+# CA is er nu bij, én plot 400, 424 en 426
 
 
-dendro_by_plot_new %>% select(-year) %>% arrange(plot_id, period) == dendro_by_plot_git %>% select(-year) %>% arrange(plot_id, period)
-# OK denk ik andere ordening van variabelen
-dendro_by_plot_new == dendro_by_plot_git
+t <- waldo::compare(dendro_by_plot_git, dendro_by_plot_new)
+view(t)
 
-head(dendro_by_plot_new %>% arrange(plot_id, period)); head(dendro_by_plot_git %>% arrange(plot_id, period))
-head(dendro_by_plot_new %>% arrange(desc(plot_id), period)); head(dendro_by_plot_git %>% arrange(desc(plot_id), period))
-
-# dendro_by_plot_species_git <- read_vc(file = "dendro_by_plot_species", root = path_to_forresdat_data)
-# nrow(dendro_by_plot_species) == nrow(dendro_by_plot_species_git)
-# 
-# dendro_by_diam_plot_git <- read_vc(file = "dendro_by_diam_plot", root = path_to_forresdat_data)
-# nrow(dendro_by_diam_plot) == nrow(dendro_by_diam_plot_git)
-# 
+head(dendro_by_plot_git %>% arrange(plot_id, period)); head(dendro_by_plot_new %>% arrange(plot_id, period))
 # logs_by_decay_plot_git <- read_vc(file = "logs_by_decay_plot", root = path_to_forresdat_data)
 # nrow(logs_by_decay_plot) == nrow(logs_by_decay_plot_git)
 
