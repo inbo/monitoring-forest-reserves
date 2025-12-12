@@ -1,0 +1,1174 @@
+---
+title: "Statistieken obv cirkelplots"
+subtitle: "Heirnisse - dendrometrie"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    keep_md: false
+    number_sections: true
+    fig_caption: true
+    code_folding: hide
+    toc: true
+    toc_float:
+      collapsed: true
+      smooth_scroll: true
+---
+
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 7,
+  fig.height = 3,
+  fig.align = TRUE)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+
+```
+
+
+```{r Setup2, include = FALSE}
+forest_reserve <- "Heirnisse"
+source(here::here("scripts/Per_gebied/", forest_reserve, "/setup_paths_gebied.R"))
+path_to_datarequest_teamdrive <- paste0(path_to_teamdrive_gebied, "04_statistieken_BR/")
+```
+
+
+# Vraagstelling
+
+Statistieken op niveau van bosreservaat, obv de cirkelplots.
+
+Alle basis variabelen van de monitoring:    
+- dendro    
+- dendro_per_species    
+- dendro_by_diam    
+- ....    
+- decaystage       
+
+Hierna worden deze één voor één doorlopen en weggeschreven naar de resultatendb
+
+Om gemiddeldes per BR te verkrijgen, beperken we ons tot de CP's. 
+(KV's zijn beter afz. te verwerken)
+
+Dit dient als insteek voor de ontwikkeling van functies die alles integreren:
+zie `functions_overall_statistics.R`.
+
+Eerst afzonderlijke functies per dendro_xxxx.csv
+Dan al deze functies in één overkoepelend functie
+
+Elke functie moet volgende stappen bevatten:   
+
+- inlezen data     
+- filteren op CP’s    
+- filteren op afgewerkt      
+- toevoegen nulwaardes waar nodig    
+- ev. wegfilteren van bosreservaten zonder de vereiste data
+- …    
+
+vervolgens al die functies combineren in één superfunctie (cfr Els met dendro calc)
+
+Idem voor reg & veg
+
+Nodig voor:   
+
+- zenodo   
+- bookdown-rapporten   
+- …    
+
+
+
+# Inladen data
+
+We werken verder met de data aangemaakt specifiek voor `r forestreserve`.
+
+## Lookuplijsten
+
+```{r }
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+
+  qIndShootCop <- sqlFetch(con, "qIndShootCop", stringsAsFactors = FALSE)
+  # deadw_test <- sqlFetch(con, "Deadwood_3eSET", stringsAsFactors = FALSE)
+  qAliveDead <- sqlFetch(con, "qAliveDead", stringsAsFactors = FALSE)
+  qSpecies <- sqlFetch(con, "qSpecies", stringsAsFactors = FALSE)
+  qDecaystage <- sqlFetch(con, "qdecaystage", stringsAsFactors = FALSE)
+  qIntactSnag <- sqlFetch(con, "qIntactSnag", stringsAsFactors = FALSE)
+  qVdagnVfm <- sqlFetch(con, "qVdagnVfm", stringsAsFactors = FALSE)
+
+  qHerbSpecies240810<- sqlFetch(con, "qHerbSpecies240810", stringsAsFactors = FALSE)
+  qCoverHerbs <- sqlFetch(con, "qCoverHerbs", stringsAsFactors = FALSE)
+  qBrowsIndex <- sqlFetch(con, "qBrowsIndex", stringsAsFactors = FALSE)
+
+  qHeightClass_regeneration <- sqlFetch(con, "qHeightClass_regeneration", stringsAsFactors = FALSE)
+  qnumber_regeneration_classes <- sqlFetch(con, "qnumber_regeneration_classes", stringsAsFactors = FALSE)
+
+  qcommonremark <- sqlFetch(con, "qcommonremark", stringsAsFactors = FALSE)
+  qCrownVolRedu <- sqlFetch(con, "qCrownVolRedu", stringsAsFactors = FALSE)
+  qBranchLenghtReduction <- sqlFetch(con, "qBranchLenghtReduction", stringsAsFactors = FALSE)
+
+  qiufroheight <- sqlFetch(con, "qiufroheight", stringsAsFactors = FALSE)
+  qiufroheight_shoots <- sqlFetch(con, "qiufroheight_shoots", stringsAsFactors = FALSE)
+  qiufrovitality <- sqlFetch(con, "qiufrovitality", stringsAsFactors = FALSE)
+  qiufrovitality_shoots <- sqlFetch(con, "qiufrovitality_shoots", stringsAsFactors = FALSE)
+  qiufrosocialstatus <- sqlFetch(con, "qiufrosocialstatus", stringsAsFactors = FALSE)
+  qiufrosocialstatus_shoots <- sqlFetch(con, "qiufrosocialstatus_shoots", stringsAsFactors = FALSE)
+
+odbcClose(con)
+
+```
+
+```{r}
+
+qIndShootCop <- qIndShootCop %>% select(-Value3, -OrderField, -Active)
+qAliveDead <- qAliveDead %>% select(-Value3, -OrderField, -Active)
+qSpecies <- qSpecies %>% select(ID, name_nl = Value1, name_sc = Value2)
+qDecaystage <- qDecaystage %>% select(-Value3, -OrderField, -Active, -MasterID)
+```
+
+
+## Plotinfo
+
+```{r }
+plotinfo <- read_excel(paste0(path_to_datarequest, "plotinfo.xlsx")) %>% 
+   select(-1)
+
+```
+
+
+## Meetgegevens 
+
+Enkel cirkelplots   
+
+```{r load_dendro_all}
+tbl_namen <- c("dendro_by_plot", "dendro_by_diam_plot"
+               , "dendro_by_diam_plot_species", "dendro_by_plot_species"
+               , "deadw_by_decay_plot", "deadw_by_decay_plot_species")
+
+# tab <- "deadw_by_decay_plot_species"
+# tab <- "dendro_by_plot"
+
+inlezen_functie <- function(tab, info = plotinfo) {
+  
+  tabel <- read_excel(paste0(path_to_datarequest, tab, ".xlsx")) %>%
+    select(-1) %>%
+    # select(-contains("eg"), -contains("min40cm")) %>%  # (veg en reg)
+    left_join(info) %>% 
+    filter(plottype == "CP")
+    # filter(plottype == "CP" & !plot_id %in% plots_to_exclude) %>% 
+    # anti_join(open_ruimte, by = c("plot_id", "period"))
+  
+  if ("species" %in% colnames(tabel)) {
+    tabel <- tabel %>% 
+      left_join(qSpecies, by = c("species" = "ID"))
+  }
+
+    if ("decay" %in% colnames(tabel)) {
+    tabel <- tabel %>% 
+      left_join(qDecaystage, by = c("decaystage" = "ID")) %>% 
+      rename(decaystage_cde = decaystage,
+             afbraak = Value1, 
+             decay_stage = Value2) 
+    }
+  
+  tabel
+  }
+
+# test voor één tabel
+# deadw_by_decay_plot_species2 <- inlezen_functie(tab = "deadw_by_decay_plot_species")
+
+# voor alle tabellen mbv "map"
+# tbls <- map(tbl_namen, ~ inlezen_functie(.x))
+tbls <- map(tbl_namen, \(x) inlezen_functie(x))
+names(tbls) <- tbl_namen
+```
+
+
+```{r CreateSeparateDataframesDendro}
+for (tablename in names(tbls)) {
+     assign(tablename, tbls[[tablename]])
+} 
+
+```
+
+
+
+# Statistieken
+
+In het dashboard wordt liggend en staand dood hout altijd afzonderlijk weergegeven.
+Grootste detail is per soort en per afbraakstadium, niet gecombineerd.
+
+Daarom enkel obv `dendro_by_plot(_species)` en `deadw_by_decay_plot` statistieken 
+berekend van    
+
+- totaal liggend dood hout als combinatie van LIS en FAS 
+(`vol_log_LISFAS_m3_ha`)      
+- totaal volume liggend en staand dood hout samen (`vol_deadw_m3_ha`)       
+
+Afhankelijk van al dan niet een LIS-survey, is `vol_deadw_m3_ha` opgebouwd uit enkel 
+FAS of uit combinatie LIS en FAS.
+
+Het is aan de gebruiker om te weten hoe deze variabele opgebouwd is, enkel FAS 
+of combinatie LIS en FAS. 
+
+<!-- - Variabele `vol_deadw_FAS_m3_ha` indien géén LIS-survey, enkel FAS -->
+<!-- - Variabele `vol_deadw_FAS_m3_ha` indien LIS-survey -->
+
+
+## Obv dendro_by_plot
+
+```{r data1}
+dataset <- dendro_by_plot
+
+table(dataset$forest_reserve, dataset$period)
+```
+
+Combinatie van LIS en FAS om totaal volume liggend dood hout te bekomen.      
+Combinatie liggend en staand dood hout om totaal volume dood hout te bekomen.     
+
+<!-- ev. enkel bij dendro_by_plot en deadwood_by_decay totaal volume liggend dood hout  -->
+<!-- berekenen obv LIS en FAS samen -->
+<!-- (meer detail bij de andere geeft misschien foute vertekend beeld -->
+
+<!-- kan weliswaar achteraf ook opgeteld worden voor geïnteresseerden, maar beter om al  -->
+<!-- per plot op te tellen, dan correctere BI's -->
+
+
+```{r logs_total1}
+# names(dataset)
+
+dataset_ <- dataset %>% 
+  # left_join(plotinfo %>% select(plot_id, period, survey_lis)) %>% 
+  # totaal volume liggend dood hout obv LIS en FAS samen
+  mutate(vol_log_LISFAS_m3_ha = ifelse(survey_lis == TRUE
+                                       , vol_LIS_10_30cm_m3_ha + vol_log_above30cm_m3_ha
+                                       , NA)
+         , vol_deadw_m3_ha = ifelse(survey_lis == FALSE
+                                       , vol_log_m3_ha + vol_dead_standing_m3_ha
+                                       , vol_log_LISFAS_m3_ha + vol_dead_standing_m3_ha)
+         )
+
+dataset <- dataset_
+```
+
+
+```{r variables1}
+variables_for_statistics <- dataset %>% 
+  dplyr::select(contains(c("_ha", "number_of_tree_species")), -vol_LIS_above30cm_m3_ha) %>% 
+  names()
+
+variables_for_statistics
+# summary(dataset)
+```
+```{r}
+# check of deadwood volumes die NA moeten zijn, niet 0 geworden zijn (LIS en log_above30cm)
+dataset %>% filter(period %in% c(1,2) & !is.na(vol_LIS_m3_ha)) %>% nrow() == 0
+```
+
+```{r stat1, results='hide'}
+resultaat <- create_statistics(
+  dataset = dataset,
+  level = c("period", "forest_reserve"),
+  variables = variables_for_statistics,
+  include_year_range = FALSE
+  ) %>% 
+  forestmangr::round_df(., 2) %>% 
+  # rename(strata = forest_reserve) %>% 
+  mutate(strata = NA,
+         stratum_name = NA,
+         strata2 = NA,
+         stratum_name2 = NA) 
+
+# voor export naar excel ipv access-db
+resultaat <- resultaat %>% 
+  arrange(variable) %>% 
+  select(-contains(c("strat", "log"))) # lege velden
+
+str(resultaat)
+head(resultaat)
+
+```
+
+```{r results='hide'}
+# waar NA's?
+resultaat %>% filter(is.na(mean))
+
+# OK periode 1 en 2 alles mbt LIS en log_above30cm
+# periode 3 vol_log
+```
+
+
+```{r eval = FALSE}
+# testje tussendoor - temp!!
+names(dataset)
+unique(dataset$year)
+
+stat <- create_statistics(
+   dataset = dataset,
+   level = c("forest_reserve", "period"),
+   variables = c("vol_log_above30cm_m3_ha"),
+   include_year_range = TRUE
+   ) 
+
+summary(stat)
+```
+
+```{r table1}
+resultaat %>% 
+  DT::datatable(options = list(dom = 'tip')
+                , rownames = FALSE
+                , filter = "top")
+```
+
+We exporteren de resultaten naar een excel-file "dendro_stat" met 
+per tabblad de basisfile bv. dendro_per_plot, ...
+
+```{r}
+path_to_datarequest
+path_to_datarequest_teamdrive
+
+```
+
+```{r export1}
+write.xlsx(resultaat
+           , paste0(path_to_datarequest, "stat_dendro.xlsx")
+           , sheetName = "dendro_by_plot"
+           , showNA = FALSE
+           , append = FALSE) 
+
+write.xlsx(resultaat
+           , paste0(path_to_datarequest_teamdrive, "stat_dendro.xlsx")
+           , sheetName = "dendro_by_plot"
+           , showNA = FALSE
+           , append = FALSE) 
+```
+
+
+## Obv dendro_by_plot_species
+
+Nulwaardes staan niet in de output.
+Een species of diam-klasse die niet voorkomt, staat niet in resulterende tabel
+
+
+<!-- !! oppassen met 0 waardes (zitten niet in tabel: zie ook dataverwerking ikv artikel C). -->
+<!-- Moeten eerst toegevoegd worden. -->
+
+<!-- Zie ook script `INBO_biomassa_vglBR_VBI/meanNGV_per_bms_levend_dood_PNV.Rmd`, daar gebruik gemaakt van add_zeros -->
+
+<!-- Boomsoort als level: enkel indien ik ook alle nulwaardes mee heb om een gemiddelde over alle plots heen te maken!  -->
+<!-- bv. appel -->
+<!-- => met functie `add_zeros` nullen toevoegen -->
+<!-- ! lukt enkel als ik alle overbodige velden verwijder!! -->
+
+<!-- OPGEPAST: forest_reserve achteraf terug toevoegen, niet meenemen bij add_zeros, -->
+<!-- anders voor elke plot, alle bosreservaten toegevoegd met 0 voor alle soorten -->
+
+
+<!-- OPGEPAST met NA's: daar wordt ook 0 van gemaakt!!  -->
+<!-- Bv. vol_log_m3_ha_min40cm: moet NA zijn, maar bij add_zero's wordt daar 0 van gemaakt!! -->
+<!-- !! niet relevant bij CP's -->
+
+<!-- Maar wel bij bv Kluisbos: geen logs opgemeten ... -->
+
+
+```{r data2}
+dataset2 <- dendro_by_plot_species 
+# table(dataset2$forest_reserve, dataset2$period)
+nrow(dataset2) # 419
+```
+
+```{r logs_total2}
+# names(dataset2)
+
+dataset2_ <- dataset2 %>% 
+  # left_join(plotinfo %>% select(plot_id, period, survey_lis)) %>% 
+  # totaal volume liggend dood hout obv LIS en FAS samen
+  mutate(vol_log_LISFAS_m3_ha = ifelse(survey_lis == TRUE
+                                       , vol_LIS_10_30cm_m3_ha + vol_log_above30cm_m3_ha
+                                       , NA)
+         , vol_deadw_m3_ha = ifelse(survey_lis == FALSE
+                                       , vol_log_m3_ha + vol_dead_standing_m3_ha
+                                       , vol_log_LISFAS_m3_ha + vol_dead_standing_m3_ha)
+         )
+
+dataset2 <- dataset2_
+
+```
+
+
+```{r add_zeros_all_species}
+# names(dataset2)
+dataset2_0 <- add_zeros(dataset = dataset2 %>% 
+                          select(forest_reserve, plot_id, period, species, contains(c("_ha", "stems"))),
+                        comb_vars = c("plot_id", "species", "period"),
+                        grouping_vars = c("forest_reserve"),
+                        defaults_to_na = c("stems_per_tree")
+                        ) 
+
+nrow(dataset2_0) #5916
+```
+
+```{r results='hide'}
+# check of deadwood volumes die NA moeten zijn, niet 0 geworden zijn (LIS en log_above30cm)
+dataset2_0 %>% filter(period %in% c(1,2) & !is.na(vol_LIS_m3_ha)) %>% nrow() 
+
+t <- dataset2_0 %>% filter(period %in% c(1,2) & !is.na(vol_LIS_m3_ha))
+# waar niks gemeten is, zijn ALLE variabelen op 0 gezet, als er iets gemeten is, zijn NA's behouden
+# => CORRECTIE NODIG
+# "defaults to na" is enkel nuttig dat iets NA moet zijn als er niks is, maar hier moet afhankelijk van survey_lis de waardes 0 of NA zijn. 
+
+```
+
+Opgepast: ook in periode 1 en 2 (waar géén survey_lis gebeurd is) zijn de LIS-volumes op 
+0 gezet voor soorten die niet voorkwamen in een plot.
+
+Twee opties:    
+- dataset2_0 corrigeren
+- resultaat2 aanpassen
+
+Makkelijkste om dataset2_0 te corrigeren, want daar kunnen we nog link leggen met `lis_survey.`
+
+Onderstaande correctie moet mogelijks op termijn aangepast worden, mocht forrescalc voor 
+alle periodes  `vol_log_above30cm_m3_ha` berekenen (naast `vol_log_m3_ha`)
+Dan mag `vol_log_above30cm_m3_ha` NIET op NA gezet worden!
+
+```{r corr_lis2}
+dataset2_0_ <- dataset2_0 %>% 
+  left_join(plotinfo %>% select(plot_id, period, survey_lis)) %>% 
+  mutate(# !!!! OPGEPAST: op termijn misschien voor alle periodes "vol_log_above30cm_m3_ha" berekend
+         # dan mag "vol_log_above30cm_m3_ha" NIET op NA gezet worden !!!!!!!!!!!!!!
+          vol_log_above30cm_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
+                                           , vol_log_above30cm_m3_ha
+                                           , NA)
+         , vol_LIS_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
+                                           , vol_LIS_m3_ha
+                                           , NA)
+         , vol_LIS_10_30cm_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
+                                           , vol_LIS_10_30cm_m3_ha
+                                           , NA)
+         , vol_LIS_above30cm_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
+                                           , vol_LIS_above30cm_m3_ha
+                                           , NA)
+         , vol_log_LISFAS_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
+                                           , vol_log_LISFAS_m3_ha
+                                           , NA)
+         # !! ook omgekeerd: vol_log_m3_ha = NA wanneer LIS gebruikt is
+         , vol_log_m3_ha = ifelse(survey_lis == FALSE & !is.na(survey_lis)
+                                           , vol_log_m3_ha
+                                           , NA)
+         )
+# t <- dataset2_0_ %>% filter(is.na(vol_LIS_m3_ha) & !is.na(vol_log_above30cm_m3_ha))
+
+dataset2_0 <- dataset2_0_
+```
+
+
+```{r}
+variables_for_statistics2 <- dataset2_0 %>% 
+  select(contains(c("_ha", "stems")), -vol_LIS_above30cm_m3_ha) %>% 
+  names()
+
+variables_for_statistics2
+```
+
+
+```{r stat2}
+# !! één resultaat per soort en per BR
+n_BR <- length(unique(dataset2$forest_reserve))
+n_species <- length(unique(dataset2$species))
+n_period <- length(unique(dataset2$period))
+n <- n_BR * n_species * n_period * length(variables_for_statistics2)
+n # 1305
+
+resultaat2 <- create_statistics(
+  dataset = dataset2_0,
+  level = c("period", "forest_reserve", "species"),
+  # level = c("period", "forest_reserve", "name_nl"),
+  # level = c("period"),
+  variables = variables_for_statistics2,
+  # variables = "basal_area_alive_m2_ha",
+  include_year_range = FALSE,
+  na_rm = TRUE,   # moet TRUE zijn voor stems_per_tree, is NA als soort niet voorkomt in plot
+  # en zodra er één NA is, wordt som/gemiddelde ook NA, terwijl er enkel moet geteld worden met records/plots waar er een waarde is
+  # ook OK voor LIS, want daar in een bepaalde periode geen enkele meting en dan wordt som/gemiddelde van "niks" een NA en dat is OK
+    interval_information = suppressMessages(read_csv2(system.file("extdata/class_data.csv",
+    package = "forrescalc")))
+  ) %>% 
+  select(-logaritmic) %>% 
+  # filter(mean != 0 & !is.na(mean)) %>% 
+  forestmangr::round_df(., 2) %>% 
+  left_join(qSpecies, by = c("species" = "ID")) %>% 
+  mutate(strata = "species",
+         stratum_name = name_nl,
+         strata2 = NA,
+         stratum_name2 = NA)
+
+# voor export naar excel ipv access-db
+resultaat2 <- resultaat2 %>% 
+  arrange(variable, species) %>%
+  select(-strata2, -stratum_name2, -contains(c("log"))) # lege velden
+
+nrow(resultaat2) == n
+# table(resultaat2$species)
+
+```
+
+
+```{r check_add_zeros2}
+totaal_NGV_per_BR <- resultaat2 %>% 
+  filter(variable == "basal_area_alive_m2_ha") %>% 
+  group_by(period, forest_reserve) %>% 
+  summarize(G = sum(mean)) %>% 
+  ungroup()
+
+# vgl met Result_NGV_per_BR obv analyseset (zonder soorten)
+check_NGV <- totaal_NGV_per_BR %>% 
+  left_join(resultaat %>% filter(variable == "basal_area_alive_m2_ha") 
+            , by = c("period", "forest_reserve")) %>% 
+  mutate(verschil = G - mean)
+
+range(check_NGV$verschil) # ok
+```
+
+```{r table2}
+resultaat2 %>% select(period, forest_reserve, name_nl, variable
+                       , n_obs, mean, variance, lci, uci) %>% 
+  DT::datatable(options = list(dom = 'tip')
+                , rownames = FALSE
+                , filter = "top")
+```
+
+
+```{r export2}
+write.xlsx(resultaat2
+           , paste0(path_to_datarequest, "stat_dendro.xlsx")
+           , sheetName = "dendro_by_plot_species"
+           , showNA = FALSE
+           , append = TRUE) 
+
+write.xlsx(resultaat2
+           , paste0(path_to_datarequest_teamdrive, "stat_dendro.xlsx")
+           , sheetName = "dendro_by_plot_species"
+           , showNA = FALSE
+           , append = TRUE) 
+```
+
+
+## Obv dendro_by_diam_plot
+
+<!-- geen LIS, wel vol_log_m3_ha -->
+
+```{r data3}
+dataset3 <- dendro_by_diam_plot
+
+```
+
+```{r add_zeros_all_dbhs}
+dataset3_0 <- add_zeros(dataset = dataset3 %>%
+                          select(forest_reserve, plot_id, period, dbh_class_5cm, contains(c("_ha"))),
+                        comb_vars = c("plot_id", "dbh_class_5cm", "period"),
+                        grouping_vars = c("forest_reserve")
+                        )
+
+```
+
+```{r corr_log3}
+# weliswaar geen LIS die NA moet zijn in periode 1 en 2 (ipv 0)
+# maar wél vol_log_m3_ha die in periode 3 NA moet zijn in lage diameterklasses
+
+diam_klasses_under_30cm <- c("5 - 10 cm", "10 - 15 cm", "15 - 20 cm", "20 - 25 cm", "25 - 30 cm")
+
+dataset3_0_ <- dataset3_0 %>% 
+  left_join(plotinfo %>% select(plot_id, period, survey_lis)) %>% 
+  mutate(# vol_log_m3_ha = NA wanneer LIS gebruikt is
+         # , vol_log_m3_ha = ifelse(survey_lis == FALSE & !is.na(survey_lis)
+         #                                   , vol_log_m3_ha
+         #                                   , NA)
+         vol_log_m3_ha = ifelse(
+           survey_lis == TRUE & dbh_class_5cm %in% diam_klasses_under_30cm
+           , NA
+           , vol_log_m3_ha)
+         )
+# t <- dataset2_0_ %>% filter(is.na(vol_LIS_m3_ha) & !is.na(vol_log_above30cm_m3_ha))
+
+dataset3_0 <- dataset3_0_
+```
+
+
+```{r}
+variables_for_statistics3 <- dataset3_0 %>% 
+  select(contains("_ha")) %>% 
+  names()
+
+variables_for_statistics3
+#
+```
+
+
+```{r stat3}
+# !! één resultaat per dbh-class en per BR
+n_BR <- length(unique(dataset3$forest_reserve))
+n_dbh <- length(unique(dataset3$dbh_class_5cm))
+n_period <- length(unique(dataset3$period))
+n <- n_BR * n_dbh * n_period * length(variables_for_statistics3)
+n # 702
+
+resultaat3 <- create_statistics(
+  dataset = dataset3_0,
+  level = c("period", "forest_reserve", "dbh_class_5cm"),
+  variables = variables_for_statistics3,
+  include_year_range = FALSE,
+  na_rm = TRUE,
+    interval_information = suppressMessages(read_csv2(system.file("extdata/class_data.csv",
+    package = "forrescalc")))
+  ) %>% 
+  select(-logaritmic) %>% 
+  # filter(mean != 0 & !is.na(mean)) %>% 
+  forestmangr::round_df(., 2) %>% 
+  mutate(strata = "dbh_class",
+         stratum_name = dbh_class_5cm,
+         strata2 = NA,
+         stratum_name2 = NA)
+
+# voor export naar excel ipv access-db
+resultaat3 <- resultaat3 %>% 
+  arrange(variable, dbh_class_5cm) %>%
+  select(-strata2, -stratum_name2, -contains(c("log"))) # lege velden
+
+nrow(resultaat3) == n
+
+```
+
+```{r check_add_zeros3}
+totaal_NGV_per_BR <- resultaat3 %>% 
+  filter(variable == "basal_area_dead_m2_ha") %>% 
+  group_by(period, forest_reserve) %>% 
+  summarize(G = sum(mean)) %>% 
+  ungroup()
+
+# vgl met Result_NGV_per_PNV obv analyseset (zonder soorten)
+check_NGV <- totaal_NGV_per_BR %>% 
+  left_join(resultaat %>% filter(variable == "basal_area_dead_m2_ha") 
+            , by = c("period", "forest_reserve")) %>% 
+  mutate(verschil = G - mean)
+
+range(check_NGV$verschil)
+# [1] 0.01  0.01
+```
+
+```{r table3}
+resultaat3 %>% select(period, forest_reserve, dbh_class_5cm, variable
+                       , n_obs, mean, variance, lci, uci) %>% 
+  DT::datatable(options = list(dom = 'tip')
+                , rownames = FALSE
+                , filter = "top")
+```
+
+```{r export3}
+write.xlsx(resultaat3
+           , paste0(path_to_datarequest, "stat_dendro.xlsx")
+           , sheetName = "dendro_by_plot_diam"
+           , showNA = FALSE
+           , append = TRUE) 
+
+write.xlsx(resultaat3
+           , paste0(path_to_datarequest_teamdrive, "stat_dendro.xlsx")
+           , sheetName = "dendro_by_plot_diam"
+           , showNA = FALSE
+           , append = TRUE) 
+```
+
+
+## Obv dendro_by_diam_plot_species
+
+<!-- geen LIS, wel vol_log_m3_ha -->
+
+```{r data4}
+dataset4 <- dendro_by_diam_plot_species 
+```
+
+
+```{r add_zeros_all_dbhs_species}
+dataset4_0 <- add_zeros(dataset = dataset4 %>% 
+                          select(forest_reserve, plot_id, period, dbh_class_5cm
+                                 , species, contains("_ha")),
+                        comb_vars = c("plot_id", "dbh_class_5cm", "species", "period"),
+                        grouping_vars = c("forest_reserve")
+                        )
+```
+
+
+```{r corr_log4}
+# weliswaar geen LIS die NA moet zijn in periode 1 en 2 (ipv 0)
+# maar wél vol_log_m3_ha die in periode 3 NA moet zijn in lage diameterklasses
+
+diam_klasses_under_30cm <- c("5 - 10 cm", "10 - 15 cm", "15 - 20 cm", "20 - 25 cm", "25 - 30 cm")
+
+dataset4_0_ <- dataset4_0 %>% 
+  left_join(plotinfo %>% select(plot_id, period, survey_lis)) %>% 
+  mutate(# vol_log_m3_ha = NA wanneer LIS gebruikt is
+         # , vol_log_m3_ha = ifelse(survey_lis == FALSE & !is.na(survey_lis)
+         #                                   , vol_log_m3_ha
+         #                                   , NA)
+         vol_log_m3_ha = ifelse(
+           survey_lis == TRUE & dbh_class_5cm %in% diam_klasses_under_30cm
+           , NA
+           , vol_log_m3_ha)
+         )
+# t <- dataset2_0_ %>% filter(is.na(vol_LIS_m3_ha) & !is.na(vol_log_above30cm_m3_ha))
+
+dataset4_0 <- dataset4_0_
+```
+
+```{r}
+variables_for_statistics4 <- dataset4_0 %>% 
+  select(contains(c("_ha", "stems"))) %>% 
+  names()
+
+variables_for_statistics4
+#
+```
+
+```{r stat4}
+# !! één resultaat per soort, per diameterklasse en per BR
+n_BR <- length(unique(dataset4$forest_reserve))
+n_species <- length(unique(dataset4$species))
+n_dbh <- length(unique(dataset4$dbh_class_5cm))
+n_period <- length(unique(dataset4$period))
+n <- n_BR * n_species * n_dbh * n_period * length(variables_for_statistics4)
+n # 22464
+# veel records, daarom hier geopteerd om 0 en NA (xxxx_min40cm) te verwijderen 
+# mbv filter in onderstaande code, zie "GEEN NULLEN"
+
+resultaat4 <- create_statistics(
+  dataset = dataset4_0,
+  level = c("period", "forest_reserve", "species", "dbh_class_5cm"),
+  # level = c("period", "forest_reserve", "name_nl"),
+  # level = c("period"),
+  variables = variables_for_statistics4,
+  # variables = "basal_area_alive_m2_ha",
+  include_year_range = FALSE,
+  na_rm = TRUE,
+    interval_information = suppressMessages(read_csv2(system.file("extdata/class_data.csv",
+    package = "forrescalc")))
+  ) %>% 
+  select(-logaritmic) %>% 
+    # GEEN NULLEN
+  filter(mean != 0 & !is.na(mean)) %>% 
+  forestmangr::round_df(., 2) %>% 
+  left_join(qSpecies, by = c("species" = "ID")) %>% 
+  mutate(strata = "species",
+         stratum_name = name_nl,
+         strata2 = "dbh_class",
+         stratum_name2 = dbh_class_5cm)
+
+# voor export naar excel ipv access-db
+resultaat4 <- resultaat4 %>% 
+  arrange(variable, species, dbh_class_5cm) %>%
+  select(-contains(c("log"))) # lege velden
+
+nrow(resultaat4); n
+# [1] 970
+# [1] 7254
+```
+
+```{r check_add_zeros4}
+totaal_NGV_per_BR <- resultaat4 %>% 
+  filter(variable == "basal_area_alive_m2_ha") %>% 
+  group_by(period, forest_reserve) %>% 
+  summarize(G = sum(mean)) %>% 
+  ungroup()
+
+# vgl met Result_NGV_per_PNV obv analyseset (zonder soorten)
+check_NGV <- totaal_NGV_per_BR %>% 
+  left_join(resultaat %>% filter(variable == "basal_area_alive_m2_ha") 
+            , by = c("period", "forest_reserve")) %>% 
+  mutate(verschil = G - mean)
+
+range(check_NGV$verschil) # ok
+# -0.01 -0.01
+```
+
+```{r table4}
+resultaat4 %>%  select(period, forest_reserve, name_nl, dbh_class_5cm, variable
+                       , n_obs, mean, variance, lci, uci) %>% 
+  DT::datatable(options = list(dom = 'tip')
+                , rownames = FALSE
+                , filter = "top")
+```
+
+
+
+
+
+
+```{r export4}
+write.xlsx(resultaat4
+           , paste0(path_to_datarequest, "stat_dendro.xlsx")
+           , sheetName = "dendro_by_diam_plot_species"
+           , showNA = FALSE
+           , append = TRUE) 
+
+write.xlsx(resultaat4
+           , paste0(path_to_datarequest_teamdrive, "stat_dendro.xlsx")
+           , sheetName = "dendro_by_diam_plot_species"
+           , showNA = FALSE
+           , append = TRUE) 
+
+
+
+```
+
+
+## Obv deadw_by_decay_plot
+
+De dataset `deadw_by_decay_plot` bevat enkel info over afbraakstadium van liggend 
+en staand dood hout afzonderlijk, niet van het dood hout in het totaal.
+Kan zelf opgeteld worden.    
+
+Totaal volume dood hout staat wel in `dendro_by_plot.`
+
+```{r data5}
+dataset5 <- deadw_by_decay_plot %>% 
+  filter(decaystage != 16 | is.na(decaystage))
+
+# bevat ook NVT_levend (decaystage 16), omdat deadwood by decay_plot 
+# berekend wordt obv dataset staande bomen met initieel ook decaystage 16
+# bij deadw_by_decay_plot_species staan die nullen (decaystage 16) er niet meer in
+```
+
+
+
+```{r logs_total5}
+# names(dataset5)
+
+dataset5_ <- dataset5 %>% 
+  # left_join(plotinfo %>% select(plot_id, period, survey_lis)) %>% 
+  # totaal volume liggend dood hout obv LIS en FAS samen
+  mutate(vol_log_LISFAS_m3_ha = ifelse(survey_lis == TRUE
+                                       , vol_LIS_10_30cm_m3_ha + vol_log_above30cm_m3_ha
+                                       , NA)
+         , vol_deadw_m3_ha = ifelse(survey_lis == FALSE
+                                       , vol_log_m3_ha + vol_dead_standing_m3_ha
+                                       , vol_log_LISFAS_m3_ha + vol_dead_standing_m3_ha)
+         )
+
+dataset5 <- dataset5_
+
+```
+
+
+```{r add_zeros_all_decaystages}
+# names(dataset5)
+
+dataset5_0 <- add_zeros(dataset = dataset5 %>% 
+                          select(forest_reserve, plot_id, period, decaystage, contains("_ha")),
+                        comb_vars = c("plot_id", "decaystage", "period"),
+                        grouping_vars = c("forest_reserve")
+                        ) %>%
+  left_join(qDecaystage, by = c("decaystage" = "ID")) %>% 
+  rename(afbraak_txt = Value1, 
+         decaystage_txt = Value2)
+
+nrow(dataset5_0)
+# 192
+
+#check
+n_BR <- length(unique(dataset5$forest_reserve))
+n_decay <- length(unique(dataset5$decaystage))
+n_period <- length(unique(dataset5$period))
+n_plots <- length(unique(dataset5$plot_id))
+nrow(dataset5_0) == n_BR * n_decay * n_period * n_plots
+```
+Onderstaande correctie moet mogelijks op termijn aangepast worden, mocht forrescalc voor 
+alle periodes  `vol_log_above30cm_m3_ha` berekenen (naast `vol_log_m3_ha`)
+Dan mag `vol_log_above30cm_m3_ha` NIET op NA gezet worden!
+
+```{r corr_lis5}
+dataset5_0_ <- dataset5_0 %>% 
+  left_join(plotinfo %>% select(plot_id, period, survey_lis)) %>% 
+  # foutief 0 toegekend, waar NA moet blijven
+  mutate(# !!!! OPGEPAST: op termijn misschien voor alle periodes "vol_log_above30cm_m3_ha" berekend
+         # dan mag "vol_log_above30cm_m3_ha" NIET op NA gezet worden !!!!!!!!!!!!!!
+          vol_log_above30cm_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
+                                           , vol_log_above30cm_m3_ha
+                                           , NA)
+         , vol_LIS_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
+                                           , vol_LIS_m3_ha
+                                           , NA)
+         , vol_LIS_10_30cm_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
+                                           , vol_LIS_10_30cm_m3_ha
+                                           , NA)
+         , vol_LIS_above30cm_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
+                                           , vol_LIS_above30cm_m3_ha
+                                           , NA)
+         , vol_log_LISFAS_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
+                                           , vol_log_LISFAS_m3_ha
+                                           , NA)
+         # !! ook omgekeerd: vol_log_m3_ha = NA wanneer LIS gebruikt is
+         , vol_log_m3_ha = ifelse(survey_lis == FALSE & !is.na(survey_lis)
+                                           , vol_log_m3_ha
+                                           , NA))
+
+# t <- dataset2_0_ %>% filter(is.na(vol_LIS_m3_ha) & !is.na(vol_log_above30cm_m3_ha))
+
+dataset5_0 <- dataset5_0_
+```
+
+
+
+```{r}
+variables_for_statistics5 <- dataset5_0 %>% 
+  select(contains("_ha"), -vol_LIS_above30cm_m3_ha) %>% 
+  names()
+
+variables_for_statistics5
+
+```
+
+
+```{r stat5}
+# !! één resultaat per decaystage en per BR
+n_BR <- length(unique(dataset5$forest_reserve))
+n_decay <- length(unique(dataset5$decaystage))
+n_period <- length(unique(dataset5$period))
+n <- n_BR * n_decay * n_period * length(variables_for_statistics5)
+n # 18
+
+resultaat5 <- create_statistics(
+  dataset = dataset5_0,
+  level = c("period", "forest_reserve", "decaystage"),
+  variables = variables_for_statistics5,
+  include_year_range = FALSE,
+  na_rm = TRUE,  #verschil met TRUE is enkel nObs, wordt 1 ipv 33 bij TRUE
+    interval_information = suppressMessages(read_csv2(system.file("extdata/class_data.csv",
+    package = "forrescalc")))
+  ) %>% 
+  select(-logaritmic) %>% 
+  # filter(mean != 0 & !is.na(mean)) %>% 
+  forestmangr::round_df(., 2) %>% 
+  # rename(strata = forest_reserve) %>% 
+  left_join(qDecaystage, by = c("decaystage" = "ID")) %>% 
+  rename(afbraak = Value1, 
+         decaystage_txt = Value2) %>% 
+  mutate(strata = "decaystage",
+         stratum_name = decaystage,
+         strata2 = NA,
+         stratum_name2 = NA)
+
+nrow(resultaat5) # 18
+nrow(resultaat5) == n_BR * n_decay * n_period * length(variables_for_statistics5)
+
+```
+
+```{r check_add_zeros5}
+totaal_NGV_per_BR <- resultaat5 %>% 
+  filter(variable == "vol_log_m3_ha") %>% 
+  group_by(period, forest_reserve) %>% 
+  summarize(G = sum(mean)) %>% 
+  ungroup()
+
+# vgl met Result_NGV_per_PNV obv analyseset (zonder soorten)
+check_NGV <- totaal_NGV_per_BR %>% 
+  left_join(resultaat %>% filter(variable == "vol_log_m3_ha") 
+            , by = c("period", "forest_reserve")) %>% 
+  mutate(verschil = G - mean)
+
+range(check_NGV$verschil, na.rm = T)
+# [1] 0 0
+```
+
+```{r table5}
+resultaat5 %>% select(period, forest_reserve, decaystage, variable, n_obs
+                      , mean, variance, lci, uci) %>% 
+  DT::datatable(options = list(dom = 'tip')
+                , rownames = FALSE
+                , filter = "top")
+```
+
+```{r export5}
+
+write.xlsx(resultaat5
+           , paste0(path_to_datarequest, "stat_dendro.xlsx")
+           , sheetName = "deadw_by_decay_plot"
+           , showNA = FALSE
+           , append = TRUE) 
+
+write.xlsx(resultaat5
+           , paste0(path_to_datarequest_teamdrive, "stat_dendro.xlsx")
+           , sheetName = "deadw_by_decay_plot"
+           , showNA = FALSE
+           , append = TRUE) 
+
+
+```
+
+
+
+## Obv deadw_by_decay_plot_species
+
+```{r data6}
+dataset6 <- deadw_by_decay_plot_species 
+```
+
+```{r add_zeros_all_decaystages_all_species}
+# names(dataset6)
+
+dataset6_0 <- add_zeros(dataset = dataset6 %>% 
+                          select(forest_reserve, plot_id, period, decaystage, species, contains("_ha")),
+                        comb_vars = c("plot_id", "decaystage", "species", "period"),
+                        grouping_vars = c("forest_reserve")
+                        ) %>%
+  left_join(qDecaystage, by = c("decaystage" = "ID")) %>% 
+  rename(afbraak = Value1, 
+         decaystage_txt = Value2) 
+
+nrow(dataset6_0) # 6944
+```
+Onderstaande correctie moet mogelijks op termijn aangepast worden, mocht forrescalc voor 
+alle periodes  `vol_log_above30cm_m3_ha` berekenen (naast `vol_log_m3_ha`)
+Dan mag `vol_log_above30cm_m3_ha` NIET op NA gezet worden!
+
+```{r corr_lis6}
+dataset6_0_ <- dataset6_0 %>% 
+  left_join(plotinfo %>% select(plot_id, period, survey_lis)) %>% 
+  # foutief 0 toegekend, waar NA moet blijven
+  mutate(# !!!! OPGEPAST: op termijn misschien voor alle periodes "vol_log_above30cm_m3_ha" berekend
+         # dan mag "vol_log_above30cm_m3_ha" NIET op NA gezet worden !!!!!!!!!!!!!!
+          vol_log_above30cm_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
+                                           , vol_log_above30cm_m3_ha
+                                           , NA)
+         , vol_LIS_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
+                                           , vol_LIS_m3_ha
+                                           , NA)
+         , vol_LIS_10_30cm_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
+                                           , vol_LIS_10_30cm_m3_ha
+                                           , NA)
+         , vol_LIS_above30cm_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
+                                           , vol_LIS_above30cm_m3_ha
+                                           , NA)
+         # !! ook omgekeerd: vol_log_m3_ha = NA wanneer LIS gebruikt is
+         , vol_log_m3_ha = ifelse(survey_lis == FALSE & !is.na(survey_lis)
+                                           , vol_log_m3_ha
+                                           , NA))
+
+# t <- dataset6_0_ %>% filter(is.na(vol_LIS_m3_ha) & !is.na(vol_log_above30cm_m3_ha))
+
+dataset6_0 <- dataset6_0_
+```
+
+
+```{r}
+variables_for_statistics6 <- dataset6_0 %>% 
+  select(contains("_ha"), -vol_LIS_above30cm_m3_ha) %>% 
+  names()
+
+variables_for_statistics6
+
+```
+
+
+```{r stat6}
+# !! één resultaat per decaystage, soort en BR
+n_BR <- length(unique(dataset6$forest_reserve))
+n_species <- length(unique(dataset6$species))
+n_decay <- length(unique(dataset6$decaystage))
+n_period <- length(unique(dataset6$period))
+n <- n_BR * n_species * n_decay * n_period * length(variables_for_statistics6)
+n # 651
+# veel records, daarom hier geopteerd om 0 en NA (xxxx_min40cm) te verwijderen 
+# mbv filter in onderstaande code, zie "GEEN NULLEN"
+
+
+resultaat6 <- create_statistics(
+  dataset = dataset6_0,
+  level = c("period", "forest_reserve", "decaystage", "species"),
+  variables = variables_for_statistics6,
+  include_year_range = FALSE,
+  na_rm = TRUE,  # anders som/mean van NA's = 0, som/mean van niks is wél NA (! LIS)
+    interval_information = suppressMessages(read_csv2(system.file("extdata/class_data.csv",
+    package = "forrescalc")))
+  ) %>% 
+  select(-logaritmic) %>% 
+    # GEEN NULLEN
+  filter(mean != 0 & !is.na(mean)) %>% 
+  forestmangr::round_df(., 2) %>% 
+  left_join(qSpecies, by = c("species" = "ID")) %>% 
+  left_join(qDecaystage, by = c("decaystage" = "ID")) %>% 
+  rename(afbraak = Value1, 
+         decaystage_txt = Value2) %>% 
+  mutate(strata = "decaystage",
+         stratum_name = decaystage,
+         strata2 = "species",
+         stratum_name2 = name_nl)
+
+nrow(resultaat6);n
+# [1] 142
+# [1] 651
+```
+
+```{r check_add_zeros6}
+totaal_NGV_per_BR <- resultaat6 %>% 
+  filter(variable == "vol_log_m3_ha") %>% 
+  group_by(period, forest_reserve) %>% 
+  summarize(G = sum(mean)) %>% 
+  ungroup()
+
+# vgl met Result_NGV_per_PNV obv analyseset (zonder soorten)
+check_NGV <- totaal_NGV_per_BR %>% 
+  left_join(resultaat %>% filter(variable == "vol_log_m3_ha") 
+            , by = c("period", "forest_reserve")) %>% 
+  mutate(verschil = G - mean)
+
+range(check_NGV$verschil, na.rm = T)
+# [1] 0 0
+```
+
+```{r table6}
+resultaat6 %>% select(period, forest_reserve, decaystage, name_nl, variable, n_obs
+                      , mean, variance, lci, uci) %>% 
+  DT::datatable(options = list(dom = 'tip')
+                , rownames = FALSE
+                , filter = "top")
+
+```
+
+```{r export6}
+
+write.xlsx(resultaat6
+           , paste0(path_to_datarequest, "stat_dendro.xlsx")
+           , sheetName = "deadw_by_decay_plot_species"
+           , showNA = FALSE
+           , append = TRUE) 
+
+write.xlsx(resultaat6
+           , paste0(path_to_datarequest_teamdrive, "stat_dendro.xlsx")
+           , sheetName = "deadw_by_decay_plot_species"
+           , showNA = FALSE
+           , append = TRUE) 
+
+
+```
+
+# Copy html to teamdrive
+
+Na knitting - manueel
+
+```{r eval = FALSE}
+# Specify the path of the file you want to copy
+source_file <- here::here(paste0("Scripts/Per_gebied/", forestreserve_short, "/", forestreserve_short, "_stat_dendro_2025.html"))
+
+# Specify the destination directory where you want to copy the file
+destination_dir <- path_to_datarequest_teamdrive
+
+# Copy the file to the destination directory
+file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
+# ? file.copy
+```
