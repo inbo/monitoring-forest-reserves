@@ -20,5 +20,7 @@ path_to_teamdrive_gebied <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverwerking
 
 path_to_datacontrol <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverwerking/per_gebied/2025_", forestreserve_short, "/datacontrole/")
 
-# TIJDELIJK `path_to_fieldmap_db` naar situatie jan 2025 (voor aanpassing nalv andere benadering hakhout)
-path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_X8_inbo2020_20250123/")
+# TIJDELIJK `path_to_fieldmap_db` naar situatie mrt 2025 (voor aanpassing nalv andere benadering hakhout)
+path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_X8_inbo2020_20250311/")
+dbFieldmap <- "FieldMapData_MDB_BR_X8_inbo2020.accdb"
+path_to_fieldmap_db <- paste0(path_to_fieldmap, dbFieldmap)

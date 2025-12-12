@@ -39,7 +39,7 @@ source(here::here("scripts/Setup.R"))
 ```{r Setup2, include = FALSE}
 forest_reserve <- "Jansheideberg"
 source(here::here("scripts/Per_gebied/", forest_reserve, "/setup_paths_gebied.R"))
-path_to_datarequest_teamdrive <- paste0(path_to_teamdrive_gebied, "03_output_R_plotlevel/")
+path_to_datarequest_teamdrive <- paste0(path_to_teamdrive_gebied, "04_statistieken_BR/")
 ```
 
 
@@ -202,6 +202,26 @@ for (tablename in names(tbls)) {
 
 # Statistieken
 
+In het dashboard wordt liggend en staand dood hout altijd afzonderlijk weergegeven.
+Grootste detail is per soort en per afbraakstadium, niet gecombineerd.
+
+Daarom enkel obv `dendro_by_plot(_species)` en `deadw_by_decay_plot` statistieken 
+berekend van    
+
+- totaal liggend dood hout als combinatie van LIS en FAS 
+(`vol_log_LISFAS_m3_ha`)      
+- totaal volume liggend en staand dood hout samen (`vol_deadw_m3_ha`)       
+
+Afhankelijk van al dan niet een LIS-survey, is `vol_deadw_m3_ha` opgebouwd uit enkel 
+FAS of uit combinatie LIS en FAS.
+
+Het is aan de gebruiker om te weten hoe deze variabele opgebouwd is, enkel FAS 
+of combinatie LIS en FAS. 
+
+<!-- - Variabele `vol_deadw_FAS_m3_ha` indien géén LIS-survey, enkel FAS -->
+<!-- - Variabele `vol_deadw_FAS_m3_ha` indien LIS-survey -->
+
+
 ## Obv dendro_by_plot
 
 ```{r data1}
@@ -210,9 +230,38 @@ dataset <- dendro_by_plot
 table(dataset$forest_reserve, dataset$period)
 ```
 
+Combinatie van LIS en FAS om totaal volume liggend dood hout te bekomen.      
+Combinatie liggend en staand dood hout om totaal volume dood hout te bekomen.     
+
+<!-- ev. enkel bij dendro_by_plot en deadwood_by_decay totaal volume liggend dood hout  -->
+<!-- berekenen obv LIS en FAS samen -->
+<!-- (meer detail bij de andere geeft misschien foute vertekend beeld -->
+
+<!-- kan weliswaar achteraf ook opgeteld worden voor geïnteresseerden, maar beter om al  -->
+<!-- per plot op te tellen, dan correctere BI's -->
+
+
+```{r logs_total1}
+names(dataset)
+
+dataset_ <- dataset %>% 
+  # left_join(plotinfo %>% select(plot_id, period, survey_lis)) %>% 
+  # totaal volume liggend dood hout obv LIS en FAS samen
+  mutate(vol_log_LISFAS_m3_ha = ifelse(survey_lis == TRUE
+                                       , vol_LIS_10_30cm_m3_ha + vol_log_above30cm_m3_ha
+                                       , NA)
+         , vol_deadw_m3_ha = ifelse(survey_lis == FALSE
+                                       , vol_log_m3_ha + vol_dead_standing_m3_ha
+                                       , vol_log_LISFAS_m3_ha + vol_dead_standing_m3_ha)
+         )
+
+dataset <- dataset_
+```
+
+
 ```{r variables1}
 variables_for_statistics <- dataset %>% 
-  dplyr::select(contains(c("_ha", "number_of_tree_species"))) %>% 
+  dplyr::select(contains(c("_ha", "number_of_tree_species")), -vol_LIS_above30cm_m3_ha) %>% 
   names()
 
 variables_for_statistics
@@ -264,7 +313,7 @@ unique(dataset$year)
 stat <- create_statistics(
    dataset = dataset,
    level = c("forest_reserve", "period"),
-   variables = c("vol_alive_m3_ha"),
+   variables = c("vol_log_above30cm_m3_ha"),
    include_year_range = TRUE
    ) 
 
@@ -335,6 +384,23 @@ dataset2 <- dendro_by_plot_species
 nrow(dataset2) # 419
 ```
 
+```{r logs_total2}
+names(dataset2)
+
+dataset2_ <- dataset2 %>% 
+  # left_join(plotinfo %>% select(plot_id, period, survey_lis)) %>% 
+  # totaal volume liggend dood hout obv LIS en FAS samen
+  mutate(vol_log_LISFAS_m3_ha = ifelse(survey_lis == TRUE
+                                       , vol_LIS_10_30cm_m3_ha + vol_log_above30cm_m3_ha
+                                       , NA)
+         , vol_deadw_m3_ha = ifelse(survey_lis == FALSE
+                                       , vol_log_m3_ha + vol_dead_standing_m3_ha
+                                       , vol_log_LISFAS_m3_ha + vol_dead_standing_m3_ha)
+         )
+
+dataset2 <- dataset2_
+
+```
 
 
 ```{r add_zeros_all_species}
@@ -369,10 +435,16 @@ Twee opties:
 
 Makkelijkste om dataset2_te corrigeren, want daar kunnen we nog link leggen met `lis_survey.`
 
+Onderstaande correctie moet mogelijks op termijn aangepast worden, mocht forrescalc voor 
+alle periodes  `vol_log_above30cm_m3_ha` berekenen (naast `vol_log_m3_ha`)
+Dan mag `vol_log_above30cm_m3_ha` NIET op NA gezet worden!
+
 ```{r corr_lis2}
 dataset2_0_ <- dataset2_0 %>% 
   left_join(plotinfo %>% select(plot_id, period, survey_lis)) %>% 
-  mutate(vol_log_above30cm_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
+  mutate(# !!!! OPGEPAST: op termijn misschien voor alle periodes "vol_log_above30cm_m3_ha" berekend
+         # dan mag "vol_log_above30cm_m3_ha" NIET op NA gezet worden !!!!!!!!!!!!!!
+          vol_log_above30cm_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
                                            , vol_log_above30cm_m3_ha
                                            , NA)
          , vol_LIS_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
@@ -383,20 +455,24 @@ dataset2_0_ <- dataset2_0 %>%
                                            , NA)
          , vol_LIS_above30cm_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
                                            , vol_LIS_above30cm_m3_ha
-                                           , NA))
-
+                                           , NA)
+         , vol_log_LISFAS_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
+                                           , vol_log_LISFAS_m3_ha
+                                           , NA)
+         # !! ook omgekeerd: vol_log_m3_ha = NA wanneer LIS gebruikt is
+         , vol_log_m3_ha = ifelse(survey_lis == FALSE & !is.na(survey_lis)
+                                           , vol_log_m3_ha
+                                           , NA)
+         )
 # t <- dataset2_0_ %>% filter(is.na(vol_LIS_m3_ha) & !is.na(vol_log_above30cm_m3_ha))
 
 dataset2_0 <- dataset2_0_
 ```
 
 
-
-
-
 ```{r}
 variables_for_statistics2 <- dataset2_0 %>% 
-  select(contains(c("_ha", "stems"))) %>% 
+  select(contains(c("_ha", "stems")), -vol_LIS_above30cm_m3_ha) %>% 
   names()
 
 variables_for_statistics2
@@ -487,7 +563,7 @@ write.xlsx(resultaat2
 
 ## Obv dendro_by_diam_plot
 
-<!-- geen LIS -->
+<!-- geen LIS, wel vol_log_m3_ha -->
 
 ```{r data3}
 dataset3 <- dendro_by_diam_plot
@@ -502,6 +578,29 @@ dataset3_0 <- add_zeros(dataset = dataset3 %>%
                         )
 
 ```
+
+```{r corr_log3}
+# weliswaar geen LIS die NA moet zijn in periode 1 en 2 (ipv 0)
+# maar wél vol_log_m3_ha die in periode 3 NA moet zijn in lage diameterklasses
+
+diam_klasses_under_30cm <- c("5 - 10 cm", "10 - 15 cm", "15 - 20 cm", "20 - 25 cm", "25 - 30 cm")
+
+dataset3_0_ <- dataset3_0 %>% 
+  left_join(plotinfo %>% select(plot_id, period, survey_lis)) %>% 
+  mutate(# vol_log_m3_ha = NA wanneer LIS gebruikt is
+         # , vol_log_m3_ha = ifelse(survey_lis == FALSE & !is.na(survey_lis)
+         #                                   , vol_log_m3_ha
+         #                                   , NA)
+         vol_log_m3_ha = ifelse(
+           survey_lis == TRUE & dbh_class_5cm %in% diam_klasses_under_30cm
+           , NA
+           , vol_log_m3_ha)
+         )
+# t <- dataset2_0_ %>% filter(is.na(vol_LIS_m3_ha) & !is.na(vol_log_above30cm_m3_ha))
+
+dataset3_0 <- dataset3_0_
+```
+
 
 ```{r}
 variables_for_statistics3 <- dataset3_0 %>% 
@@ -526,7 +625,7 @@ resultaat3 <- create_statistics(
   level = c("period", "forest_reserve", "dbh_class_5cm"),
   variables = variables_for_statistics3,
   include_year_range = FALSE,
-  na_rm = FALSE,
+  na_rm = TRUE,
     interval_information = suppressMessages(read_csv2(system.file("extdata/class_data.csv",
     package = "forrescalc")))
   ) %>% 
@@ -589,7 +688,7 @@ write.xlsx(resultaat3
 
 ## Obv dendro_by_diam_plot_species
 
-<!-- geen LIS -->
+<!-- geen LIS, wel vol_log_m3_ha -->
 
 ```{r data4}
 dataset4 <- dendro_by_diam_plot_species 
@@ -603,6 +702,29 @@ dataset4_0 <- add_zeros(dataset = dataset4 %>%
                         comb_vars = c("plot_id", "dbh_class_5cm", "species", "period"),
                         grouping_vars = c("forest_reserve")
                         )
+```
+
+
+```{r corr_log4}
+# weliswaar geen LIS die NA moet zijn in periode 1 en 2 (ipv 0)
+# maar wél vol_log_m3_ha die in periode 3 NA moet zijn in lage diameterklasses
+
+diam_klasses_under_30cm <- c("5 - 10 cm", "10 - 15 cm", "15 - 20 cm", "20 - 25 cm", "25 - 30 cm")
+
+dataset4_0_ <- dataset4_0 %>% 
+  left_join(plotinfo %>% select(plot_id, period, survey_lis)) %>% 
+  mutate(# vol_log_m3_ha = NA wanneer LIS gebruikt is
+         # , vol_log_m3_ha = ifelse(survey_lis == FALSE & !is.na(survey_lis)
+         #                                   , vol_log_m3_ha
+         #                                   , NA)
+         vol_log_m3_ha = ifelse(
+           survey_lis == TRUE & dbh_class_5cm %in% diam_klasses_under_30cm
+           , NA
+           , vol_log_m3_ha)
+         )
+# t <- dataset2_0_ %>% filter(is.na(vol_LIS_m3_ha) & !is.na(vol_log_above30cm_m3_ha))
+
+dataset4_0 <- dataset4_0_
 ```
 
 ```{r}
@@ -633,7 +755,7 @@ resultaat4 <- create_statistics(
   variables = variables_for_statistics4,
   # variables = "basal_area_alive_m2_ha",
   include_year_range = FALSE,
-  na_rm = FALSE,
+  na_rm = TRUE,
     interval_information = suppressMessages(read_csv2(system.file("extdata/class_data.csv",
     package = "forrescalc")))
   ) %>% 
@@ -722,6 +844,27 @@ dataset5 <- deadw_by_decay_plot %>%
 # bij deadw_by_decay_plot_species staan die nullen (decaystage 16) er niet meer in
 ```
 
+
+
+```{r logs_total5}
+names(dataset5)
+
+dataset5_ <- dataset5 %>% 
+  # left_join(plotinfo %>% select(plot_id, period, survey_lis)) %>% 
+  # totaal volume liggend dood hout obv LIS en FAS samen
+  mutate(vol_log_LISFAS_m3_ha = ifelse(survey_lis == TRUE
+                                       , vol_LIS_10_30cm_m3_ha + vol_log_above30cm_m3_ha
+                                       , NA)
+         , vol_deadw_m3_ha = ifelse(survey_lis == FALSE
+                                       , vol_log_m3_ha + vol_dead_standing_m3_ha
+                                       , vol_log_LISFAS_m3_ha + vol_dead_standing_m3_ha)
+         )
+
+dataset5 <- dataset5_
+
+```
+
+
 ```{r add_zeros_all_decaystages}
 names(dataset5)
 
@@ -744,12 +887,17 @@ n_period <- length(unique(dataset5$period))
 n_plots <- length(unique(dataset5$plot_id))
 nrow(dataset5_0) == n_BR * n_decay * n_period * n_plots
 ```
-
+Onderstaande correctie moet mogelijks op termijn aangepast worden, mocht forrescalc voor 
+alle periodes  `vol_log_above30cm_m3_ha` berekenen (naast `vol_log_m3_ha`)
+Dan mag `vol_log_above30cm_m3_ha` NIET op NA gezet worden!
 
 ```{r corr_lis5}
 dataset5_0_ <- dataset5_0 %>% 
   left_join(plotinfo %>% select(plot_id, period, survey_lis)) %>% 
-  mutate(vol_log_above30cm_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
+  # foutief 0 toegekend, waar NA moet blijven
+  mutate(# !!!! OPGEPAST: op termijn misschien voor alle periodes "vol_log_above30cm_m3_ha" berekend
+         # dan mag "vol_log_above30cm_m3_ha" NIET op NA gezet worden !!!!!!!!!!!!!!
+          vol_log_above30cm_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
                                            , vol_log_above30cm_m3_ha
                                            , NA)
          , vol_LIS_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
@@ -760,6 +908,13 @@ dataset5_0_ <- dataset5_0 %>%
                                            , NA)
          , vol_LIS_above30cm_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
                                            , vol_LIS_above30cm_m3_ha
+                                           , NA)
+         , vol_log_LISFAS_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
+                                           , vol_log_LISFAS_m3_ha
+                                           , NA)
+         # !! ook omgekeerd: vol_log_m3_ha = NA wanneer LIS gebruikt is
+         , vol_log_m3_ha = ifelse(survey_lis == FALSE & !is.na(survey_lis)
+                                           , vol_log_m3_ha
                                            , NA))
 
 # t <- dataset2_0_ %>% filter(is.na(vol_LIS_m3_ha) & !is.na(vol_log_above30cm_m3_ha))
@@ -771,7 +926,7 @@ dataset5_0 <- dataset5_0_
 
 ```{r}
 variables_for_statistics5 <- dataset5_0 %>% 
-  select(contains("_ha")) %>% 
+  select(contains("_ha"), -vol_LIS_above30cm_m3_ha) %>% 
   names()
 
 variables_for_statistics5
@@ -792,7 +947,7 @@ resultaat5 <- create_statistics(
   level = c("period", "forest_reserve", "decaystage"),
   variables = variables_for_statistics5,
   include_year_range = FALSE,
-  na_rm = FALSE,
+  na_rm = TRUE,  #verschil met TRUE is enkel nObs, wordt 1 ipv 33 bij TRUE
     interval_information = suppressMessages(read_csv2(system.file("extdata/class_data.csv",
     package = "forrescalc")))
   ) %>% 
@@ -810,6 +965,7 @@ resultaat5 <- create_statistics(
 
 nrow(resultaat5) # 18
 nrow(resultaat5) == n_BR * n_decay * n_period * length(variables_for_statistics5)
+
 ```
 
 ```{r check_add_zeros5}
@@ -876,12 +1032,17 @@ dataset6_0 <- add_zeros(dataset = dataset6 %>%
 
 nrow(dataset6_0) # 6944
 ```
-
+Onderstaande correctie moet mogelijks op termijn aangepast worden, mocht forrescalc voor 
+alle periodes  `vol_log_above30cm_m3_ha` berekenen (naast `vol_log_m3_ha`)
+Dan mag `vol_log_above30cm_m3_ha` NIET op NA gezet worden!
 
 ```{r corr_lis6}
 dataset6_0_ <- dataset6_0 %>% 
   left_join(plotinfo %>% select(plot_id, period, survey_lis)) %>% 
-  mutate(vol_log_above30cm_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
+  # foutief 0 toegekend, waar NA moet blijven
+  mutate(# !!!! OPGEPAST: op termijn misschien voor alle periodes "vol_log_above30cm_m3_ha" berekend
+         # dan mag "vol_log_above30cm_m3_ha" NIET op NA gezet worden !!!!!!!!!!!!!!
+          vol_log_above30cm_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
                                            , vol_log_above30cm_m3_ha
                                            , NA)
          , vol_LIS_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
@@ -892,6 +1053,10 @@ dataset6_0_ <- dataset6_0 %>%
                                            , NA)
          , vol_LIS_above30cm_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
                                            , vol_LIS_above30cm_m3_ha
+                                           , NA)
+         # !! ook omgekeerd: vol_log_m3_ha = NA wanneer LIS gebruikt is
+         , vol_log_m3_ha = ifelse(survey_lis == FALSE & !is.na(survey_lis)
+                                           , vol_log_m3_ha
                                            , NA))
 
 # t <- dataset6_0_ %>% filter(is.na(vol_LIS_m3_ha) & !is.na(vol_log_above30cm_m3_ha))
@@ -902,7 +1067,7 @@ dataset6_0 <- dataset6_0_
 
 ```{r}
 variables_for_statistics6 <- dataset6_0 %>% 
-  select(contains("_ha")) %>% 
+  select(contains("_ha"), -vol_LIS_above30cm_m3_ha) %>% 
   names()
 
 variables_for_statistics6
