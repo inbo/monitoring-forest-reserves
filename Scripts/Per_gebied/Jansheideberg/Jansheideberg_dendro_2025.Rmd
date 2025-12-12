@@ -220,10 +220,6 @@ year_range %>%
 # t_ %>% filter(year_dendro == 2023)
 ```
 
-> tot hier in orde
-plotinfo weggeschreven zdd kan gebruikt worden bij reg en veg
-
-
 # Load dendro data
 
 Standaard worden enkel de "processed" data ingeladen mbv de load-functies.
