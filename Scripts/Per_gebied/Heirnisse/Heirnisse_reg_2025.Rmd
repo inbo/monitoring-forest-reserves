@@ -90,6 +90,33 @@ odbcClose(con)
 
 ```
 
+
+# Plots to exclude
+
+In de Heirnisse werd in 10 plots een exotenbeheer uitgevoerd na de eerste meting (in 2004 en 2008).
+
+Deze plots worden mee **opgenomen** in de tabellen met **resultaten op plotniveau**.
+
+In de strata-db staat immers voldoende info over deze plots:      
+- in tabel "strata_remaining": veld "unmanaged since": 2008 (ipv 1991 bij de andere)    
+- in tabel "cirkelplots_management_startbeheer_exotenbeheer": veld "management_indicator":
+exotenbeheer tss periode 1 en 2     
+- in tabel "plots_excluded_from_network": veld "info": exotenbeheer (2004 en 2008) na eerste meting     
+
+Bij het berekenen van de **statistieken op reservaatniveau** is het echter logischer deze **NIET**
+mee te nemen. 
+
+Het gaat om volgende plots:
+
+```{r }
+plots_to_exclude <- read_xlsx(paste0(path_to_output_gdrive, "00_METADATA-ALL_PLOTS/plots_excluded_from_monitoring_network.xlsx"))
+
+plots_to_exclude %>% filter(forest_reserve == forestreserve) %>% 
+  select(plot_id, info)
+
+```
+
+
 # Load regeneration
 
 ```{r load_reg}
