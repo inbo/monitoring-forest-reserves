@@ -130,10 +130,11 @@ Plotinfo samenstellen, zijnde plottype, naam forest_reserve en info over survey 
 Wegschrijven naar git, access en opslaan als csv
 
 ```{r plotinfo_load}
-plotinfo <- load_plotinfo(database = path_to_fieldmap_db) %>% 
+plotinfo <- load_plotinfo(database = path_to_fieldmap_db, processed = FALSE) %>% 
   filter(forest_reserve == forestreserve)
 names(plotinfo)
 ```
+
 ## Processed
 
 We controleren of er nog plots "not processed" zijn.
@@ -147,6 +148,19 @@ check_processed <- plotinfo %>%
 table(check_processed$forest_reserve, check_processed$data_processed)
 # table(plotinfo$forest_reserve, plotinfo$data_processed)
 ```
+
+4 plots zijn "not processed": 400, 424, 426 en 482
+
+Alle zijn ook opgenomen in "plots_excluded_from_monitoring_network.xlsx"
+
+```{r results='hide', eval = FALSE}
+# 400, 424, 426
+plots_to_exclude <- read_xlsx(paste0(path_to_output_gdrive, "00_METADATA-ALL_PLOTS/plots_excluded_from_monitoring_network.xlsx"))
+
+view(plots_to_exclude)
+```
+
+Deze niet verder meenemen in de berekeningen.
 
 ```{r check_not_processed, results='hide'}
 plotinfo_check <- plotinfo %>% 
@@ -187,22 +201,25 @@ query_update <- paste0(sprintf("UPDATE (PlotDetails_%seSET pd
 
 odbcClose(con)
 
-```
-
-
-```{r plotinfo_load2, eval=FALSE}
+#plotinfo opnieuw inladen
 plotinfo <- load_plotinfo(database = path_to_fieldmap_db) %>% 
   filter(forest_reserve == forestreserve)
 names(plotinfo)
 ```
 
-In het geval van `r forestreserve` gaat het om volgende plots die na de eerste decade niet 
-meer heropgemeten werden:     
+In het geval van `r forestreserve` gaat het om volgende plots die uitgesloten worden van de verdere analyse:     
 
 ```{r}
 plotinfo %>% filter(survey_trees == FALSE) %>% distinct(plot_id)
 ```
 
+We gaan verder met de processed plots
+
+```{r plotinfo_load2}
+plotinfo <- load_plotinfo(database = path_to_fieldmap_db, processed = TRUE) %>% 
+  filter(forest_reserve == forestreserve)
+
+```
 
 ## Check year_dendro 
 
@@ -214,7 +231,6 @@ names(plotinfo)
 summary(plotinfo)
 
 plotinfo %>% filter(is.na(year_dendro)) %>% distinct(data_processed) 
-# enkel NA daar waar data_processed = FALSE - OK
 
 year_range <- plotinfo %>% 
   group_by(forest_reserve, period) %>% 
@@ -238,16 +254,11 @@ plot 425 en 503 hebben een afwijkende dendro-date, gecheckt in FM-DC en klopt.
 Standaard worden enkel de "processed" data ingeladen mbv de load-functies.
 
 ```{r load_data, results='hide'}
-data_dendro <- load_data_dendrometry(database = path_to_fieldmap_db)
-
-
-
 data_dendro <- load_data_dendrometry(database = path_to_fieldmap_db
                                      # , plottype = plot_type
                                      , forest_reserve = forestreserve
-                                     , processed = FALSE  # default: data_processed = TRUE
+                                     , processed = TRUE  # default: data_processed = TRUE
                                      , extra_variables = TRUE)
-
 
 data_shoots <- load_data_shoots(database = path_to_fieldmap_db
                                 , extra_variables = TRUE)
@@ -263,14 +274,16 @@ data_deadwood <- load_data_deadwood(database = path_to_fieldmap_db
 ```
 
 ```{r eval = FALSE}
-height_model <- load_height_models() %>%
-  filter(forest_reserve == forestreserve)
+height_model <- load_height_models()
 
 save(height_model, file = "height_model.RData")
 ```
 
 ```{r}
 load("height_model.RData")
+
+height_model <- height_model %>%
+  filter(forest_reserve == forestreserve)
 ```
 
 ```{r check_heightmodels, results = 'hide'}
@@ -283,6 +296,7 @@ missing_heightmodel <- data_stems %>%
   select(forest_reserve, plot_id, plottype, period, species, alive_dead) %>% 
   left_join(height_model) %>% 
   filter(is.na(P1))
+nrow(missing_heightmodel) == 0
 
 ```
 
@@ -414,14 +428,6 @@ data_stems_calc <- calc_variables_stem_level(data_stems, height_model)
 data_dendro_calc <- calc_variables_tree_level(data_dendro, data_stems_calc)
 
 dendro <- calculate_dendrometry(data_dendro, data_deadwood, data_shoots, height_model, plotinfo)
-# waar survey_trees = TRUE, wordt een '0' toegekend, als er geen andere metingen zijn
-# DUS: als ik wegfilter obv data_processed, worden data NIET ingeladen,
-# MAAR omdat survey_trees = TRUE, wordt er in functie "calc_dendro_plot()" een '0' 
-# toegekend aan die non-processed plots ( 400, ...°)
-# DAAROM: hoger in chunck 'load_data' het argument processed = FALSE zetten
-# zdd dat deze toch meegenomen worden, en géén "0" toegekend krijgen.
-# OPGEPAST: er bij statistische verwerking wél voor zorgen dat deze plots niet meegenomen worden
-# ev. mbv lijstje "plots_to_exclude" obv processed = TRUE
 ```
 
 
@@ -480,7 +486,7 @@ test_DW1
 # OK: periode 3 pas vanaf 30 cm opgemeten
 ```
 
-We zien dat er in de cirkelplots en de kernvlakte effectief pas opgemeten wordt vanaf 30 cm.
+We zien dat er in de cirkelplots 3de decade effectief pas opgemeten wordt vanaf 30 cm.
 
 ```{r eval = FALSE}
 test_DW2 <- dendro_by_diam_plot %>% 
@@ -916,6 +922,7 @@ t <- dendro_by_plot_ %>%
   select(plot_id, contains("above"), everything())
 
 mean(t$vol_log_above30cm_m3_ha); mean(t$vol_LIS_above30cm_m3_ha)
+# 26 vs 32, ca 25% wordt niet gedetecteerd
 ```
 
 ```{r eval = FALSE, results='hide'}
@@ -954,7 +961,7 @@ te beslissen of beide gecombineerd worden.
 
 Sowieso beide NIET combineren op plotniveau, ev. wel op reservaatsniveau, en dan beide ook met hun BI ...
 
-Globaal mist LIS ca 25% (16 vs 11 m3/ha)
+Globaal mist LIS ca 25% (32 vs 26 m3/ha)
 
 ```{r results='hide'}
 names(dendro_by_plot_)
@@ -1021,8 +1028,8 @@ gemaakt tss boven en onder 30 cm.
 Zie script "Jansheideberg_deadwood_comb_LIS_FAS_2025.Rmd".
 
 ```{r}
-save.image(file = here::here("Scripts/Per_gebied/Heirnisse/LIS_FAS.RData"))
-# load(here::here("Scripts/Per_gebied/Jansheideberg/LIS_FAS.RData"))
+save.image(file = here::here(paste0("Scripts/Per_gebied/", forestreserve_short, "/LIS_FAS.RData")))
+# load(here::here(paste0("Scripts/Per_gebied/", forestreserve_short, "/LIS_FAS.RData")))
 ```
 
 Alle dood hout met een bepaalde minimum diameter (bosreservaten standaard min 10 cm) 
@@ -1151,14 +1158,6 @@ write.xlsx(missing_dbh
 
 Te checken op niveau van de stems
 
-Tijdelijke oplossing: ik heb daar intacte van gemaakt in `r path_to_fieldmap_db`
-
-  period	tree_measure_id	old_id   	species	   dbh_mm
-71000	CA	3	2022	144	      5520			83	        205
-71000	CA	3	2022	353	      6498			16	        90
-71000	CA	3	2022	216	      5625			89	        120
-
-
 ```{r missing_height}
 missing_height <- data_stems_calc %>% 
   filter(intact_snag == 10 & is.na(height_m)) %>% 
@@ -1187,6 +1186,23 @@ write.xlsx(missing_height
 
 
 # Extra processing
+
+## Alles samenvoegen
+
+Lijst `dendro` opnieuw aanmaken
+
+```{r}
+dendro <- list(
+  # gecorrigeerde standaard forrescalc files nalv vol_logs_above30cm & LIS
+  dendro_by_plot = dendro_by_plot
+ , dendro_by_plot_species = dendro_by_plot_species
+ , deadw_by_decay_plot = deadw_by_decay_plot
+ , deadw_by_decay_plot_species = deadw_by_decay_plot_species
+ , dendro_by_diam_plot = dendro_by_diam_plot
+ , dendro_by_diam_plot_species = dendro_by_diam_plot_species)
+
+
+```
 
 ## Plotinfo toevoegen
 
@@ -1255,8 +1271,9 @@ summary(dendro_by_plot_git)
 
 diff <- dendro_by_plot_new %>% anti_join(dendro_by_plot_git, by = c("plot_id", "period"))
 diff
-# CA is er nu bij, én plot 400, 424 en 426
-
+# CA is er nu bij
+diff <- dendro_by_plot_git %>% anti_join(dendro_by_plot_new, by = c("plot_id", "period"))
+diff
 
 t <- waldo::compare(dendro_by_plot_git, dendro_by_plot_new)
 view(t)
@@ -1290,7 +1307,8 @@ versus "vol_alive_m3_ha" en "vol_dead_standing_m3_ha"
 
 * "vol_log_m3_ha": liggend dood hout (NA als er geen deadwood survey gebeurd is)
 
-* "vol_deadw_m3_ha": staand en liggend dood hout (NA als er geen deadwood survey gebeurd is)
+* "vol_deadw_m3_ha": wordt hier niet meer berekend (staand en liggend dood hout samen)
+want onduidelijk welke fracties geteld worden (LIS of FAS of beide)
 
 
 ```{r save, eval=FALSE}

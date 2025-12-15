@@ -155,7 +155,7 @@ odbcClose(con)
 
 
 ```{r plotinfo_load2, eval=FALSE}
-plotinfo <- load_plotinfo(database = path_to_fieldmap_db) %>% 
+plotinfo <- load_plotinfo(database = path_to_fieldmap_db, processed = TRUE) %>% 
   filter(forest_reserve == forestreserve)
 names(plotinfo)
 ```

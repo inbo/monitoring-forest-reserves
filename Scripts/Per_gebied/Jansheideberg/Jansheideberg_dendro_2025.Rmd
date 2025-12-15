@@ -154,6 +154,15 @@ plotinfo %>%  filter(data_processed & !survey_trees) %>% nrow() == 0
 table(check_processed$period, check_processed$survey_trees)
 ```
 
+```{r results='hide', eval = FALSE}
+# 400, 424, 426
+plots_to_exclude <- read_xlsx(paste0(path_to_output_gdrive, "00_METADATA-ALL_PLOTS/plots_excluded_from_monitoring_network.xlsx"))
+
+view(plots_to_exclude)
+# geen plots van Jansheideberg
+```
+
+
 **!! OPGEPAST:** nadat de data gecontroleerd zijn door Peter, moet veld `processed` aangepast worden.
 OK, is gebeurd.
 
@@ -184,7 +193,7 @@ odbcClose(con)
 
 ```{r plotinfo_load_processed, results='hide'}
 # hier enkel de processed
-plotinfo <- load_plotinfo(database = path_to_fieldmap_db) %>% 
+plotinfo <- load_plotinfo(database = path_to_fieldmap_db, processed = TRUE) %>% 
   filter(forest_reserve == forestreserve)
 names(plotinfo)
 
@@ -246,14 +255,16 @@ data_deadwood <- load_data_deadwood(database = path_to_fieldmap_db
 ```
 
 ```{r eval = FALSE}
-height_model <- load_height_models() %>%
-  filter(forest_reserve == forestreserve)
+height_model <- load_height_models()
 
 save(height_model, file = "height_model.RData")
 ```
 
 ```{r}
 load("height_model.RData")
+
+height_model <- height_model %>%
+  filter(forest_reserve == forestreserve)
 ```
 
 ```{r check_heightmodels, results = 'hide'}
@@ -1005,8 +1016,8 @@ gemaakt tss boven en onder 30 cm.
 Zie script "Jansheideberg_deadwood_comb_LIS_FAS_2025.Rmd".
 
 ```{r}
-save.image(file = here::here("Scripts/Per_gebied/Jansheideberg/LIS_FAS.RData"))
-# load(here::here("Scripts/Per_gebied/Jansheideberg/LIS_FAS.RData"))
+save.image(file = here::here(paste0("Scripts/Per_gebied/", forestreserve_short, "/LIS_FAS.RData")))
+# load(here::here(paste0("Scripts/Per_gebied/", forestreserve_short, "/LIS_FAS.RData")))
 ```
 
 Alle dood hout met een bepaalde minimum diameter (bosreservaten standaard min 10 cm) 
@@ -1251,7 +1262,8 @@ versus "vol_alive_m3_ha" en "vol_dead_standing_m3_ha"
 
 * "vol_log_m3_ha": liggend dood hout (NA als er geen deadwood survey gebeurd is)
 
-* "vol_deadw_m3_ha": staand en liggend dood hout (NA als er geen deadwood survey gebeurd is)
+* "vol_deadw_m3_ha": wordt hier niet meer berekend (staand en liggend dood hout samen)
+want onduidelijk welke fracties geteld worden (LIS of FAS of beide)
 
 
 ```{r save, eval=FALSE}

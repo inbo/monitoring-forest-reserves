@@ -833,8 +833,6 @@ De dataset `deadw_by_decay_plot` bevat enkel info over afbraakstadium van liggen
 en staand dood hout afzonderlijk, niet van het dood hout in het totaal.
 Kan zelf opgeteld worden.    
 
-Totaal volume dood hout staat wel in `dendro_by_plot.`
-
 ```{r data5}
 dataset5 <- deadw_by_decay_plot %>% 
   filter(decaystage != 16 | is.na(decaystage))
