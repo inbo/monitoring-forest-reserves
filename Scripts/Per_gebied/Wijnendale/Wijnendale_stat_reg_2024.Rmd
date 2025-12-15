@@ -105,6 +105,21 @@ Nodig voor:
 
 We werken verder met de data aangemaakt specifiek voor `r forestreserve`.
 
+Vier plots zijn "not processed": 400, 424, 426 en 482 en worden bijgevolg ook niet meegenomen
+in de verdere dataverwerking.
+
+(zie file "plots_excluded_from_monitoring_network.xlsx" onder metadata)
+
+```{r }
+plots_to_exclude <- read_xlsx(paste0(path_to_output_gdrive
+                                     , "00_METADATA-ALL_PLOTS/plots_excluded_from_monitoring_network.xlsx")) %>% 
+  filter(forest_reserve == forestreserve)
+
+plots_to_exclude  %>% 
+  select(plot_id, info)
+
+```
+
 ## Lookuplijsten
 
 ```{r }
@@ -141,7 +156,7 @@ plotinfo <- read_excel(paste0(path_to_datarequest, "plotinfo.xlsx")) %>%
 
 # Enkel bosplots
 
-Zie Wijnendale_stat_dendr => "plots to exclude"
+Zie Wijnendale_stat_dendro => "plots to exclude"
 
 **OPGEPAST**: er werden een aantal plots NIET heropgemeten in 2012 & 2022
 => om vergelijking volledig correct te maken, deze niet meer meenemen bij de verwerking
