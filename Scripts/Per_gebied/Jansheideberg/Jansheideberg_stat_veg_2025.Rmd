@@ -146,16 +146,33 @@ herblayer_by_plot <- read_excel(
 
 # Statistieken
 
-## Statistieken op niveau bosreservaat 
+? Waarin geïnteresseerd op reservaatsniveau?    
+
+Op plotniveau:    
+
+- gemiddelde bedekking van vegetatielagen     
+
+
+Per soort:   
+
+- aantal plots waar soort voorkomt !! best procentueel, want exact aantal plots 
+niet gekend door gebruiker    
+- karakteristieke bedekking = som van bedekkingen over alle plots heen/aantal plots 
+waar de soort voorkomt   
+- vraatschade: per soort het percentage plots met minor (< 1/20) of explicit browsing (>= 1/20)    
+
+
+Enkel bosplots bekijken!
+
+
+
+## Gemiddelde bedekking vegetatielagen 
 
 Obv `veg_by_plot`
 
-? Waarin geïnteresseerd op reservaatsniveau?
+###  Obv mid-waarde
 
-Volgens mij enkel in aantal plots per soort en karakteristieke bedekking
-En dat komt uit herblayer.
-
-Ev. wel een gemiddelde bedekking van   
+Gemiddelde bedekking van   
 
 - kruidlaag  
 - struiklaag
@@ -166,7 +183,7 @@ Ev. wel een gemiddelde bedekking van
 
 Indien nodig zouden we ook vraatschade op reservaatsniveau kunnen berekenen, ongeacht de soort.
 Maar ik ben niet zeker of dat nut heeft.
-Nu enkel op soortniveau gegevens gegenereerd.
+Nu enkel op soortniveau gegevens gegenereerd (zie verder)
 
 
 ```{r data1}
@@ -197,12 +214,12 @@ dataset %>% filter(is.na(herb_cover_mid)) %>% nrow()
 dataset %>% filter(is.na(cumm_herb_coverage_class_average_perc)) %>% nrow()
 dataset %>% filter(is.na(cumulated_canopy_cover_mid)) %>% nrow()
 
+# [1] 33
+# [1] 1
+# [1] 1
 # [1] 0
 # [1] 0
-# [1] 0
-# [1] 0
-# [1] 0
-# [1] 0
+# [1] 1
 
 ```
 ```{r results='hide'}
@@ -312,26 +329,18 @@ write.xlsx(resultaat
            , append = FALSE) 
 ```
 
+
 ### Obv intervallen - NIET
+
 Statistics voor intervals cfr Els: variance bijna steeds Inf en mean = 0
 => geen bruikbare resultaten
 
 Ev. later uit te klaren met Els ...
 
 
-## Statistieken op soortniveau
+## Aantal/percentage plots waar soort voorkomt
 
 Obv `herblayer_by_plot` in combinatie met `veg_by_plot`
-
-Per soort:   
-
-- aantal plots waar soort voorkomt !! best procentueel, want exact aantal plots niet gekend door gebruiker
-- karakteristieke bedekking = som van bedekkingen over alle plots heen/aantal plots waar de soort voorkomt
-- vraatschade: per soort het percentage plots met minor (< 1/20) of explicit browsing (>= 1/20)
-
-
-Enkel bosplots bekijken!
-
 
 ```{r data2}
 dataset2 <- herblayer_by_plot
@@ -349,8 +358,6 @@ dataset2 %>% group_by(plot_id, period) %>% summarize(n_subplots = n_distinct(sub
 
 ```
 
-
-### Aantal/percentage plots waar soort voorkomt
 
 ```{r n_plots_per_species, results='hide'}
 names(dataset2)  # herblayer_by_plot, reeds gefilterd op CPs en open area
@@ -434,7 +441,7 @@ resultaat2 %>% distinct(variable)
 ```
 
 
-### Karakteristieke bedekking
+## Karakteristieke bedekking
 
 Obv aantal plots waar de soort voorkomt
 
@@ -509,7 +516,7 @@ write.xlsx(resultaat3
 
 
 
-### Vraatschade
+## Vraatschade
 
 Aantal plots en percentage plots met meer of minder vraatschade: 
 
@@ -522,7 +529,7 @@ Aantal plots en percentage plots met meer of minder vraatschade:
 
 Obv aantal plots waar de soort voorkomt
 
-Percentage plots met vraatscvhaden = aantal plots met vraatschade, 
+Percentage plots met vraatschade = aantal plots met vraatschade, 
 gedeeld door het aantal plots waar de soort voorkomt
 
 
