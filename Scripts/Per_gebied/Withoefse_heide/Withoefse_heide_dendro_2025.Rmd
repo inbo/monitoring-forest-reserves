@@ -134,6 +134,18 @@ table(check_processed$period, check_processed$survey_trees)
 
 Er zijn 4 plots (201, 202, 203 en 208) waar geen opnames gebeurd zijn => in moederdatabank "non_processed".
 
+```{r }
+plots_to_exclude <- read_xlsx(paste0(path_to_output_gdrive
+                                     , "00_METADATA-ALL_PLOTS/plots_excluded_from_monitoring_network.xlsx")) %>% 
+  filter(forest_reserve == forestreserve)
+
+plots_to_exclude  %>% 
+  select(plot_id, info)
+
+```
+
+
+
 **!! OPGEPAST:** nadat de data gecontroleerd zijn door Peter, moet veld `processed` aangepast worden.
 OK, is gebeurd.
 
