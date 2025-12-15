@@ -147,6 +147,31 @@ plotinfo <- read_excel(paste0(path_to_datarequest, "plotinfo.xlsx")) %>%
 
 Enkel cirkelplots   
 
+Zonder de plots waar exotenbeheer werd uitgevoerd na de eerste meting (in 2004 en 2008).
+
+Deze plots (10 van de 68) worden mee **opgenomen** in de tabellen met **resultaten op plotniveau**.
+
+In de strata-db staat immers voldoende info over deze plots:      
+- in tabel "strata_remaining": veld "unmanaged since": 2008 (ipv 1991 bij de andere)    
+- in tabel "cirkelplots_management_startbeheer_exotenbeheer": veld "management_indicator":
+exotenbeheer tss periode 1 en 2     
+- in tabel "plots_excluded_from_network": veld "info": exotenbeheer (2004 en 2008) na eerste meting     
+
+Bij het berekenen van de **statistieken op reservaatniveau** is het echter logischer deze **NIET**
+mee te nemen. 
+
+Het gaat om volgende plots:
+
+```{r }
+plots_to_exclude <- read_xlsx(paste0(path_to_output_gdrive
+                                     , "00_METADATA-ALL_PLOTS/plots_excluded_from_monitoring_network.xlsx")) %>% 
+  filter(forest_reserve == forestreserve)
+
+plots_to_exclude  %>% 
+  select(plot_id, info)
+
+```
+
 ```{r load_dendro_all}
 tbl_namen <- c("dendro_by_plot", "dendro_by_diam_plot"
                , "dendro_by_diam_plot_species", "dendro_by_plot_species"
@@ -161,7 +186,8 @@ inlezen_functie <- function(tab, info = plotinfo) {
     select(-1) %>%
     # select(-contains("eg"), -contains("min40cm")) %>%  # (veg en reg)
     left_join(info) %>% 
-    filter(plottype == "CP")
+    filter(plottype == "CP") %>% 
+    anti_join(plots_to_exclude)
     # filter(plottype == "CP" & !plot_id %in% plots_to_exclude) %>% 
     # anti_join(open_ruimte, by = c("plot_id", "period"))
   
@@ -832,8 +858,6 @@ write.xlsx(resultaat4
 De dataset `deadw_by_decay_plot` bevat enkel info over afbraakstadium van liggend 
 en staand dood hout afzonderlijk, niet van het dood hout in het totaal.
 Kan zelf opgeteld worden.    
-
-Totaal volume dood hout staat wel in `dendro_by_plot.`
 
 ```{r data5}
 dataset5 <- deadw_by_decay_plot %>% 

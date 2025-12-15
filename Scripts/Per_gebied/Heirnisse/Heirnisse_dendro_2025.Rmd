@@ -191,6 +191,31 @@ names(plotinfo)
 table(plotinfo$period, plotinfo$data_processed)
 ```
 
+## Plots to exclude
+
+In de Heirnisse werd in 10 plots een exotenbeheer uitgevoerd na de eerste meting (in 2004 en 2008).
+
+Deze plots worden mee **opgenomen** in de tabellen met **resultaten op plotniveau**.
+
+In de strata-db staat immers voldoende info over deze plots:      
+- in tabel "strata_remaining": veld "unmanaged since": 2008 (ipv 1991 bij de andere)    
+- in tabel "cirkelplots_management_startbeheer_exotenbeheer": veld "management_indicator":
+exotenbeheer tss periode 1 en 2     
+- in tabel "plots_excluded_from_network": veld "info": exotenbeheer (2004 en 2008) na eerste meting     
+
+Bij het berekenen van de **statistieken op reservaatniveau** is het echter logischer deze **NIET**
+mee te nemen. 
+
+Het gaat om volgende plots:
+
+```{r }
+plots_to_exclude <- read_xlsx(paste0(path_to_output_gdrive, "00_METADATA-ALL_PLOTS/plots_excluded_from_monitoring_network.xlsx"))
+
+plots_to_exclude %>% filter(forest_reserve == forestreserve) %>% 
+  select(plot_id, info)
+
+```
+
 
 ## Check year_dendro 
 
@@ -252,14 +277,16 @@ data_deadwood <- load_data_deadwood(database = path_to_fieldmap_db
 ```
 
 ```{r eval = FALSE}
-height_model <- load_height_models() %>%
-  filter(forest_reserve == forestreserve)
+height_model <- load_height_models()
 
 save(height_model, file = "height_model.RData")
 ```
 
 ```{r}
 load("height_model.RData")
+
+height_model <- height_model %>%
+  filter(forest_reserve == forestreserve)
 ```
 
 ```{r check_heightmodels, results = 'hide'}
@@ -1013,8 +1040,8 @@ gemaakt tss boven en onder 30 cm.
 Zie script "Jansheideberg_deadwood_comb_LIS_FAS_2025.Rmd".
 
 ```{r}
-save.image(file = here::here("Scripts/Per_gebied/Heirnisse/LIS_FAS.RData"))
-# load(here::here("Scripts/Per_gebied/Jansheideberg/LIS_FAS.RData"))
+save.image(file = here::here(paste0("Scripts/Per_gebied/", forestreserve_short, "/LIS_FAS.RData")))
+# load(here::here(paste0("Scripts/Per_gebied/", forestreserve_short, "/LIS_FAS.RData")))
 ```
 
 Alle dood hout met een bepaalde minimum diameter (bosreservaten standaard min 10 cm) 
