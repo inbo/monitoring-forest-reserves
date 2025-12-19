@@ -68,7 +68,7 @@ respectievelijke survey gebeurd is, dus ook de plots zonder bomen, reg of veg
 - opp. KV Hannecart en Rodebosfout => correctie
 - volume deadwood was fout berekend (enkel obv log ipv als som van log en snag)
 - 14/2/2023: tabellen “dendro_by_diam_plot” en “dendro_by_diam_plot_species”: 
-diam-klasses 10-15cm/15-20cm/20-25cm/25-30cm/…: “vol_log_m3_ha_min40cm” = NA ipv “0” 
+diam-klasses 10-15cm/15-20cm/20-25cm/25-30cm/…: “vol_log_above40cm_m3_ha” = NA ipv “0” 
 
 
 
