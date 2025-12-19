@@ -167,13 +167,14 @@ inlezen_functie <- function(tab, info = plotinfo) {
       left_join(qSpecies, by = c("species" = "ID"))
   }
 
-    if ("decay" %in% colnames(tabel)) {
-    tabel <- tabel %>% 
-      left_join(qDecaystage, by = c("decaystage" = "ID")) %>% 
-      rename(decaystage_cde = decaystage,
-             afbraak = Value1, 
-             decay_stage = Value2) 
-    }
+    # code hierna werkt niet, wordt sowieso verder toch gekoppeld
+    # if ("decay" %in% colnames(tabel)) {
+    # tabel <- tabel %>% 
+    #   left_join(qDecaystage, by = c("decaystage" = "ID")) %>% 
+    #   rename(decaystage_cde = decaystage,
+    #          afbraak = Value1, 
+    #          decay_stage = Value2) 
+    # }
   
   tabel
   }
@@ -237,7 +238,7 @@ open_ruimte <- open_ruimte %>%
 # 400, 424, 426
 plots_to_exclude <- read_xlsx(paste0(path_to_output_gdrive, "00_METADATA-ALL_PLOTS/plots_excluded_from_monitoring_network.xlsx"))
 
-view(plots_to_exclude)
+# view(plots_to_exclude)
 # geen plots van everzwijnbad
 ```
 
@@ -256,7 +257,7 @@ bosplots <- dendro_by_plot %>%
 # Herinladen data 
 
 - enkel cirkelplots   
-- zonder de "plots to exclude": plots `r plots_to_exclude`    
+- zonder de "plots to exclude"   
 - zonder de open ruimte: dat zijn `r nrow(open_ruimte)` plots in geval van `r forestreserve`.
 
 (c)A: er bestaat ook read_package (https://docs.ropensci.org/frictionless/)
@@ -267,75 +268,40 @@ resources(package) : geeft overzicht van de tabellen in het datapackage
 
 read_resource(package, "gps")  : om één tabel in te laden
 
-```{r load_dendro_all}
-dendro_by_plot <- read_excel(
-  paste0(path_to_datarequest, "dendro_by_plot.xlsx")
-  ) %>% 
-  select(-1) %>%   
-  # select(-contains("eg"), -contains("min40cm")) %>%  # (veg en reg)
-  left_join(plotinfo) %>% 
-  filter(plottype == "CP" & !plot_id %in% plots_to_exclude) %>% 
-  anti_join(open_ruimte, by = c("plot_id", "period"))
+```{r load_dendro_all2}
+tbl_namen <- c("dendro_by_plot", "dendro_by_diam_plot"
+               , "dendro_by_diam_plot_species", "dendro_by_plot_species"
+               , "deadw_by_decay_plot", "deadw_by_decay_plot_species")
 
-dendro_by_diam_plot <- read_excel(
-  paste0(path_to_datarequest, "dendro_by_diam_plot.xlsx")
-  ) %>% 
-  select(-1) %>% 
-  left_join(plotinfo) %>% 
-  filter(plottype == "CP") %>% 
-  filter(!plot_id %in% plots_to_exclude) %>% 
-  anti_join(open_ruimte, by = c("plot_id", "period"))
+# tab <- "deadw_by_decay_plot_species"
+# tab <- "dendro_by_plot"
 
-dendro_by_diam_plot_species <- read_excel(
-  paste0(path_to_datarequest, "dendro_by_diam_plot_species.xlsx")
-  ) %>% 
-  select(-1) %>% 
-  left_join(plotinfo) %>% 
-  filter(plottype == "CP") %>% 
-  filter(!plot_id %in% plots_to_exclude) %>% 
-  anti_join(open_ruimte, by = c("plot_id", "period")) %>%
-  left_join(qSpecies, by = c("species" = "ID"))
+inlezen_functie <- function(tab, info = plotinfo) {
+  
+  tabel <- read_excel(paste0(path_to_datarequest, tab, ".xlsx")) %>%
+    select(-1) %>%
+    # select(-contains("eg"), -contains("min40cm")) %>%  # (veg en reg)
+    left_join(info) %>% 
+    filter(plottype == "CP" & !plot_id %in% plots_to_exclude) %>% 
+    anti_join(open_ruimte, by = c("plot_id", "period"))
+  
+  if ("species" %in% colnames(tabel)) {
+    tabel <- tabel %>% 
+      left_join(qSpecies, by = c("species" = "ID"))
+  }
+  
+  tabel
+  }
 
-dendro_by_plot_species <- read_excel(
-  paste0(path_to_datarequest, "dendro_by_plot_species.xlsx")
-  ) %>% 
-  select(-1) %>% 
-  left_join(plotinfo) %>% 
-  filter(plottype == "CP") %>% 
-  filter(!plot_id %in% plots_to_exclude) %>% 
-  anti_join(open_ruimte, by = c("plot_id", "period")) %>%
-  left_join(qSpecies, by = c("species" = "ID"))
+# test voor één tabel
+# deadw_by_decay_plot_species2 <- inlezen_functie(tab = "deadw_by_decay_plot_species")
 
-deadw_by_decay_plot <- read_excel(
-  paste0(path_to_datarequest, "deadw_by_decay_plot.xlsx")
-  ) %>% 
-  select(-1) %>% 
-  left_join(plotinfo) %>% 
-  filter(plottype == "CP") %>% 
-  filter(!plot_id %in% plots_to_exclude) %>% 
-  anti_join(open_ruimte, by = c("plot_id", "period")) %>% 
-  left_join(qDecaystage, by = c("decaystage" = "ID")) %>% 
-  rename(decaystage_cde = decaystage,
-         afbraak = Value1, 
-         decay_stage = Value2) 
-
-deadw_by_decay_plot_species <- read_excel(
-  paste0(path_to_datarequest, "deadw_by_decay_plot_species.xlsx")
-  ) %>% 
-  select(-1) %>% 
-  left_join(plotinfo) %>% 
-  filter(plottype == "CP") %>% 
-  filter(!plot_id %in% plots_to_exclude) %>% 
-  anti_join(open_ruimte, by = c("plot_id", "period")) %>%
-  left_join(qSpecies, by = c("species" = "ID")) %>% 
-  left_join(qDecaystage, by = c("decaystage" = "ID")) %>% 
-  rename(decaystage_cde = decaystage,
-         afbraak = Value1, 
-         decay_stage = Value2) 
+# voor alle tabellen mbv "map"
+# tbls <- map(tbl_namen, ~ inlezen_functie(.x))
+tbls <- map(tbl_namen, \(x) inlezen_functie(x))
+names(tbls) <- tbl_namen
 
 ```
-
-
 
 # Statistieken
 
