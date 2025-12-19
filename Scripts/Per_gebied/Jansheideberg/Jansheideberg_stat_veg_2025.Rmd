@@ -174,12 +174,12 @@ Obv `veg_by_plot`
 
 Gemiddelde bedekking van   
 
-- kruidlaag  
-- struiklaag
-- boomlaag
-- moslaag
-- soildisturbance !! indien opgemeten
-- cumulated canopy_cover
+- kruidlaag   
+- struiklaag    
+- boomlaag    
+- moslaag   
+- soildisturbance !! indien opgemeten   
+- cumulated canopy_cover    
 
 Indien nodig zouden we ook vraatschade op reservaatsniveau kunnen berekenen, ongeacht de soort.
 Maar ik ben niet zeker of dat nut heeft.
