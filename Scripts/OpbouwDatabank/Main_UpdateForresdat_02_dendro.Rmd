@@ -22,7 +22,8 @@ rm(list=ls())
 ```{r Setup, include = FALSE}
 knitr::opts_chunk$set(
   echo = TRUE,
-  eval = FALSE,  # FALSE: dan kan ik knitten zonder dat er iets gebeurt
+  eval = TRUE,  # FALSE: dan kan ik knitten zonder dat er iets gebeurt
+  # maar dan kan ik ook niet bv. n_plots weergeven in de html mbv 'r n_plots'
   message = FALSE,
   warning = FALSE, 
   fig.width = 9,
@@ -941,7 +942,7 @@ check <- deadw_by_decay_plot_species %>% filter_at(col, any_vars(is.na(.))) %>%
 
 `vol_log_m3_ha` zit zowel in `dendro_by_plot` als in `deadw_by_plot`.
 
-In zowel `dendro_by_plot` als `deadw_by_plot` zijn NA's OK 
+In zowel `dendro_by_plot` als `deadw_by_plot` zijn NA's OK.     
 Ze worden correct opgevangen in forrescalc: NA versus 0: enkel 0 als survey_deadw = TRUE
 
 ```{r }
@@ -1368,7 +1369,7 @@ for (tablename in names(tbls)) {
 corr_2 <- list(dendro_by_diam_plot = dendro_by_diam_plot
             , dendro_by_diam_plot_species = dendro_by_diam_plot_species)
 
-unique(dendro_by_diam_plot$dbh_class_5cm)
+# unique(dendro_by_diam_plot$dbh_class_5cm)
 diam_klasses_under_30cm <- c("5 - 10 cm", "10 - 15 cm", "15 - 20 cm", "20 - 25 cm", "25 - 30 cm")
 diam_klasses_under_10cm <- c("5 - 10 cm")
 
@@ -1552,7 +1553,7 @@ Artikel: *The LIS transects consisted of three radial lines at 120° intervals (
 werd of niet (TRUE/10 or FALSE/20)      
 - Indien geen angle ingevoerd, veronderstellen we deze horizontaal (angle = 0)      
 - volgende variabelen nodig:    
-    - lengte van de (drie) transecten samen (Li<-45; zou uit plotdetails moeten komen) 
+    - lengte van de (drie) transecten samen (Li<-45/120; zou uit plotdetails moeten komen) 
     - oriëntatie van de transecten enkel nodig als we de intersect diameters willen
     berekenen van de zwaardere logs uit de Full Area Survey (FAS) - VOORLPOIG NIET
 
@@ -1633,7 +1634,7 @@ data_LIS <- data_LIS %>%
 table(data_LIS$forest_reserve, data_LIS$Li)
 ```
 
-```{r}
+```{r results='hide'}
 names(data_LIS)
 nrow(data_LIS)  # 3008
 range(data_LIS$plot_id)
@@ -1663,13 +1664,13 @@ data_LIS %>% filter(is.na(diam_mm))
 colnames(data_LIS)
 
 #
-LIS_by_decay_species_ <- data_LIS %>%
+LIS_by_decay_species <- data_LIS %>%
   mutate(diam_m = diam_mm/1000
          # , Diameter_cm = diam_mm/10     # cfrVBI
          ) %>% 
   dplyr::group_by(plot_id, period, species, decaystage) %>%
   dplyr::reframe(
-    volume_m3_m2=pi^2/8/Li*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
+    volume_m3_m2=pi^2/8/mean(Li)*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
     # , v3_VolumeLogs_ha=pi^2/8/Li*sum((Diameter_cm^2)/cos(angle*pi/180),na.rm=T)   # cfrVBI, zelfde resultaat
     ) %>% 
   mutate(vol_LIS_m3_ha = volume_m3_m2 * 10000) %>% 
@@ -1677,7 +1678,7 @@ LIS_by_decay_species_ <- data_LIS %>%
 # bij mogelijkse verwarring tss VBI en BR: VBI rekent obv diam_cm en komt m3/ha uit, 
 # BR gebruikt diam_m en komt m3/m2 uit
 
-waldo::compare(LIS_by_decay_species_, LIS_by_decay_species)
+# waldo::compare(LIS_by_decay_species_, LIS_by_decay_species)
 
 #
 LIS_by_decay <- data_LIS %>%
@@ -1686,7 +1687,7 @@ LIS_by_decay <- data_LIS %>%
          ) %>% 
   dplyr::group_by(plot_id, period, decaystage) %>%
   dplyr::reframe(
-    volume_m3_m2=pi^2/8/Li*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
+    volume_m3_m2=pi^2/8/mean(Li)*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
     # , v3_VolumeLogs_ha=pi^2/8/Li*sum((Diameter_cm^2)/cos(angle*pi/180),na.rm=T)   # cfrVBI, zelfde resultaat
     ) %>% 
   mutate(vol_LIS_m3_ha = volume_m3_m2 * 10000) %>% 
@@ -1699,7 +1700,7 @@ LIS_by_species <- data_LIS %>%
          ) %>% 
   dplyr::group_by(plot_id, period, species) %>%
   dplyr::reframe(
-    volume_m3_m2=pi^2/8/Li*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
+    volume_m3_m2=pi^2/8/mean(Li)*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
     # , v3_VolumeLogs_ha=pi^2/8/Li*sum((Diameter_cm^2)/cos(angle*pi/180),na.rm=T)   # cfrVBI, zelfde resultaat
     ) %>% 
   mutate(vol_LIS_m3_ha = volume_m3_m2 * 10000) %>% 
@@ -1714,12 +1715,12 @@ LIS_by_plot <- data_LIS %>%
          ) %>% 
   dplyr::group_by(plot_id, period) %>%
   dplyr::reframe(
-    volume_m3_m2=pi^2/8/Li*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
+    volume_m3_m2=pi^2/8/mean(Li)*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
     # , v3_VolumeLogs_ha=pi^2/8/Li*sum((Diameter_cm^2)/cos(angle*pi/180),na.rm=T)   # cfrVBI, zelfde resultaat
     ) %>% 
   mutate(vol_LIS_m3_ha = volume_m3_m2 * 10000) %>% 
   select(-volume_m3_m2)
-
+# waldo::compare(LIS_by_plot, LIS_by_plot_)
 ```
 
 Twee opties: 
@@ -1730,7 +1731,7 @@ Twee opties:
 Weinig zinvol om LIS toe te voegen aan data per diameterklasse, te groot detail.
 We berekenen wel LIS < 30 cm, om te combineren met FAS > 30 cm.
 
-```{r calc_LIS_10_30cm}
+```{r calc_LIS_10_30cm, results='hide'}
 colnames(data_LIS)
 
 data_LIS_10_30cm <- data_LIS %>% 
@@ -1742,7 +1743,7 @@ LIS_by_decay_species_10_30cm <- data_LIS_10_30cm %>%
          ) %>% 
   dplyr::group_by(plot_id, period, species, decaystage) %>%
   dplyr::reframe(
-    volume_m3_m2=pi^2/8/Li*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
+    volume_m3_m2=pi^2/8/mean(Li)*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
     ) %>% 
   mutate(vol_LIS_10_30cm_m3_ha = volume_m3_m2 * 10000) %>% 
   select(-volume_m3_m2)
@@ -1753,7 +1754,7 @@ LIS_by_decay_10_30cm <- data_LIS_10_30cm %>%
          ) %>% 
   dplyr::group_by(plot_id, period, decaystage) %>%
   dplyr::reframe(
-    volume_m3_m2=pi^2/8/Li*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
+    volume_m3_m2=pi^2/8/mean(Li)*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
     ) %>% 
   mutate(vol_LIS_10_30cm_m3_ha = volume_m3_m2 * 10000) %>% 
   select(-volume_m3_m2)
@@ -1764,7 +1765,7 @@ LIS_by_species_10_30cm <- data_LIS_10_30cm %>%
          ) %>% 
   dplyr::group_by(plot_id, period, species) %>%
   dplyr::reframe(
-    volume_m3_m2=pi^2/8/Li*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
+    volume_m3_m2=pi^2/8/mean(Li)*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
     ) %>% 
   mutate(vol_LIS_10_30cm_m3_ha = volume_m3_m2 * 10000) %>% 
   select(-volume_m3_m2)
@@ -1775,7 +1776,7 @@ LIS_by_plot_10_30cm <- data_LIS_10_30cm %>%
          ) %>% 
   dplyr::group_by(plot_id, period) %>%
   dplyr::reframe(
-    volume_m3_m2=pi^2/8/Li*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
+    volume_m3_m2=pi^2/8/mean(Li)*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
     ) %>% 
   mutate(vol_LIS_10_30cm_m3_ha = volume_m3_m2 * 10000) %>% 
   select(-volume_m3_m2)
@@ -2040,7 +2041,7 @@ save_results_forresdat(
   repo_path = path_to_git_forresdat,
   metadata_path = paste0(path_to_metadata, "_metadata_plotlevel_results_dendro.xlsx"),
   push = FALSE,
-  strict = TRUE,
+  strict = FALSE,
   branch = "develop"
 )
 
