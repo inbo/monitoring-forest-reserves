@@ -606,21 +606,23 @@ dataset3_0 <- add_zeros(dataset = dataset3 %>%
 ```
 
 ```{r corr_log3}
-# weliswaar geen LIS die NA moet zijn in periode 1 en 2 (ipv 0)
+# (1): logs werden niet opgemeten in diamaterklasse 5-10 cm, maar worden nu als 0 toegevoegd 
+# => terug NA van maken  
+# (ter info: waar staande bomen voorkwamen in 5-10 cm, is NA behouden; enkel als er niks voorkwam in
+# 5-10 cm werd overal (ook bij logs) een 0 geplaatst)
+
+# (2) weliswaar geen LIS die NA moet zijn in periode 1 en 2 (ipv 0)
 # maar wél vol_log_m3_ha die in periode 3 NA moet zijn in lage diameterklasses
 
+diam_klasses_under_10cm <- c("5 - 10 cm")
 diam_klasses_under_30cm <- c("5 - 10 cm", "10 - 15 cm", "15 - 20 cm", "20 - 25 cm", "25 - 30 cm")
 
 dataset3_0_ <- dataset3_0 %>% 
   left_join(plotinfo %>% select(plot_id, period, survey_lis)) %>% 
-  mutate(# vol_log_m3_ha = NA wanneer LIS gebruikt is
-         # , vol_log_m3_ha = ifelse(survey_lis == FALSE & !is.na(survey_lis)
-         #                                   , vol_log_m3_ha
-         #                                   , NA)
-         vol_log_m3_ha = ifelse(
-           survey_lis == TRUE & dbh_class_5cm %in% diam_klasses_under_30cm
-           , NA
-           , vol_log_m3_ha)
+  mutate(vol_log_m3_ha= ifelse(dbh_class_5cm %in% diam_klasses_under_10cm
+                               , NA, vol_log_m3_ha)
+           , vol_log_m3_ha= ifelse(survey_lis == TRUE & dbh_class_5cm %in% diam_klasses_under_30cm
+                               , NA, vol_log_m3_ha)
          )
 # t <- dataset2_0_ %>% filter(is.na(vol_LIS_m3_ha) & !is.na(vol_log_above30cm_m3_ha))
 
@@ -732,23 +734,24 @@ dataset4_0 <- add_zeros(dataset = dataset4 %>%
 
 
 ```{r corr_log4}
-# weliswaar geen LIS die NA moet zijn in periode 1 en 2 (ipv 0)
+# (1): logs werden niet opgemeten in diamaterklasse 5-10 cm, maar worden nu als 0 toegevoegd 
+# => terug NA van maken  
+# (ter info: waar staande bomen voorkwamen in 5-10 cm, is NA behouden; enkel als er niks voorkwam in
+# 5-10 cm werd overal (ook bij logs) een 0 geplaatst)
+
+# (2) weliswaar geen LIS die NA moet zijn in periode 1 en 2 (ipv 0)
 # maar wél vol_log_m3_ha die in periode 3 NA moet zijn in lage diameterklasses
 
+diam_klasses_under_10cm <- c("5 - 10 cm")
 diam_klasses_under_30cm <- c("5 - 10 cm", "10 - 15 cm", "15 - 20 cm", "20 - 25 cm", "25 - 30 cm")
 
 dataset4_0_ <- dataset4_0 %>% 
   left_join(plotinfo %>% select(plot_id, period, survey_lis)) %>% 
-  mutate(# vol_log_m3_ha = NA wanneer LIS gebruikt is
-         # , vol_log_m3_ha = ifelse(survey_lis == FALSE & !is.na(survey_lis)
-         #                                   , vol_log_m3_ha
-         #                                   , NA)
-         vol_log_m3_ha = ifelse(
-           survey_lis == TRUE & dbh_class_5cm %in% diam_klasses_under_30cm
-           , NA
-           , vol_log_m3_ha)
+  mutate(vol_log_m3_ha= ifelse(dbh_class_5cm %in% diam_klasses_under_10cm
+                               , NA, vol_log_m3_ha)
+           , vol_log_m3_ha= ifelse(survey_lis == TRUE & dbh_class_5cm %in% diam_klasses_under_30cm
+                               , NA, vol_log_m3_ha)
          )
-# t <- dataset2_0_ %>% filter(is.na(vol_LIS_m3_ha) & !is.na(vol_log_above30cm_m3_ha))
 
 dataset4_0 <- dataset4_0_
 ```
