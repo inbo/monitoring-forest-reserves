@@ -47,6 +47,18 @@ DOEL van dit script is een update van forresdat gegevens naar
 
 # Stand van zaken
 
+## dec 2025
+- Implementatie LIS
+- Bug mbt dendro vol_log_m3_ha 5-10 cm = NA ipv 0 (treshold liggend dood hout = 10 cm)
+- Bug mbt regeneratie
+
+Deels opgenomen in Bugfix_AL2025 
+Deels in enkele issues (#163 tot #177)
+
+## sept 2024
+Forresdat van begin weer aanvullen
+Nu vertrekkende van een copy van de moederdatabank
+
 
 ## Mrt 2023
 Opsplitsen van scripts
@@ -134,6 +146,3 @@ obv branch "statistics_and_other_issues".
 
 - 9/3/2022: ook tree-id toegevoegd, functie was nog niet in orde, maar licht aangepast  
 
-## sept 2024
-Forresdat van begin weer aanvullen
-Nu vertrekkende van een copy van de moederdatabank
