@@ -644,6 +644,7 @@ corr_2 <- list(dendro_by_diam_plot = dendro_by_diam_plot
 
 unique(dendro_by_diam_plot$dbh_class_5cm)
 diam_klasses_under_30cm <- c("5 - 10 cm", "10 - 15 cm", "15 - 20 cm", "20 - 25 cm", "25 - 30 cm")
+diam_klasses_under_10cm <- c("5 - 10 cm")
 
 # dendro_by_diam_plot_ <- dendro_by_diam_plot %>% 
 #   mutate(vol_log_m3_ha= ifelse(plottype == "CP" & period == 3 &
@@ -656,7 +657,9 @@ correctie_2 <- function(tab, info = plotinfo) {
   tabel <- tab %>% 
     left_join(info %>% select(plot_id, period, survey_lis)
               , by = c("plot_id", "period")) %>% 
-    mutate(vol_log_m3_ha= ifelse(survey_lis & dbh_class_5cm %in% diam_klasses_under_30cm
+    mutate(vol_log_m3_ha= ifelse(dbh_class_5cm %in% diam_klasses_under_10cm
+                               , NA, vol_log_m3_ha)
+           , vol_log_m3_ha= ifelse(survey_lis & dbh_class_5cm %in% diam_klasses_under_30cm
                                , NA, vol_log_m3_ha)
          ) %>% 
     select(-survey_lis)
