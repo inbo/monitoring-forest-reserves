@@ -229,14 +229,26 @@ data_shoots <- load_data_shoots(database = path_to_fieldmap_db
 data_stems  <- compose_stem_data(data_dendro, data_shoots
                                  , extra_variables = TRUE)
 
-height_model <- load_height_models() %>%
-  filter(forest_reserve == forestreserve)
-
 data_deadwood <- load_data_deadwood(database = path_to_fieldmap_db
                                     # , plottype = plot_type
                                     , forest_reserve = forestreserve
-                                    , processed = TRUE)
+                                    , processed = TRUE) %>% 
+  filter(max_diam_mm >= 100)
 ```
+
+```{r eval = FALSE}
+height_model <- load_height_models()
+
+save(height_model, file = "height_model.RData")
+```
+
+```{r}
+load("height_model.RData")
+
+height_model <- height_model %>%
+  filter(forest_reserve == forestreserve)
+```
+
 
 ```{r check_heightmodels, results = 'hide'}
 table(height_model$forest_reserve, height_model$period)
@@ -377,6 +389,46 @@ for (tablename in names(dendro)) {
 
 ```
 
+Op 19/12/2025 nog een bug in forrescalc die ervoor zorgt dat volume logs in
+diameterklasse 5-10cm op 0 gezet wordt, terwijl er pas gemeten wordt vanaf 10 cm
+
+Zie [issue 172](https://github.com/inbo/forrescalc/issues/172)
+
+Hierna tijdelijke correctie.
+Eigenlijk niet nodig bij With heide, want treshold is ook voor staande bomen 10 cm
+
+```{r TEMP_corr_logs_5_10cm, results='hide', eval = FALSE}
+# dataframes mét info over diameterklasse: `vol_log_m3_ha` op NA zetten in de
+# diameterklasse 5-10 cm
+
+corr_list <- list(dendro_by_diam_plot = dendro_by_diam_plot
+            , dendro_by_diam_plot_species = dendro_by_diam_plot_species)
+
+unique(dendro_by_diam_plot$dbh_class_5cm)
+# diam_klasses_under_30cm <- c("5 - 10 cm", "10 - 15 cm", "15 - 20 cm", "20 - 25 cm", "25 - 30 cm")
+diam_klasses_under_10cm <- c("5 - 10 cm")
+
+correctie_logs <- function(tab) {
+
+  tabel <- tab %>%
+    mutate(vol_log_m3_ha= ifelse(dbh_class_5cm %in% diam_klasses_under_10cm
+                               , NA, vol_log_m3_ha)
+         )
+  tabel
+  }
+
+# test voor één tabel
+# test <- correctie_2(tab = dendro_by_diam_plot, info = plotinfo)
+
+# voor alle tabellen mbv "map"
+# tbls <- map(tbl_namen, ~ inlezen_functie(.x))
+tbls <- map(corr_list, \(x) correctie_logs(x))
+
+for (tablename in names(tbls)) {
+     assign(tablename, tbls[[tablename]])
+}
+```
+
 
 # Datacontrole
 
@@ -452,6 +504,22 @@ nrow(missing_height) == 0
 
 
 # Extra processing
+
+## Alles samenvoegen
+
+Lijst `dendro` opnieuw aanmaken
+
+```{r}
+dendro <- list(
+  # gecorrigeerde standaard forrescalc files nalv vol_logs_above30cm & LIS
+  dendro_by_plot = dendro_by_plot
+ , dendro_by_plot_species = dendro_by_plot_species
+ , deadw_by_decay_plot = deadw_by_decay_plot
+ , deadw_by_decay_plot_species = deadw_by_decay_plot_species
+ , dendro_by_diam_plot = dendro_by_diam_plot
+ , dendro_by_diam_plot_species = dendro_by_diam_plot_species)
+
+```
 
 ## Plotinfo toevoegen
 

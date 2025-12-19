@@ -200,7 +200,7 @@ for (tablename in names(tbls)) {
 
 Dendro per BR: enkel obv de bosplots  
 => eerst de open ruimtes verwijderen (zonder bomen én zonder verjonging)   
-=> link met regeneration_by_plot nodig
+=> link met reg_by_plot nodig
 
 **Plot 475** Wijnendale periode 1: enkel dood hout; omdat er in periode 2 
 wel soorten genoteerd werden zit plot mee in `dendro_by_plot`
@@ -210,7 +210,7 @@ enkel in periode 1 opgemeten werd (geen bomen), en erna niet meer
 => goed om die NIET mee te nemen
 
 ```{r}
-regeneration_by_plot <- read_excel(paste0(path_to_datarequest, "regeneration_by_plot.xlsx")) %>% 
+reg_by_plot <- read_excel(paste0(path_to_datarequest, "reg_by_plot.xlsx")) %>% 
   select(-1) %>% 
   filter(plottype == "CP")
 
@@ -220,7 +220,7 @@ regeneration_by_plot <- read_excel(paste0(path_to_datarequest, "regeneration_by_
 open_ruimte <- dendro_by_plot %>% 
   filter(number_of_tree_species == 0) %>% # 1 plot (plot 475)
   filter(vol_deadw_m3_ha == 0) %>%  # dan valt plot 475 weg => is bosplot, maar in periode 1 zonder bomen/verjonging, mét dood hout
-  left_join(regeneration_by_plot) %>% 
+  left_join(reg_by_plot) %>% 
   filter((approx_nr_established_ha == 0 & approx_nr_seedlings_ha == 0) 
          | (is.na(approx_nr_established_ha) & is.na(approx_nr_seedlings_ha))
   ) 
@@ -231,6 +231,14 @@ table(open_ruimte$forest_reserve, open_ruimte$period)
 open_ruimte <- open_ruimte %>% 
   select(forest_reserve, plot_id, period, number_of_tree_species)
 
+```
+
+```{r results='hide'}
+# 400, 424, 426
+plots_to_exclude <- read_xlsx(paste0(path_to_output_gdrive, "00_METADATA-ALL_PLOTS/plots_excluded_from_monitoring_network.xlsx"))
+
+view(plots_to_exclude)
+# geen plots van everzwijnbad
 ```
 
 
@@ -570,6 +578,26 @@ dataset3_0 <- add_zeros(dataset = dataset3 %>%
 
 ```
 
+
+```{r corr_log3, eval = FALSE}
+# (1): logs werden niet opgemeten in diamaterklasse 5-10 cm, maar worden nu als 0 toegevoegd 
+# => terug NA van maken  
+# (ter info: waar staande bomen voorkwamen in 5-10 cm, is NA behouden; enkel als er niks voorkwam in
+# 5-10 cm werd overal (ook bij logs) een 0 geplaatst)
+
+# niet nodig bij With want ook staande bomen pas vanaf 10 cm opgemeten
+
+diam_klasses_under_10cm <- c("5 - 10 cm")
+
+dataset3_0_ <- dataset3_0 %>% 
+  mutate(vol_log_m3_ha= ifelse(dbh_class_5cm %in% diam_klasses_under_10cm
+                               , NA, vol_log_m3_ha)
+         )
+
+dataset3_0 <- dataset3_0_
+```
+
+
 ```{r}
 variables_for_statistics3 <- dataset3_0 %>% 
   select(contains("_ha")) %>% 
@@ -667,6 +695,26 @@ dataset4_0 <- add_zeros(dataset = dataset4 %>%
                         grouping_vars = c("forest_reserve")
                         )
 ```
+
+
+```{r corr_log4, eval = FALSE}
+# (1): logs werden niet opgemeten in diamaterklasse 5-10 cm, maar worden nu als 0 toegevoegd 
+# => terug NA van maken  
+# (ter info: waar staande bomen voorkwamen in 5-10 cm, is NA behouden; enkel als er niks voorkwam in
+# 5-10 cm werd overal (ook bij logs) een 0 geplaatst)
+
+# niet nodig bij With want ook staande bomen pas vanaf 10 cm opgemeten
+
+diam_klasses_under_10cm <- c("5 - 10 cm")
+
+dataset4_0_ <- dataset4_0 %>% 
+  mutate(vol_log_m3_ha= ifelse(dbh_class_5cm %in% diam_klasses_under_10cm
+                               , NA, vol_log_m3_ha)
+         )
+
+dataset4_0 <- dataset4_0_
+```
+
 
 ```{r}
 variables_for_statistics4 <- dataset4_0 %>% 
