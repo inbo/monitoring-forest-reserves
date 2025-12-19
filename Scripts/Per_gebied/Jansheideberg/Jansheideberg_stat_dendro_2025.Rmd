@@ -170,13 +170,14 @@ inlezen_functie <- function(tab, info = plotinfo) {
       left_join(qSpecies, by = c("species" = "ID"))
   }
 
-    if ("decay" %in% colnames(tabel)) {
-    tabel <- tabel %>% 
-      left_join(qDecaystage, by = c("decaystage" = "ID")) %>% 
-      rename(decaystage_cde = decaystage,
-             afbraak = Value1, 
-             decay_stage = Value2) 
-    }
+    # code hierna werkt niet, wordt sowieso verder toch gekoppeld
+    # if ("decay" %in% colnames(tabel)) {
+    # tabel <- tabel %>% 
+    #   left_join(qDecaystage, by = c("decaystage" = "ID")) %>% 
+    #   rename(decaystage_cde = decaystage,
+    #          afbraak = Value1, 
+    #          decay_stage = Value2) 
+    # }
   
   tabel
   }
