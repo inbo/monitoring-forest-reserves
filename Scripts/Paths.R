@@ -29,7 +29,8 @@ path_to_reserves <- Sys.getenv("path_to_reserves") #"C:/03_BR_gebieden/"
 
 path_to_databases <- Sys.getenv("path_to_databases") #"C:/03_BR_db_monitoring/"
 
-path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_X8_inbo2020_20250311/")
+path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_22_inbo2026_20251014/")
+# path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_X8_inbo2020_20250311/")
 # path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_X8_inbo2020_20250123/")
 # path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_X8_inbo2020_20241205/")
 # path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_X8_inbo2020_20241127/")
@@ -41,8 +42,8 @@ path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_X8_inbo2020_20250311/")
 # path_to_fieldmap <- "C:/03_BR_db_monitoring/3_dB_Els_deel2_vs20231012/"
 # path_to_fieldmap <- "C:/03_BR_db_monitoring/dB_Els_deel2_vs20220714/"
 
-
-dbFieldmap <- "FieldMapData_MDB_BR_X8_inbo2020.accdb"
+dbFieldmap <- "FieldMapData_MDB_BR_22_inbo2026.accdb"
+# dbFieldmap <- "FieldMapData_MDB_BR_X8_inbo2020.accdb"
 path_to_fieldmap_db <- paste0(path_to_fieldmap, dbFieldmap)
 path_to_fieldmap_db_all <- paste0(path_to_fieldmap, dbFieldmap)
 
@@ -58,7 +59,8 @@ path_to_plotlevel_csv <- paste0(path_to_dataverwerking, "Output/_plot-level-data
 path_to_lulists_csv <- paste0(path_to_dataverwerking, "Output/_qXX_lookuplijsten/") 
 path_to_treelevel_csv <- paste0(path_to_dataverwerking, "Output/_tree-level-data/")
 
-path_to_analysis_set_db <- paste0(path_to_dataverwerking, "Output/BR_analysedb_20250310.accdb") # accessdb
+path_to_analysis_set_db <- paste0(path_to_dataverwerking, "Output/BR_analysedb_20251215.accdb") # accessdb
+# path_to_analysis_set_db <- paste0(path_to_dataverwerking, "Output/BR_analysedb_20250310.accdb") # accessdb
 # path_to_analysis_set_db <- paste0(path_to_dataverwerking, "Output/BR_analysedb_20240924.accdb") # accessdb
 
 
