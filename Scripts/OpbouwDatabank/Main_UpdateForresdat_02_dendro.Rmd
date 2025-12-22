@@ -14,7 +14,6 @@ output:
       smooth_scroll: yes
 ---
 
-
 ```{r Rm, eval = FALSE}
 rm(list=ls())
 ```
@@ -37,9 +36,19 @@ source(here::here("scripts/Setup.R"))
 ```
 
 
+```{r TMP_fieldmapdb}
+#tijdelijk
+path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_22_inbo2026_20251014/")
+dbFieldmap <- "FieldMapData_MDB_BR_22_inbo2026.accdb"
+path_to_fieldmap_db <- paste0(path_to_fieldmap, dbFieldmap)
+path_to_fieldmap_db_all <- paste0(path_to_fieldmap, dbFieldmap)
+```
+
+
 ```{r Setup2}
 path_to_html_teamdrive <- paste0(path_to_dataverwerking_teamdrive, "25_Overkoepelend")
 ```
+
 
 
 > juiste forrescalc kiezen:   
@@ -145,7 +154,10 @@ data deze telkens opnieuw inladen en berekenen)
 data_dendro <- load_data_dendrometry(database = path_to_fieldmap_db, 
                                      extra_variables = TRUE, 
                                      processed = TRUE) %>% 
-  filter(plottype != "OTHER")  # enkel CP of CA
+  filter(plottype != "OTHER") %>%  # enkel CP of CA
+  # nog onterecht data_processed = TRUE:
+  filter(!(forest_reserve == "Bos Terrijst" & period == 3))
+
 # 79866 + 2455 = 82321 (rodebos)
 # 83171 (22/11/2022)
 # 87742 (18/12/2024)
@@ -160,7 +172,9 @@ data_stems  <- compose_stem_data(data_dendro, data_shoots, extra_variables = TRU
 ```{r load_dendro2}
 # enkel processed
 data_deadwood <- load_data_deadwood(database = path_to_fieldmap_db, processed = TRUE) %>% 
-  filter(plottype != "OTHER")
+  filter(plottype != "OTHER") %>% 
+  # nog onterecht data_processed = TRUE:
+  filter(!(forest_reserve == "Bos Terrijst" & period == 3))
 
 data_deadwood %>% filter(max_diam_mm < 100)
 # 2 records => verwijderen, ook gevraagd aan Peter in mail van 17/12/25
@@ -641,9 +655,10 @@ data_dendro_calc <- calc_variables_tree_level(data_dendro, data_stems_calc)
 dendro <- calculate_dendrometry(data_dendro, data_deadwood, data_shoots, height_model, plotinfo)
 ```
 
-TEMP: overal vol_deadw_m3_ha verwijderen
+TEMP: overal `vol_deadw_m3_ha` verwijderen
 Combineert logs en standing dead trees, maar is onduidelijk welke logs gebruikt worden (lis/fas of beide?).
 Op te nemen in forrescalc, zie [issue 166](https://github.com/inbo/forrescalc/issues/166).
+Opgenomen in bugfix_Al2025 (22/12/2025).
 
 ```{r TMP_NO_FIELD_vol_deadw_m3_ha}
 # voor alle dataframes in "dendro"
@@ -1914,7 +1929,7 @@ gemaakt tss boven en onder 30 cm.
 
 17/12/2025 vergeleken met data op git (maart 2025 (?))
 
-```{r eval = FALSE}
+```{r eval = FALSE, results='hide'}
 # 
 dendro_by_plot_git <- read_forresdat_table(tablename = "dendro_by_plot"
                                            , join_plotinfo = FALSE
@@ -1937,17 +1952,30 @@ nrow(dendro_by_plot) == nrow(dendro_by_plot_git)
 summary(dendro_by_plot)
 names(dendro_by_plot) == names(dendro_by_plot_git)
 summary(dendro_by_plot_git)
+waldo::compare(dendro_by_plot, dendro_by_plot_git)
 
 dendro_by_plot %>% select(-year) %>% arrange(plot_id, period) == dendro_by_plot_git %>% select(-year) %>% arrange(plot_id, period)
 # OK denk ik andere ordening van variabelen (3/2025)
 # 12/2025: andere namen,  niet OK dus
 dendro_by_plot == dendro_by_plot_git
 
-head(dendro_by_plot %>% arrange(plot_id, period)); head(dendro_by_plot_git %>% arrange(plot_id, period))
+head(dendro_by_plot %>% arrange(desc(plot_id), period)); head(dendro_by_plot_git %>% arrange(desc(plot_id), period))
 # lijkt OK
+
+t <- dendro_by_plot %>% 
+  anti_join(dendro_by_plot_git)
+
+head(dendro_by_plot %>% arrange(desc(plot_id), period) %>% filter(plot_id == 2010)); 
+head(dendro_by_plot_git %>% arrange(desc(plot_id), period) %>% filter(plot_id == 2010))
+
+# LIS is anders, is nu foutief 0 !!!
+
+waldo::compare(dendro_by_plot %>% filter(plot_id == 2010), dendro_by_plot_git %>% filter(plot_id == 2010))
+# afronding is anders 
+# of enkele kleine aanpassingen wegens kleine correcties?
 ```
 
-```{r}
+```{r results='hide'}
 #
 dendro_by_plot_species_git <- read_forresdat_table(tablename = "dendro_by_plot_species"
                                            , join_plotinfo = TRUE
@@ -1955,10 +1983,9 @@ dendro_by_plot_species_git <- read_forresdat_table(tablename = "dendro_by_plot_s
                                            , git_ref_type = "branch"
                                            , git_reference = "develop")
 nrow(dendro_by_plot_species) == nrow(dendro_by_plot_species_git)
-
 ```
 
-```{r}
+```{r results='hide'}
 #
 dendro_by_diam_plot_git <- read_forresdat_table(tablename = "dendro_by_diam_plot"
                                            , join_plotinfo = TRUE
@@ -1966,25 +1993,22 @@ dendro_by_diam_plot_git <- read_forresdat_table(tablename = "dendro_by_diam_plot
                                            , git_ref_type = "branch"
                                            , git_reference = "develop")
 nrow(dendro_by_diam_plot) == nrow(dendro_by_diam_plot_git)
-t <- dendro_by_diam_plot_git %>% 
-  # select(plot_id, period)
-  anti_join(dendro_by_diam_plot, by = c("plot_id", "period", "dbh_class_5cm"))
-# logs < 5cm door Peter verwijderd, nog twee behouden => wellicht juist, maar
-# omdat we pas meten vanaf 10 cm beter verwijderen
-t <- data_deadwood %>% filter(max_diam_mm < 100)
-
 ```
 
 
-```{r}
+```{r results='hide'}
 #
 deadw_by_decay_plot_git <- read_forresdat_table(tablename = "deadw_by_decay_plot"
                                            , join_plotinfo = TRUE
                                            , plottype = "all"
                                            , git_ref_type = "branch"
                                            , git_reference = "develop")
-nrow(deadw_by_decay_plot) == nrow(deadw_by_decay_plot_git)
+nrow(deadw_by_decay_plot); nrow(deadw_by_decay_plot_git)
+t <- deadw_by_decay_plot_git %>% 
+  anti_join(deadw_by_decay_plot, by = c("plot_id", "period", "decaystage"))
 
+head(deadw_by_decay_plot %>% arrange(desc(plot_id), period, decaystage) %>% filter(plot_id == 2010)); 
+head(deadw_by_decay_plot_git %>% arrange(desc(plot_id), period, decaystage) %>% filter(plot_id == 2010))
 ```
 
 
@@ -2041,7 +2065,7 @@ save_results_forresdat(
   repo_path = path_to_git_forresdat,
   metadata_path = paste0(path_to_metadata, "_metadata_plotlevel_results_dendro.xlsx"),
   push = FALSE,
-  strict = FALSE,
+  strict = TRUE,
   branch = "develop"
 )
 

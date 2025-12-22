@@ -31,7 +31,17 @@ library(here)
 
 # libraries & invoergegevens
 source(here::here("scripts/Setup.R"))
+
 ```
+
+```{r TMP_fieldmapdb}
+#tijdelijk
+path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_22_inbo2026_20251014/")
+dbFieldmap <- "FieldMapData_MDB_BR_22_inbo2026.accdb"
+path_to_fieldmap_db <- paste0(path_to_fieldmap, dbFieldmap)
+path_to_fieldmap_db_all <- paste0(path_to_fieldmap, dbFieldmap)
+```
+
 
 ```{r Setup2}
 path_to_html_teamdrive <- paste0(path_to_dataverwerking_teamdrive, "25_Overkoepelend")
@@ -39,11 +49,16 @@ path_to_html_teamdrive <- paste0(path_to_dataverwerking_teamdrive, "25_Overkoepe
 
 
 > juiste forrescalc kiezen:   
-- om weg te schrijven naar forresdat - branch main => met juiste release van het package: dan `install.packages("forrescalc")`  
-- laatste correcties van forrescalc => juiste branch selecteren in forrescalc en opnieuw builden - wegschrijven kan naar forresdat - branch "develop"
-(10/3/25: branch 'bugfix' met corr van read_forresdat waarbij we de develop branch kunnen selecteren ipv main)
+(1)  om weg te schrijven naar "main" branch van forresdat => met juiste release van het package: dan `install.packages("forrescalc")`  
+OF
+(2) om weg te schrijven naar "develop" branch van forresdat, dat kan met laatste correcties van forrescalc 
+=> juiste branch selecteren in forrescalc en opnieuw builden 
 
-```{r forrescalc_to_write_to_forresdat, eval = FALSE}
+> (10/3/25: branch 'bugfix' met corr van read_forresdat waarbij we de develop branch kunnen selecteren ipv main)
+
+> (15/12/2025: branch "bugfix_AL2025" => wegschrijven naar branch develop van forresdat)
+
+```{r forrescalc_to_write_to_forresdat_NOG_NIET, eval = FALSE}
 # !!! eerst zeker 'install.packages("forrescalc")
 # zodat forresdat-data goede release krijgt!
 # zie mail 7/10/24 van Els L.
@@ -53,7 +68,6 @@ path_to_html_teamdrive <- paste0(path_to_dataverwerking_teamdrive, "25_Overkoepe
 install.packages("forrescalc")
 
 ```
-
 
 
 # Vraagstelling
@@ -80,6 +94,7 @@ path_to_meetgegevens
 
 # Load plotinfo
 
+
 Plotinfo inladen: `plottype`, naam `forest_reserve` en info over survey's.
 (plotinfo op gdrive en forresdat: enkel processed plots!)
 
@@ -90,20 +105,43 @@ Plotinfo inladen: `plottype`, naam `forest_reserve` en info over survey's.
 # ?read_forresdat
 
 # van c-schijf
-plotinfo <- read.csv2(paste0(path_to_plotlevel_csv, "plotinfo.csv")) %>% 
-  select(-1)
+    # plotinfo_ <- read.csv2(paste0(path_to_plotlevel_csv, "plotinfo.csv")) %>% 
+    #   select(-1)
 
+# van forresdat
+plotinfo <- read_forresdat_table(
+  tablename = "plotinfo"
+  , git_ref_type = "branch", git_reference = "develop"
+  , join_plotinfo = FALSE
+  , plottype = "all")  # NIET ENKEL CP's!
+
+# plotinfo_0 <- load_plotinfo(database = path_to_fieldmap_db, processed = TRUE) %>% 
+#   filter(plottype != "OTHER") %>% 
+#   filter(!(forest_reserve == "Bos Terrijst" & period == 3))
+    # enig verschil is survey_deadw in zonien, moet idd true zijn, weliswaar niet in fieldmap,
+    # maar wel opgemeten => beter inlezen vanuit forresdat!
+
+# t <- plotinfo_0 %>% 
+#   anti_join(plotinfo)
+# t2 <- plotinfo %>% 
+#   anti_join(plotinfo_0)
+# waldo::compare(plotinfo, plotinfo_0)
 ```
 
 
-# Load dendro data - voorlopig OK - 31/5/2023
+# Load dendro data - voorlopig OK - 16/12/2025
 
-Standaard wordt enkel processed data ingeladen mbv de load-functies
+Standaard wordt enkel processed data ingeladen mbv de load-functies.
+We willen voor onze output ook enkel deze processed data mee (voor non-processed 
+data deze telkens opnieuw inladen en berekenen)
 
 ```{r load_dendro1_processed, results = 'hide'}
 data_dendro <- load_data_dendrometry(database = path_to_fieldmap_db, 
                                      extra_variables = TRUE, 
-                                     processed = TRUE) 
+                                     processed = TRUE) %>% 
+  # nog onterecht data_processed = TRUE:
+  filter(!(forest_reserve == "Bos Terrijst" & period == 3))
+  
 # %>% ilter(plottype != "OTHER")  # enkel CP of CA - omdat processed = TRUE worden andere plottypes hier niet meegenomen
 unique(data_dendro$plottype)
 data_dendro %>% filter(plot_id == 11000 & period == 1 & tree_measure_id == 10)
@@ -116,14 +154,21 @@ data_shoots <- load_data_shoots(database = path_to_fieldmap_db, extra_variables 
 data_stems  <- compose_stem_data(data_dendro, data_shoots, extra_variables = TRUE)
 # data_stems %>% filter(plot_id == 11000 & period == 1 & tree_measure_id == 10)
 
-# height_model <- load_height_models()
-# sneller en bij problemen met forresheights github, lokale modellen gebruiken
-path_to_height_models # "C:/03_BR/1_DataVerwerkingBR/Data/Hoogtemodellen/"
-height_model <- load_height_models_local(path_to_height_models)
-# mean(height_model$P1) == mean(height_model2$P1)
-
 data_deadwood <- load_data_deadwood(database = path_to_fieldmap_db, processed = TRUE)
 # unique(data_deadwood$plottype) # CP CA
+```
+
+```{r eval = FALSE}
+height_model <- load_height_models()
+save(height_model, file = "height_model.RData")
+```
+
+```{r}
+load("height_model.RData")
+
+# bij problemen met forresheights github, eigen functie gebruiken
+# path_to_height_models <- "C:/03_BR/1_DataVerwerkingBR/Data/Hoogtemodellen/"
+# height_model <- load_height_models_local(path_to_height_models)
 ```
 
 Waar hoogtemodellen beschikbaar? 
@@ -141,7 +186,6 @@ height_model %>% group_by(forest_reserve) %>% summarise(n = n()) %>% ungroup() %
 
 
 ## Correctie year van dendrometrie
-
 
 Year = jaar van groeiseizoen
 Grens was gelegd op 1/7, nu naar 1/5.
@@ -181,16 +225,16 @@ t <- year_range %>%
 
 ## Afwijkingen 
 
-- KV 1986: 
-** geen shoots, geen deadwood, reg of veg
-** pas vanaf dbh > 30 cm  
+- Zoniën KERN_1983 - KV - 1986:    
+  ** geen shoots, geen deadwood, reg of veg    
+  ** pas vanaf dbh 30 cm        
 
-- KV 2000: 
-** pas vanaf dbh 30 cm volopname  
-** boompjes met dbh 10-30 cm werden geteld, niet gepositioneerd, ook geen dbh of hoogte gekend
+- Zoniën KERN_1983 - KV - 2000:    
+  ** pas vanaf dbh 30 cm volopname      
+  ** boompjes met dbh 10-30 cm werden geteld    
 
 
-## Staande bomen 1ste decade KV Kersselaerspleyn pas vanaf 30 cm
+## Staande bomen 1ste decade KV Zoniën KERN_1983 pas vanaf 30 cm
 
 Hier **NIET WEGFILTEREN VAN** de bomen met dbh < 30 cm in `data_stems` en `data_dendro` 
 (want sommige old_id's uit p2 verwijzen naar die boompjes).
@@ -209,11 +253,7 @@ data_dendro_calc <- calc_variables_tree_level(data_dendro, data_stems_calc)
 
 # dendro <- calculate_dendrometry(data_dendro, data_deadwood, data_shoots, height_model)
 
-data_stems_calc %>% filter(is.na(calc_height_m)) %>% nrow() == 0 
-data_dendro_calc %>% filter(is.na(calc_height_m)) %>% nrow() == 0
-
 ```
-
 
 ```{r CreateSeparateDataframesDendro}
 # for (tablename in names(dendro)) {
@@ -260,27 +300,31 @@ nrow(data_dendro_calc  %>%
 # Vergelijking met oude data
 
 ```{r eval = FALSE}
-trees_git <- read.csv2(file = paste0(path_to_treelevel_csv, "trees_calc.csv"))
-nrow(trees_git) - nrow(data_dendro_calc) == 36
+trees_old <- read.csv2(file = paste0(path_to_treelevel_csv, "trees_calc.csv"))
+nrow(trees_old) - nrow(data_dendro_calc) == -29  # 36
 summary(data_dendro_calc)
-summary(trees_git)
-check <- trees_git %>% 
+summary(trees_old)
+check <- trees_old %>% 
   anti_join(data_dendro_calc, by = c("period", "plot_id", "tree_measure_id"))
-# 0  (nu ook mét 913 van Kerss KV 2000 < 30 cm dbh: die moeten mee opgenomen blijven)
+# 1: id = 0 => nu verwijderd  
 check <- data_dendro_calc %>% 
-  anti_join(trees_git, by = c("period", "plot_id", "tree_measure_id"))
+  anti_join(trees_old, by = c("period", "plot_id", "tree_measure_id"))
 # Rodebos KV1&2: periode 3: OK, wel nog niet in detail bekeken
+table(check$period, check$forest_reserve)
+# allemaal coppice, wellicht correcties
+# ervan uitgaan dat meest recente databank de correcte is
 
-stems_git <- read.csv2(file = paste0(path_to_treelevel_csv, "stems_calc.csv"))          
-nrow(stems_git) - nrow(data_stems_calc) == -321
+#--------
+stems_old <- read.csv2(file = paste0(path_to_treelevel_csv, "stems_calc.csv"))          
+nrow(stems_old) - nrow(data_stems_calc) == 0 #-321
 summary(data_stems_calc)
-summary(stems_git)
-check2 <- stems_git  %>% 
+summary(stems_old)
+check2 <- stems_old  %>% 
   anti_join(data_stems_calc, by = c("period", "plot_id", "tree_measure_id"))
-# 0  (nu ook mét 913 van Kerss KV 2000 < 30 cm dbh: die moeten mee opgenomen blijven)
+# 0  
 check2 <- data_stems_calc  %>% 
-  anti_join(stems_git, by = c("period", "plot_id", "tree_measure_id"))
-# 1234: Rodebos KV1&2: periode 3: OK, wel nog niet in detail bekeken
+  anti_join(stems_old, by = c("period", "plot_id", "tree_measure_id"))
+
 ```
 
 
@@ -430,7 +474,7 @@ Zodra er meer dan één per decade is, dan moeten we werken met coppice_id voor 
 
 ```{r NumberOfPartsPerCoppicePerDecade, results = 'hide'}
 tree_id %>% filter(coppice_id > 0) %>% nrow()
-# [1] 17224 - 18015 - 18481 - 21584
+# [1] 17224 - 18015 - 18481 - 21583
 
 # coppice_id en plot_id samen uniek => hoeveel metingen zijn er per stoof en per decade 
 # (max.2, 1 levend en 1 dood deel- klopt)
@@ -439,17 +483,19 @@ summ_coppice_id <- tree_id %>%
   group_by(coppice_id, plot_id, period) %>% 
   summarise(aantal = n()) %>% 
   ungroup()
-# 16138 - 16536 - 19253
+# 16138 - 16536 - 19253  - 19265
 
-table(summ_coppice_id$aantal)  # per periode max 2 => OK
+table(summ_coppice_id$aantal)  
+# per periode max 2 (voor levend en dood deel zelfde coppice-ide)=> OK
 #     1     2 
 # 14645  1918
 #     1     2 
 # 16922  2331 
+#     1     2 
+# 16947  2318
 
 summ_coppice_id %>% filter(aantal > 2) %>% distinct(plot_id)
-
-summ_coppice_id %>% filter(aantal > 2)
+summ_coppice_id %>% filter(aantal > 2) %>% nrow() == 0
 
 # vb van 3 decades
 tree_id %>%  filter(coppice_id == 32 & plot_id == 31000) %>% 
@@ -461,7 +507,7 @@ summ_coppice_id_def <- summ_coppice_id %>%
   group_by(coppice_id, plot_id) %>% 
   summarise(max_aantal = max(aantal)) %>% 
   ungroup()
-# 9690 - 9774 - 10125
+# 9690 - 9774 - 10125 - 10136
 ```
 
 ```{r SplitDataTrees_OldID_CoppID, results = 'hide'}
@@ -624,6 +670,8 @@ Dit werkt enkel bij een unieke tree_id.
 > mail op 12/3/25 naar Peter om dubbele coppice_id's te checken
 (zie G:\Gedeelde drives\Team_Boseco_BR\PRJ_BR_Gegevensverwerking\30_Datacontrole)
 
+> 22/12/2025: geen dubbele tree-id's
+
 Zie hierna:
 
 ```{r tree_id_wide_check}
@@ -634,7 +682,7 @@ check_dubbele_tree_id <- tree_id %>%
   filter(aantal_per_periode > 1) 
 # %>% inner_join(tree_data_CoppID_check)
 
-check_dubbele_tree_id
+nrow(check_dubbele_tree_id) == 0
 # A tibble: 3 x 4
 #   plot_id tree_id       period aantal_per_periode
 #     <int> <chr>          <dbl>              <int>
@@ -643,7 +691,7 @@ check_dubbele_tree_id
 # 3   53000 1_53000_258_b      1                  2
 
 ```
-```{r results='hide'}
+```{r results='hide', eval = FALSE}
 check_dubbele_tree_id %>% distinct(plot_id)
 # 13 rows
 
@@ -666,7 +714,7 @@ write.xlsx(check_dubbele_tree_id2,
 
 
 
-```{r dubbele_ids_verwijderen}
+```{r dubbele_ids_verwijderen, eval = FALSE}
 # TIJDELIJK
 tree_id_ <- tree_id %>% 
   anti_join(check_dubbele_tree_id %>%  select(plot_id, tree_id, period))  # tijdelijk de dubbele tree_id's verwijderen
@@ -704,7 +752,7 @@ names(tree_id_wide)
 ```
 **Jaartal survey's toevoegen**    
 Dit jaartal moet uit `plotinfo` gehaald worden, want als boom er niet meer staat (omgevallen), 
-is er in de tabel met bomen ook geen `year_dendro` meer voor di eboom en dat jaartal, 
+is er in de tabel met bomen ook geen `year_dendro` meer voor die boom en dat jaartal, 
 terwijl er wél een opname was.
 We nemen voor `survey_Y1` het jaar van de eerste survey voor dat gebied, dus NIET het jaartal van 
 de eerste decade/periode van monitoringnetwerk.
@@ -805,6 +853,42 @@ tree_id_long %>%
 summary(tree_id_long)
   
 ```
+
+# Vergelijking met oude data
+
+```{r eval = FALSE}
+trees_long_old <- read.csv2(file = paste0(path_to_treelevel_csv, "trees_unique_id_long.csv"))
+
+nrow(trees_long_old); nrow(tree_id_less_var)
+summary(trees_long_old)
+summary(tree_id_long)
+
+
+check <- trees_long_old %>% 
+  anti_join(tree_id_long, by = c("decade", "plot_id", "tree_id"))
+# 1: id = 0 => nu verwijderd  
+check2 <- tree_id_long %>% 
+  anti_join(trees_long_old, by = c("decade", "plot_id", "tree_id"))
+# Rodebos KV1&2: periode 3: OK, wel nog niet in detail bekeken
+table(check$period, check$forest_reserve)
+# allemaal coppice, wellicht correcties
+# ervan uitgaan dat meest recente databank de correcte is
+
+#--------
+trees_wide_old <- read.csv2(file = paste0(path_to_treelevel_csv, "trees_wide.csv"))
+
+nrow(trees_wide_old); nrow(tree_survey_wide)
+
+summary(trees_wide_old)
+summary(tree_survey_wide)
+check <- trees_wide_old  %>% 
+  anti_join(tree_survey_wide, by = c("plot_id", "tree_id"))
+# 0  
+check2 <- tree_survey_wide  %>% 
+  anti_join(trees_wide_old, by = c("plot_id", "tree_id"))
+
+```
+
 
 # Export tree level data
 
