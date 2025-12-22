@@ -419,9 +419,9 @@ check_subplot78 <- reg_by_core_area_height_species %>%
   left_join(plotinfo %>% select(plot_id, period, game_impact_reg)) %>%
   filter(plot_id == 101000 & height_class == 1000 & period == 3) %>% 
   filter(game_impact_reg == TRUE) 
-# verwarrend: er is ""n subplot met species = NA in hoogteklasse 1000
-# het lijkt in deze outputalsof er één subplot is waar geen soort genoteerd werd, maar dat is niet correct
-# => in db leeg recodr verwijderd
+# verwarrend: er is een subplot met species = NA in hoogteklasse 1000
+# het lijkt in deze output alsof er één subplot is waar geen soort genoteerd werd, maar dat is niet correct
+# => in db leeg record verwijderd
 # zelfde gevraagdd aan Peter in mail van 28/11/2025 of 1/12/2025
 ```
 
