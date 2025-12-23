@@ -40,11 +40,16 @@ path_to_html_teamdrive <- paste0(path_to_dataverwerking_teamdrive, "25_Overkoepe
 ```
 
 > juiste forrescalc kiezen:   
-- om weg te schrijven naar forresdat - branch main => met juiste release van het package: dan `install.packages("forrescalc")`  
-- laatste correcties van forrescalc => juiste branch selecteren in forrescalc en opnieuw builden - wegschrijven kan naar forresdat - branch "develop"
-(10/3/25: branch 'bugfix' met corr van read_forresdat waarbij we de develop branch kunnen selecteren ipv main)
+(1)  om weg te schrijven naar "main" branch van forresdat => met juiste release van het package: dan `install.packages("forrescalc")`  
+OF
+(2) om weg te schrijven naar "develop" branch van forresdat, dat kan met laatste correcties van forrescalc 
+=> juiste branch selecteren in forrescalc en opnieuw builden 
 
-```{r forrescalc_to_write_to_forresdat, eval = FALSE}
+> (10/3/25: branch 'bugfix' met corr van read_forresdat waarbij we de develop branch kunnen selecteren ipv main)
+
+> (15/12/2025: branch "bugfix_AL2025" => wegschrijven naar branch develop van forresdat)
+
+```{r forrescalc_to_write_to_forresdat_NOG_NIET, eval = FALSE}
 # !!! eerst zeker 'install.packages("forrescalc")
 # zodat forresdat-data goede release krijgt!
 # zie mail 7/10/24 van Els L.
@@ -83,6 +88,8 @@ path_to_meetgegevens
 
 Plotinfo inladen: `plottype`, naam `forest_reserve` en info over survey's.
 (plotinfo: enkel processed plots!)
+Plotinfo inladen: `plottype`, naam `forest_reserve` en info over survey's.
+(plotinfo op gdrive en forresdat: enkel processed plots!)
 
 ```{r }
 # mbv forresdat
@@ -91,11 +98,18 @@ Plotinfo inladen: `plottype`, naam `forest_reserve` en info over survey's.
 # ?read_forresdat
 
 # van c-schijf
-plotinfo <- read.csv2(paste0(path_to_plotlevel_csv, "plotinfo.csv")) %>% 
-  select(-1)
+    # plotinfo_ <- read.csv2(paste0(path_to_plotlevel_csv, "plotinfo.csv")) %>%
+    #   select(-1)
 
+# van forresdat
+plotinfo <- read_forresdat_table(
+  tablename = "plotinfo"
+  , git_ref_type = "branch", git_reference = "develop"
+  , join_plotinfo = FALSE
+  , plottype = "all")  # NIET ENKEL CP's!
+
+# waldo::compare(plotinfo_, plotinfo)
 ```
-
 
 # Load lookuplijsten
 
@@ -111,21 +125,24 @@ odbcClose(con)
 ```
 
 
-# Load vegetation - OK - 19/1/2023 - 18/3/2025
+# Load vegetation - OK - 19/1/2023 - 18/3/2025 - 23/12/2025
 
 ```{r load_veg}
 data_vegetation <-
   load_data_vegetation(
     database = path_to_fieldmap_db,
     processed = TRUE
-  )
+  ) %>% 
+  # nog onterecht data_processed = TRUE:
+  filter(!(forest_reserve == "Bos Terrijst" & period == 3))
+
 data_herblayer <-
   load_data_herblayer(
     database = path_to_fieldmap_db,
     processed = TRUE
-  )
-
-
+  ) %>% 
+  # nog onterecht data_processed = TRUE:
+  filter(!(forest_reserve == "Bos Terrijst" & period == 3))
 ```
 
 # Calculate
@@ -168,8 +185,9 @@ col <- c("number_of_species", "cumm_herb_coverage_class_average_perc")
 
 veg_by_plot %>% filter_at(col, any_vars(is.na(.))) %>% 
   filter(number_of_species != 0) %>% nrow() == 0
-# 122 met cumm_herb_coverage_class_average_perc = NA, allemaal aantal soorten = 0
+# 42 met cumm_herb_coverage_class_average_perc = NA, allemaal aantal soorten = 0
 veg_by_plot %>% filter_at(col, any_vars(is.na(.))) %>% nrow()
+veg_by_plot %>% filter(number_of_species == 0) %>% nrow()
 ```
 
 In `data_herblayer` wordt een record met species = NA toegevoegd voor elke plot waar een opname gebeurd
@@ -217,7 +235,7 @@ veg_by_core_area_species %>% filter(plot_id == 41000 & is.na(species))
 data_herblayer %>% filter(is.na(species) & !is.na(browse_index_id) & plottype == "CP") %>% 
   nrow() == 0
 data_herblayer %>% left_join(plotinfo) %>% 
-  filter(is.na(species) & game_impact_veg == TRUE) %>% 
+  filter(is.na(species) & game_impact_veg == TRUE & plottype == "CP") %>% 
   nrow() == 0
 ```
 
@@ -229,10 +247,9 @@ col <- c("number_of_subplots_with_species", "perc_of_subplots", "mean_coverage_c
 
 veg_by_core_area_species %>% filter_at(col, any_vars(is.na(.))) %>% nrow()
 t <- veg_by_core_area_species %>% filter_at(col, any_vars(is.na(.)))
-# 4 records met mean_coverage_class_average_perc = NA wegens species = NA
+# 2 records met mean_coverage_class_average_perc = NA wegens species = NA
 t1 <- data_herblayer %>% filter(plottype == "CA" & is.na(species))
 unique(t1$plot_id)
-# [1] 11000 31000 43000 41000
 # [1] 11000 41000
 
 
@@ -246,26 +263,213 @@ unique(t1$plot_id)
 
 - plot 41000: `species` = NA => `mean_coverage_class_average_perc` = NA - OK
 
-- plot 31000 en 43000: 40 subplots zonder species    
+<!-- # OUDERE ANALYSE, VOOR AANPASSING FORRESCALC:  -->
+<!-- - plot 31000 en 43000: 40 subplots zonder species     -->
 
-REDEN: in periode 1 werden deze 40 subplots niet opgemeten
-maar dat is niet opgenomen in plotdetails (veg_survey = TRUE), want dat is info 
-op plotniveau, niet de subplots    
-(11000: ook 40 plots met species = NA, maar daar wel een jaartal => dat duidt onderscheid met waar
-dan wél een opname gebeurd is)
+<!-- REDEN: in periode 1 werden deze 40 subplots niet opgemeten -->
+<!-- maar dat is niet opgenomen in plotdetails (veg_survey = TRUE), want dat is info  -->
+<!-- op plotniveau, niet de subplots     -->
+<!-- (11000: ook 40 plots met species = NA, maar daar wel een jaartal => dat duidt onderscheid met waar -->
+<!-- dan wél een opname gebeurd is) -->
 
-OPLOSSING: als jaartal = NA, dan moeten die records verwijderd worden uit data_herblayer
-=> aangepast in branch "bugfix_AL2" (27/3/2025)
-Bij berekening van `veg_by_core_area_species` worden deze dan ook niet meer meegenomen
+<!-- OPLOSSING: als jaartal = NA, dan moeten die records verwijderd worden uit data_herblayer -->
+<!-- => aangepast in branch "bugfix_AL2" (27/3/2025) -->
+<!-- Bij berekening van `veg_by_core_area_species` worden deze dan ook niet meer meegenomen -->
 
 
 ```{r}
-t2 <- data_herblayer %>% filter(plottype == "CP" & is.na(species))
+data_herblayer %>% filter(plottype == "CP" & is.na(species))
 # plot 1176: OK, geen kruidlaag aanwezig 
 ```
 
 
-# Export vegetation - OK - 27/3/2025
+# Vergelijking met recente verwerking JHB/Wijn
+
+```{r eval = FALSE}
+path_to_JHB <- "G:/Gedeelde drives/Team_Boseco_BR/PRJ_BR_Gegevensverwerking/20_Per_gebied/2025_Jansheideberg/03_output_R_plotlevel/"
+veg_by_plot_JHB_gdrive <- read_xlsx(paste0(path_to_JHB, "veg_by_plot.xlsx"))
+
+veg_by_plot_JHB <- veg_by_plot %>% 
+  left_join(plotinfo %>% select(forest_reserve, plot_id, period)) %>% 
+  filter(forest_reserve == "Jansheideberg") 
+                           
+# vgl
+veg_by_plot_JHB_gdrive <- veg_by_plot_JHB_gdrive %>% 
+  select(-1, -survey_number) 
+
+nrow(veg_by_plot_JHB_gdrive);nrow(veg_by_plot_JHB)
+names(veg_by_plot_JHB_gdrive) == names(veg_by_plot_JHB)
+waldo::compare(veg_by_plot_JHB_gdrive, veg_by_plot_JHB)
+
+# t <- veg_by_plot_JHB_gdrive %>% 
+#   anti_join(veg_by_plot_JHB)
+# 
+# t <- veg_by_plot_JHB %>% 
+#   anti_join(veg_by_plot_JHB_gdrive)
+# 
+# head(veg_by_plot %>% arrange(desc(plot_id), period)); 
+# head(veg_by_plot_JHB %>% arrange(desc(plot_id), period))
+```
+
+
+```{r eval = FALSE}
+path_to_wijn <- "G:/Gedeelde drives/Team_Boseco_BR/PRJ_BR_Gegevensverwerking/20_Per_gebied/2024_Wijnendale/03_output_R_plotlevel/"
+veg_by_core_area_species_gdrive <- read_xlsx(paste0(path_to_wijn, "vegetation_by_core_area_species.xlsx"))
+
+veg_by_core_area_species_wijn <- veg_by_core_area_species %>% 
+  left_join(plotinfo %>% select(forest_reserve, plot_id, period)) %>% 
+  filter(forest_reserve == "Wijnendalebos") 
+                           
+# vgl
+veg_by_core_area_species_gdrive <- veg_by_core_area_species_gdrive %>% 
+  select(-1, -survey_number) 
+
+nrow(veg_by_core_area_species_gdrive);nrow(veg_by_core_area_species_wijn)
+names(veg_by_core_area_species_gdrive) == names(veg_by_core_area_species_wijn)
+waldo::compare(veg_by_core_area_species_gdrive, veg_by_core_area_species_wijn)
+
+t <- veg_by_core_area_species_gdrive %>% 
+  anti_join(veg_by_core_area_species_wijn)
+
+t2 <- veg_by_core_area_species_wijn %>% 
+  anti_join(veg_by_core_area_species_gdrive)
+
+head(veg_by_core_area_species_wijn %>% arrange(desc(plot_id), period)); 
+head(veg_by_core_area_species_gdrive %>% arrange(desc(plot_id), period))
+# beter, nu rekening gehouden met feit dat browsing = 0 ipv NA
+                             
+```
+
+```{r eval = FALSE}
+path_to_JHB <- "G:/Gedeelde drives/Team_Boseco_BR/PRJ_BR_Gegevensverwerking/20_Per_gebied/2025_Jansheideberg/03_output_R_plotlevel/"
+veg_by_core_area_species_gdrive <- read_xlsx(paste0(path_to_JHB, "veg_by_core_area_species.xlsx"))
+
+veg_by_core_area_species_JHB <- veg_by_core_area_species %>% 
+  left_join(plotinfo %>% select(forest_reserve, plot_id, period)) %>% 
+  filter(forest_reserve == "Jansheideberg") 
+                           
+# vgl
+veg_by_core_area_species_gdrive <- veg_by_core_area_species_gdrive %>% 
+  select(-1, -survey_number) 
+
+nrow(veg_by_core_area_species_gdrive);nrow(veg_by_core_area_species_JHB)
+names(veg_by_core_area_species_gdrive) == names(veg_by_core_area_species_JHB)
+waldo::compare(veg_by_core_area_species_gdrive, veg_by_core_area_species_JHB)
+
+t <- veg_by_core_area_species_gdrive %>% 
+  anti_join(veg_by_core_area_species_JHB)
+
+t2 <- veg_by_core_area_species_JHB %>% 
+  anti_join(veg_by_core_area_species_gdrive)
+
+head(veg_by_core_area_species_JHB %>% arrange(desc(plot_id), period)); 
+head(veg_by_core_area_species_gdrive %>% arrange(desc(plot_id), period))
+
+                             
+```
+
+
+```{r eval = FALSE}
+path_to_wijn <- "G:/Gedeelde drives/Team_Boseco_BR/PRJ_BR_Gegevensverwerking/20_Per_gebied/2024_Wijnendale/03_output_R_plotlevel/"
+veg_by_plot_height_species_gdrive <- read_xlsx(paste0(path_to_wijn, "veg_by_plot_height_species.xlsx"))
+
+veg_by_plot_height_species_wijn <- veg_by_plot_height_species %>% 
+  left_join(plotinfo %>% select(forest_reserve, plot_id, period)) %>% 
+  filter(forest_reserve == "Wijnendalebos") 
+                           
+# vgl
+veg_by_plot_height_species_gdrive <- veg_by_plot_height_species_gdrive %>% 
+  select(-1, -survey_number) 
+
+nrow(veg_by_plot_height_species_gdrive);nrow(veg_by_plot_height_species_wijn)
+names(veg_by_plot_height_species_gdrive) == names(veg_by_plot_height_species_wijn)
+waldo::compare(veg_by_plot_height_species_gdrive, veg_by_plot_height_species_wijn)
+
+t <- veg_by_plot_height_species_gdrive %>% 
+  anti_join(veg_by_plot_height_species_wijn, by = c("plot_id", "period", "species", "height_class"))
+
+t <- veg_by_plot_height_species_wijn %>% 
+  anti_join(veg_by_plot_height_species_gdrive, by = c("plot_id", "period", "species", "height_class"))
+
+head(veg_by_plot_height_species_wijn %>% arrange(desc(plot_id), period)); 
+head(veg_by_plot_height_species_gdrive %>% arrange(desc(plot_id), period))
+```
+
+# Vergelijking met oude data
+
+22/12/2025 vergeleken met data op git (maart 2025 (?))
+
+```{r eval = FALSE, results='hide'}
+# 
+veg_by_plot_git <- read_forresdat_table(tablename = "veg_by_plot"
+                                           , join_plotinfo = FALSE
+                                           , plottype = "all"
+                                           , git_ref_type = "branch"
+                                           , git_reference = "develop")
+
+# vgl
+veg_by_plot_git <- veg_by_plot_git %>% 
+  select(plot_id, year_main_survey, everything()) 
+# %>% 
+#   select(names(dendro_by_plot))    # vol_log_min40cm van naam veranderd!
+nrow(veg_by_plot);nrow(veg_by_plot_git)
+# [1] 6158
+# [1] 6158
+summary(veg_by_plot)
+names(veg_by_plot) == names(veg_by_plot_git)
+summary(veg_by_plot_git)
+waldo::compare(veg_by_plot, veg_by_plot_git)
+
+t <- veg_by_plot %>% 
+  anti_join(veg_by_plot_git) %>% 
+  left_join(plotinfo %>% select(forest_reserve, plot_id, period)) 
+
+t2 <- veg_by_plot_git %>% 
+  anti_join(veg_by_plot) %>% 
+  left_join(plotinfo %>% select(forest_reserve, plot_id, period)) 
+
+head(veg_by_plot %>% arrange(plot_id, period)); 
+head(veg_by_plot_git %>% arrange(plot_id, period))
+
+
+t %>% filter(plot_id == 101); t2 %>% filter(plot_id == 101)
+tt <- rbind(t %>% filter(plot_id == 11000 & subplot_id == 155545), t2 %>% filter(plot_id == 11000 & subplot_id == 155545))
+```
+
+```{r eval = FALSE, results='hide'}
+# 
+veg_by_core_area_species_git <- read_forresdat_table(tablename = "veg_by_core_area_species"
+                                           , join_plotinfo = FALSE
+                                           , plottype = "all"
+                                           , git_ref_type = "branch"
+                                           , git_reference = "develop")
+
+# vgl
+veg_by_core_area_species_git <- veg_by_core_area_species_git %>% 
+  select(plot_id, year, everything()) 
+# %>% 
+#   select(names(dendro_by_plot))    # vol_log_min40cm van naam veranderd!
+nrow(veg_by_core_area_species);nrow(veg_by_core_area_species_git)
+# summary(veg_by_core_area_species)
+names(veg_by_core_area_species) == names(veg_by_core_area_species_git)
+summary(veg_by_core_area_species_git)
+waldo::compare(veg_by_core_area_species, veg_by_core_area_species_git)
+
+t <- veg_by_core_area_species %>% 
+  anti_join(veg_by_core_area_species_git, by = c("plot_id", "period"))
+t <- veg_by_core_area_species %>% 
+  anti_join(veg_by_core_area_species_git)
+            
+head(veg_by_core_area_species %>% arrange(desc(plot_id), period)); 
+head(veg_by_core_area_species_git %>% arrange(desc(plot_id), period))
+
+tt <- rbind(veg_by_core_area_species %>% filter(plot_id == 41000 & species == 760)
+            , veg_by_core_area_species_git %>% filter(plot_id == 41000 & species == 760))
+# afronding ...
+```
+
+
+# Export vegetation - OK - 23/12/2025
 
 Ook naar git exporteren
 
@@ -352,7 +556,7 @@ save_results_csv(
 ```
 
 
-# Export herblayer - OK - 19/1/2023 - 27/3/2025
+# Export herblayer - OK - 23/12/2025
 
 Ook herblayer naar forresdat wegschrijven
 
