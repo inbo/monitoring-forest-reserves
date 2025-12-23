@@ -39,13 +39,17 @@ source(here::here("scripts/Setup.R"))
 path_to_html_teamdrive <- paste0(path_to_dataverwerking_teamdrive, "25_Overkoepelend")
 ```
 
-
 > juiste forrescalc kiezen:   
-- om weg te schrijven naar forresdat - branch main => met juiste release van het package: dan `install.packages("forrescalc")`  
-- laatste correcties van forrescalc => juiste branch selecteren in forrescalc en opnieuw builden - wegschrijven kan naar forresdat - branch "develop"
-(10/3/25: branch 'bugfix' met corr van read_forresdat waarbij we de develop branch kunnen selecteren om naar weg te schrijven ipv de main branch)
+(1)  om weg te schrijven naar "main" branch van forresdat => met juiste release van het package: dan `install.packages("forrescalc")`  
+OF
+(2) om weg te schrijven naar "develop" branch van forresdat, dat kan met laatste correcties van forrescalc 
+=> juiste branch selecteren in forrescalc en opnieuw builden 
 
-```{r forrescalc_to_write_to_forresdat, eval = FALSE}
+> (10/3/25: branch 'bugfix' met corr van read_forresdat waarbij we de develop branch kunnen selecteren ipv main)
+
+> (15/12/2025: branch "bugfix_AL2025" => wegschrijven naar branch develop van forresdat)
+
+```{r forrescalc_to_write_to_forresdat_NOG_NIET, eval = FALSE}
 # !!! eerst zeker 'install.packages("forrescalc")
 # zodat forresdat-data goede release krijgt!
 # zie mail 7/10/24 van Els L.
@@ -85,6 +89,8 @@ path_to_meetgegevens
 
 Plotinfo inladen: `plottype`, naam `forest_reserve` en info over survey's.
 (plotinfo op gdrive en forresdat: enkel processed plots!)
+Plotinfo inladen: `plottype`, naam `forest_reserve` en info over survey's.
+(plotinfo op gdrive en forresdat: enkel processed plots!)
 
 ```{r }
 # mbv forresdat
@@ -93,8 +99,15 @@ Plotinfo inladen: `plottype`, naam `forest_reserve` en info over survey's.
 # ?read_forresdat
 
 # van c-schijf
-plotinfo <- read.csv2(paste0(path_to_plotlevel_csv, "plotinfo.csv")) %>% 
-  select(-1)
+    # plotinfo_ <- read.csv2(paste0(path_to_plotlevel_csv, "plotinfo.csv")) %>% 
+    #   select(-1)
+
+# van forresdat
+plotinfo <- read_forresdat_table(
+  tablename = "plotinfo"
+  , git_ref_type = "branch", git_reference = "develop"
+  , join_plotinfo = FALSE
+  , plottype = "all")  # NIET ENKEL CP's!
 
 ```
 
@@ -134,15 +147,16 @@ odbcClose(con)
 
 ```
 
-# Load regeneration - OK - 8/4/2022 - 19/1/2023 - 18/3/2025
+# Load regeneration - OK - 8/4/2022 - 19/1/2023 - 18/3/2025 - 22/12/2025
 
 ```{r load_reg}
 data_regeneration <-
   load_data_regeneration(
     database = path_to_fieldmap_db,
     processed = TRUE
-  )
-
+  ) %>% 
+  # nog onterecht data_processed = TRUE:
+  filter(!(forest_reserve == "Bos Terrijst" & period == 3))
 ```
 
 
@@ -186,12 +200,12 @@ data_regeneration %>% filter(!is.na(nr_of_regeneration) & !is.na(number_class)) 
 # 2021 van de 38000
 
 test <- data_regeneration %>% filter(!is.na(nr_of_regeneration) & !is.na(number_class)) %>% 
-  select(select_colnames_reg)
+  select(all_of(select_colnames_reg))
 table(test$subcircle)
 # A1 A2 
 # 89  1
 #   A1   A2 
-# 1249  128
+# 1248  128
 # komt meer voor bij seedlings: exact number dat vertaald is naar numberclass 
 # (is gebeurd bij de datacontrole of op terrein - zit niet in package)
 
@@ -221,7 +235,7 @@ checkA2 <- data_regeneration %>%
   filter(subcircle == "A2" & 
            is.na(nr_of_regeneration) &
            !is.na(number_class)) %>% 
-  select(select_colnames_reg)
+  select(all_of(select_colnames_reg))
 # 71 waar enkel klasse vermeld staat, terwijl het een exact nummer zou moeten zijn
 # package zal dan automatisch de klasse gebruiken ==> OK
 # ? 1572
@@ -556,6 +570,246 @@ check_Kerss$approx_nr_regeneration_ha
 Resultaten stemmen overeen met dataverwerking uit 2012.
 
 
+# TEMP: Check perc_rubbing op plot-niveau
+
+Initiële fout deels opgelost door bij `load_data_regeneration()` 
+`GameImpactRegObserved = 10` te gebruiken voor toekennen van 0 ipv NA.
+
+Deels door nog wat extra aanpassingen bij de calc-functies 
+(commits 10/4/2024, branch `testdatabase_AL`):
+
+(1) zdd ook nr van numberclass gebruikt wordt
+(2) niet enkel A2
+(3) afgetopt op 100%
+
+Hierna nog enkele testen.
+
+**FOUT 19/11/2025: opgelost in bugfix_AL2025, nog te mergen naar bugfix**
+Probleem enkel bij `calc_reg_plot_height()` en `calc_reg_core_area_height_spec()`
+`Data_regeneration` had correcte NA bij browsing (`load_data_reg` dus ok),
+maar dat werd niet goed doorvertaald door de calc functies waardoor er onterecht 
+nullen ontstonden terwijl er geen game impact genoteerd was
+(issue #163 in forrescalc)
+
+
+```{r}
+# CP
+check_rubbing_perc_NA <- reg_by_plot_height %>% 
+  left_join(plotinfo %>% select(plot_id, period, game_impact_reg)) %>%
+  filter(is.na(approx_rubbing_damage_perc) & number_of_tree_species > 0) %>% 
+  filter(game_impact_reg == TRUE) 
+
+check_rubbing_perc_NA %>% nrow() == 0
+
+# wat als pd.GameImpactRegObserved = 20 (FALSE)
+check_rubbing_perc_NA2 <- reg_by_plot %>%
+  left_join(plotinfo %>% select(plot_id, period, game_impact_reg)) %>%
+  filter(game_impact_reg == FALSE) %>% 
+  filter(!is.na(approx_rubbing_damage_perc_established))
+check_rubbing_perc_NA2 %>% nrow() == 0
+# OK
+
+check_rubbing_perc_NA2 <- reg_by_plot_height %>%
+  left_join(plotinfo %>% select(plot_id, period, game_impact_reg)) %>%
+  filter(game_impact_reg == FALSE) %>% 
+  filter(!is.na(rubbing_damage_number_ha))
+check_rubbing_perc_NA2 %>% nrow() == 0
+# ok
+
+# CA
+check_rubbing_perc_NA <- reg_by_core_area_height_species %>% 
+  left_join(plotinfo %>% select(plot_id, period, game_impact_reg)) %>%
+  filter(is.na(approx_rubbing_damage_perc) & nr_of_subplots_with_regeneration > 0) %>% 
+  filter(game_impact_reg == TRUE) 
+
+check_rubbing_perc_NA %>% nrow() == 0
+# 2
+
+# plot 410000, subplot 22: geen verjonging => er is een species "NA", die in één subplot voorkomt ...
+# plot 141100, subplot 21, 23 en 34: geen verjonging => er is een species "NA", die in drie subplots voorkomt ... 
+
+# in totaal 9  kernvlaktes waar er subplots zijn zonder verjonging, dus zonder soort en hoogteklasse,
+# dat is OK, maar misschien wat verwarrend => wegfilteren
+```
+
+```{r CA_wegfilteren_species_NA}
+# wegfilteren van species = NA
+reg_by_core_area_height_species <- reg_by_core_area_height_species %>% 
+  filter(!is.na(species))
+
+reg_by_core_area_species <- reg_by_core_area_species %>% 
+  filter(!is.na(species))
+
+```
+
+
+```{r}
+# plot-niveau: mag enkel NA zijn ,wanneer er géén van die soort gezien is en damaged ook 0 (dus 0/0)
+check_rubbing_perc_NA <- reg_by_plot %>% 
+  left_join(plotinfo %>% select(plot_id, period, game_impact_reg)) %>%
+  filter(is.na(approx_rubbing_damage_perc_established) & mean_number_established_ha > 0) %>% 
+  filter(game_impact_reg == TRUE) 
+
+check_rubbing_perc_NA %>% nrow() == 0
+
+check_rubbing_perc_NA <- reg_by_plot %>% 
+  left_join(plotinfo %>% select(plot_id, period, game_impact_reg)) %>%
+  filter(is.na(approx_rubbing_damage_perc_seedlings) & mean_number_seedlings_ha > 0) %>% 
+  filter(game_impact_reg == TRUE) 
+
+check_rubbing_perc_NA %>% nrow() == 0
+
+```
+
+# Vergelijking met recente verwerking JHB/Wijn
+
+```{r eval = FALSE}
+path_to_JHB <- "G:/Gedeelde drives/Team_Boseco_BR/PRJ_BR_Gegevensverwerking/20_Per_gebied/2025_Jansheideberg/03_output_R_plotlevel/"
+reg_by_plot_JHB_gdrive <- read_xlsx(paste0(path_to_JHB, "reg_by_plot.xlsx"))
+
+reg_by_plot_JHB <- reg_by_plot %>% 
+  left_join(plotinfo %>% select(forest_reserve, plot_id, period)) %>% 
+  filter(forest_reserve == "Jansheideberg") 
+                           
+# vgl
+reg_by_plot_JHB_gdrive <- reg_by_plot_JHB_gdrive %>% 
+  select(-1, -survey_number) 
+
+nrow(reg_by_plot_JHB_gdrive);nrow(reg_by_plot_JHB)
+summary(reg_by_plot_JHB_gdrive)
+names(reg_by_plot_JHB_gdrive) == names(reg_by_plot_JHB)
+summary(reg_by_plot_JHB)
+waldo::compare(reg_by_plot_JHB_gdrive, reg_by_plot_JHB)
+
+t <- reg_by_plot_JHB_gdrive %>% 
+  anti_join(reg_by_plot_JHB)
+
+t <- reg_by_plot_JHB %>% 
+  anti_join(reg_by_plot_JHB_gdrive)
+
+head(reg_by_plot %>% arrange(desc(plot_id), period)); 
+head(reg_by_plot_JHB %>% arrange(desc(plot_id), period))
+         
+                             
+```
+
+```{r eval = FALSE}
+path_to_wijn <- "G:/Gedeelde drives/Team_Boseco_BR/PRJ_BR_Gegevensverwerking/20_Per_gebied/2024_Wijnendale/03_output_R_plotlevel/"
+reg_by_core_area_height_species_gdrive <- read_xlsx(paste0(path_to_wijn, "reg_by_core_area_height_species.xlsx"))
+
+reg_by_core_area_height_species_wijn <- reg_by_core_area_height_species %>% 
+  left_join(plotinfo %>% select(forest_reserve, plot_id, period)) %>% 
+  filter(forest_reserve == "Wijnendalebos") 
+                           
+# vgl
+reg_by_core_area_height_species_gdrive <- reg_by_core_area_height_species_gdrive %>% 
+  select(-1, -survey_number) 
+
+nrow(reg_by_core_area_height_species_gdrive);nrow(reg_by_core_area_height_species_wijn)
+names(reg_by_core_area_height_species_gdrive) == names(reg_by_core_area_height_species_wijn)
+waldo::compare(reg_by_core_area_height_species_gdrive, reg_by_core_area_height_species_wijn)
+
+t <- reg_by_core_area_height_species_gdrive %>% 
+  anti_join(reg_by_core_area_height_species_wijn, by = c("plot_id", "period", "species", "height_class"))
+
+t <- reg_by_core_area_height_species_wijn %>% 
+  anti_join(reg_by_core_area_height_species_gdrive, by = c("plot_id", "period", "species", "height_class"))
+
+head(reg_by_core_area_height_species_wijn %>% arrange(desc(plot_id), period)); 
+head(reg_by_core_area_height_species_gdrive %>% arrange(desc(plot_id), period))
+
+                             
+```
+
+
+```{r eval = FALSE}
+path_to_wijn <- "G:/Gedeelde drives/Team_Boseco_BR/PRJ_BR_Gegevensverwerking/20_Per_gebied/2024_Wijnendale/03_output_R_plotlevel/"
+reg_by_plot_height_species_gdrive <- read_xlsx(paste0(path_to_wijn, "reg_by_plot_height_species.xlsx"))
+
+reg_by_plot_height_species_wijn <- reg_by_plot_height_species %>% 
+  left_join(plotinfo %>% select(forest_reserve, plot_id, period)) %>% 
+  filter(forest_reserve == "Wijnendalebos") 
+                           
+# vgl
+reg_by_plot_height_species_gdrive <- reg_by_plot_height_species_gdrive %>% 
+  select(-1, -survey_number) 
+
+nrow(reg_by_plot_height_species_gdrive);nrow(reg_by_plot_height_species_wijn)
+names(reg_by_plot_height_species_gdrive) == names(reg_by_plot_height_species_wijn)
+waldo::compare(reg_by_plot_height_species_gdrive, reg_by_plot_height_species_wijn)
+
+t <- reg_by_plot_height_species_gdrive %>% 
+  anti_join(reg_by_plot_height_species_wijn, by = c("plot_id", "period", "species", "height_class"))
+
+t <- reg_by_plot_height_species_wijn %>% 
+  anti_join(reg_by_plot_height_species_gdrive, by = c("plot_id", "period", "species", "height_class"))
+
+head(reg_by_plot_height_species_wijn %>% arrange(desc(plot_id), period)); 
+head(reg_by_plot_height_species_gdrive %>% arrange(desc(plot_id), period))
+```
+
+# Vergelijking met oude data
+
+22/12/2025 vergeleken met data op git (maart 2025 (?))
+
+```{r eval = FALSE, results='hide'}
+# 
+reg_by_plot_git <- read_forresdat_table(tablename = "reg_by_plot"
+                                           , join_plotinfo = FALSE
+                                           , plottype = "all"
+                                           , git_ref_type = "branch"
+                                           , git_reference = "develop")
+
+# vgl
+reg_by_plot_git <- reg_by_plot_git %>% 
+  select(plot_id, year, everything()) 
+# %>% 
+#   select(names(dendro_by_plot))    # vol_log_min40cm van naam veranderd!
+nrow(reg_by_plot);nrow(reg_by_plot_git)
+summary(reg_by_plot)
+names(reg_by_plot) == names(reg_by_plot_git)
+summary(reg_by_plot_git)
+waldo::compare(reg_by_plot, reg_by_plot_git)
+
+t <- reg_by_plot %>% 
+  anti_join(reg_by_plot_git, by = c("plot_id", "period"))
+# plot 414: plotdetails waren niet ingevuld, nu wel, OK dat dat mee opgenomen is nu
+
+head(reg_by_plot %>% arrange(desc(plot_id), period)); 
+head(reg_by_plot_git %>% arrange(desc(plot_id), period))
+
+```
+
+```{r eval = FALSE, results='hide'}
+# 
+reg_by_core_area_species_git <- read_forresdat_table(tablename = "reg_by_core_area_species"
+                                           , join_plotinfo = FALSE
+                                           , plottype = "all"
+                                           , git_ref_type = "branch"
+                                           , git_reference = "develop")
+
+# vgl
+reg_by_plot_git <- reg_by_core_area_species_git %>% 
+  select(plot_id, year, everything()) 
+# %>% 
+#   select(names(dendro_by_plot))    # vol_log_min40cm van naam veranderd!
+nrow(reg_by_core_area_species);nrow(reg_by_core_area_species_git)
+summary(reg_by_core_area_species)
+names(reg_by_core_area_species) == names(reg_by_core_area_species_git)
+summary(reg_by_core_area_species_git)
+waldo::compare(reg_by_core_area_species, reg_by_core_area_species_git)
+
+t <- reg_by_core_area_species %>% 
+  anti_join(reg_by_core_area_species_git, by = c("plot_id", "period"))
+t <- reg_by_core_area_species %>% 
+  anti_join(reg_by_core_area_species_git)
+            
+head(reg_by_core_area_species %>% arrange(desc(plot_id), period)); 
+head(reg_by_core_area_species_git %>% arrange(desc(plot_id), period))
+
+```
+
+
 # Export
 
 ```{r join_plottype_surveynr_BR_reg}
@@ -576,7 +830,6 @@ save_results_forresdat(
 )
 
 ```
-
 
 ```{r save_reg_access_csv, eval = FALSE}
 save_results_csv (
