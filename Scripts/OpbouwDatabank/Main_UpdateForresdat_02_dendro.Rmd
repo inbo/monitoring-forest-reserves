@@ -1560,7 +1560,79 @@ Artikel: *The LIS transects consisted of three radial lines at 120° intervals (
 *starting 3 m from the plot centre till the plot boundary (45 m total transect length in general).* 
 *Using three subtransects at 120° intervals overcomes effects of potential orientation *
 *bias of LWD (De Vries 1973, Van Wagner 1968).*
- 
+
+
+**Combinatie LIS en FAS**
+"In our simulation, logs (at base) larger than the threshold diameter were not 
+included in the LIS. Also in many managed forest it might be still feasible to exclude 
+larger logs from LIS measurements even when their diameter at intersect is already 
+smaller than the threshold. 
+
+However, in structure-rich forest with large amounts of LWD, this becomes increasingly difficult. 
+
+**Twee opties**
+**(1)** Therefore, we propose to measure all logs which are thinner than the threshold 
+diameter at the intersect of the line transect and compensate mathematically 
+for the logs that are measured by FAS and LIS. 
+
+The double counting (overestimating) can be mathematically compensated by calculating 
+the assumed diameter of all logs measured by FAS at the line intersect, applying 
+the De Vries formula for LIS (see materials & methods) for these assumed diameters 
+smaller than the threshold and subtracting the obtained volume from the total volume. 
+
+The difference between the real diameter and calculated diameter based on the 
+conical log shape might cause additional variance in the data but the number of 
+logs for which compensation is needed, is very limited (1.6% of the logs in our 
+dataset for a threshold of 30 cm). 
+
+**(2)** Alternatively, the monitoring of the French forest reserves uses FAS to measure 
+logs up to a cut-off diameter of 30 cm and LIS for diameters in between 7,5 cm 
+and 30 cm avoiding any double counting (RNF 2005)."
+
+> Mijn voorstel is om de methode van de French Forest Reserves te volgen, is makkelijkste
+te implementeren in forrescalc.
+Het kan wel zijn dat Frankrijk bij LIS enkel die logs opmeten, die niet opgemeten worden in FAS.
+Dat kan bij ons vanaf data 2026 (Liedekerke en Pruikemakers: zie veld "Remark", waarde "1") 
+Tot dan verwijderen we enkel de dbh's > 300 mm uit de LIS-data.
+
+
+**Combinatie LIS-FAS NIET bekijken OP PLOTNIVEAU**
+"It is important to clarify that measurements with the combined FAS-LIS method 
+can not be compared with FAS measurements at plot level. Despite, the CV is 
+only slightly higher for the combined method with a 30 cm threshold compared 
+to FAS, differences at plot level can be high and in both directions. 
+In our dataset, differences range from -100% up to +3760% volume difference 
+but in general the difference is low (42% of the plots are between -25 to +25% 
+volume difference, 73% between -100 and 100% volume difference)." 
+
+
+## Combinatie LIS en FAS
+
+1/1/2026: totaal volume logs obv LIS 10-30 (op snijpunt) en FAS > 30
+
+Als je abstractie maakt is dat volgens mij OK voor volledig reservaat, waar LIS voor 
+gemaakt is, LIS mag je immers niet op plotniveau bekijken
+
+- LIS op reservaatsniveau voor 10-30 cm en    
+- FAS op plot- en  reservaatsniveau  voor > 30 cm       
+
+**SVZ:**  
+
+- JHB, Wijnend, Everzwijn (CP), Heirnisse (CP + KV): LIS verwerkt, geen info over comb LIS/FAS     
+- Coolhem en Terrijst (CP + KV): nog niet verwerkt, geen info over comb LIS/FAS    
+
+
+**Op termijn:** 
+
+Vanaf winter 2025-2026 (Liedekerke en Pruikemakers) wordt op terrein aangegeven 
+of een log die snijdt, al dan niet ook bij FAS opgenomen is, dit door middel van 
+een "1" in het veld Remark. 
+Dat laat toe om - indien gewenst - deze intersects weg te laten, om zo een correctere (?)
+combinatie van LIS en FAS mogelijk te maken. De logs worden dan niet dubbel geteld. 
+
+Als dat een meerwaarde is, kan deze "1" in een volwaardige variabele gestopt worden.
+
+
  
 ## Inladen en berekenen
 
@@ -1645,7 +1717,9 @@ data_LIS <- rbind(data_LIS_p2, data_LIS_p3)
 data_LIS <- data_LIS %>% 
   # Li<-45  # lengte van de drie transecten   ! anders bij zonien
   mutate(Li = ifelse(str_detect(forest_reserve, "Zon")
-                     , 120, 45))
+                     , 120, 45)) %>% 
+  # ook anders bij KV Heirnisse
+  mutate(Li = ifelse(plot_id == "91000", 560, Li))
 table(data_LIS$forest_reserve, data_LIS$Li)
 ```
 
