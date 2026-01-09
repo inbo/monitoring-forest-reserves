@@ -679,22 +679,26 @@ over LIS versus FAS.
 Artikel: *For each plot, we simulated LIS transects and calculated log intersect*
 *diameters based on a conical log shape.*
 
-(c) Anja: voor artikel van Arno was het belangrijk om de LIS-diameters te simuleren. 
+Dixit Anja: voor artikel van Arno was het belangrijk om de LIS-diameters te simuleren. 
 Om aan te tonen dat resultaat LIS voldoende vergelijkbaar is met resultaat FAS, 
 toch wat lageer diameters betreft.
-Maar voor de dataverwerking van een cmbinatie vna LIS en FAS, is het iet correct om 
-resultaten van beide te gaan combineren.
+Maar voor de dataverwerking van een combinatie vna LIS en FAS, is het volgens mij 
+niet helemaal correct om resultaten van beide te gaan combineren.
+Anderzijds gebeurt het ook in Frankrijk en in Zweden, waarbij hetzij de zwaardere logs NIET
+opgemeten worden met LIS, hetzij mathematisch gecorrigeerd worden (cfr artikel Arno)
+
 De log intersects zijn gesimuleerd op basis van logs met een conical shape, wat niet
 de werkelijkheid is. 
 Echte LIS-diameters wijken dus af van de gesimuleerde, waardoor het idee om de logs boven 30 cm 
-met een negatieve diameter toe te voegen aan de LIS-berekening, geen steek houdt. 
+met een negatieve diameter toe te voegen aan de LIS-berekening, ook fouten creëert.
+Zeker als we volume berekenen per afbraakklasse of per soort, dan krijgen we soms negatieve volumes ...
 
-Artikel: *The LIS transects consisted of three radial lines at 120° intervals (the first pointing north) *
-*starting 3 m from the plot centre till the plot boundary (45 m total transect length in general).* 
-*Using three subtransects at 120° intervals overcomes effects of potential orientation *
-*bias of LWD (De Vries 1973, Van Wagner 1968).*
- 
- 
+Anderzijds (ook uit artikel): "the number of logs for which compensation is needed, 
+is very limited (1.6% of the logs in our dataset for a threshold of 30 cm)."
+Dus als correctie wat afwijkt, is het niet zo erg.
+Betekent dit ook dat compleet negeren van dubbel tellen OK is?
+
+
 ## Inladen en berekenen
 
 - Veld `LineIntersect` in layer `PlotDetails_3eSet` geeft aan of er LIS gebruikt 
@@ -703,7 +707,13 @@ werd of niet (TRUE/10 or FALSE/20)
 - volgende variabelen nodig:    
     - lengte van de (drie) transecten samen (Li<-45; zou uit plotdetails moeten komen) 
     - oriëntatie van de transecten enkel nodig als we de intersect diameters willen
-    berekenen van de zwaardere logs uit de Full Area Survey (FAS) - VOORLPOIG NIET
+    berekenen van de zwaardere logs uit de Full Area Survey (FAS) - VOORLOPIG NIET
+    (vanaf winter 2025-2026 (Liedekerke en Pruikemakers) wordt op terrein aangegeven 
+    of een log die snijdt, al dan niet ook bij FAS opgenomen is, dit door middel
+    van een "1" in het veld Remark. Dat kan - indien nodig - in een volwaardige 
+    variabele gestopt worden, en laat toe om deze intersects weg te laten, zodat 
+    bij combinatie van LIS en FAS, deze logs niet dubbel geteld worden: 
+    zie voor meer uitleg bij script "Main_UpdataForresdat_dendro2")
 
 <!-- code hierna komt uit script UpdateForresdat_07 -->
 
