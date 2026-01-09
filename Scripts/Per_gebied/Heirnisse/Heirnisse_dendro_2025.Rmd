@@ -474,11 +474,6 @@ Sinds 2022 is LIS in gebruik om dood hout opnames te vereenvoudigen.
 - LIS wordt gebruikt bij diameters < 30 cm    
 - Volopname (FAS) blijft in gebruik bij diameters >= 30 cm    
 
-Everzwijnbad en Wijnendale waren de eerste reservaten waar LIS gebruikt werd in de cirkelplots 
-(3 x 15 m lijn). 
-Intussen ook gebruikt bij Jansheideberg en Heirnisse.
-Heirnisse is het eerste reservaat waar LIS in de kernvlakte gebruikt werd (560 m: 2 lijnen van 140m 
-en 4 van 70m, zie figuur mail 7/12/2023).
 
 Forrescalc verwerkt momenteel (2/12/2025) enkel FAS.
 
@@ -665,6 +660,37 @@ for (tablename in names(tbls)) {
 
 # Berekening plotdata LIS 
 
+Everzwijnbad en Wijnendale waren de eerste reservaten waar LIS gebruikt werd in de cirkelplots 
+(3 x 15 m lijn). 
+Intussen ook gebruikt bij Jansheideberg en Heirnisse.
+
+Heirnisse is het eerste reservaat waar LIS in de kernvlakte gebruikt werd (560 m: 2 lijnen van 140m 
+en 4 van 70m, zie figuur mail 7/12/2023).
+Onzeker of dit wel correct is!
+
+**OPGEPAST BIJ KERNVLAKTE**
+De Vries (1973) onderzocht grondig de rekenkundige aspecten van LIS, waaronder de schatting
+van de precisie. Op basis hiervan en op basis van de simulaties van Pickford & Hazard (1978),
+somde van Wagner (1982) de volgende principes op:     
+
+- Voor gelijk welke situatie is de mate van precisie in de eerste plaats afhankelijk van de
+steekproefgrootte.      
+
+- Theoretisch gezien is de grootte van het bemonsterde gebied irrelevant. Het is immers de
+variabiliteit van het bemonsterde liggend dood hout dat een invloed heeft op de precisie.   
+
+- Daarbij komt dat voor een bepaalde totale transectlengte, het aantal transectlijnen, binnen
+bepaalde grenzen, van geen belang is. Tien transectlijnen van elk 100 m zouden dezelfde
+standaardfout moeten opleveren als 100 transectlijnen van elk 10 m (zie ook Figuur 3).
+**Maar van Wagner merkt op dat het aantal transectlijnen niet onder een bepaald minimum mag komen (bv. 20).**
+
+- Deze transectlijnen mogen fysisch gescheiden zijn (situatie VBI) of deel uitmaken van een
+lange continue transectlijn.    
+
+
+
+## Variabelen
+
 Naast `vol_logs_m3_ha` en `vol_logs_above30cm_m3_ha` ook volgende velden berekenen
 (enkel voor LIS-plots)      
 
@@ -700,31 +726,35 @@ over LIS versus FAS.
 Artikel: *For each plot, we simulated LIS transects and calculated log intersect*
 *diameters based on a conical log shape.*
 
-(c) Anja: voor artikel van Arno was het belangrijk om de LIS-diameters te simuleren. 
+Dixit Anja: voor artikel van Arno was het belangrijk om de LIS-diameters te simuleren. 
 Om aan te tonen dat resultaat LIS voldoende vergelijkbaar is met resultaat FAS, 
 toch wat lageer diameters betreft.
-Maar voor de dataverwerking van een cmbinatie vna LIS en FAS, is het iet correct om 
-resultaten van beide te gaan combineren.
+Maar voor de dataverwerking van een combinatie vna LIS en FAS, is het volgens mij 
+niet helemaal correct om resultaten van beide te gaan combineren.
+Anderzijds gebeurt het ook in Frankrijk en in Zweden, waarbij hetzij de zwaardere logs NIET
+opgemeten worden met LIS, hetzij mathematisch gecorrigeerd worden (cfr artikel Arno)
+
 De log intersects zijn gesimuleerd op basis van logs met een conical shape, wat niet
 de werkelijkheid is. 
 Echte LIS-diameters wijken dus af van de gesimuleerde, waardoor het idee om de logs boven 30 cm 
-met een negatieve diameter toe te voegen aan de LIS-berekening, geen steek houdt. 
+met een negatieve diameter toe te voegen aan de LIS-berekening, ook fouten creëert.
+Zeker als we volume berekenen per afbraakklasse of per soort, dan krijgen we soms negatieve volumes ...
 
-Artikel: *The LIS transects consisted of three radial lines at 120° intervals (the first pointing north) *
-*starting 3 m from the plot centre till the plot boundary (45 m total transect length in general).* 
-*Using three subtransects at 120° intervals overcomes effects of potential orientation *
-*bias of LWD (De Vries 1973, Van Wagner 1968).*
- 
- 
+Anderzijds (ook uit artikel): "the number of logs for which compensation is needed, 
+is very limited (1.6% of the logs in our dataset for a threshold of 30 cm)."
+Dus als correctie wat afwijkt, is het niet zo erg.
+Betekent dit ook dat compleet negeren van dubbel tellen OK is?
+
+
 ## Inladen en berekenen
 
 - Veld `LineIntersect` in layer `PlotDetails_3eSet` geeft aan of er LIS gebruikt 
 werd of niet (TRUE/10 or FALSE/20)      
 - Indien geen angle ingevoerd, veronderstellen we deze horizontaal (angle = 0)      
 - volgende variabelen nodig:    
-    - lengte van de (drie) transecten samen (Li<-45; zou uit plotdetails moeten komen) 
+    - lengte van de (drie) transecten samen (Li<-45 voor CP; zou uit plotdetails moeten komen) 
     - oriëntatie van de transecten enkel nodig als we de intersect diameters willen
-    berekenen van de zwaardere logs uit de Full Area Survey (FAS) - VOORLPOIG NIET
+    berekenen van de zwaardere logs uit de Full Area Survey (FAS) - VOORLOPIG NIET
 
 <!-- code hierna komt uit script UpdateForresdat_07 -->
 
@@ -783,11 +813,18 @@ data_LIS %>% filter(is.na(angle_cde)) %>% nrow() == 0
 summary(data_LIS)
 ```
 
+```{r}
+data_LIS <- data_LIS %>% 
+  # Li<-45  # lengte van de drie transecten   ! anders bij zonien
+  mutate(Li = ifelse(str_detect(forest_reserve, "Zon")
+                     , 120, 45)) %>% 
+  # ook anders bij KV Heirnisse
+  mutate(Li = ifelse(plot_id == "91000", 560, Li))
+
+```
+
+
 ```{r calc_LIS, results='hide'}
-colnames(data_LIS)
-
-Li<-45  # lengte van de drie transecten   
-
 #
 LIS_by_decay_species <- data_LIS %>%
   mutate(diam_m = diam_mm/1000
@@ -795,8 +832,8 @@ LIS_by_decay_species <- data_LIS %>%
          ) %>% 
   dplyr::group_by(plot_id, period, species, decaystage) %>%
   dplyr::summarise(
-    volume_m3_m2=pi^2/8/Li*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
-    # , v3_VolumeLogs_ha=pi^2/8/Li*sum((Diameter_cm^2)/cos(angle*pi/180),na.rm=T)   # cfrVBI, zelfde resultaat
+    volume_m3_m2=pi^2/8/mean(Li)*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
+    # , v3_VolumeLogs_ha=pi^2/8/mean(Li)*sum((Diameter_cm^2)/cos(angle*pi/180),na.rm=T)   # cfrVBI, zelfde resultaat
     ) %>% 
   ungroup() %>% 
   mutate(vol_LIS_m3_ha = volume_m3_m2 * 10000) %>% 
@@ -811,8 +848,8 @@ LIS_by_decay <- data_LIS %>%
          ) %>% 
   dplyr::group_by(plot_id, period, decaystage) %>%
   dplyr::summarise(
-    volume_m3_m2=pi^2/8/Li*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
-    # , v3_VolumeLogs_ha=pi^2/8/Li*sum((Diameter_cm^2)/cos(angle*pi/180),na.rm=T)   # cfrVBI, zelfde resultaat
+    volume_m3_m2=pi^2/8/mean(Li)*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
+    # , v3_VolumeLogs_ha=pi^2/8/mean(Li)*sum((Diameter_cm^2)/cos(angle*pi/180),na.rm=T)   # cfrVBI, zelfde resultaat
     ) %>% 
   ungroup() %>% 
   mutate(vol_LIS_m3_ha = volume_m3_m2 * 10000) %>% 
@@ -825,8 +862,8 @@ LIS_by_species <- data_LIS %>%
          ) %>% 
   dplyr::group_by(plot_id, period, species) %>%
   dplyr::summarise(
-    volume_m3_m2=pi^2/8/Li*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
-    # , v3_VolumeLogs_ha=pi^2/8/Li*sum((Diameter_cm^2)/cos(angle*pi/180),na.rm=T)   # cfrVBI, zelfde resultaat
+    volume_m3_m2=pi^2/8/mean(Li)*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
+    # , v3_VolumeLogs_ha=pi^2/8/mean(Li)*sum((Diameter_cm^2)/cos(angle*pi/180),na.rm=T)   # cfrVBI, zelfde resultaat
     ) %>% 
   ungroup() %>% 
   mutate(vol_LIS_m3_ha = volume_m3_m2 * 10000) %>% 
@@ -841,8 +878,8 @@ LIS_by_plot <- data_LIS %>%
          ) %>% 
   dplyr::group_by(plot_id, period) %>%
   dplyr::summarise(
-    volume_m3_m2=pi^2/8/Li*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
-    # , v3_VolumeLogs_ha=pi^2/8/Li*sum((Diameter_cm^2)/cos(angle*pi/180),na.rm=T)   # cfrVBI, zelfde resultaat
+    volume_m3_m2=pi^2/8/mean(Li)*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
+    # , v3_VolumeLogs_ha=pi^2/8/mean(Li)*sum((Diameter_cm^2)/cos(angle*pi/180),na.rm=T)   # cfrVBI, zelfde resultaat
     ) %>% 
   ungroup() %>% 
   mutate(vol_LIS_m3_ha = volume_m3_m2 * 10000) %>% 
@@ -865,15 +902,13 @@ colnames(data_LIS)
 data_LIS_10_30cm <- data_LIS %>% 
   filter(diam_mm < 300)
 
-Li<-45  # lengte van de drie transecten   
-
 #
 LIS_by_decay_species_10_30cm <- data_LIS_10_30cm %>%
   mutate(diam_m = diam_mm/1000
          ) %>% 
   dplyr::group_by(plot_id, period, species, decaystage) %>%
   dplyr::summarise(
-    volume_m3_m2=pi^2/8/Li*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
+    volume_m3_m2=pi^2/8/mean(Li)*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
     ) %>% 
   ungroup() %>% 
   mutate(vol_LIS_10_30cm_m3_ha = volume_m3_m2 * 10000) %>% 
@@ -885,7 +920,7 @@ LIS_by_decay_10_30cm <- data_LIS_10_30cm %>%
          ) %>% 
   dplyr::group_by(plot_id, period, decaystage) %>%
   dplyr::summarise(
-    volume_m3_m2=pi^2/8/Li*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
+    volume_m3_m2=pi^2/8/mean(Li)*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
     ) %>% 
   ungroup() %>% 
   mutate(vol_LIS_10_30cm_m3_ha = volume_m3_m2 * 10000) %>% 
@@ -897,7 +932,7 @@ LIS_by_species_10_30cm <- data_LIS_10_30cm %>%
          ) %>% 
   dplyr::group_by(plot_id, period, species) %>%
   dplyr::summarise(
-    volume_m3_m2=pi^2/8/Li*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
+    volume_m3_m2=pi^2/8/mean(Li)*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
     ) %>% 
   ungroup() %>% 
   mutate(vol_LIS_10_30cm_m3_ha = volume_m3_m2 * 10000) %>% 
@@ -909,7 +944,7 @@ LIS_by_plot_10_30cm <- data_LIS_10_30cm %>%
          ) %>% 
   dplyr::group_by(plot_id, period) %>%
   dplyr::summarise(
-    volume_m3_m2=pi^2/8/Li*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
+    volume_m3_m2=pi^2/8/mean(Li)*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
     ) %>% 
   ungroup() %>% 
   mutate(vol_LIS_10_30cm_m3_ha = volume_m3_m2 * 10000) %>% 
@@ -950,7 +985,7 @@ mean(t$vol_log_above30cm_m3_ha); mean(t$vol_LIS_above30cm_m3_ha)
       #          ) %>% 
       #   dplyr::group_by(plot_id, period) %>%
       #   dplyr::summarise(
-      #     volume_m3_m2=pi^2/8/Li*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
+      #     volume_m3_m2=pi^2/8/mean(Li)*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
       #     ) %>% 
       #   ungroup() %>% 
       #   mutate(vol_LIS_above30cm_m3_ha = volume_m3_m2 * 10000) %>% 
@@ -1291,9 +1326,7 @@ Enkele verduidelijkingen:
 * "vol_bole_alive_m3_ha" en "vol_bole_dead_m3_ha": volume zonder crown, 
 versus "vol_alive_m3_ha" en "vol_dead_standing_m3_ha"
 
-* "vol_log_m3_ha": liggend dood hout (NA als er geen deadwood survey gebeurd is)
-
-* "vol_deadw_m3_ha": staand en liggend dood hout (NA als er geen deadwood survey gebeurd is)
+* "vol_log_m3_ha": liggend dood hout obv volopname (NA als er geen deadwood survey gebeurd is)
 
 
 ```{r save, eval=FALSE}
