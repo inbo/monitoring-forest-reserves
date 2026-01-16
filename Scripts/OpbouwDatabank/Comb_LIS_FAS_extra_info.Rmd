@@ -1,5 +1,6 @@
 ---
-title: "Update forresdat - deadwood op plotniveau obv LIS"
+title: "Combinatie LIS - FAS"
+subtitle: "Berekening diameter op snijpunt van logs > 30 cm"
 author: "Anja Leyman"
 date: "`r Sys.Date()`"
 output: 
@@ -13,6 +14,50 @@ output:
       collapsed: yes
       smooth_scroll: yes
 ---
+
+De berekening van de deadwood volumes op basis van LIS gebeurt in script 
+Main_UpdateForresdat_02_dendro.Rmd.
+
+Onderstaand script was een eerste aanzet om de dubbele metingen 
+van LIS en FAS mathematisch te corrigeren, wat volgens mij niet goed lukt.
+
+Beter is om met een extra variabele te werken die aangeeft of een LIS-element 
+ook als FAS opgemeten werd.
+**(vanaf winter 2025-2026 (BR Liedekerke en Pruikemakers) wordt in het veld "remark" **
+**een "1" geplaatst wanneer het LIS-element ook in FAS opgenomen is)**
+
+Op dit moment wordt LIS naast FAS berekend, het is aan de gebruiker van de data 
+om te beslissen of hij deze al dan niet combineert.
+
+**Berekende velden**
+
+- vol_LIS_m3_ha
+- vol_LIS_10_30cm_m3_ha
+- vol_log_above30cm_m3_ha
+
+=> totaal volume logs obv LIS 10-30 (op snijpunt) en FAS > 30        
+(als je abstractie maakt is dat volgens mij OK voor volledig reservaat, waar LIS voor 
+gemaakt is, LIS mag je immers niet op plotniveau bekijken)      
+    - LIS op reservaatsniveau voor 10-30 cm en        
+    - FAS op plot- en  reservaatsniveau  voor > 30 cm   
+    
+
+**SVZ:**  
+
+- JHB, Wijnend, Everzwijn (CP), Heirnisse (CP + KV): LIS verwerkt, geen info over comb LIS/FAS     
+- Coolhem en Terrijst (CP + KV): nog niet verwerkt, geen info over comb LIS/FAS    
+
+
+**Op termijn:** 
+
+Vanaf winter 2025-2026 (Liedekerke en Pruikemakers) wordt op terrein aangegeven 
+of een log die snijdt, al dan niet ook bij FAS opgenomen is, dit door middel van 
+een "1" in het veld Remark. 
+Dat laat toe om - indien gewenst - deze intersects weg te laten, om zo een correctere (?)
+combinatie van LIS en FAS mogelijk te maken. De logs worden dan niet dubbel geteld. 
+
+Als dat een meerwaarde is, kan deze "1" in een volwaardige variabele gestopt worden.
+
 
 
 ```{r Rm, eval = FALSE}
@@ -41,31 +86,7 @@ path_to_html_teamdrive <- paste0(path_to_dataverwerking_teamdrive, "25_Overkoepe
 ```
 
 
-> juiste forrescalc kiezen:   
-- om weg te schrijven naar forresdat - branch main => met juiste release van het package: dan `install.packages("forrescalc")`  
-- laatste correcties van forrescalc => juiste branch selecteren in forrescalc en opnieuw builden - wegschrijven kan naar forresdat - branch "develop"
-(10/3/25: branch 'bugfix' met corr van read_forresdat waarbij we de develop branch kunnen selecteren ipv main)
-
-
-```{r forrescalc_to_write_to_forresdat, eval = FALSE}
-# !!! eerst zeker 'install.packages("forrescalc")
-# zodat data goede release krijgt!
-# zie mail 7/10/24 van Els L.
-# soms een andere branch nodig als Els nog iets moet fixen, maar als ik naar forresdat 
-# wil wegschrijven, moet ik officiële versie van forrescalc gebruiken
-
-install.packages("forrescalc")
-```
-
-
-
 # Vraagstelling
-DOEL van dit script is een update van forresdat gegevens naar 
-
-- forresdat-folder als csv (nadien nog te pushen naar github)
-- BR_analysedb.accdb
-- output-folders "_plot-level-data" en "_tree-level-data" als csv
-- gdrive-folders "_plot-level-data" en "_tree-level-data" als csv
 
 Sinds 2022 is LIS in gebruik om dood hout opnames te vereenvoudigen.
 Arno T. schreef er een artikel over ()
@@ -749,24 +770,11 @@ Ofwel rapporteren we over > 30 cm obv FAS, groot BI als we op reservaatsniveau e
 Ofwel rapporteren we over alles obv LIS, grote onnauwkeurigheid voor grote diameters
 
 Eigenlijk zou er een extra veld moeten zijn met diameter thv de transecten
-Maar dan kunnen we net zo goed zeggen van niet dubbel te tellen.
+**(vanaf winter 2025-2026 (BR Liedekerke en Pruikemakers) wordt in het veld "remark" **
+**een "1" geplaatst wanneer het LIS-element ook in FAS opgenomen is)**
 
 We kunnen ook - als er veel zijn waarmee gekoppeld kan worden - de grootste diameter nemen.
 En als er geen zijn, dan decaystage laten vallen om mee te koppelen
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 ```{r combine_LIS_en_compFAS}
@@ -796,7 +804,7 @@ data_LIS_corr <- rbind(data_LIS_kleinerdan30, comp_LIS_groterdan30)
 => dus NA compensatie voor dubbeltellingen, enkel wat effectief < 30 cm diameter is
 
 
-```{r calc_LIS, results='hide'}
+```{r calc_LIS2, results='hide'}
 colnames(data_LIS_corr)
 summary(data_LIS_corr) # ok
 
