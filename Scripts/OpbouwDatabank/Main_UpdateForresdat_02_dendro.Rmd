@@ -35,21 +35,9 @@ source(here::here("scripts/Setup.R"))
 
 ```
 
-
-```{r TMP_fieldmapdb}
-#tijdelijk
-path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_22_inbo2026_20251014/")
-dbFieldmap <- "FieldMapData_MDB_BR_22_inbo2026.accdb"
-path_to_fieldmap_db <- paste0(path_to_fieldmap, dbFieldmap)
-path_to_fieldmap_db_all <- paste0(path_to_fieldmap, dbFieldmap)
-```
-
-
 ```{r Setup2}
 path_to_html_teamdrive <- paste0(path_to_dataverwerking_teamdrive, "25_Overkoepelend")
 ```
-
-
 
 > juiste forrescalc kiezen:   
 (1)  om weg te schrijven naar "main" branch van forresdat => met juiste release van het package: dan `install.packages("forrescalc")`  
@@ -86,6 +74,7 @@ Deze uitzonderingen worden na het inladen van de data gecorrigeerd.
 
 
 ```{r results='hold', eval=TRUE}
+path_to_fieldmap_db
 path_to_forresdat_data
 path_to_analysis_set_db
 path_to_plotlevel_csv
@@ -126,13 +115,8 @@ Plotinfo inladen: `plottype`, naam `forest_reserve` en info over survey's.
 (plotinfo op gdrive en forresdat: enkel processed plots!)
 
 ```{r }
-# mbv forresdat
-# plotinfo <- read_forresdat(file = "plotinfo", root = path_to_forresdat_data)
-# names(plotinfo)
-# ?read_forresdat
-
 # van c-schijf
-    # plotinfo_ <- read.csv2(paste0(path_to_plotlevel_csv, "plotinfo.csv")) %>% 
+    # plotinfo <- read.csv2(paste0(path_to_plotlevel_csv, "plotinfo.csv")) %>% 
     #   select(-1)
 
 # van forresdat
@@ -141,6 +125,7 @@ plotinfo <- read_forresdat_table(
   , git_ref_type = "branch", git_reference = "develop"
   , join_plotinfo = FALSE
   , plottype = "all")  # NIET ENKEL CP's!
+
 ```
 
 
@@ -330,8 +315,11 @@ in de moederdatabank zelf.
 
 **!!! ZEKER WANNEER ER EXTRA PLOTS TOEGEVOEGD ZIJN**
 Dan blijkt volume nog niet "inside plot" berekend te zijn!
-Zoals nu (10/3/2025) Withoefse heide, Heirnisse en Jansheideberg
-
+Zoals nu (10/3/2025) Withoefse heide, Heirnisse en Jansheideberg.
+> Laatste keer aangepast in db "C:/03_BR_db_monitoring/MDB_BR_22_inbo2026_20251014/FieldMapData_MDB_BR_22_inbo2026.accdb"
+op 21/1/2026
+(eerst in DC "volume inside plot" berekenen voor "all plots" (duudrde ca 10 minuten)
+en dan chunck hierna runnen om CalcLength_m en CalcVolume_m3 te berekenen)
 
 ```{r sql_update_calc_deadw_inside_plot, eval = FALSE}
 # !! ENKEL UITVOEREN NADAT IN DC "volume inside plot" BEREKEND IS
@@ -437,8 +425,8 @@ nrow(check_deadw) == 0
 
 ```
 
-9 records transect withoefsse heide, wel reeds afgesneden, maar calc_volume nog niet berekend in db
-Nu in orde in mijn lokale moederdb "C:/03_BR_db_monitoring/MDB_BR_X8_inbo2020_20250311/FieldMapData_MDB_BR_X8_inbo2020.accdb"
+9 records transect withoefse heide, wel reeds afgesneden, maar calc_volume nog niet berekend in db
+> Nu in orde in mijn lokale moederdb "C:/03_BR_db_monitoring/MDB_BR_22_inbo2026_20251014/FieldMapData_MDB_BR_22_inbo2026.accdb"
 
 
 ```{r tmp_WithHeide_T, eval = FALSE}
@@ -482,7 +470,7 @@ OPGEPAST: gebeurt plot per plot én enkel voor de actieve layers
 
 Indien deadwood als intact (veld `IntactFragment`) aangevinkt staat, moeten er 
 **tarieven** gebruikt worden om dit volume te berekenen.
-(zie issue # 105) 
+(zie issue # 105: is nu geïmplementeerd in forrescalc) 
 
 Er werd afgesproken met Peter `intact` enkel nog te gebruiken voor de BE's of de KV's  
 (als bomen tenminste plotgrens van KV niet overschrijden). 
@@ -658,9 +646,9 @@ dendro <- calculate_dendrometry(data_dendro, data_deadwood, data_shoots, height_
 TEMP: overal `vol_deadw_m3_ha` verwijderen
 Combineert logs en standing dead trees, maar is onduidelijk welke logs gebruikt worden (lis/fas of beide?).
 Op te nemen in forrescalc, zie [issue 166](https://github.com/inbo/forrescalc/issues/166).
-Opgenomen in bugfix_Al2025 (22/12/2025).
+Opgenomen in bugfix_AL2025 (22/12/2025).
 
-```{r TMP_NO_FIELD_vol_deadw_m3_ha}
+```{r TMP_NO_FIELD_vol_deadw_m3_ha, eval = FALSE}
 # voor alle dataframes in "dendro"
 names(dendro)
 
@@ -809,9 +797,9 @@ dendro_by_plot %>% filter( stems_per_tree == 0) %>% nrow() == 0
 
 ```{r}
 dendro_by_plot_species %>% filter(is.na(stems_per_tree)) %>% nrow()
-# 1389 records / 1479 / 1480
+# 1389 records / 1479 / 1480 / 1478
 dendro_by_plot_species %>% filter(stem_number_ha == 0) %>% nrow()
-# ook 1389 /1479 /1480 => OK
+# ook 1389 /1479 /1480 / 1478 => OK
 
 dendro_by_plot_species %>% filter( stems_per_tree == 0)
 # komt niet voor
@@ -827,7 +815,7 @@ col <- c("year", "stem_number_alive_ha", "stem_number_dead_ha",
          "vol_dead_standing_m3_ha", "vol_bole_alive_m3_ha", "vol_bole_dead_m3_ha",
          "vol_log_m3_ha")
 
-dendro_by_diam_plot %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+dendro_by_diam_plot %>% filter_at(col, any_vars(is.na(.))) %>% nrow() 
 # 280 / 281
 
 check <- dendro_by_diam_plot %>% filter_at(col, any_vars(is.na(.)))
@@ -854,10 +842,10 @@ col <- c("year", "species", "stem_number_alive_ha", "stem_number_dead_ha",
          "vol_log_m3_ha")
 
 dendro_by_diam_plot_species %>% filter_at(col, any_vars(is.na(.))) %>% nrow() 
-#346
+# 345
 
 check <- dendro_by_diam_plot_species %>% filter_at(col, any_vars(is.na(.)))
-# deadwood geen opname, ename: geen species en dbh_clss, 
+# deadwood geen opname, ename: geen species en dbh_class, 
 check %>% left_join(plotinfo) %>% 
   group_by(forest_reserve, plottype, period, survey_deadw) %>% 
   summarise(n = n_distinct(plot_id)) %>% 
@@ -865,10 +853,11 @@ check %>% left_join(plotinfo) %>%
 
 dendro_by_plot %>% filter(number_of_tree_species == 0) %>% dplyr::pull(plot_id)
 
-t <- dendro_by_diam_plot_species %>% filter(plot_id == 734 & period == 3)
-# waarom hier een NA bij species? 
-# !er is liggend dood hout waarvan de soort ontbreekt, gevraagd aan Peter (mail 17/12/2025)
-# (en geen levend in die diameterklasse)
+# OPGELOST: 
+# t <- dendro_by_diam_plot_species %>% filter(plot_id == 734 & period == 3)
+  # waarom hier een NA bij species? 
+  # !er is liggend dood hout waarvan de soort ontbreekt, gevraagd aan Peter (mail 17/12/2025)
+  # (en geen levend in die diameterklasse)
 ```
 
 In Ename (periode 2) zijn er 13 plots zonder bomen:
@@ -877,10 +866,7 @@ Deze zorgen voor een "NA" bij species en diameterklasse, en volumes = 0.
 
 In Wijnendale (periode 1) is er ook één plot (475) zonder bomen, maar omdat er 
 wél liggend dood hout opgemeten is, wordt dat in de tabel opgenomen.
-Levend voluem = 0.
-
-In Heinisse (periode 3) is er één log zonder soort in plot 734, daarom species = NA
-Dat is OK zo.
+Levend volume = 0.
 
 ```{r}
 # beperkter
@@ -911,6 +897,7 @@ col <- c("year", "decaystage", "vol_log_m3_ha", "vol_bole_dead_m3_ha")
 
 deadw_by_decay_plot %>% filter_at(col, any_vars(is.na(.))) %>% 
   filter(vol_bole_dead_m3_ha != 0 | vol_log_m3_ha != 0) %>% nrow() == 0
+# 60
 # als volume 0 is, is het logisch dat decaystage = NA
 
 check <- deadw_by_decay_plot %>% filter_at(col, any_vars(is.na(.))) %>% 
@@ -920,11 +907,14 @@ check <- deadw_by_decay_plot %>% filter_at(col, any_vars(is.na(.))) %>%
 # deels geen liggend dood hout opname => ok
 
 check %>% 
+  filter(!is.na(vol_log_m3_ha) & vol_log_m3_ha > 0) %>% 
   group_by(forest_reserve, plottype, period, survey_deadw) %>% 
   summarise(n = n()
             ,n_plots = n_distinct(plot_id)) %>% 
   ungroup() %>% 
   filter(survey_deadw)
+# verspreid een aantal decaystages (n = 26) niet ingevuld
+# check %>% filter(!is.na(vol_log_m3_ha) & vol_log_m3_ha > 0) %>% nrow()
 ```
 
 ## Deadw_by_decay_plot_species
@@ -933,11 +923,18 @@ check %>%
 col <- c("year", "decaystage", "species", "vol_log_m3_ha", "vol_bole_dead_m3_ha")
 
 deadw_by_decay_plot_species %>% filter_at(col, any_vars(is.na(.))) %>% 
-  filter(vol_bole_dead_m3_ha != 0 | vol_log_m3_ha != 0) %>% nrow() == 0
+  filter(vol_bole_dead_m3_ha != 0 | vol_log_m3_ha != 0) %>%
+  filter(!is.na(vol_log_m3_ha) & is.na(decaystage)) %>%  nrow() == 0
+# 67
+# vol_log_m3_ha = NA is OK, want geen deadwood opname
 
 check <- deadw_by_decay_plot_species %>% filter_at(col, any_vars(is.na(.))) %>% 
-  filter(vol_bole_dead_m3_ha != 0 | vol_log_m3_ha != 0)
-# OK, kan vergeten zijn
+  filter(vol_bole_dead_m3_ha != 0 | vol_log_m3_ha != 0) %>% 
+  filter(!is.na(vol_log_m3_ha) & is.na(decaystage))
+# OK, kan vergeten zijn (vooral periode 1)
+table(check$period)
+#  1  2  3 
+#  45  9 13 
 ```
 
 <!-- # Add zero's - NIET MEER NODIG -->
@@ -1003,7 +1000,8 @@ deadw_by_decay_plot_species %>% filter(plot_id == 11000 & period == 1) %>% dplyr
 deadw_by_decay_plot_species %>% filter(plot_id == 1620 & period == 2) %>% dplyr::pull(vol_log_m3_ha)
 
 ```
-# CORRECTIE logs - Zoniën KERN_1983 & UITBR_1995 
+
+# CORRECTIE logs - Zoniën 
 
 Correctie op plot-niveau
 
@@ -1022,14 +1020,17 @@ en Zwaenepoel werden vervangen door
 - Zoniën KERN_1983 - CA - 1986 en 2000: 
 ** geen deadwood opgemeten
 
-- Zoniën KERN_1983 & Zoniën KERN_1995 - CP - 2000:
+- Zoniën KERN_1983 - CP - 2000:
+CP's achteraf uitgesneden uit KV => geen deadwood
+
+- Zoniën UITBR_1995 - CP - 2000:
 ** cijfers overgenomen uit monitoringrapport, zitten niet in fieldmap
 
-- Zoniën KERN_1983 - CA - KV 2010 en 2020: 
+- Zoniën KERN_1983 - CA - 2010 en 2020: 
 ** deadwood pas vanaf 40 cm 
 ** 51 intacte liggende dode bomen
 
-## CORRECTIE CP's Zoniën KERN_1983 & Zoniën UITBR_1995 - periode 1
+## CORRECTIE CP's Zoniën UITBR_1995 - periode 1
 
 Periode 1, opnamejaar 2000
 
@@ -1074,7 +1075,7 @@ update_logs_Kerss_CP <- function(tab) {
       left_join(logs_Kerss_2000) %>% 
       mutate(vol_log_m3_ha = ifelse(
         between(plot_id, 2000, 2070) & period == 1 
-        #forest_reserve %in% c("Zoniën KERN_1983", "Zoniën UITBR_1995") & plottype == "CP" 
+        #forest_reserve %in% c("Zoniën UITBR_1995") & plottype == "CP" 
         , VOLUME_LOG_m3_ha
         , vol_log_m3_ha)) %>% 
       select(-VOLUME_LOG_m3_ha)
@@ -1084,7 +1085,7 @@ update_logs_Kerss_CP <- function(tab) {
     tabel <- tabel %>% 
       left_join(logs_per_spec_Kerss_2000) %>% 
       mutate(vol_log_m3_ha = ifelse(between(plot_id, 2000, 2070) & period == 1 
-                                #forest_reserve %in% c("Zoniën KERN_1983", "Zoniën UITBR_1995") & plottype == "CP" 
+                                #forest_reserve %in% c("Zoniën UITBR_1995") & plottype == "CP" 
                                 , ifelse(is.na(VOLUME_LOG_m3_ha), 0, VOLUME_LOG_m3_ha)
                                 , vol_log_m3_ha)) %>% 
       select(-VOLUME_LOG_m3_ha)
@@ -1095,7 +1096,7 @@ update_logs_Kerss_CP <- function(tab) {
     tabel <- tabel %>% 
       mutate(vol_log_m3_ha = ifelse(
         between(plot_id, 2000, 2070) & period == 1 
-        #forest_reserve %in% c("Zoniën KERN_1983", "Zoniën UITBR_1995") & plottype == "CP" 
+        #forest_reserve %in% c("Zoniën UITBR_1995") & plottype == "CP" 
         , NA
         , vol_log_m3_ha)) 
     }
@@ -1245,7 +1246,7 @@ gaan we hier niet doen
 
 ```{r}
 plotinfo %>% filter(survey_lis) %>% distinct(period, plottype)
-# LIS enkel periode 2 en 3 en CP
+# LIS enkel periode 2 (CP) en 3 (CP én 1 CA op 1/1/2026)
 ```
 Forrescalc gaat er nog vanuit dat er opgemeten wordt vanaf 10 cm, waardoor de 
 volumes (`vol_log_m3_ha`) per diameterklasse foutief op nul gezet worden.
@@ -1274,8 +1275,14 @@ de treshold is voor opname deadwood:
 - `TresHoldDiam_Deadwood_A4`    
 - `TresHoldDiam_Deadwood_CoreArea`
 
-Hierna gaan we dit hard coderen, zonder naar de plotdetails te gaan kijken.
+Hierna gaan we dit hard coderen, zonder naar de plotdetails te kijken.
 Maar moet wel geïmplementeerd worden in forescalc.
+(issue 174: `load_plotinfo()` haalt nu ook de tresholds op)
+
+```{r eval = FALSE}
+names(plotinfo)
+```
+
 
 Volgende stappen worden doorlopen: 
 
@@ -1310,7 +1317,7 @@ Nu (2/12/22025) dus opgenomen in functie `correctie_1`
 # lis 2011 zonien
 plotinfo %>% filter(period == 2 & survey_lis) %>% distinct(forest_reserve, plottype)
 
-# uitzondering voor corectie mbt survey_lis
+# uitzondering voor correctie mbt survey_lis
 FAS_vanaf_10cm <- c("Zoniën UITBR_1995", "Zoniën KERN_1983", "Kluisbos")
 # ter info: slechts een deel van Kluisbos, het andere deel (beheerd) werd géén FAS uitgevoerd
 # (survey_deadw = FALSE) - maar dat heeft hier geen impact, want vol_log is daar sowieso al = NA
@@ -1721,11 +1728,12 @@ data_LIS <- data_LIS %>%
   # ook anders bij KV Heirnisse
   mutate(Li = ifelse(plot_id == "91000", 560, Li))
 table(data_LIS$forest_reserve, data_LIS$Li)
+table(data_LIS$forest_reserve, data_LIS$period)
 ```
 
 ```{r results='hide'}
 names(data_LIS)
-nrow(data_LIS)  # 3008
+nrow(data_LIS)  # 3008  (? 21/1/2026: 2614): gecheckt en via access-db zie ik zelfde aantallen
 range(data_LIS$plot_id)
 unique(data_LIS$AliveDead) == 12  # enkel dood en NA (zonien)
 unique(data_LIS$survey_lis) == TRUE
@@ -1897,7 +1905,7 @@ t <- dendro_by_plot_ %>%
   select(plot_id, contains("above"), everything())
 
 mean(t$vol_log_above30cm_m3_ha, na.rm = TRUE); mean(t$vol_LIS_above30cm_m3_ha)
-# hier geen goede vergelijking, want zonien heeft geen vol_log_above30cm_m3_ha
+# hier geen goede vergelijking, want zonien/kluisbos heeft geen vol_log_above30cm_m3_ha
 # maar wel een vol_LIS_above30cm_m3_ha
 ```
 
@@ -2039,12 +2047,12 @@ head(dendro_by_plot %>% arrange(desc(plot_id), period)); head(dendro_by_plot_git
 t <- dendro_by_plot %>% 
   anti_join(dendro_by_plot_git)
 
-head(dendro_by_plot %>% arrange(desc(plot_id), period) %>% filter(plot_id == 2010)); 
-head(dendro_by_plot_git %>% arrange(desc(plot_id), period) %>% filter(plot_id == 2010))
+head(dendro_by_plot %>% arrange(desc(plot_id), period) %>% filter(plot_id == 830)); 
+head(dendro_by_plot_git %>% arrange(desc(plot_id), period) %>% filter(plot_id == 830))
 
 # LIS is anders, is nu foutief 0 !!!
 
-waldo::compare(dendro_by_plot %>% filter(plot_id == 2010), dendro_by_plot_git %>% filter(plot_id == 2010))
+w <- waldo::compare(dendro_by_plot %>% filter(plot_id == 91000), dendro_by_plot_git %>% filter(plot_id == 91000))
 # afronding is anders 
 # of enkele kleine aanpassingen wegens kleine correcties?
 ```
@@ -2077,9 +2085,9 @@ deadw_by_decay_plot_git <- read_forresdat_table(tablename = "deadw_by_decay_plot
                                            , plottype = "all"
                                            , git_ref_type = "branch"
                                            , git_reference = "develop")
-nrow(deadw_by_decay_plot); nrow(deadw_by_decay_plot_git)
-t <- deadw_by_decay_plot_git %>% 
-  anti_join(deadw_by_decay_plot, by = c("plot_id", "period", "decaystage"))
+nrow(deadw_by_decay_plot) == nrow(deadw_by_decay_plot_git)
+# t <- deadw_by_decay_plot_git %>% 
+#   anti_join(deadw_by_decay_plot, by = c("plot_id", "period", "decaystage"))
 
 head(deadw_by_decay_plot %>% arrange(desc(plot_id), period, decaystage) %>% filter(plot_id == 2010)); 
 head(deadw_by_decay_plot_git %>% arrange(desc(plot_id), period, decaystage) %>% filter(plot_id == 2010))
