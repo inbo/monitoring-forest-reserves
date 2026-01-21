@@ -86,6 +86,7 @@ Dataverwerking Wijnendale (nalv 3eSET), gebruik makend van (nieuwe) forrescalc.
 
 
 ```{r results='hold', eval=TRUE}
+path_to_fieldmap_db
 path_to_forresdat_data
 path_to_analysis_set_db
 path_to_plotlevel_csv
