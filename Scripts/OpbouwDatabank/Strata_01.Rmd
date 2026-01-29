@@ -21,7 +21,8 @@ rm(list=ls())
 ```{r Setup, include = FALSE}
 knitr::opts_chunk$set(
   echo = TRUE,
-  eval = FALSE,
+  eval = TRUE,
+  results = 'hide', 
   message = FALSE,
   warning = FALSE, 
   fig.width = 9,
@@ -89,17 +90,25 @@ en Zwaenepoel werden vervangen door
     - Zoniën HARRAS_1995: bevat KV en CP (voorheen "Harras" voor KV en "Zwaenepoel" voor CP's)    
     - Zoniën UITBR_2010: bevat enkel CP's (voorheen "Zwaenepoel", maar zonder deze die nu in "HARRAS_1995" liggen)
 
+22/01/2026: LIS geïmplementeerd       
+Nu ook With heide, Heirnisse en Jansheideberg 3de decade in info_survey       
+Alle plots ook opgenomen in tabel "dominant tree"
+
 
 # Import data
 
 ## Shapefile Marc
 
-> VPN opstarten!
+VPN opstarten bij inladen van een nieuwe shapefile.   
+
+Eens ingeladen deze shapefile best op de c-schijf opslaan om hem toegankelijker
+te maken.
 
 ```{r import_data_shp, eval = FALSE}
 # rechtstreeks van  Amazon, na opstarten van VPN
-fc_strata_shp <-read_sf("Z:/Projects/PRJ_BosEco/PRJ_PERS_ME_GIS/00_alle_proefvlakken/def/metinfo/boseco_alleproefvlakken_centraalpunt_lam72_metinfo.shp", crs = 31370) %>% rename(plot_id = PlotID)
+# fc_strata_shp_marc_orig <-read_sf("Z:/Projects/PRJ_BosEco/PRJ_PERS_ME_GIS/00_alle_proefvlakken/def/metinfo/boseco_alleproefvlakken_centraalpunt_lam72_metinfo.shp", crs = 31370) %>% rename(plot_id = PlotID)
 
+fc_strata_shp <-read_sf("G:/Gedeelde drives/Team_Boseco_BR/PRJ_BR_AanvraagGegevens/00_METADATA-ALL_PLOTS/GIS-lagen_bosreservaten/alle_proefvlakken_gecombineerd/boseco_alleproefvlakken_centraalpunt_lam72_metinfo.shp", crs = 31370) %>% rename(plot_id = PlotID)
 
 df_strata_shp <- fc_strata_shp %>% st_drop_geometry()  # cfr forresdat
 
@@ -108,7 +117,7 @@ st_write(fc_strata_shp, "C:/03_BR/1_DataVerwerkingBR/Data/GIS/boseco_alleproefvl
          , append=FALSE) 
 ```
 
-```{r import_data_shp_c_schijf, eval = TRUE}
+```{r import_data_shp_c_schijf, eval = TRUE, results='markup'}
 fc_strata_shp <-read_sf("C:/03_BR/1_DataVerwerkingBR/Data/GIS/boseco_alleproefvlakken_centraalpunt_lam72_metinfo.shp", crs = 31370) 
 
 df_strata_shp <- fc_strata_shp %>% st_drop_geometry()  # cfr forresdat
@@ -130,43 +139,11 @@ df_strata_shp %>% inner_join(dubbele_plotids)
 # ! enkel van belang bij bodem, alle andere strata zijn zelfde voor volledige kernvlakte
 ```
 
-> TMP: tijdelijk beheer van 6 plots in Kluisbos aanpassen, gevraagd aan Marc om dat in shapefile aan te passen
-in mail van 21/3/2025
-Zodra in orde nieuwe kopie naar mijn c-schijf
-Idem voor drie plots open ruimte en gemaaide paden in Wijnendale
-
-```{r TMP_adjust_management_kluisbos}
-names(df_strata_shp)
-
-df_strata_shp_ <- df_strata_shp %>% 
-  mutate(Management = ifelse(plot_id %in% c(1512:1517), "unmanaged", Management),
-         Beheer = ifelse(plot_id %in% c(1512:1517), "0-beheer", Beheer))
-
-unique(df_strata_shp$Management)
-unique(df_strata_shp$Beheer)
-
-df_strata_shp <- df_strata_shp_ 
-```
-
-
-```{r TMP_adjust_other_management}
-names(df_strata_shp)
-
-df_strata_shp_ <- df_strata_shp %>% 
-  mutate(Management = ifelse(plot_id %in% c(482, 1137, 1140), "open area", Management),
-         Beheer = ifelse(plot_id %in% c(482, 1137, 1140), "open ruimte", Beheer)) %>% 
-  mutate(Management = ifelse(plot_id %in% c(400, 424, 426), "mowed path", Management),
-         Beheer = ifelse(plot_id %in% c(400, 424, 426), "gemaaid pad", Beheer))  
-
-# onderstaande niet, want nu wel nulbeheer, wordt aangegeven in jaartal ...
-# %>% 
-#   mutate(Management = ifelse(plot_id %in% exotenbeheer$plot_id, "control of invasive species (2004 and 2008)", Management),
-#          Beheer = ifelse(plot_id %in% exotenbeheer$plot_id, "exotenbeheer (2004 en 2008)", Beheer)) 
-
-unique(df_strata_shp$Management)
-unique(df_strata_shp$Beheer)
-
-df_strata_shp <- df_strata_shp_
+```{r eval = FALSE}
+# check nalv enkele aangepaste records mbt "beheer" - ok, 22/1/2026
+# df_strata_shp %>% filter(plot_id %in% c(1512:1517))
+# df_strata_shp %>% filter(plot_id %in% c(c(400, 424, 426)))
+# df_strata_shp %>% filter(plot_id %in% c(482, 1137, 1140))   
 ```
 
 
@@ -184,7 +161,7 @@ input_gsheet <- read_xlsx(paste0(path_to_output_gdrive, "00_METADATA-ALL_PLOTS/0
 ```
 
 
-```{r variables_gsheet}
+```{r variables_gsheet, results='markup'}
 names(input_gsheet)
 ```
 
@@ -212,13 +189,15 @@ n_distinct(df_strata_shp$plot_id) == 1055
 Oa wegens gelegen op pad, vogelkersbestrijding, open ruimte geworden
 => tabel "plots_excluded_from_network"
 
-```{r}
+```{r results='markup'}
 plots_to_exclude <- read_xlsx(paste0(path_to_output_gdrive, "00_METADATA-ALL_PLOTS/plots_excluded_from_monitoring_network.xlsx")) 
 
-names(plots_to_exclude)
+# names(plots_to_exclude)
 
 plots_to_exclude <- plots_to_exclude %>% 
   select(-"FM processed", - info2)
+
+plots_to_exclude %>% as.tibble()
 ```
 
 
@@ -238,7 +217,7 @@ in folder "C:/03_BR/3_AanvraagGegevens/EUFORIA_algemeen/enkel_INBO/".
 
 Manueel in excel een koppeling gemaakt tussen fieldmap naamgeving en EUFORIA-indeling (`EUFORIA2025_link_fieldmap.xlsx`) 
 op zelfde locatie.
-Extra ook `EUFORIA2025_link_wildcard.xlsx`.
+Extra ook `EUFORIA2025_link_wildcard.xlsx`.       
 We schrijven beide files weg naar de strata-db: 
 
 - link_wildcard_fieldmap 
@@ -276,7 +255,16 @@ info_EUFORIA <- info_EUFORIA_ %>%
   select(forest_reserve_FM_adjusted, everything(), -`LPI_ID / SPI_ID`, -comment, -subarea)
 ```
 
-```{r}
+**info_EUFORIA**
+
+
+```{r results='markup'}
+names(info_EUFORIA)
+```
+
+**LINK_EUFORIA_fieldmap**
+
+```{r results='markup'}
 names(LINK_EUFORIA_fieldmap)
 
 LINK_EUFORIA_fieldmap <- LINK_EUFORIA_fieldmap %>% 
@@ -285,9 +273,9 @@ LINK_EUFORIA_fieldmap <- LINK_EUFORIA_fieldmap %>%
 
 nrow(LINK_EUFORIA_fieldmap) == nrow(info_EUFORIA)
 ```
+**LINK_EUFORIA_wildcard**
 
-
-```{r}
+```{r results='markup'}
 names(LINK_EUFORIA_wildcard)
 
 LINK_EUFORIA_wildcard <- LINK_EUFORIA_wildcard %>% 
@@ -306,14 +294,15 @@ We baseren ons op de file "LINK_WILDCARD_fieldmap_Yannick_AL.xlsx", sheet "Link_
 Deze werd aangemaakt in kader van het Wildcard project en staat op onze teamdrive onder 
 "G:\Gedeelde drives\Team_Boseco_BR\PRJ_BR_AanvraagGegevens\EUFORIA_WILDCARD_2024".
 
-**OPGEPAST*
+**OPGEPAST**
 De tabel bevat naast het veld `forest_reserve_fieldmap` (= veld `forest_reserve` uit fieldmap),
 ook nog een extra veld `forest_reserve_FM_adjusted`.
 Dit veld werd enkel aangemaakt voor Sevendonck cirkelplots, om daar een één op één link 
 te hebben met Wildcard, waar onderscheid gemaakt is tussen Q en A. 
 
+**link_WC_FM**
 
-```{r link_WC_FM, results = 'hide'}
+```{r link_WC_FM, results='markup'}
 path_to_project_wildcard <-  paste0(path_to_datarequests_gdrive, "EUFORIA_WILDCARD_2024")
 
 link_WC_FM <- read_xlsx(paste0(path_to_project_wildcard, "/LINK_WILDCARD_fieldmap_Yannick_AL.xlsx")
@@ -322,7 +311,7 @@ link_WC_FM <- read_xlsx(paste0(path_to_project_wildcard, "/LINK_WILDCARD_fieldma
 names(link_WC_FM)
 ```
 
-Als we deze tabel dus willen gebruiken, moeten we in onze code `forest_reserve`
+Als we deze tabel willen gebruiken, moeten we in onze code `forest_reserve`
 vervangen door `forest_reserve_FM_adjusted`, met behulp van de tabel "strata_soil" uit de strata-db.
 Zie onderstaande code uit script "Wildcard_Flanders_plot_data.Rmd".
 
@@ -355,7 +344,7 @@ link_WC_FM <- link_WC_FM %>%
 
 Info overgenomen uit methodiekrapport en aangevuld met info uit "00_referentiefile-meestcompleet-Bosreservaten_allecirkels_CORR_20250324.xlsx"
 
-```{r import_data_forest_reserve2}
+```{r import_data_forest_reserve2, results='markup'}
 # uit Methodiekrapport 
 con <- odbcConnectAccess2007(path_to_strata_db)
   management_methodiekrapport <- sqlFetch(con, "methodiekrapport_info_beheer", stringsAsFactors = FALSE)  # reserve establishment date
@@ -368,9 +357,11 @@ names(management_methodiekrapport)
 
 **? verschil met EUFORIA database** 
 
-```{r diff_euforia}
+```{r results='markup'}
 names(info_EUFORIA)
+```
 
+```{r diff_euforia}
 check <- info_EUFORIA %>% 
   select(forest_reserve_fieldmap, plottype, year_reserve
          , year_abandonment) %>% 
@@ -404,13 +395,17 @@ Antwoord: `year_abandonment_EUFORIA` moet ook 1990 worden => aangepast in eigen 
 
 Info mbt surveys
 
-```{r plotinfo_load}
+```{r plotinfo_load, results='markup'}
 # plotinfo <- load_plotinfo(database = path_to_fieldmap_db)
-# van gdrive (ipv forresdat)
-plotinfo <- read.csv2(paste0(path_to_plotlevel_gdrive, "plotinfo.csv")) %>% 
-  select(-1)
 
-# ! enkel de processed data - dd 11/9/2024: nu ook Wijnendale en Everzwijnbad 3de decade erbij
+# van forresdat - correcter
+plotinfo <- read_forresdat_table(
+  tablename = "plotinfo"
+  , git_ref_type = "branch", git_reference = "develop"
+  , join_plotinfo = FALSE
+  , plottype = "all")  # NIET ENKEL CP's!
+
+# ! enkel de processed data
 names(plotinfo)
 
 ```
@@ -450,13 +445,13 @@ In shapefile Marc is naast de naam van het bosreservaat en het plottype, ook
 SiteName en SubArea opgenomen.
 Deze blijken niet overeen te komen met de sites opgenomen in EUFORIA of wildcard.
 
-Andrzijds wordt hier wel extra onderscheid gemaakt bij bv. Kluisbos tussen het gemeentebos, 
+Anderzijds wordt hier wel extra onderscheid gemaakt bij bv. Kluisbos tussen het gemeentebos, 
 openbaar bos en bosreservaat.
 Dus die link is wel interessant.
 Maar beter op te nemen in een afzonderlijke tabel `link_plotid_subarea`.
 
-```{r link_plotid_subarea}
-names(df_strata_shp)
+```{r link_plotid_subarea, results='markup'}
+# names(df_strata_shp)
 link_plotid_subarea <- df_strata_shp %>%
   filter(!Unieknr %in% c(32000, 11001:11006, 155001:155002)) %>% 
   left_join(list_reserves) %>% 
@@ -481,31 +476,35 @@ Onafhankelijk van periode
 
 ## Klimaat
 
-Bron: GIS-data INBO: S:\Europa\Klimatologie_Meteorologie - Current climate_30s_EU.lyr
+**Bron**: GIS-data INBO: S:\Europa\Klimatologie_Meteorologie - Current climate_30s_EU.lyr
 
-Referentie: Klimaatdata (afkomstig van WorldClim;[](http://www.worldclim.org/);versie 1.3, download juli-augustus 2009)
+**Referentie**: Klimaatdata (afkomstig van WorldClim;[](http://www.worldclim.org/);versie 1.3, download juli-augustus 2009)
 
 
 Voor klimaat (neerslag en temp) heb ik Current climate_30s_EU.lyr gebruikt. Bij "metadata" staat er alleen maar: Klimaatdata (afkomstig van [WorldClim](http://www.worldclim.org/), versie 1.3, download juli-augustus 2009)(zie ook bijlage waar ook nog andere uitleg staat over welke modellen er gebruikt zijn) of S:\Europa\Klimatologie_Meteorologie.
 
-```{r strata_klimaat}
-names(df_strata_shp)
-names(list_reserves)
+```{r strata_klimaat, results='markup'}
+# names(df_strata_shp)
+# names(list_reserves)
 
 strata_klimaat <- df_strata_shp %>% 
   filter(!Unieknr %in% c(32000, 11001:11006, 155001:155002)) %>% 
   select(plot_id, contains(c("Regen", "Temp")))
 
 names(strata_klimaat)
+```
+
+```{r}
 head(strata_klimaat)
+
 
 # 
 t <- strata_klimaat %>% 
   group_by(plot_id, Regen_jaar, Temp_jaar) %>% 
   summarize(n  =  n()) %>% 
   ungroup()
-
 ```
+
 
 
 ## Bodem
@@ -516,7 +515,7 @@ WRB Soil Units 40k: Bodemkaart van het Vlaamse Gewest volgens het internationale
 
 Ook te vinden op [geopunt](https://www.geopunt.be/catalogus/datasetfolder/83c46eae-a202-454c-b063-a858be3e4335).
 
-Referentie: Databank Ondergrond Vlaanderen - (vermelding van de beheerder en de specifieke geraadpleegde gegevens) - Geraadpleegd op dd/mm/jjjj, op https://www.dov.vlaanderen.be
+**Referentie1**: Databank Ondergrond Vlaanderen - (vermelding van de beheerder en de specifieke geraadpleegde gegevens) - Geraadpleegd op dd/mm/jjjj, op https://www.dov.vlaanderen.be
 
 
 **Bron2**: GIS-data INBO: S:\Vlaanderen\GeoData\Bodemkaart_2_0.lyr 
@@ -524,11 +523,11 @@ Referentie: Databank Ondergrond Vlaanderen - (vermelding van de beheerder en de 
 Bevat de gegegevens van de Belgische bodemkaart.
 Metadata: zie S:\Vlaanderen\GeoData\_Metadata\Bodemkaart\DOV bodemkaart_2_0.pdf
 
-Referentie: Digitale bodemkaart van het Vlaams Gewest: bodemtypes, substraten, fasen en varianten van het moedermateriaal en de profielontwikkeling, v2.0. Vlaamse overheid, Departement Omgeving, Vlaams Planbureau voor Omgeving (VPO)
+**Referentie2**: Digitale bodemkaart van het Vlaams Gewest: bodemtypes, substraten, fasen en varianten van het moedermateriaal en de profielontwikkeling, v2.0. Vlaamse overheid, Departement Omgeving, Vlaams Planbureau voor Omgeving (VPO)
 
 
-```{r strata_bodem}
-names(df_strata_shp)
+```{r strata_bodem, results='markup'}
+# names(df_strata_shp)
 strata_bodem <- df_strata_shp %>%
   select(Unieknr, plot_id, 65:111) %>%    # shp via vpn
   # select(basic_variables, 52:100) %>%     # shp c-schijf
@@ -552,9 +551,12 @@ strata_bodem <- df_strata_shp %>%
 names(strata_bodem)
 # strata_bodem %>% filter(Unitype != Bodemtype)
 # strata_bodem %>% filter(Bodemser_c != Bodemtype)
-head(strata_bodem)
 
 ```
+```{r}
+head(strata_bodem)
+```
+
 
 
 ## Boshistoriek
@@ -563,17 +565,18 @@ head(strata_bodem)
 
 9 historische kaarten, referenties in shapefile zelf opgeslagen en mee geëxporteerd.
 
-```{r strata_historiek_obv_shp_marc}
+```{r strata_historiek_obv_shp_marc, results='markup'}
 strata_hist <- df_strata_shp %>% 
   filter(!Unieknr %in% c(32000, 11001:11006, 155001:155002)) %>% 
   select(plot_id, 30:64)
 
 names(strata_hist)
-unique(strata_hist$Boshis_sam)
-
-head(strata_hist)
-
+# unique(strata_hist$Boshis_sam)
 ```
+```{r}
+head(strata_hist)
+```
+
 
 De codes gebruikt bij de historische kaarten kunnen geraadpleegd worden in tabel `qHistoriek`.
 
@@ -591,12 +594,11 @@ Volgens Marc is dit immers correcter dan overlay met de bosleeftijdskaart (mail 
 
 ### Bosleeftijd
 
-Zie [geopunt](https://www.geopunt.be/catalogus/datasetfolder/680321a6-99d2-4ff2-8048-0dd1d5012377)  
-Referentie: Bosleeftijd, Opname 1771-2001, actualisatie 2021 (versiedatum	17/12/2021). ANB.
+Zie [geopunt](https://www.geopunt.be/catalogus/datasetfolder/680321a6-99d2-4ff2-8048-0dd1d5012377).    
+**Referentie**: Bosleeftijd, Opname 1771-2001, actualisatie 2021 (versiedatum	17/12/2021). ANB.
 
-De bosleeftijdskaart baseert zich op slechts 4 tijdstippen.
-
-Nochtans is het interessant om deze mee te nemen ter vgl met VBI.
+De bosleeftijdskaart baseert zich weliswaar op maar 4 tijdstippen, toch is het 
+interessant om deze mee te nemen ter vgl met VBI.
 
 Overlay gaan we echter niet doen, want volgens Marc is zijn shapefile correcter (zie hoger).
 Info wordt opgeslagen in de velden `boslftd_cde` en `boslftd`.
@@ -647,12 +649,15 @@ summary(strata_hist_def)
 
 ```
 
+```{r results='markup'}
+names(strata_hist_def)
+```
 
 
 ## Locatie
 
-```{r strata_locatie}
-names(df_strata_shp)
+```{r strata_locatie, results='markup'}
+# names(df_strata_shp)
 strata_locatie <- df_strata_shp %>% 
   filter(!Unieknr %in% c(32000, 11001:11006, 155001:155002)) %>% 
   select(plot_id, 4:10, 24:29,
@@ -698,15 +703,17 @@ forest_reserve_management <- management_methodiekrapport %>%
          plots_unmanaged_since, last_commercial_intervention,
          attention = info)
 
-names(forest_reserve_management)
-
 ```
+```{r results='markup'}
+names(forest_reserve_management)
+```
+
 
 
 ## Overige (beheer, fisheye, veg-type)
 
-Dit zijn eerder dynamische strata (kunnen veranderen doorheen de tijd).
-Met uitzondering van PNV.
+Dit zijn eerder dynamische strata (kunnen veranderen doorheen de tijd), met 
+uitzondering van PNV.
 
 (wat is huidig beheer? Zo zijn er immers een aantal plots waar tss 1e en 2e SET exotenbeheer gebeurd is (Heirnisse: 701, 709, ...).
 
@@ -724,7 +731,7 @@ Indien nodig kan dat snel omgevormd worden naar één record per periode (dynami
 
 Werd samengezet door Kris VdK in kader van een data-aanvraag.
 
-Referentie: Bohn U, Gollub G, Hettwer C, Neuh€auslova Z, Schl€uter H, Weber H (2003) Karte der natürlichen Vegetation Europas. Massstab 1:2,500,000. Erläuterungstext. Bundesamt f. Naturschutz, Bad
+**Referentie**: Bohn U, Gollub G, Hettwer C, Neuh€auslova Z, Schl€uter H, Weber H (2003) Karte der natürlichen Vegetation Europas. Massstab 1:2,500,000. Erläuterungstext. Bundesamt f. Naturschutz, Bad
 Godesberg
 
 Engelse referentie met kaarten: 
@@ -752,14 +759,13 @@ Velden op plotniveau zoals
 
 - `Management` (en `Beheer`: vertaling): uit shapefile, voor alle plots
 - `Management_type`: uit gsheet - enkel cirkelplots
-- `Unmanaged_since` (wordt `plot_unmanaged_since`): uit gsheet - enkel cirkelplots
+- `plot_unmanaged_since`: < "Unmanaged_since" uit gsheet (< Kris VdK) - enkel cirkelplots
 
 Daarnaast ook info op reservaatsniveau zoals 
 
 - `reserve_establishment_yr`: uit Methodiekrapport op niveau van bosreservaat
 - `last_commercial_intervention`: uit Methodiekrapport op niveau van bosreservaat
-- unmanaged_since (wordt `reserve_unmanaged_since`): uit Methodiekrapport op niveau van bosreservaat
-
+- `reserve_unmanaged_since`: < "unmanaged_since" uit Methodiekrapport op niveau van bosreservaat
 
 Beheer op niveau van het volledige bosreservaat wordt daarnaast ook nog in een
 afzonderlijke tabel (`forest_reserve_management`) opgeslagen. Daar is echter enkel 
@@ -819,12 +825,11 @@ strata_overige_uit_gsheet <- input_gsheet %>%
          PNV_Bohn, Habtype,
          S1_fisheyedate, LAI_1ste, VisSky_1st
          ) %>% 
-  mutate(Unmanaged_since = str_sub(Unmanaged_since, 1, 4),  # als character in gsheet
+  mutate(Unmanaged_since = as.integer(Unmanaged_since), # als character in gsheet
+         # Unmanaged_since = str_sub(Unmanaged_since, 1, 4),  # als character in gsheet
          Habtype = ifelse(str_detect(Habtype, ".0"), 
                                      str_sub(Habtype, 1, 4),
                                      Habtype)) %>% 
-  mutate(Unmanaged_since = ifelse(Unmanaged_since == "NA", NA,
-                                  as.numeric(Unmanaged_since))) %>% 
   rename(plot_unmanaged_since = Unmanaged_since)
 
 # names(strata_overige_uit_gsheet)
@@ -885,7 +890,32 @@ strata_overige <- strata_overige0 %>%
          reserve_establishment_yr, last_commercial_intervention, everything()) 
 
 ```
+```{r results='markup'}
+names(strata_overige)
+```
+<!-- mail Kris VdK 25/1/2021:  -->
+<!-- Opsplitsing Kluisbos: 'reserve' en 'managed'.  -->
+<!-- Ik heb een aparte 'subsite' 'doveleen' ingevoegd in de tabel met proefvlakken  -->
+<!-- 1501-1511 (populier) - reservaatsdeel. -->
+<!-- Proefvlakken 1512-1517 zijn officieel geen reservaat maar zijn het de facto wel  -->
+<!-- al sinds 2005. Ze zitten nu in de subsite 'kluisbos-managed' maar met beheer  -->
+<!-- 'non-intervention' met startdatum 2005 (zoals rest van het reservaat).. -->
+<!-- Zo zijn er nog proefvlakken in Kluisbos, maar die weet ik niet precies liggen. -->
+<!-- Marc, als je wilt mag je die corrigeren in de meest recente overzichtstabel :  -->
+<!-- in de kolom met 'management-type' mag je selective thinning hier vervangen door 'non-intervention' met 'unmanaged_since' op 2010 (?) -->
+<!-- (c) ANJa: ook dit spreekt elkaar tegen => ik heb me gehouden aan "Ze zitten nu in  -->
+<!-- de subsite 'kluisbos-managed' maar met beheer 'non-intervention' met  -->
+<!-- startdatum 2005 (zoals rest van het reservaat)" -->
 
+
+**Verwarrende input mbt bosreservaat Kluisbos:**      
+
+- in methodiekrapport (bron: Kris VdK): reserve unmanaged since 2000      
+- in gsheet cirkelplots (bron: Kris VdK): alle plots unmanaged since 2005     
+
+Ik heb dat zo behouden =>   
+  - in tabel op plotniveau: plot_unmanaged_since = 2005 (ook de plots 1512:1517)    
+  - in tabel op reservaatsniveau: plots_unmanaged_since = 2000        
 
 ```{r CORR_kluisbos_productiebos}
 # een deel van Kluisbos is productiebos (maar alles onder zelfde noemer in fieldmap)
@@ -907,11 +937,14 @@ strata_overige_ <- strata_overige %>%
          , reserve_establishment_yr = ifelse(SubArea %in% c("Kluisbos Communal Forest", "Kluisbos State Forest")
                                           , NA, reserve_establishment_yr)
          , last_commercial_intervention = ifelse(SubArea %in% c("Kluisbos Communal Forest", "Kluisbos State Forest")
-                                          , "2016-2017", last_commercial_intervention)
-         , last_commercial_intervention = ifelse(SubArea %in% c("Kluisbos SFR") |
-                                                   plot_id %in% c(1512:1517)
-                                                , "1990's", last_commercial_intervention)
+                                          , "thinning in 2016-17", last_commercial_intervention)
+         , last_commercial_intervention = ifelse(plot_id %in% c(1512:1517)
+                                                , "??", last_commercial_intervention)
          )
+
+t <- strata_overige_ %>% filter(plot_id %in% c(1500:1517))
+
+t <- strata_overige_ %>% filter(SubArea %in% c("Kluisbos Communal Forest", "Kluisbos State Forest"))
 ```
 
 ```{r CORR_ename_beheerd}
@@ -921,10 +954,6 @@ strata_overige_ <- strata_overige %>%
 
 # daar heeft reserve_unmanaged_since en reserve_establishment_yr geen enkele zin
 # => NA maken
-
-# bijkomend een verschil in last_commercial_intervention tss productiebos en reservaat
-# in reserve: thinning in 1990s (?)
-# in managed forest: thinning in 2016-17
 
 strata_overige_ <- strata_overige_ %>% 
   mutate(reserve_unmanaged_since = ifelse(SiteName == "Bos t'Ename" &
@@ -958,9 +987,16 @@ Naast `MaxTreeNumber`, `MaxBasalArea` en `MaxTreeNumberSpeciesName`, `MaxBasalAr
 ook interessant om percentage te kennen: `Perc_MaxTreeNumber`, `Perc_MaxBasalArea` (22/2/2024 ingevoerd)
 
 ```{r bms_plotlevel_results}
-# dendro_by_plot_species <- read_vc(file = "dendro_by_plot_species", root = path_to_forresdat_data)
-dendro_by_plot_species <- read.csv2(paste0(path_to_plotlevel_gdrive, "dendro_by_plot_species.csv")) %>% 
-  select(-1)
+# dendro_by_plot_species_ <- read.csv2(paste0(path_to_plotlevel_gdrive, "dendro_by_plot_species.csv")) %>%
+#   select(-1)
+
+# van forresdat
+dendro_by_plot_species <- read_forresdat_table(
+  tablename = "dendro_by_plot_species"
+  , git_ref_type = "branch", git_reference = "develop"
+  , join_plotinfo = FALSE
+  , plottype = "all")  # NIET ENKEL CP's!
+
 names(dendro_by_plot_species)
 
 dominant_tree <- dendro_by_plot_species %>% 
@@ -985,10 +1021,14 @@ dominant_tree %>% filter(MaxTreeNumber == 0 & !is.na(MaxTreeNumberSpeciesID))
 ```
 
 ```{r link_species, results='hide'}
-# qspecies <- read_vc(file = "qSpecies", root = path_to_forresdat_data) %>% 
-  # select(ID, Value1)
-qspecies <- read.csv2(paste0(path_to_lulists_gdrive, "qspecies.csv")) %>% 
+# qspecies <- read.csv2(paste0(path_to_lulists_gdrive, "qspecies.csv")) %>% 
+#   select(ID, Value1)
+qspecies <- read_forresdat_table(
+  tablename = "qspecies"
+  , git_ref_type = "branch", git_reference = "develop"
+  , join_plotinfo = FALSE) %>% 
   select(ID, Value1)
+
 # names(qspecies)
 # names(dominant_tree)
 
@@ -1020,11 +1060,16 @@ unique(t$plot_id)
 # 475 en enamebos => OK
 ```
 
-
 ```{r perc_tov_totaal}
-# dendro_by_plot <- read_vc(file = "dendro_by_plot", root = path_to_forresdat_data)
-dendro_by_plot <- read.csv2(paste0(path_to_plotlevel_gdrive, "dendro_by_plot.csv")) %>% 
-  select(-1)
+# dendro_by_plot <- read.csv2(paste0(path_to_plotlevel_gdrive, "dendro_by_plot.csv")) %>% 
+#   select(-1)
+
+dendro_by_plot <- read_forresdat_table(
+  tablename = "dendro_by_plot"
+  , git_ref_type = "branch", git_reference = "develop"
+  , join_plotinfo = FALSE
+  , plottype = "all")  # NIET ENKEL CP's!
+
 names(dendro_by_plot)
 
 dominant_tree_ <- dominant_tree %>% 
@@ -1063,9 +1108,12 @@ dominant_tree_ <- dominant_tree_ %>%
 summary(dominant_tree_)
 
 dominant_tree <- dominant_tree_ 
-names(dominant_tree)
+
 ```
 
+```{r results='markup'}
+names(dominant_tree)
+```
 
 
 
@@ -1085,7 +1133,7 @@ Mogelijks wijken die data af van de data uit FieldMap.
 
 Daar is geen controle op gebeurd, immers andere insteek: de shapefile bevat één jaartal per bosreservaat (voor alle plots hetzelfde jaar).   
 
-Deze jaartallen werden toegeveogd aan `strata_location` (zie hoger).
+Deze jaartallen werden toegevoegd aan `strata_location` (zie hoger).
 
 
 ## Fieldmap
@@ -1103,7 +1151,7 @@ Plotinfo uit forresdat, met info over
 - de hoeveelste survey voor die plot
 - year (afgeleid van Dendro_Date)
 
-```{r load_plotinfo_yrs}
+```{r }
 # met jaartallen van opnames
 # is deels afgeleid uit plotdetails Fieldmap
 names(plotinfo)
@@ -1347,6 +1395,9 @@ plotinfo_def %>% group_by(plot_id, survey_number) %>% summarize(n = n()) %>%
   ungroup() %>% filter(n > 1) %>% nrow() == 0
 
 
+```
+```{r results='markup'}
+names(plotinfo_def)
 ```
 
 
