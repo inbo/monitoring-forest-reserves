@@ -1158,94 +1158,13 @@ names(plotinfo)
 # !! bevat geen info over opp. A1234
 
 ```
+Sinds 2026 ook info over    
 
+- rA1234    
+- size core area    
+- Tresholds     
+- Date_Dendro   
 
-### Plotdetails
-
-- rA1234
-- size core area
-- Tresholds
-- Date_Dendro
-
-```{r load_plotdetails}
-con <- odbcConnectAccess2007(path_to_fieldmap_db)
-
-tables_fieldmap <- sqlTables(con) %>% filter(!str_detect(TABLE_NAME, "MSys"))
-
-PlotDetails_1986 <- sqlFetch (con, "PlotDetails_1986", stringsAsFactors = TRUE) %>% 
-  mutate(period = 0) %>% 
-  rename(Date_Dendro = Date_Dendro_1986,
-         FieldTeam_Dendro = FieldTeam_Dendro_1eSet) %>% 
-  select(-FieldStatus)
-PlotDetails_1eSet <- sqlFetch (con, "PlotDetails_1eSet", stringsAsFactors = TRUE) %>% 
-  mutate(period = 1) %>% 
-  rename(Date_Dendro = Date_Dendro_1eSet,
-         FieldTeam_Dendro = FieldTeam_Dendro_1eSet) %>% 
-  select(-FieldStatus)
-PlotDetails_2eSet <- sqlFetch (con, "PlotDetails_2eSet", stringsAsFactors = TRUE) %>% 
-  mutate(period = 2) %>% 
-  rename(Date_Dendro = Date_Dendro_2eSet,
-         FieldTeam_Dendro = FieldTeam_Dendro_2eSet) %>% 
-  select(-FieldStatus)
-PlotDetails_3eSet <- sqlFetch (con, "PlotDetails_3eSet", stringsAsFactors = TRUE) %>% 
-  mutate(period = 3) %>% 
-  rename(Date_Dendro = Date_Dendro_3eSet,
-         FieldTeam_Dendro = FieldTeam_Dendro_3eSet) %>% 
-  select(-FieldStatus)
-
-odbcClose(con)
-
-# tables_fieldmap %>% filter(str_detect(TABLE_NAME, "PlotDet"))
-
-# names(PlotDetails_1986)
-# names(PlotDetails_1eSet)
-# names(PlotDetails_2eSet)
-# names(PlotDetails_3eSet)
-
-plotDetails <- rbind(PlotDetails_1986, PlotDetails_1eSet, PlotDetails_2eSet, PlotDetails_3eSet)
-
-colnames(PlotDetails_1eSet) == colnames(PlotDetails_2eSet)
-
-nrow(plotDetails) == nrow(PlotDetails_1eSet) + nrow(PlotDetails_1986) + nrow(PlotDetails_2eSet) + nrow(PlotDetails_3eSet)
-
-```
-
-```{r select_variables}
-names(plotDetails)
-
-# n_distinct(plotDetails$plot_id)
-
-plotdetails2 <- plotDetails %>% 
-  filter(DataProcessed_YN == 10) %>% # e,nkel processed data
-  mutate(year = as.integer(year(.data$Date_Dendro) - (month(.data$Date_Dendro) < 5)),
-         # year = year(round_date(.data$Date_Dendro, "year")) - 1, # oude code - fout!!
-         survey_trees = ifelse(.data$Survey_Trees_YN == 10 & !is.na(.data$Survey_Trees_YN), TRUE, FALSE),
-          survey_deadw = ifelse(.data$Survey_Deadwood_YN == 10 & !is.na(.data$Survey_Deadwood_YN), TRUE, FALSE),
-          survey_lis = ifelse(.data$LineIntersect == 10 & !is.na(.data$LineIntersect), TRUE, FALSE),
-          survey_veg = ifelse(.data$Survey_Vegetation_YN == 10 & !is.na(.data$Survey_Vegetation_YN), TRUE, FALSE),
-          survey_reg = ifelse(.data$Survey_Regeneration_YN == 10 & !is.na(.data$Survey_Regeneration_YN), TRUE, FALSE),
-          data_processed = ifelse(.data$DataProcessed_YN == 10 & !is.na(.data$DataProcessed_YN), TRUE, FALSE)
-           ) %>% 
-  rename(CoreArea_ha = Area_ha) %>% 
-    select(plot_id = IDPlots, forest_reserve = ForestReserve, period, year,
-           Date_Dendro, 
-           contains("survey"), data_processed,
-         rA1_m = rA1, rA2_m = rA2, rA3_m = rA3, rA4_m = rA4, 
-         TresHoldDBH_A3_alive_mm = TresHoldDBH_Trees_A3_alive, 
-         TresHoldDBH_A3_dead_mm = TresHoldDBH_Trees_A3_dead, 
-         TresHoldDBH_A4_alive_mm = TresHoldDBH_Trees_A4_alive, 
-         TresHoldDBH_A4_dead_mm = TresHoldDBH_Trees_A4_dead, 
-         TresHoldDBH_CoreArea_dead_mm = TresHoldDBH_Trees_CoreArea_dead, 
-         TresHoldDBH_CoreArea_alive_mm = TresHoldDBH_Trees_CoreArea_alive, 
-         TresHoldDiam_Deadw_A4_mm = TresHoldDiam_Deadwood_A4,
-         TresHoldDiam_Deadw_CoreArea_mm = TresHoldDiam_Deadwood_CoreArea,
-         contains("Area"),
-         -contains("YN")
-         )
-
-names(plotdetails2)
-
-```
 
 ### Check oppervlakte core area 
 
@@ -1256,15 +1175,16 @@ Er waren CA's waar `CoreArea_ha` (< `Area_ha` in `plotdetails`) verschillend is 
 # check_CA_area <- plotdetails2 %>% 
 #   filter(!is.na(CoreArea_ha) | !is.na(LengthCoreArea_m))  # enkel Bauwensplots erbij
 
-error_CA_area <- plotdetails2 %>% 
-  filter(!is.na(CoreArea_ha) & !is.na(LengthCoreArea_m)) %>% 
-  mutate(area_LxB = LengthCoreArea_m * WidthCoreArea_m
-         , diff_CoreArea = CoreArea_ha - area_LxB/10000
+error_CA_area <- plotinfo %>% 
+  filter(!is.na(core_area_ha) & !is.na(length_core_area_m)) %>% 
+  mutate(area_LxB = length_core_area_m * width_core_area_m
+         , diff_CoreArea = core_area_ha - area_LxB/10000
          ) %>% 
-  select(contains("CoreArea"), everything(), -contains("Treshold")) %>% 
+  select(contains("core_area"), everything(), -contains("_min_")) %>% 
   filter(diff_CoreArea != 0)
 
 nrow(error_CA_area) == 0
+
 ```
 
 ## Shapefile
@@ -1300,92 +1220,63 @@ We voegen `survey_Y1`, `survey_Y2`, `survey_Y3`, `survey_Y4`, `survey_Y5` toe aa
 
 
 ```{r check_verschillende_tresholds_per_plot, eval = FALSE}
-names(plotdetails2)
+names(plotinfo)
 
-check_tresholds_CP <- plotdetails2 %>% 
-  group_by(forest_reserve, TresHoldDBH_A3_alive_mm, TresHoldDBH_A3_dead_mm, TresHoldDBH_A4_alive_mm, TresHoldDBH_A4_dead_mm, TresHoldDiam_Deadw_A4_mm) %>% 
+check_tresholds_CP <- plotinfo %>% 
+  group_by(forest_reserve, dbh_min_a3, dbh_min_a3_dead, dbh_min_a4, dbh_min_a4_dead, diam_min_a4_logs) %>% 
   summarize(range_period = paste0(min(period), "-", max(period))) %>% 
   ungroup() %>% 
-  filter(!is.na(TresHoldDBH_A4_alive_mm) & !is.na(TresHoldDBH_A4_dead_mm))
+  filter(!is.na(dbh_min_a4) & !is.na(dbh_min_a4_dead))
 
-check_tresholds_CA <- plotdetails2 %>% 
-  group_by(forest_reserve, plot_id, TresHoldDBH_CoreArea_alive_mm, TresHoldDBH_CoreArea_dead_mm, 
-           TresHoldDiam_Deadw_CoreArea_mm) %>% 
+check_tresholds_CA <- plotinfo %>% 
+  group_by(forest_reserve, plot_id, dbh_min_core_area, dbh_min_core_area_dead, 
+           diam_min_core_area_logs) %>% 
   summarize(range_period = paste0(min(period), "-", max(period))) %>% 
   ungroup() %>% 
-  filter(!is.na(TresHoldDBH_CoreArea_alive_mm))
+  filter(!is.na(dbh_min_core_area_dead))
 
 ```
 
 **OPGEPAST:** 
-Date_Dendro (< plotdetails FM) wijkt soms af van year (< forresdat, berekend door Els package).  
-Dat komt omdat er beslist is om naar groeiseizoen te kijken voor de bepaling van `year`:
-alles voor 1 mei hoort bij het voorgaande jaar, vanaf 1 mei bij het huidige jaar. 
-(functie `load_plotinfo` uit package `forrescalc`)
-
-Ook tov Survey_Y1/2/3/4/5 van Marcs shapefile soms een verschil.
+year_dendro wijkt soms af van Survey_Y1/2/3/4/5 van Marcs shapefile.
 
 ```{r compare_variables}
 # library(forrescalc)
-
 names(plotinfo)
-names(plotdetails2)
 names(plotinfo_shp)
 
-nrow(plotdetails2) == 1892 #2250
-nrow(plotinfo_shp) == 1063  # want geen onderscheid in periodes
-nrow(plotdetails2) == nrow(plotinfo)   # beide enkel processed data
+nrow(plotinfo) == 2022 #2250
+nrow(plotinfo_shp) == 1054  # want geen onderscheid in periodes
+
 ```
-
-```{r combine_plotdetails_plotinfo}
-plotdetails2 %>% filter(data_processed) %>% nrow() == 2023 #1892 # 1725
-plotinfo %>% filter(!is.na(survey_number)) %>% nrow() == 2023 # 1892 # 1725
-
-plotinfo2 <- plotinfo %>% 
-  select(-forest_reserve, -year_dendro, -survey_trees, -survey_deadw, -survey_lis
-         , -survey_veg, -survey_reg, -data_processed) %>% 
-  filter(!is.na(survey_number)) %>% # is na indien nog niet uitgevoerd
-  full_join(plotdetails2 %>% filter(data_processed), by = c("plot_id", "period")) %>% 
-  select(plot_id, plottype, everything())
-
-# Vgl DateDendro en year
-
-# plotinfo2_ <- plotinfo2 %>%
-#   mutate(test_yr = year(round_date(.data$Date_Dendro, "year")) - 1,
-#          test_yr_2 = year(.data$Date_Dendro),
-#          month = month(.data$Date_Dendro))
-# 
-# test_yr <- plotinfo2_ %>%
-#   select(plot_id, year, test_yr, test_yr_2, Date_Dendro, month) %>%
-#   mutate(gelijk = ifelse(year - test_yr == 0, TRUE, FALSE),
-#          gelijk_2 = ifelse(year - test_yr_2 == 0, TRUE, FALSE))
-
-summary(plotinfo2)
-
-plotinfo2 %>% filter(is.na(survey_number)) %>% nrow() == 0
-
-names(plotinfo2)
-```
-
 
 ```{r combine_info_fm_shp}
-names(plotinfo2)
+names(plotinfo)
 names(plotinfo_shp)  # Unieknr => plot_id niet uniek
 
-plotinfo_def <- plotinfo2 %>% 
+plotinfo_def <- plotinfo %>% 
   left_join(plotinfo_shp, by = c("plot_id")) %>% 
   select(forest_reserve, plot_id, plottype, plottype_txt,
-         survey_trees, survey_deadw, survey_lis, survey_reg, survey_veg, data_processed,
-         period, survey_number, year_dendro = year, date_dendro = Date_Dendro,
-         rA1_m, rA2_m, rA3_m, rA4_m,
-         LengthCoreArea_m, WidthCoreArea_m, CoreArea_ha,
-         TresHoldDBH_A3_alive_mm, TresHoldDBH_A3_dead_mm, 
-         TresHoldDBH_A4_alive_mm, TresHoldDBH_A4_dead_mm, 
-         TresHoldDBH_CoreArea_dead_mm, TresHoldDBH_CoreArea_alive_mm, 
-         TresHoldDiam_Deadw_A4_mm, TresHoldDiam_Deadw_CoreArea_mm,
+         survey_trees, survey_deadw, survey_lis, 
+         survey_reg, survey_veg, data_processed,
+         period, survey_number,
+         year_dendro, 
+         # date_dendro = Date_Dendro,
+         rA1_m = r_A1, rA2_m = r_A2, rA3_m = r_A3, rA4_m = r_A4,
+         LengthCoreArea_m = length_core_area_m,
+         WidthCoreArea_m = width_core_area_m,
+         CoreArea_ha = core_area_ha,
+         TresHoldDBH_A3_alive_mm = dbh_min_a3, 
+         TresHoldDBH_A3_dead_mm = dbh_min_a3_dead, 
+         TresHoldDBH_A4_alive_mm = dbh_min_a4, 
+         TresHoldDBH_A4_dead_mm = dbh_min_a4_dead, 
+         TresHoldDiam_Logs_A4_mm = diam_min_a4_logs, 
+         TresHoldDBH_CoreArea_alive_mm = dbh_min_core_area, 
+         TresHoldDBH_CoreArea_dead_mm = dbh_min_core_area_dead, 
+         TresHoldDiam_Logs_CoreArea_mm = diam_min_core_area_logs,
          plotsize_dendro, plotsize_veg
-         ) %>% 
-  mutate(date_dendro = as.Date(date_dendro))
+         ) 
+  # mutate(date_dendro = as.Date(date_dendro))
 # survey_Y1, survey_Y2, survey_Y3, survey_Y4, survey_Y5 toegevoegd aan strata_locatie
 
 # 1918 vs 1749 / 1894 vs 1725: zelfde verschil: te maken met shapefile die via unieknr 
@@ -1461,7 +1352,7 @@ strata <- list(
       # strata
       q_hist = qHist,
       q_foresttype = qEUNIS,
-      # strata_soil = strata_bodem,  # !! bevat ook PNV dat in ander script toegeveogd wordt
+      # strata_soil = strata_bodem,  # !! bevat ook PNV dat in ander script toegevoegd wordt
       strata_climate = strata_klimaat,
       strata_history = strata_hist_def,
       strata_location = strata_locatie,
