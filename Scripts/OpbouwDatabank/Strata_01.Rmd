@@ -155,7 +155,8 @@ OPGEPAST: gecorrigeerd nalv overleg 20/3/2022 --> "00_referentiefile-meestcomple
 
 
 ```{r import_data_gsheet}
-input_gsheet <- read_xlsx(paste0(path_to_output_gdrive, "00_METADATA-ALL_PLOTS/00_referentiefile-meestcompleet-Bosreservaten_allecirkels_CORR_20250324.xlsx")) %>% 
+input_gsheet <- read_xlsx(paste0(path_to_strata_input
+                                 , "00_referentiefile-meestcompleet-Bosreservaten_allecirkels_CORR_20250324.xlsx")) %>% 
   rename(plot_id = PlotID)
 # origineel als gsheet op gdrive - aangevuld door Kris VdK
 ```
@@ -187,10 +188,12 @@ n_distinct(df_strata_shp$plot_id) == 1055
 ## Plots die niet meer tot netwerk behoren
 
 Oa wegens gelegen op pad, vogelkersbestrijding, open ruimte geworden
-=> tabel "plots_excluded_from_network"
+=> tabel "plots_excluded_from_network.xlsx" 
+(zie "G:/Gedeelde drives/Team_Boseco_BR/PRJ_BR_AanvraagGegevens/00_METADATA-ALL_PLOTS")
 
 ```{r results='markup'}
-plots_to_exclude <- read_xlsx(paste0(path_to_output_gdrive, "00_METADATA-ALL_PLOTS/plots_excluded_from_monitoring_network.xlsx")) 
+plots_to_exclude <- read_xlsx(paste0(path_to_output_gdrive
+                                     , "00_METADATA-ALL_PLOTS/plots_excluded_from_monitoring_network.xlsx")) 
 
 # names(plots_to_exclude)
 
@@ -227,7 +230,7 @@ We schrijven beide files weg naar de strata-db:
 
 ```{r import_euforia}
 # Kris Vdk heeft allerlei data samen gezet voor Euforia, op niveau van het volledige bosreservaat (CP vs KV)
-path_to_EUFORIA_algemeen <- paste0(path_to_datarequests, "EUFORIA_algemeen/INBO/")
+path_to_EUFORIA_algemeen <- paste0(path_to_datarequests_gdrive, "EUFORIA_algemeen/INBO/")
 
 LINK_EUFORIA_fieldmap <- read_xlsx(paste0(path_to_EUFORIA_algemeen, "EUFORIA2025_link_fieldmap.xlsx"))
 LINK_EUFORIA_wildcard <- read_xlsx(paste0(path_to_EUFORIA_algemeen, "EUFORIA2025_link_wildcard.xlsx"))
@@ -509,6 +512,8 @@ t <- strata_klimaat %>%
 
 ## Bodem
 
+### Bodemkaart
+
 **Bron1**: GIS-data INBO: S:\Vlaanderen\GeoData\Bodemkaart\WRB Soil Units 40k.
 
 WRB Soil Units 40k: Bodemkaart van het Vlaamse Gewest volgens het internationale bodemclassificatiesysteem "World Reference Base for Soil Resources" (WRB) op schaal 1:40.000
@@ -558,6 +563,121 @@ head(strata_bodem)
 ```
 
 
+### PNV 
+
+```{r}
+names(strata_bodem)
+```
+
+PNV toevoegen aan de bodemstrata:     
+
+  - Op basis van link tussen bodemserie en PNV opgesteld door Luc De Keersmaeker 
+  (**NARA BODEMSERIE PNV VOOR ANJA.xlsx**)     
+  - Op basis van PNV's toegekend aan CP's van Sevendonck en Heirnisse 
+  (zonder bodemtype), ook door Luc De Keersmaeker 
+  (**forest_reserve_plots_missing_pnv_aangevuld.csv**)      
+
+Zie teamdrive: "...\Team_Boseco_BR\PRJ_BR_AanvraagGegevens\00_METADATA-ALL_PLOTS\strata\input"
+
+```{r import_strata}
+# path_to_strata_db
+# path_to_strata_input
+link_pnv_soil <- read_xlsx(paste0(path_to_strata_input, "NARA BODEMSERIE PNV VOOR ANJA.xlsx")) %>% 
+  filter(ORI == "BR")
+
+qPNV <- read_xlsx(paste0(path_to_strata_gdrive, "legende_PNV.xlsx"))
+
+con <- odbcConnectAccess2007(path_to_strata_db)
+soil <- sqlFetch(con, "strata_soil") %>% select(-PNV)
+management <- sqlFetch(con, "strata_remaining")
+odbcClose(con)
+
+# forest_reserve_plots_missing_pnv_aangevuld.csv
+extra_pnv <- read.csv2(paste0(path_to_strata_input, "forest_reserve_plots_missing_pnv_aangevuld.csv"))
+
+```
+
+
+```{r join_pnv}
+soil_pnv <- soil %>% 
+  left_join(link_pnv_soil, by = c("belgisch_bodemtype" = "BODEMTYPE")) %>% 
+  unique() %>% 
+  select(-ORI)
+
+```
+
+```{r}
+# controle
+check <- soil_pnv %>% 
+  select(Unieknr, plot_id, belgisch_bodemtype, PNV)
+
+check3 <- check %>% 
+  group_by(belgisch_bodemtype, PNV) %>% 
+  summarize(n = n()) %>% 
+  ungroup() %>% 
+  filter(is.na(PNV))
+# OK, aangevuld (grote letter vs kleine letter)
+table(check3$belgisch_bodemtype, check3$n)
+
+# geen dubbels meer
+check %>% group_by(Unieknr, plot_id) %>%  summarize(n = n()) %>% 
+  ungroup() %>% filter(n > 1) %>% nrow() == 0
+```
+
+
+```{r}
+# controle op OT
+
+check_OB <- check %>% 
+  inner_join(check3) %>% 
+  left_join(management %>% select(plot_id, SiteName)) %>% 
+  unique()
+
+table(check_OB$SiteName)
+
+# plotids 1100 OB (Sevendonck), 700 OT (Heirnisse), 1700 ON/OT (Kolmont)
+
+```
+
+Het merendeel van de plots zonder bodemtype situeren zich in de bosreservaten 
+Sevendonck en Heirnisse.        
+Daarom heeft Luc De Keersmaeker daar zelf op basis van een eigen inschatting en 
+met de nodige terreinkennis een PNV aan toegekend.
+
+Zie file **forest_reserve_plots_missing_pnv_aangevuld.csv** op de teamdrive.
+
+```{r}
+names(soil_pnv)
+names(extra_pnv)
+
+# NA's
+soil_pnv %>% filter(is.na(PNV)) %>% group_by(SiteName, SubArea) %>% summarize(n= n()) %>% 
+  ungroup()
+
+# toevoegen PNV Sevendonck en Heirnisse
+soil_pnv2 <- soil_pnv %>% 
+  left_join(extra_pnv %>% select(plot_id, PNV.aanvul)) %>% 
+  mutate(PNV = ifelse(is.na(PNV), PNV.aanvul, PNV))
+
+```
+
+In de volgende reservaten ontbreekt bij bepaalde plots nog de PNV:
+
+```{r results='markup'}
+# NA's
+soil_pnv2 %>% filter(is.na(PNV)) %>% group_by(SiteName, SubArea, belgisch_bodemtype) %>% summarize(n= n()) %>% 
+  ungroup()
+```
+
+
+
+```{r }
+strata_bodem <- soil_pnv2 %>% 
+  select(-PNV.aanvul)
+names(strata_bodem)
+head(strata_bodem)
+```
+
 
 ## Boshistoriek
 
@@ -581,7 +701,7 @@ head(strata_hist)
 De codes gebruikt bij de historische kaarten kunnen geraadpleegd worden in tabel `qHistoriek`.
 
 ```{r lkp_boshist_shp}
-qHist <- read_xlsx(paste0(path_to_strata, "qHistoriek.xlsx"))
+qHist <- read_xlsx(paste0(path_to_strata_gdrive, "qHistoriek.xlsx"))
 ```
 
 Zelf aanmaken van bosleeftijdscode cfr bosleeftijdskaart, door 0 en 1 toe te voegen voor al dan niet bos op de 4 sleutelmomenten.
@@ -747,7 +867,7 @@ Zie "strata/info_european_forest_types.xlsx" voor een overzichtslijst van types.
 p 28 from: European forest types. Categories and types for sustainable forest management reporting and policy. EEA Technical report No 9/2006
 
 ```{r lkp_foresttype}
-qEUNIS <- read_xlsx(paste0(path_to_strata, "info_european_forest_types.xlsx")
+qEUNIS <- read_xlsx(paste0(path_to_strata_gdrive, "info_european_forest_types.xlsx")
                     , sheet = "lkp_types")
 ```
 
@@ -1352,10 +1472,12 @@ strata <- list(
       # strata
       q_hist = qHist,
       q_foresttype = qEUNIS,
-      # strata_soil = strata_bodem,  # !! bevat ook PNV dat in ander script toegevoegd wordt
+      q_pnv = qPNV,
+      strata_soil = strata_bodem, 
       strata_climate = strata_klimaat,
       strata_history = strata_hist_def,
       strata_location = strata_locatie,
+      info_survey = plotinfo_def,
       dominant_tree = dominant_tree,
       forest_reserve_management = forest_reserve_management,
       plots_excluded_from_network = plots_to_exclude,
@@ -1388,19 +1510,6 @@ con <- odbcConnectAccess2007(path_to_strata_db)
 sqlDrop(con, "strata_remaining")
 sqlSave(con, strata_overige, "strata_remaining", varTypes = c(S1_fisheyedate="datetime"))
 
-sqlDrop(con, "info_survey")
-sqlSave(con, plotinfo_def, "info_survey", varTypes = c(date_dendro="datetime"))
-
-# # TEMP
-# sqlDrop(con, "link_EUFORIA_fieldmap")
-# sqlSave(con, LINK_EUFORIA_fieldmap, "link_EUFORIA_fieldmap")
-# 
-# sqlDrop(con, "link_EUFORIA_wildcard")
-# sqlSave(con, LINK_EUFORIA_wildcard, "link_EUFORIA_wildcard")
-# 
-# sqlDrop(con, "info_EUFORIA")
-# sqlSave(con, LINK_EUFORIA_wildcard, "info_EUFORIA")
-
 odbcClose(con)
 
 ```
@@ -1413,7 +1522,8 @@ strata <- list(
       # strata
       q_hist = qHist,
       q_foresttype = qEUNIS,
-      # strata_soil = strata_bodem,  # !! bevat ook PNV dat in ander script toegeveogd wordt
+      q_pnv = qPNV,
+      strata_soil = strata_bodem,
       strata_climate = strata_klimaat,
       strata_history = strata_hist_def,
       strata_location = strata_locatie,
@@ -1468,11 +1578,12 @@ save_results_forresdat(
 
 
 ```{r save_strata_git, eval = FALSE}
-# strikte strata
+# strikte strata (zonder de relations)
 strata_strict <- list(
       q_hist = qHist,
       q_foresttype = qEUNIS,
-      # strata_soil = strata_bodem,  # !! bevat ook PNV dat in ander script toegevoegd wordt
+      q_pnv = qPNV,
+      strata_soil = strata_bodem,
       strata_climate = strata_klimaat,
       strata_history = strata_hist_def,
       strata_location = strata_locatie,
