@@ -108,6 +108,8 @@ Els gemerged in haar branch "bugfix")
 
 - 15/12/2025: meest recente bosreservaten apart verwerkt mét implementatie LIS
 
+- jan 2026: volledige databank verwerkt mét implementatie LIS
+
 
 # Load plotinfo
 

@@ -125,13 +125,16 @@ en Zwaenepoel werden vervangen door
     - Zoniën UITBR_2010: bevat enkel CP's (voorheen "Zwaenepoel", maar zonder deze die nu in "HARRAS_1995" liggen)
 
 - 10/3/2025: update van de reeds verwerkte data, vooral vanuit vraag naar trees wide beuk
-(trees_weide_beuk: tabel met ook Wijnendale, Everzwijnbad en Jansheideberg)
+(trees_wide_beuk: tabel met ook Wijnendale, Everzwijnbad en Jansheideberg)
 
 - 4/6/2025: foutje plot 414 tresholds
 
 - 17/11/2025: foutje in forrescalc => werken met branch "bugfix_AL2025" (nog niet door 
 Els gemerged in haar branch "bugfix")
-- 15/12/2025: meest recente bosreservaten apart verwerkt
+
+- 15/12/2025: meest recente bosreservaten apart verwerkt mét implementatie LIS
+
+- jan 2026: volledige databank verwerkt mét implementatie LIS
 
 
 # Update lookuplijsten - INDIEN GEWIJZIGD
