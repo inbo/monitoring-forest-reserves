@@ -93,9 +93,12 @@ dbStrata <- "BR_Strata_2025-03-24.accdb"
 # dbStrata <- "BR_Strata_2022-11-07.accdb"
 # dbStrata <- "BR_Strata_2022-02-14.accdb"
 # dbStrata <- "BR_Strata_2022-02-11.accdb"
-path_to_strata <- paste0(path_to_data, "Strata/")
-path_to_strata_db <- paste0(path_to_strata, dbStrata)
+path_to_strata_db <- paste0(path_to_data, "Strata/", dbStrata) # moet op c-schijf staan
 
+path_to_strata_gdrive <- paste0(path_to_output_gdrive
+                               , "00_METADATA-ALL_PLOTS/strata/")
+path_to_strata_input <- paste0(path_to_strata_gdrive
+                               , "input/")
 
 # Extra meetgegevens ----
 path_to_meetgegevens <- paste0(path_to_data, "Meetgegevens/")
