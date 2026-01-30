@@ -505,7 +505,6 @@ plotinfo <- plotinfo_
 
 # Export plotinfo
 
-
 ```{r plotinfo_save_git, eval=FALSE}
 save_results_forresdat(
   results = list(plotinfo = plotinfo)
