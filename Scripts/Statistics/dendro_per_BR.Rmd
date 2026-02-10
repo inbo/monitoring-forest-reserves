@@ -97,56 +97,87 @@ resources(package) : geeft overzicht van de tabellen in het datapackage
 
 read_resource(package, "gps")  : om één tabel in te laden
 
-!! ook lookuplijsten hebbben een andere naam gekregen: snakecase allemaal
+> dit kan pas eens forresdat op zenodo staat, nu nog in develop branch bezig (10/2/2026)
+Daarom nu nog via `read_forresdat_table()`
 
+```{r read_forresdat1}
+tablenames_input <- c("qiufroheight", "qalive_dead", "qdecaystage", "qspecies", "qind_shoot_cop")
 
-```{r read_forresdat1, eval=FALSE}
-qIufroheight <- read_forresdat("qiufroheight", repo_path = path_to_git_forresdat, join_plotinfo = FALSE)
+tables <- map(tablenames_input, read_forresdat_table
+                   , join_plotinfo = FALSE
+                   # , plottype = "all"
+                   , git_ref_type = "branch"
+                   , git_reference = "develop")
 
-# list.files(paste0(path_to_git_forresdat, "data/"))
+tables <- map(tables, function(x) x %>% select(-Value3, -OrderField, -Active))
+
+#The input was not named
+names(tables) <- tablenames_input
+
+# Create separate dataframes
+for (tablename in names(tables)) {
+     assign(tablename, tables[[tablename]])
+} 
+
+#
+qspecies <- qspecies %>% select(ID, name_nl = Value1, name_sc = Value2)
 
 ```
 
-```{r fetch_access}
-con <- odbcConnectAccess2007(path_to_fieldmap_db)
-
-qIndShootCop <- sqlFetch(con, "qIndShootCop", stringsAsFactors = FALSE)
-qAliveDead <- sqlFetch(con, "qAliveDead", stringsAsFactors = FALSE)
-qSpecies <- sqlFetch(con, "qspecies", stringsAsFactors = FALSE)
-qDecaystage <- sqlFetch(con, "qdecaystage", stringsAsFactors = FALSE)
-
-odbcClose(con)
-
-qIndShootCop <- qIndShootCop %>% select(-Value3, -OrderField, -Active)
-qAliveDead <- qAliveDead %>% select(-Value3, -OrderField, -Active)
-qSpecies <- qSpecies %>% select(ID, name_nl = Value1, name_sc = Value2)
-qDecaystage <- qDecaystage %>% select(-Value3, -OrderField, -Active, -MasterID)
+```{r fetch_access, eval = FALSE}
+# con <- odbcConnectAccess2007(path_to_fieldmap_db)
+# 
+# qIndShootCop <- sqlFetch(con, "qIndShootCop", stringsAsFactors = FALSE)
+# qAliveDead <- sqlFetch(con, "qAliveDead", stringsAsFactors = FALSE)
+# qSpecies <- sqlFetch(con, "qspecies", stringsAsFactors = FALSE)
+# qDecaystage <- sqlFetch(con, "qdecaystage", stringsAsFactors = FALSE)
+# 
+# odbcClose(con)
+# 
+# qIndShootCop <- qIndShootCop %>% select(-Value3, -OrderField, -Active)
+# qAliveDead <- qAliveDead %>% select(-Value3, -OrderField, -Active)
+# qSpecies <- qSpecies %>% select(ID, name_nl = Value1, name_sc = Value2)
+# qDecaystage <- qDecaystage %>% select(-Value3, -OrderField, -Active, -MasterID)
 ```
 
 
 
-# Inladen strata
+# Inladen plotinfo en strata
 
 OPGEPAST: sommige plots nog beheerd na start van monitoringnetwerk
 
-```{r }
-con <- odbcConnectAccess2007(path_to_strata_db)
-strata_remaining <- sqlFetch(con, "strata_remaining", stringsAsFactors = FALSE)
-plots_excluded_from_network <- sqlFetch(con, "plots_excluded_from_network", stringsAsFactors = FALSE)
-# = plots waar beheer gebeurd is ergens na start van monitoringnetwerk
-odbcClose(con)
+```{r read_forresdat2}
+tablenames_input <- c("plotinfo", "strata_remaining", "plots_excluded_from_network")
 
+tables <- map(tablenames_input, read_forresdat_table
+                   , join_plotinfo = FALSE
+                   # , plottype = "all"
+                   , git_ref_type = "branch"
+                   , git_reference = "develop")
+
+#The input was not named
+names(tables) <- tablenames_input
+
+# Create separate dataframes
+for (tablename in names(tables)) {
+     assign(tablename, tables[[tablename]])
+} 
 ```
 
+```{r eval = FALSE}
+# con <- odbcConnectAccess2007(path_to_strata_db)
+# strata_remaining <- sqlFetch(con, "strata_remaining", stringsAsFactors = FALSE)
+# plots_excluded_from_network <- sqlFetch(con, "plots_excluded_from_network", stringsAsFactors = FALSE)
+# # = plots waar beheer gebeurd is ergens na start van monitoringnetwerk
+# odbcClose(con)
 
-# Inladen plotinfo
 
-```{r read_forresdat2}
-plotinfo <- read_forresdat("plotinfo", repo_path = path_to_git_forresdat, join_plotinfo = FALSE)
+# plotinfo <- read_forresdat("plotinfo", repo_path = path_to_git_forresdat, join_plotinfo = FALSE)
 
 ```
 
 # Beheer
+
 (c) Kris: Kluisbos: ik zou de data in drie groepen clusteren: data van het bosreservaat, plots in onbeheerd buiten het reservaat en beheerde plots
 => Obv strata_remaining Kluisbos opsplitsen in Kluisbos, Kluisbos_managed en
 Kluisbos_managed_non_intervention (resp. 67, 55 en 6 plots)
@@ -172,33 +203,19 @@ Ename ook stukken beheerd (begraasd of coppice with standards of beide), naast o
 
 ```{r}
 management_types <- strata_remaining %>% 
-  group_by(Management_type) %>% 
-  summarize(n_plots = n()) %>% 
-  ungroup()
-
-management_types <- strata_remaining %>% 
-  group_by(Management_type, forest_reserve_fieldmap) %>% 
-  summarize(n_plots = n()) %>% 
-  ungroup()
-
-management_types <- strata_remaining %>% 
-  group_by(Management, forest_reserve_fieldmap) %>% 
-  summarize(n_plots = n()) %>% 
-  ungroup()
-
-management_types <- strata_remaining %>% 
   filter(plot_id < 10000) %>% # enkel CP's
-  group_by(forest_reserve_fieldmap, Site_subsite, Management, Management_type) %>%
+  group_by(forest_reserve_fieldmap, SiteName, SubArea, Management, Management_type) %>%
   summarize(n_plots = n()) %>% 
   ungroup()
 
 site_subtypes <- strata_remaining %>% 
   filter(plot_id < 10000) %>% 
-  group_by(forest_reserve_fieldmap, Site_subsite) %>% 
+  group_by(forest_reserve_fieldmap, SiteName, SubArea) %>% 
   summarize(n_plots = n()) %>% 
   ungroup()
 
 # deze zonder naam forest_reserve zitten niet in plotinfo omdat data_processed = FALSE
+# geen info over management type van kernvlaktes
 ```
 
 ```{r ename}
@@ -217,13 +234,16 @@ table(open_area$Management)
 
 Dendro per BR: enkel obv de bosplots mogen berekend worden   
 => eerst de open ruimtes verwijderen (zonder bomen én zonder verjonging)   
-=> link met regeneration_by_plot nodig
+=> link met reg_by_plot nodig
 
 plot 475 Wijnendale periode 1: bevat dood hout; omdat er in periode 2 wel soorten genoteerd werden zit plot mee in dendro_by_plot_species
 
 ```{r}
-regeneration_by_plot <- read_forresdat("regeneration_by_plot", repo_path = path_to_git_forresdat, join_plotinfo = TRUE) %>% 
-  select(-contains("eg"))
+reg_by_plot <- read_forresdat_table(tablename = "reg_by_plot"
+                                           , join_plotinfo = FALSE
+                                           , plottype = "CP"
+                                           , git_ref_type = "branch"
+                                           , git_reference = "develop")
 
 # 15 plots zonder enige verjonging
 # zijn dat dezelfde als deze zonder bomen?
@@ -233,7 +253,7 @@ regeneration_by_plot <- read_forresdat("regeneration_by_plot", repo_path = path_
 open_ruimte <- dendro_by_plot %>% 
   filter(number_of_tree_species == 0) %>% # 14 plots (13 plots ename & plot 475)
   filter(vol_deadw_m3_ha == 0) %>%  # dan valt plot 475 weg => is bosplot, maar op dat moment zonder bomen/verjonging
-  left_join(regeneration_by_plot) %>% 
+  left_join(reg_by_plot) %>% 
   filter((approx_nr_established_ha == 0 & approx_nr_seedlings_ha == 0) 
          | (is.na(approx_nr_established_ha) & is.na(approx_nr_seedlings_ha))
   )
