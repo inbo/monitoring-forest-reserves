@@ -1701,4 +1701,6 @@ destination_dir <- path_to_html_teamdrive
 # Copy the file to the destination directory
 file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
 # ? file.copy
+
+file.copy(from = source_file, to = path_to_strata_gdrive, overwrite = TRUE)
 ```
