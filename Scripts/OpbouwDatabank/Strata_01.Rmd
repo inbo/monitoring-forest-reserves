@@ -110,7 +110,8 @@ te maken.
 
 fc_strata_shp <-read_sf("G:/Gedeelde drives/Team_Boseco_BR/PRJ_BR_AanvraagGegevens/00_METADATA-ALL_PLOTS/GIS-lagen_bosreservaten/alle_proefvlakken_gecombineerd/boseco_alleproefvlakken_centraalpunt_lam72_metinfo.shp", crs = 31370) %>% rename(plot_id = PlotID)
 
-df_strata_shp <- fc_strata_shp %>% st_drop_geometry()  # cfr forresdat
+df_strata_shp <- fc_strata_shp %>% st_drop_geometry() %>%   # cfr forresdat
+  arrange(plot_id)
 
 # eenmalig export naar c-schijf (of bij elke wijziging)
 st_write(fc_strata_shp, "C:/03_BR/1_DataVerwerkingBR/Data/GIS/boseco_alleproefvlakken_centraalpunt_lam72_metinfo.shp"
@@ -120,7 +121,8 @@ st_write(fc_strata_shp, "C:/03_BR/1_DataVerwerkingBR/Data/GIS/boseco_alleproefvl
 ```{r import_data_shp_c_schijf, eval = TRUE, results='markup'}
 fc_strata_shp <-read_sf("C:/03_BR/1_DataVerwerkingBR/Data/GIS/boseco_alleproefvlakken_centraalpunt_lam72_metinfo.shp", crs = 31370) 
 
-df_strata_shp <- fc_strata_shp %>% st_drop_geometry()  # cfr forresdat
+df_strata_shp <- fc_strata_shp %>% st_drop_geometry() %>%  # cfr forresdat
+  arrange(plot_id)
 names(df_strata_shp)
 ```
 
@@ -1485,16 +1487,15 @@ strata_soil_git <- read_forresdat_table(tablename = "strata_soil"
                                            , git_reference = "develop")
 
 nrow(strata_bodem) == nrow(strata_soil_git)
-summary(strata_bodem)
-names(strata_bodem) == names(strata_soil_git)
+# summary(strata_bodem)
+# names(strata_bodem) == names(strata_soil_git)
 names(strata_bodem);names(strata_soil_git)
 summary(strata_soil_git)
-waldo::compare(strata_bodem, strata_soil_git)
+waldo::compare(strata_soil_git, strata_bodem)  # old en new
 
 strata_bodem %>% arrange(plot_id) == strata_soil_git %>% arrange(plot_id)
-# OK denk ik andere ordening van variabelen (3/2025)
-# 12/2025: andere namen,  niet OK dus
 strata_bodem == strata_soil_git
+# OK, SiteName nie meer in strata_bodem opgenomen
 
 head(strata_bodem %>% arrange(desc(plot_id))); head(strata_soil_git %>% arrange(desc(plot_id)))
 # lijkt OK
@@ -1505,11 +1506,8 @@ t <- strata_bodem %>%
 head(strata_bodem %>% arrange(desc(plot_id)) %>% filter(plot_id == 830)); 
 head(strata_soil_git %>% arrange(desc(plot_id)) %>% filter(plot_id == 830))
 
-# LIS is anders, is nu foutief 0 !!!
+w <- waldo::compare(strata_soil_git %>% filter(plot_id == 91000), strata_bodem %>% filter(plot_id == 91000))
 
-w <- waldo::compare(strata_bodem %>% filter(plot_id == 91000), strata_soil_git %>% filter(plot_id == 91000))
-# afronding is anders 
-# of enkele kleine aanpassingen wegens kleine correcties?
 
 #---------------------
 
@@ -1583,7 +1581,8 @@ save_results_access (
 con <- odbcConnectAccess2007(path_to_strata_db)
 
 sqlDrop(con, "strata_remaining")
-sqlSave(con, strata_overige, "strata_remaining", varTypes = c(S1_fisheyedate="datetime"))
+sqlSave(con, strata_overige, "strata_remaining", varTypes = c(S1_fisheyedate="datetime")
+        , rownames = FALSE)
 
 odbcClose(con)
 
@@ -1677,7 +1676,7 @@ save_results_forresdat(
   repo_path = path_to_git_forresdat,
   metadata_path = paste0(path_to_metadata, "_metadata_strata.xlsx"),
   push = FALSE,
-  strict = TRUE,
+  strict = FALSE,
   branch = "develop"
 )
 
