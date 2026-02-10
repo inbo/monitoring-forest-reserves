@@ -22,8 +22,13 @@
 #' The dataframe is derived from the data saved in the forresdat-folder 
 #' (`dendro_by_plot` and `regeneration_by_plot`)
 #'
-#' @param repo_path path_name of forresdat-data. 
-#' Default is 'path_to_git_forresdat', as specified in 'Setup.R'.
+#' @param type_git_ref is the same argument as "git_ref_type" in the 
+#' forrescalc function "read_forresdat_table"; 
+#' options are “release”, “branch”, “commit”; "branch" as default
+#' @param ref_git is the same argument as "git_reference" in the 
+#' forrescalc function "read_forresdat_table";
+#' options are "latest", "develop" or the name of another branch;
+#' "develop" as default
 #'
 #' @return dataframe with all circular plots located in open area
 #'
@@ -32,21 +37,35 @@
 #' open_area <- get_open_area()
 #' }
 #'
-get_open_area <- function(repo_path = path_to_git_forresdat){
+get_open_area <- function(type_git_ref = "branch", ref_git = "develop"){
+
+  dendro_by_plot <- read_forresdat_table(
+    tablename = "dendro_by_plot"
+    , git_ref_type = type_git_ref, git_reference = ref_git
+    , join_plotinfo = TRUE
+    , plottype = "CP") 
   
-  repo_path <- path_to_git_forresdat
+  reg_by_plot <- read_forresdat_table(
+    tablename = "reg_by_plot"
+    , git_ref_type = type_git_ref, git_reference = ref_git
+    , join_plotinfo = FALSE
+    , plottype = "CP") 
   
-  dendro_by_plot <- read_forresdat("dendro_by_plot", repo_path)
-  regeneration_by_plot <- read_forresdat("regeneration_by_plot", repo_path)
   open_area <- dendro_by_plot %>% 
-    filter(number_of_tree_species == 0) %>% # 14 plots (13 plots ename & plot 475)
-    filter(vol_deadw_m3_ha == 0) %>%  # dan valt plot 475 weg => is bosplot, maar op dat moment zonder bomen/verjonging
-    left_join(regeneration_by_plot) %>% 
+    # geen levende  bomen
+    filter(number_of_tree_species == 0) %>% # 14 plots zonder levende bomen (13 plots ename & plot 475)
+    # geen staand dood hout
+    filter(vol_dead_standing_m3_ha == 0) %>% 
+    # geen liggend dood hout
+    filter(vol_log_m3_ha == 0 | vol_log_above30cm_m3_ha == 0) %>%  # plot 475 heeft wél liggend dood hout
+    # geen verjonging
+    left_join(reg_by_plot, by = c("plot_id", "period")) %>% 
     filter((approx_nr_established_ha == 0 & approx_nr_seedlings_ha == 0) 
            | (is.na(approx_nr_established_ha) & is.na(approx_nr_seedlings_ha))
     ) %>% 
-    select(forest_reserve, plot_id, period, number_of_tree_species)
-  match.fun(mean) 
+    select(forest_reserve, plot_id, period
+           , number_of_tree_species.x, number_of_tree_species.y
+           , vol_log_m3_ha)
   
   open_area
 }
