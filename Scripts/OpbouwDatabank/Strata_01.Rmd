@@ -146,7 +146,6 @@ df_strata_shp %>% inner_join(dubbele_plotids)
 # df_strata_shp %>% filter(plot_id %in% c(482, 1137, 1140))   
 ```
 
-
 ## Strata CP's samengezet door Kris VdK
 
 Origineel op onze gdrive als gsheet
@@ -534,6 +533,8 @@ Metadata: zie S:\Vlaanderen\GeoData\_Metadata\Bodemkaart\DOV bodemkaart_2_0.pdf
 ```{r strata_bodem, results='markup'}
 # names(df_strata_shp)
 strata_bodem <- df_strata_shp %>%
+  filter(!Unieknr %in% c(32000)) %>% # want zit niet meer in moederdb (=> plot_id = 0)
+  # omdat die niet heropgemeten werd in de 2de decade
   select(Unieknr, plot_id, 65:111) %>%    # shp via vpn
   # select(basic_variables, 52:100) %>%     # shp c-schijf
   select(plot_id, Unieknr, 
@@ -583,14 +584,14 @@ Zie teamdrive: "...\Team_Boseco_BR\PRJ_BR_AanvraagGegevens\00_METADATA-ALL_PLOTS
 # path_to_strata_db
 # path_to_strata_input
 link_pnv_soil <- read_xlsx(paste0(path_to_strata_input, "NARA BODEMSERIE PNV VOOR ANJA.xlsx")) %>% 
-  filter(ORI == "BR")
+  filter(ORI == "BR") %>% 
+  unique()
 
 qPNV <- read_xlsx(paste0(path_to_strata_gdrive, "legende_PNV.xlsx"))
 
-con <- odbcConnectAccess2007(path_to_strata_db)
-soil <- sqlFetch(con, "strata_soil") %>% select(-PNV)
-management <- sqlFetch(con, "strata_remaining")
-odbcClose(con)
+# con <- odbcConnectAccess2007(path_to_strata_db)
+# management <- sqlFetch(con, "strata_remaining")
+# odbcClose(con)
 
 # forest_reserve_plots_missing_pnv_aangevuld.csv
 extra_pnv <- read.csv2(paste0(path_to_strata_input, "forest_reserve_plots_missing_pnv_aangevuld.csv"))
@@ -599,16 +600,16 @@ extra_pnv <- read.csv2(paste0(path_to_strata_input, "forest_reserve_plots_missin
 
 
 ```{r join_pnv}
-soil_pnv <- soil %>% 
+strata_bodem_pnv <- strata_bodem %>% 
   left_join(link_pnv_soil, by = c("belgisch_bodemtype" = "BODEMTYPE")) %>% 
-  unique() %>% 
+  # unique() %>% 
   select(-ORI)
 
 ```
 
 ```{r}
 # controle
-check <- soil_pnv %>% 
+check <- strata_bodem_pnv %>% 
   select(Unieknr, plot_id, belgisch_bodemtype, PNV)
 
 check3 <- check %>% 
@@ -630,10 +631,10 @@ check %>% group_by(Unieknr, plot_id) %>%  summarize(n = n()) %>%
 
 check_OB <- check %>% 
   inner_join(check3) %>% 
-  left_join(management %>% select(plot_id, SiteName)) %>% 
+  left_join(plotinfo %>% select(plot_id, forest_reserve) %>% unique()) %>% 
   unique()
 
-table(check_OB$SiteName)
+table(check_OB$forest_reserve)
 
 # plotids 1100 OB (Sevendonck), 700 OT (Heirnisse), 1700 ON/OT (Kolmont)
 
@@ -647,15 +648,17 @@ met de nodige terreinkennis een PNV aan toegekend.
 Zie file **forest_reserve_plots_missing_pnv_aangevuld.csv** op de teamdrive.
 
 ```{r}
-names(soil_pnv)
+names(strata_bodem_pnv)
 names(extra_pnv)
 
 # NA's
-soil_pnv %>% filter(is.na(PNV)) %>% group_by(SiteName, SubArea) %>% summarize(n= n()) %>% 
+strata_bodem_pnv %>% filter(is.na(PNV)) %>% 
+  left_join(plotinfo %>% select(plot_id, forest_reserve) %>% unique()) %>% 
+  group_by(forest_reserve) %>% summarize(n= n()) %>% 
   ungroup()
 
 # toevoegen PNV Sevendonck en Heirnisse
-soil_pnv2 <- soil_pnv %>% 
+strata_bodem_pnv2 <- strata_bodem_pnv %>% 
   left_join(extra_pnv %>% select(plot_id, PNV.aanvul)) %>% 
   mutate(PNV = ifelse(is.na(PNV), PNV.aanvul, PNV))
 
@@ -665,14 +668,16 @@ In de volgende reservaten ontbreekt bij bepaalde plots nog de PNV:
 
 ```{r results='markup'}
 # NA's
-soil_pnv2 %>% filter(is.na(PNV)) %>% group_by(SiteName, SubArea, belgisch_bodemtype) %>% summarize(n= n()) %>% 
+strata_bodem_pnv2 %>% filter(is.na(PNV)) %>% 
+  left_join(plotinfo %>% select(plot_id, forest_reserve) %>% unique()) %>% 
+  group_by(forest_reserve) %>% summarize(n= n()) %>% 
   ungroup()
 ```
 
 
 
 ```{r }
-strata_bodem <- soil_pnv2 %>% 
+strata_bodem <- strata_bodem_pnv2 %>% 
   select(-PNV.aanvul)
 names(strata_bodem)
 head(strata_bodem)
@@ -913,6 +918,7 @@ Eerst data uit de shapefile: `Management` en `Beheer` (beschikbaar voor alle plo
 
 ```{r strata_overige_uit_shp}
 strata_overige_uit_shp <- df_strata_shp %>% 
+  filter(!Unieknr %in% c(32000, 11001:11006, 155001:155002)) %>% 
   # left_join(list_reserves) %>%  #plottype en forest_reserve_fieldmap
   # select(forest_reserve_fieldmap, plot_id, plottype, Management, Beheer)
   select(plot_id, Management, Beheer) %>% 
@@ -1465,6 +1471,73 @@ cfr Methodiekrapport
 
 
 
+
+# Vergelijking met oude data
+
+10/2/2026 strat_bodem vergeleken met data op git
+
+```{r eval = FALSE, results='hide'}
+# 
+strata_soil_git <- read_forresdat_table(tablename = "strata_soil"
+                                           , join_plotinfo = FALSE
+                                           , plottype = "all"
+                                           , git_ref_type = "branch"
+                                           , git_reference = "develop")
+
+nrow(strata_bodem) == nrow(strata_soil_git)
+summary(strata_bodem)
+names(strata_bodem) == names(strata_soil_git)
+names(strata_bodem);names(strata_soil_git)
+summary(strata_soil_git)
+waldo::compare(strata_bodem, strata_soil_git)
+
+strata_bodem %>% arrange(plot_id) == strata_soil_git %>% arrange(plot_id)
+# OK denk ik andere ordening van variabelen (3/2025)
+# 12/2025: andere namen,  niet OK dus
+strata_bodem == strata_soil_git
+
+head(strata_bodem %>% arrange(desc(plot_id))); head(strata_soil_git %>% arrange(desc(plot_id)))
+# lijkt OK
+
+t <- strata_bodem %>% 
+  anti_join(strata_soil_git)
+
+head(strata_bodem %>% arrange(desc(plot_id)) %>% filter(plot_id == 830)); 
+head(strata_soil_git %>% arrange(desc(plot_id)) %>% filter(plot_id == 830))
+
+# LIS is anders, is nu foutief 0 !!!
+
+w <- waldo::compare(strata_bodem %>% filter(plot_id == 91000), strata_soil_git %>% filter(plot_id == 91000))
+# afronding is anders 
+# of enkele kleine aanpassingen wegens kleine correcties?
+
+#---------------------
+
+strata_hist_git <- read_forresdat_table(tablename = "strata_history"
+                                           , join_plotinfo = FALSE
+                                           , plottype = "all"
+                                           , git_ref_type = "branch"
+                                           , git_reference = "develop")
+
+waldo::compare(strata_hist_def, strata_hist_git)
+
+
+sorting_max <-
+    c("period", "year", "plot_id", "dbh_class_5cm", "decaystage", "subplot_id",
+      "tree_measure_id", "height_class", "species")
+
+sorting <- sorting_max[sorting_max %in% colnames(strata_hist)]
+    
+strata_hist_def <- strata_hist_def %>%
+      arrange(across(all_of(sorting)))
+
+names(strata_hist_def); names(strata_hist_git)
+
+
+```
+
+
+
 # Export
 
 ```{r list_strata}
@@ -1495,6 +1568,8 @@ strata <- list(
     #       link_EUFORIA_wildcard = LINK_EUFORIA_wildcard,
     #       info_EUFORIA = info_EUFORIA
     #     )
+
+# strata <- list(strata_soil = strata_bodem)
 ```
 
 ```{r save_strata_access, eval = FALSE}
@@ -1540,8 +1615,8 @@ strata <- list(
       link_plotid_subarea = link_plotid_subarea
     )
 
-#update 10/6/2025
-# strata <- list(info_survey = plotinfo_def)
+#update 10/2/2026
+# strata <- list(strata_soil = strata_bodem)
 
 save_results_csv(
     results = strata,
@@ -1594,7 +1669,7 @@ strata_strict <- list(
       info_survey = plotinfo_def
     )
 
-# update 10/6/2025 - info_survey = plotinfo_def
+# update 10/2/202s - strata_soil
 # strata_strict <- strata  
 
 save_results_forresdat(
