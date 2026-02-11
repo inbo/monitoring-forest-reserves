@@ -34,6 +34,9 @@ library(here)
 # libraries & invoergegevens
 source(here::here("scripts/Setup.R"))
 
+library(frictionless)
+library(jsonlite)
+
 run <- "test_AL"
 ```
 
@@ -86,31 +89,53 @@ Nodig voor:
 
 
 
-# Inladen lookuplijsten
+# Inladen lookuplijsten, plotinfo en strata
 
+Functie `read_forresdat()` haalt het datapackage als geheel binnen,
+mét de optie om de branch te specifiëren.
 
-(c)A: er bestaat ook read_package (https://docs.ropensci.org/frictionless/)
+Op termijn - als data op zenodo staat - kan ook `frictionlesss::read_package()` 
+gebruikt worden (https://docs.ropensci.org/frictionless/)
+
+```
 package <- read_package("https://zenodo.org/records/10053702/files/datapackage.json")
+```
 
-resources(package) : geeft overzicht van de tabellen in het datapackage
-<!-- > [1] "reference-data" "gps"            "acceleration" -->
+Met behulp van het package [frictionless](https://docs.ropensci.org/frictionless/) kan je 
+vervolgens het datapackage (forresdat) makkelijk bevragen.
 
-read_resource(package, "gps")  : om één tabel in te laden
+Hierna een overzicht van alle tabellen in forrresdat:
 
-> dit kan pas eens forresdat op zenodo staat, nu nog in develop branch bezig (10/2/2026)
-Daarom nu nog via `read_forresdat_table()`
+```{r read_all_forresdat}
+datapackage <- read_forresdat(git_ref_type = "branch", git_reference = "develop")
 
-```{r read_forresdat1}
-tablenames_input <- c("qiufroheight", "qalive_dead", "qdecaystage", "qspecies", "qind_shoot_cop")
+# overzicht van wat er in forresdat (het datapackage) zit 
+frictionless::resources(datapackage)
 
-tables <- map(tablenames_input, read_forresdat_table
-                   , join_plotinfo = FALSE
-                   # , plottype = "all"
-                   , git_ref_type = "branch"
-                   , git_reference = "develop")
+```
 
-tables <- map(tables, function(x) x %>% select(-Value3, -OrderField, -Active))
+Volgende versie wordt gedownload:
 
+```{r }
+# versie forresdat
+attr(datapackage, "forresdat")
+```
+
+Vervolgens enkel de tabellen waar we in geïnteresseerd zijn inladen.
+
+```{r read_resources}
+# qiufroheight <- read_resource(datapackage, "qiufroheight")
+# qalive_dead <- read_resource(datapackage, "qalive_dead")
+
+# mbv purr::map
+tablenames_input <- c("qiufroheight", "qalive_dead", "qdecaystage"
+                      , "qspecies", "qind_shoot_cop"
+                      , "plotinfo", "strata_remaining"
+                      , "plots_excluded_from_network"
+                      , "dendro_by_plot"
+                      , "reg_by_plot")
+
+tables <- map(tablenames_input, function(x) read_resource(datapackage, x))
 #The input was not named
 names(tables) <- tablenames_input
 
@@ -119,64 +144,102 @@ for (tablename in names(tables)) {
      assign(tablename, tables[[tablename]])
 } 
 
-#
-qspecies <- qspecies %>% select(ID, name_nl = Value1, name_sc = Value2)
-
 ```
 
-```{r fetch_access, eval = FALSE}
-# con <- odbcConnectAccess2007(path_to_fieldmap_db)
-# 
-# qIndShootCop <- sqlFetch(con, "qIndShootCop", stringsAsFactors = FALSE)
-# qAliveDead <- sqlFetch(con, "qAliveDead", stringsAsFactors = FALSE)
-# qSpecies <- sqlFetch(con, "qspecies", stringsAsFactors = FALSE)
-# qDecaystage <- sqlFetch(con, "qdecaystage", stringsAsFactors = FALSE)
-# 
-# odbcClose(con)
-# 
-# qIndShootCop <- qIndShootCop %>% select(-Value3, -OrderField, -Active)
-# qAliveDead <- qAliveDead %>% select(-Value3, -OrderField, -Active)
-# qSpecies <- qSpecies %>% select(ID, name_nl = Value1, name_sc = Value2)
-# qDecaystage <- qDecaystage %>% select(-Value3, -OrderField, -Active, -MasterID)
-```
-
-
-
-# Inladen plotinfo en strata
-
-OPGEPAST: sommige plots nog beheerd na start van monitoringnetwerk
-
-```{r read_forresdat2}
-tablenames_input <- c("plotinfo", "strata_remaining", "plots_excluded_from_network")
-
-tables <- map(tablenames_input, read_forresdat_table
-                   , join_plotinfo = FALSE
-                   # , plottype = "all"
-                   , git_ref_type = "branch"
-                   , git_reference = "develop")
-
-#The input was not named
-names(tables) <- tablenames_input
-
-# Create separate dataframes
-for (tablename in names(tables)) {
-     assign(tablename, tables[[tablename]])
-} 
-```
 
 ```{r eval = FALSE}
-# con <- odbcConnectAccess2007(path_to_strata_db)
-# strata_remaining <- sqlFetch(con, "strata_remaining", stringsAsFactors = FALSE)
-# plots_excluded_from_network <- sqlFetch(con, "plots_excluded_from_network", stringsAsFactors = FALSE)
-# # = plots waar beheer gebeurd is ergens na start van monitoringnetwerk
-# odbcClose(con)
+# extra bevragingen
+datapackage$resources[[2]]$path   # path/naam van het tweede dataframe
+
+# The column names and types are derived from the resource schema
+purrr::map_chr(datapackage$resources[[2]]$schema$fields, "name")
+purrr::map_chr(datapackage$resources[[2]]$schema$fields, "type")
+purrr::map_chr(datapackage$resources[[2]]$schema$fields, "description")
+
+datapackage$resources[[3]]$path 
+purrr::map_chr(datapackage$resources[[3]]$schema$fields, "extra_info")
+# lukt wellicht niet omdat extra_info ook vaak leeg is
+info_3 <- cbind(purrr::map_chr(datapackage$resources[[3]]$schema$fields, "name")
+                , purrr::map_chr(datapackage$resources[[3]]$schema$fields, "type")
+                , purrr::map_chr(datapackage$resources[[3]]$schema$fields, "description"))
+
+datapackage$resources[[4]]$path 
+purrr::map_chr(datapackage$resources[[4]]$schema$fields, "name")
+purrr::map_chr(datapackage$resources[[4]]$schema$fields, "type")
+
+# Read data from the resource "dendor_by_plot" with column selection
+read_resource(datapackage, "dendro_by_plot", col_select = c("plot_id", "year"))
+```
 
 
-# plotinfo <- read_forresdat("plotinfo", repo_path = path_to_git_forresdat, join_plotinfo = FALSE)
+```{r lkp}
+# lkp-tables beetje omvormen, enkel relevante kolommen overhouden
+# tabellen in een list stoppen
+lkp_tables <- list(qiufroheight = qiufroheight, qalive_dead = qalive_dead
+                   , qdecaystage = qdecaystage, qspecies = qspecies
+                   , qind_shoot_cop = qind_shoot_cop)
+
+tables <- map(lkp_tables, function(x) x %>% dplyr::select(-Value3, -OrderField, -Active))
+
+# Create separate dataframes
+for (tablename in names(tables)) {
+     assign(tablename, tables[[tablename]])
+} 
+
+qspecies <- qspecies %>% select(ID, name_nl = Value1, name_sc = Value2)
+```
+
+
+```{r datatables}
+# plotinfo toevoegen aan de datatabellen xxx_by_plot 
+# en enkel de CP's selecteren
+
+# tabellen in een list stoppen
+datatables <- list(dendro_by_plot = dendro_by_plot
+                   , reg_by_plot = reg_by_plot)
+
+tables <- map(datatables, function(x) x %>% 
+                left_join(plotinfo %>% select(plot_id, period, forest_reserve)) %>% 
+                filter(plottype == "CP"))
+
+# Create separate dataframes
+for (tablename in names(tables)) {
+     assign(tablename, tables[[tablename]])
+} 
 
 ```
 
+
+
+```{r eval = FALSE}
+# mbv read_forresdat_table() - COMPLEXER
+# tablenames_input <- c("qiufroheight", "qalive_dead", "qdecaystage", "qspecies", "qind_shoot_cop")
+# 
+# tables <- map(tablenames_input, read_forresdat_table
+#                    , join_plotinfo = FALSE
+#                    # , plottype = "all"
+#                    , git_ref_type = "branch"
+#                    , git_reference = "develop")
+# 
+# tables <- map(tables, function(x) x %>% select(-Value3, -OrderField, -Active))
+# 
+# #The input was not named
+# names(tables) <- tablenames_input
+# 
+# # Create separate dataframes
+# for (tablename in names(tables)) {
+#      assign(tablename, tables[[tablename]])
+# } 
+# 
+# #
+# qspecies <- qspecies %>% select(ID, name_nl = Value1, name_sc = Value2)
+
+```
+
+
 # Beheer
+
+**OPGEPAST**: sommige plots nog beheerd na start van monitoringnetwerk
 
 (c) Kris: Kluisbos: ik zou de data in drie groepen clusteren: data van het bosreservaat, plots in onbeheerd buiten het reservaat en beheerde plots
 => Obv strata_remaining Kluisbos opsplitsen in Kluisbos, Kluisbos_managed en
@@ -217,16 +280,19 @@ site_subtypes <- strata_remaining %>%
 # deze zonder naam forest_reserve zitten niet in plotinfo omdat data_processed = FALSE
 # geen info over management type van kernvlaktes
 ```
+> waarom geen 13 plots open area , zie verder 
 
 ```{r ename}
-open_area <- get_open_area()
+open_area <- get_open_area(type_git_ref = "branch", ref_git = "develop")
 
 open_area <- open_area %>% 
   left_join(strata_remaining)
 
 table(open_area$Management)
-# allemaal conversion + grazing 
+# 8 plots, allemaal conversion + grazing 
 # !! in totaal wel 27 plots met management "conversion + grazing", maar niet allemaal open ruimte
+
+table(strata_remaining$Management)
 ```
 
 
@@ -238,7 +304,9 @@ Dendro per BR: enkel obv de bosplots mogen berekend worden
 
 plot 475 Wijnendale periode 1: bevat dood hout; omdat er in periode 2 wel soorten genoteerd werden zit plot mee in dendro_by_plot_species
 
-```{r}
+> hier nog aantal plots zonder verjonging checken (15?)
+
+```{r eval = FALSE}
 reg_by_plot <- read_forresdat_table(tablename = "reg_by_plot"
                                            , join_plotinfo = FALSE
                                            , plottype = "CP"
@@ -252,7 +320,7 @@ reg_by_plot <- read_forresdat_table(tablename = "reg_by_plot"
 ```{r open_ruimte}
 open_ruimte <- dendro_by_plot %>% 
   filter(number_of_tree_species == 0) %>% # 14 plots (13 plots ename & plot 475)
-  filter(vol_deadw_m3_ha == 0) %>%  # dan valt plot 475 weg => is bosplot, maar op dat moment zonder bomen/verjonging
+  filter(vol_dead_standing_m3_ha == 0 & vol_log_m3_ha == 0) %>%  # dan valt plot 475 weg => is bosplot, maar op dat moment zonder bomen/verjonging
   left_join(reg_by_plot) %>% 
   filter((approx_nr_established_ha == 0 & approx_nr_seedlings_ha == 0) 
          | (is.na(approx_nr_established_ha) & is.na(approx_nr_seedlings_ha))
@@ -271,12 +339,17 @@ open_ruimte <- open_ruimte %>%
 
 ```{r bosplots}
 bosplots <- dendro_by_plot %>% 
-  filter(plottype == "CP") %>% 
+  left_join(plotinfo %>% select(plot_id, period, survey_trees, survey_deadw)) %>% 
   select(forest_reserve, plot_id, period, number_of_tree_species
          , survey_trees, survey_deadw) %>% 
   anti_join(open_ruimte)
+
+# check
+nrow(bosplots) + nrow(open_ruimte) ==  nrow(dendro_by_plot)
 ```
 
+
+> tot hier maar gekomen
 
 
 # Statistieken
