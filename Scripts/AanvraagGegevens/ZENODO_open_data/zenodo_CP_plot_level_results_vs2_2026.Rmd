@@ -142,7 +142,15 @@ names(tables) <- all_tables
 ```
 
 
-Specifiek voor Zenodo selecteren we enkel de cirkelplots.
+Specifiek voor Zenodo selecteren we enkel de cirkelplots.     
+
+We verwijderen ook de velden gebaseerd op volume van de logs > 40 cm,
+omdat deze enkel betrekkinng hebben op de kernvlakte "Zoniën KERN_1983": 
+
+- vol_log_above40cm_m3_ha     
+- VolumeLogs_above40cm_m3_ha    
+- BiomassLying_above40cm_t_ha_dead    
+- CarbonLying_above40cm_t_ha_dead       
 
 
 ```{r modify_tables}
@@ -157,6 +165,25 @@ modify_tables <- function(table){
   table <- table %>% 
     filter(plottype == "CP") %>% 
     select(-plottype)
+  }
+  
+  # vol_log_above40cm_m3_ha verwijderen (enkel CA)
+  if ("vol_log_above40cm_m3_ha" %in% colnames_table) {
+  table <- table %>% 
+    select(-vol_log_above40cm_m3_ha)
+  }
+  
+  if ("VolumeLogs_above40cm_m3_ha" %in% colnames_table) {
+  table <- table %>% 
+    select(-VolumeLogs_above40cm_m3_ha
+           , -BiomassLying_above40cm_t_ha_dead
+           , -CarbonLying_above40cm_t_ha_dead)
+  }
+  
+  # subplot_id niet relevant bij reg
+  if ("subplot_id" %in% colnames_table) {
+  table <- table %>% 
+    select(-subplot_id)
   }
   
   # enkel relevante velden behouden bij lookuplijsten
@@ -243,6 +270,8 @@ Met species, heightclass, decaystage en browseindex
 ```{r dendro}
 #
 print("dendro_by_plot")
+dendro_by_plot <- dendro_by_plot %>% 
+  select(plot_id, period, year, everything())
 names(dendro_by_plot)
 # ev. enkel plottype verwijderen?
 # 1974
@@ -251,7 +280,7 @@ names(dendro_by_plot)
 print("dendro_by_plot_species")
 dendro_by_plot_species <- dendro_by_plot_species %>% 
   left_join(qspecies, by = c("species" = "ID"))  %>% 
-  select(plot_id, year, period
+  select(plot_id, period, year
          , species_id = species, name_nl, name_sc
          , everything())
 names(dendro_by_plot_species)
@@ -264,7 +293,7 @@ names(dendro_by_diam_plot)
 print("dendro_by_diam_plot_species")
 dendro_by_diam_plot_species <- dendro_by_diam_plot_species %>% 
   left_join(qspecies, by = c("species" = "ID")) %>% 
-  select(plot_id, year, period
+  select(plot_id, period, year
          , species_id = species, name_nl, name_sc
          , everything())
 names(dendro_by_diam_plot_species)
@@ -277,7 +306,7 @@ print("deadw_by_decay_plot")
 deadw_by_decay_plot <- deadw_by_decay_plot %>% 
   rename(decaystage_id = decaystage) %>% 
   left_join(qdecaystage, by = c("decaystage_id" = "ID")) %>% 
-  select(plot_id, year, period
+  select(plot_id, period, year
          , decaystage_id, decaystage
          , everything())
 names(deadw_by_decay_plot)
@@ -288,7 +317,7 @@ deadw_by_decay_plot_species <- deadw_by_decay_plot_species %>%
   left_join(qspecies, by = c("species" = "ID")) %>% 
   rename(decaystage_id = decaystage) %>% 
   left_join(qdecaystage, by = c("decaystage_id" = "ID")) %>% 
-  select(plot_id, year, period
+  select(plot_id, period, year
          , species_id = species, name_nl, name_sc
          , decaystage_id, decaystage
          , everything())
@@ -298,6 +327,29 @@ names(deadw_by_decay_plot_species)
 
 ```{r carbon}
 print("carbon_by_plot")
+
+carbon_by_plot <- carbon_by_plot %>% 
+  select(plot_id, period, year
+         , StemVolume_m3_ha_alive, VolumeStump_m3_ha_alive
+         , TotalVolumeAGB_m3_ha_alive
+         , BiomassAboveGr_t_ha_alive, BiomassBelowGr_t_ha_alive
+         , Biomass_t_ha_alive 
+         , CarbonAboveGr_t_ha_alive, CarbonBelowGr_t_ha_alive
+         , Carbon_t_ha_alive
+         , StemVolume_m3_ha_dead, VolumeStump_m3_ha_dead
+         , TotalVolumeAGB_m3_ha_dead
+         , BiomassAboveGr_t_ha_dead, BiomassBelowGr_t_ha_dead
+         , BiomassStanding_t_ha_dead
+         , CarbonAboveGr_t_ha_dead, CarbonBelowGr_t_ha_dead
+         , CarbonStanding_t_ha_dead
+         , VolumeLogs_m3_ha, VolumeLogs_above30cm_m3_ha
+         , VolumeLIS_m3_ha, VolumeLIS_10_30cm_m3_ha
+         , BiomassLying_t_ha_dead, 
+         , CarbonLying_t_ha_dead, 
+         , VolumeAGB_m3_ha_dead, BiomassAGB_t_ha_dead
+         , CarbonAGB_t_ha_dead
+  )
+
 names(carbon_by_plot)
 
 # bij carbon zijn de open ruimtes weggelaten
@@ -306,6 +358,7 @@ nrow(dendro_by_plot) == nrow(carbon_by_plot) + 13
 ```
 
 ```{r reg1}
+print("reg_by_plot")
 names(reg_by_plot)
 # 1677 vs 1680 dendro - OK (zie hierna)
 
@@ -332,10 +385,9 @@ reg_by_plot %>% group_by() %>% summarize(n_plots = n_distinct(plot_id))
 print("reg_by_plot_height")
 reg_by_plot_height <- reg_by_plot_height %>% 
   left_join(qheight_class_regeneration %>% select(1:2), by = c("height_class" = "ID")) %>% 
-  select(plot_id, year, period 
+  select(plot_id, period, year
          , height_class_id = height_class, height_class= Value1
-         , everything()
-         , -subplot_id)
+         , everything())
 names(reg_by_plot_height)
 
 # 
@@ -343,11 +395,10 @@ print("reg_by_plot_height_species")
 reg_by_plot_height_species <- reg_by_plot_height_species %>% 
   left_join(qspecies, by = c("species" = "ID")) %>% 
   left_join(qheight_class_regeneration %>% select(1:2), by = c("height_class" = "ID")) %>% 
-  select(plot_id, year, period 
+  select(plot_id, period, year 
          , height_class_id = height_class, height_class= Value1
          , species_id = species, name_nl, name_sc
-         , everything()
-         , -subplot_id)
+         , everything())
 names(reg_by_plot_height_species)
 
 ```
@@ -355,8 +406,6 @@ names(reg_by_plot_height_species)
 ```{r veg}
 # 
 print("veg_by_plot")
-veg_by_plot <- veg_by_plot %>% 
-  select(-subplot_id)
 names(veg_by_plot)
 # 1651 vs 1680 dendro - OK (zie hierna)
 ```
@@ -525,19 +574,19 @@ file.copy(from = source_file, to = paste0(destination_dir, "CP_veg/"), overwrite
 
 # Metadata  
 
-De metadata worden manueel aangepast in `r path_to_datarequest_gdrive` indien er 
-wijzigingen doorgevoerd zijn ten opzichte van de vorige update.
+De metadata worden opgeslagen in de folder "`r path_to_datarequest_gdrive`".
 
-Het betreft volgende files:   
+Ze zijn een kopie van de metadata in de folder "`r path_to_metadata`", en werden 
+manueel aangepast (o.a. de niet-relevante info mbt kernvlaktes werd verwijderd).
+
+Bij wijzigingen aan de metadata ten opzichte van de vorige update, moet dit opnieuw gebeuren.
+
+De metadata bestaat uit volgende files:   
 
 - _metadata_plotinfo.xlsx     
+<!-- volgende keer wellicht sprake van dbh_min_a3_alive ipv dbh_min_a3, 
+nog te implementeren in, forrescalc (17/2/2026)-->
 - _metadata_plotlevel_results_dendro.xlsx     
 - _metadata_plotlevel_results_veg.xlsx        
-
-> nog probleempje met
-BiomassLying_above40cm_t_ha_dead" "CarbonLying_above40cm_t_ha_dead" 
-
-> ? met dat niet boven 30 zijn?
-checken in aanmaak carbon-file in forresdat!!
 
 <!-- update gebeurd op 17/2/2026 voor plotinfo, veg en dendro -->
