@@ -16,10 +16,10 @@
 
 # FUNCTIES -------------------------
 
-#' split Ename into plots situated in open area and forest plots
+#' split Ename into plots situated in open area and in forest plots
 #' 
 #' This function is developed especially for Ename, which consists of open area 
-#' as wel as forest
+#' as well as forest.
 #' The function changes the field 'forest_reserve' from 'Ename' into 
 #' 'Ename_open_area' and 'Ename_forest'.
 #' The input dataset can only contain circular plots and has to include the 
@@ -69,7 +69,7 @@ split_Ename <- function(dataset){
 #' forest reserve ("_SFR", 67 plots 'unmanaged') and a communal forest (55 plots 
 #' 'managed' and 6 plots 'unmanaged').
 #' The function changes the field 'forest_reserve' from 'Kluisbos' into 
-#' 'Kluisbos_managed' and 'Kluisbos_unmanaged'.
+#' 'Kluisbos_SFR' and 'Kluisbos_communal'.
 #' The input dataset can only contain circular plots and has to include the 
 #' variables `plot_id` & `forest_reserve`.
 #' 
@@ -163,11 +163,12 @@ split_Kluisbos_management <- function(dataset){
 
 
 
-#' create plotinfo for statistics based on circular plots
+#' get plotinfo for statistics based on circular plots
 #' 
-#' This function selects circular plots, and divides some forest_reserves 
-#' into different parts (f.e. 'Kluisbos' into 'Kluisbos_managed' and 
-#' 'Kluisbos_unmanaged'; 'Ename' in 'Ename_open' and 'Ename_forest'.
+#' This function gets plotinfo from the datapackage, selects only circular plots
+#' and splits some forest_reserves further up.
+#' (f.e. 'Kluisbos' into 'Kluisbos_managed' and Kluisbos_unmanaged'; 
+#' 'Ename' in 'Ename_open' and 'Ename_forest').
 #'
 #' @param datapackage the datapackage with forresdat data
 #' 
@@ -175,11 +176,11 @@ split_Kluisbos_management <- function(dataset){
 #'
 #' @examples
 #' \dontrun{
-#' dendro_by_plot <- read_forresdat(name_dataset, repo_path) %>% 
-#' filter(plottype == "CP")
-#' dendro_by_plot <- split_Kluisbos_management(dataset = dendro_by_plot)
+#' datapackage <- read_forresdat(git_ref_type = "branch", git_reference = "develop")
+#' dendro_by_plot <- get_plotinfo_cp_for_stat(datapackage)
 #' }
 #'
+#'@importFrom forrescalc read_resource 
 get_plotinfo_cp_for_stat <- function(datapackage){
   plotinfo <- read_resource(datapackage, "plotinfo") %>% 
     split_Kluisbos_SFR() %>% 
@@ -209,6 +210,7 @@ get_plotinfo_cp_for_stat <- function(datapackage){
 #' forest_plot <- get_strict_forest_reserve_plots()
 #' }
 #'
+#'@importFrom forrescalc read_resource 
 get_strict_forest_reserve_plots <- function(datapackage){
   plotinfo <- read_resource(datapackage, "plotinfo") %>% 
     filter(plottype == "CP") %>% 
@@ -256,6 +258,9 @@ get_strict_forest_reserve_plots <- function(datapackage){
 #' datapackage <- read_forresdat(git_ref_type = "branch", git_reference = "develop")
 #' stat <- get_year_range(statistics)
 #' }
+#'
+#'@importFrom functions split_Kluisbos_SFR split_Ename
+#'@importFrom forrescalc read_resource 
 #'
 get_year_range <- function(statistics, datapackage){
   plotinfo <- read_resource(datapackage, "plotinfo") %>% 
