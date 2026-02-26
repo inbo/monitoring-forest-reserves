@@ -1208,13 +1208,6 @@ names(deadw_by_decay_plot_species)
 
 ```
 
-```{r TIJDELIJK}
-deadw_by_decay_plot_species <- deadw_by_decay_plot_species %>% 
-  rename(vol_lis_m3_ha = vol_LIS_m3_ha
-         , vol_lis_10_30cm_m3_ha = vol_LIS_10_30cm_m3_ha)
-```
-
-
 ```{r results='hide'}
 colnames(deadw_by_decay_plot_species)
 colnames(BiomassFactors4_FRL)
@@ -1356,13 +1349,6 @@ dendro_by_plot <- read_forresdat_table(
   , git_ref_type = "branch", git_reference = "develop"
   , join_plotinfo = TRUE
   , plottype = "all") # CP & CA
-```
-
-
-```{r TIJDELIJK2}
-dendro_by_plot <- dendro_by_plot %>% 
-  rename(vol_lis_m3_ha = vol_LIS_m3_ha
-         , vol_lis_10_30cm_m3_ha = vol_LIS_10_30cm_m3_ha)
 ```
 
 
