@@ -270,6 +270,95 @@ nrow(standing_all) == nrow(standing)
 
 ```
 
+```{r CONTROLE_SNAGS_ELISABETH, eval = FALSE}
+# checks nalv niet intacte d
+names(standing)
+
+table(standing$INVENTORY_YEAR)
+
+standing_intact <- standing %>% 
+  filter(INTEGRITY == "C") %>% 
+  mutate(verh_D_H = DBH_mm * 3.1416/(HEIGHT * 10)
+         , verh_H_D = 100*HEIGHT*10/DBH_mm)    #copilot
+
+range(standing_intact$verh_D_H, na.rm = T)
+# best tussen 1.5 en 15
+# 1.163556 15.824356
+standing_intact %>% nrow() #108773
+standing_intact %>% filter(verh_D_H > 1.5) %>% nrow()  #30
+standing_intact %>% filter(verh_D_H > 14 & DBH_mm < 1000) %>% nrow()  #7
+# de bomen met lageverhouding, zijn heel smal en hoog, dus zeker geen stumps
+# en tot een verhouding 15 kan in theorie nog een intacte boom zijn
+
+range(standing_intact$verh_H_D, na.rm = T)
+# [1]  19.85294 270.00000
+# Als h/d < 20–25 → grote kans dat boom afgebroken is (snag). # copilot
+# => de intacte kunnen gerust intact zijn
+standing_intact %>% filter(verh_H_D < 20) %>% nrow()  #1
+
+standing_fragment <- standing %>% 
+  filter(INTEGRITY == "F") %>% 
+  mutate(verh_D_H = DBH_mm * 3.1416/(HEIGHT * 10))
+range(standing_fragment$verh_D_H) 
+# [1]   1.9712 236.6672
+standing_fragment %>% nrow() #3374
+standing_fragment %>% filter(verh_D_H < 15) %>% nrow()  #2025
+standing_fragment %>% filter(verh_D_H > 15) %>% nrow()  #1349
+
+summary(standing_fragment$verh_D_H)
+ # Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+ #  1.971   8.796  12.566  16.850  19.897 236.667
+
+
+summary(standing_intact$verh_D_H)
+  # Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
+  # 1.164   2.827   3.896   4.374   5.459  15.824   91758
+```
+
+```{r height_meas_vgl_modeled}
+standing_intact <- standing_intact %>% 
+  mutate(height_diff = HEIGHT_model - HEIGHT
+         , strange_height = ifelse(height_diff > 0.5*HEIGHT_model, T, F)
+         , perc_H_model = 100*height_diff/HEIGHT_model)
+
+
+t <- standing_intact %>% 
+  filter(perc_H_model > 50) %>% 
+  select(SITE_NAME, contains("ID"), DBH_mm, contains("HEIGHT"), LIFE
+         , DECAY_NUMERIC, TREE_SPECIES_FULL_SCIENTIFIC
+         , verh_D_H, height_diff, strange_height, perc_H_model
+         , INVENTORY_YEAR)
+# 90
+table(t$LIFE)
+#  A  D 
+# 34 56
+
+t <- standing_intact %>% 
+  filter(perc_H_model > 40) %>% 
+  select(SITE_NAME, contains("ID"), DBH_mm, contains("HEIGHT"), LIFE
+         , DECAY_NUMERIC, TREE_SPECIES_FULL_SCIENTIFIC
+         , verh_D_H, height_diff, strange_height, perc_H_model
+         , INVENTORY_YEAR)
+# 186
+table(t$LIFE)
+#   A   D 
+# 112  74
+
+t <- standing_intact %>% 
+  filter(perc_H_model > 30) %>% 
+  select(SITE_NAME, contains("ID"), DBH_mm, contains("HEIGHT"), LIFE
+         , DECAY_NUMERIC, TREE_SPECIES_FULL_SCIENTIFIC
+         , verh_D_H, height_diff, strange_height, perc_H_model
+         , INVENTORY_YEAR)
+# 457
+table(t$LIFE)
+#   A   D 
+# 349 108
+```
+
+
+
+
 
 ```{r results='hide'}
 qry_standing_per_plot <- standing_all %>% 
