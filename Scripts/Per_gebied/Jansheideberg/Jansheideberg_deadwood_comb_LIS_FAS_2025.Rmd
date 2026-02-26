@@ -81,7 +81,7 @@ Op dit moment hebben we
 => je kan op 3 manieren een volume berekenen:   
 
 - enkel LIS: alle diameters maar minder nauwkeurig op plotniveau en voor zwaarder dood hout
-  (`dendro_by_plot(_species)` en `deadw_by_decay(_species)` - `vol_LIS_m3_ha` en `vol_LIS_above30cm_m3_ha`)   
+  (`dendro_by_plot(_species)` en `deadw_by_decay(_species)` - `vol_lis_m3_ha` en `vol_lis_above30cm_m3_ha`)   
 - enkel FAS: diameters vanaf 30 cm en nauwkeurig op plotniveau 
   (`dendro_by_plot(_diam)(_species)` en `deadw_by_decay(_species)` - `vol_log_above30cm_m3_ha`)  
 - combinatie van beiden maar dan is compensatie nodig: 
@@ -548,7 +548,7 @@ data_LIS_corr <- rbind(data_LIS_kleinerdan30, comp_LIS_groterdan30)
 => dus NA compensatie voor dubbeltellingen, is enkel wat effectief < 30 cm diameter is, opgenomen in de LIS-dataset.
 De LIS-dataset geeft dus info over volume < 30 cm en FAS-dataset over volume > 30 cm
 
-Maar dat kunnen we ook halen uit `vol_LIS_10_30cm`, maar daar zitten dan ook de logs 
+Maar dat kunnen we ook halen uit `vol_lis_10_30cm`, maar daar zitten dan ook de logs 
 in die op een bepaald punt wél zwaarder zijn dan 30 cm.
 Maar dat gaat ook in de andere richting: een log die een transect snijdt met diam < 100 mm wordt ook niet meegenomen, terwijl die mogelijks ook groter is.
 
@@ -766,11 +766,11 @@ vgl <- deadw_LIS_corr_plot %>%
 LIS_tss_10_en_30 <- dendro_by_plot %>% 
   select(plottype, plot_id, period
          , vol_log_above30cm_m3_ha
-         , contains("vol_LIS_")) %>% 
+         , contains("vol_lis_")) %>% 
   left_join(deadw_LIS_corr_plot %>% select(-volume_m3_m2), by = c("plot_id", "period")) %>% 
   left_join(deadw_LIS_corr_plot2 %>% select(-volume_m3_m2), by = c("plot_id", "period")) %>% 
   filter(period == 3 & plottype == "CP") %>% 
-  select(plot_id, vol_LIS_10_30cm_m3_ha, volume_m3_ha.x, volume_m3_ha.y)
+  select(plot_id, vol_lis_10_30cm_m3_ha, volume_m3_ha.x, volume_m3_ha.y)
 ```
  
 
