@@ -31,8 +31,8 @@ om te beslissen of hij deze al dan niet combineert.
 
 **Berekende velden**
 
-- vol_LIS_m3_ha
-- vol_LIS_10_30cm_m3_ha
+- vol_lis_m3_ha
+- vol_lis_10_30cm_m3_ha
 - vol_log_above30cm_m3_ha
 
 => totaal volume logs obv LIS 10-30 (op snijpunt) en FAS > 30        
