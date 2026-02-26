@@ -447,13 +447,12 @@ get_n_plots_per_reserve <- function(dataset){
 
 #' create statistics per forest reserve, based on dendro_by_plot
 #' 
-#' This function first selects all the circular, forested plots.
-#' Then the managed part of 'Kluisbos' is changed into 'Kluisbos_managed' and 
-#' 'Kluisbos_managed_non_intervention'.
+#' This function first selects all the circular plots and splits some 
+#' forest_reserves further up.
 #' Finally the function `create_statistics()` is used to create statistics on 
 #' all of the variables in `dendro_by_plot`.
 #' 
-#' @inheritParams get_strict_forest_reserve_plots
+#' @inheritParams get_plotinfo_cp_for_stat
 #' 
 #' @return statistics (mean, variance, lci, uci, n_obs) per period, 
 #' forest_reserve and all of the variables included in 'dendro_by_plot'
@@ -461,24 +460,17 @@ get_n_plots_per_reserve <- function(dataset){
 #' @examples
 #' \dontrun{
 #' datapackage <- read_forresdat(git_ref_type = "branch", git_reference = "develop")
-#' resultaat <- statistics_dendro(datapackage, strict_reserve = TRUE)
+#' resultaat <- statistics_dendro(datapackage)
 #' }
 #'
-#' @importFrom functions get_forest_plots differentiate_managed_plots
-#' @importFrom forrescalc read_forresdat create_statistics
+#' @importFrom functions get_plotinfo_cp_for_stat get_year_range
+#' @importFrom forrescalc read_resource create_statistics
 #'
 statistics_dendro <- function(datapackage){
   plotinfo <- get_plotinfo_cp_for_stat(datapackage)
-  
-  
-  plotinfo <- read_resource(datapackage, "plotinfo") %>% 
-    split_Kluisbos_SFR() %>% 
-    # gaan we altijd doen, zelfs al wordt communal deel van Kluisbos ook meegenomen
-    split_Ename() %>% 
-    filter(plottype == "CP")
-
-  dataset <- read_resource(datapackage, "dendro_by_plot") %>%  # zonder forest_reserve
-    inner_join(plotinfo %>% select(forest_reserve, plot_id, period)) %>% 
+ 
+  dataset <- read_resource(datapackage, "dendro_by_plot") %>% 
+    inner_join(plotinfo %>% select(forest_reserve, plot_id, period)) %>% # only cp
     select(-contains(c("40cm")))
     
   variables_for_statistics <- dataset %>% 
@@ -510,14 +502,13 @@ statistics_dendro <- function(datapackage){
 
 #' create statistics per forest reserve, based on dendro_by_plot_species
 #' 
-#' This function first selects all the circular, forested plots, and adds 
-#' zero values for all missing combinations of plot and species.
-#' Then the managed part of 'Kluisbos' is changed into 'Kluisbos_managed' and 
-#' 'Kluisbos_managed_non_intervention'.
+#' This function first selects all the circular plots and splits some 
+#' forest_reserves further up.
+#' Then zero values for all missing combinations of plot and species are added.
 #' Finally the function `create_statistics()` is used to create statistics on 
 #' all of the variables in `dendro_by_plot_species`.
 #' 
-#' @inheritParams get_open_area
+#' @inheritParams get_plotinfo_cp_for_stat
 #' 
 #' @return statistics (mean, variance, lci, uci, n_obs) per period, 
 #' forest_reserve and species on all of the variables included in 
@@ -526,32 +517,28 @@ statistics_dendro <- function(datapackage){
 #' @examples
 #' \dontrun{
 #' datapackage <- read_forresdat(git_ref_type = "branch", git_reference = "develop")
-#' resultaat <- statistics_dendro_species(datapackage, strict_reserve = TRUE)
+#' resultaat <- statistics_dendro_species(datapackage)
 #' }
 #'
-#' @importFrom functions get_forest_plots differentiate_managed_plots
-#' @importFrom forrescalc read_forresdat add_zeros create_statistics 
+#' @importFrom functions get_plotinfo_cp_for_stat get_year_range
+#' @importFrom forrescalc read_resource add_zeros create_statistics 
 #'
-statistics_dendro_species <- function(repo_path = path_to_git_forresdat){
+statistics_dendro_species <- function(datapackage){
+  plotinfo <- get_plotinfo_cp_for_stat(datapackage)
   
-  con <- odbcConnectAccess2007(path_to_fieldmap_db)
-  qSpecies <- sqlFetch(con, "qspecies", stringsAsFactors = FALSE) %>% 
+  dataset <- read_resource(datapackage, "dendro_by_plot_species") %>% 
+    inner_join(plotinfo %>% select(forest_reserve, plot_id, period)) %>% # only cp
+    select(-contains(c("40cm")))
+  
+  qspecies <- read_resource(datapackage, "qspecies") %>% 
     select(ID, name_nl = Value1, name_sc = Value2)
-  odbcClose(con)
 
-  forest_plot <- get_forest_plots()
-  
-  dataset <- read_forresdat("dendro_by_plot_species", repo_path) %>% 
-    select(-contains("eg"), -contains("min40cm")) %>% 
-    filter(plottype == "CP" & plot_id %in% forest_plot$plot_id) 
-  
   dataset_0 <- add_zeros(dataset = dataset %>% 
                             select(plot_id, period, species, contains("_ha")),
                           comb_vars = c("plot_id", "species"),
                           grouping_vars = c("period")
-                          ) %>%
-    left_join(forest_plot %>% select(plot_id, period, forest_reserve)) %>% 
-    differentiate_managed_plots()
+                          ) %>% 
+    left_join(plotinfo %>% select(forest_reserve, plot_id, period))
   
   variables_for_statistics <- dataset_0 %>% 
     select(contains(c("_ha", "tree"))) %>% 
@@ -566,12 +553,12 @@ statistics_dendro_species <- function(repo_path = path_to_git_forresdat){
     ) %>% 
     filter(mean != 0 & !is.na(mean)) %>% 
     round_df(., 2) %>% 
-    left_join(qSpecies, by = c("species" = "ID")) %>% 
+    left_join(qspecies, by = c("species" = "ID")) %>% 
     mutate(strata = "species",
            stratum_name = name_sc,
            strata2 = NA,
            stratum_name2 = NA) %>% 
-    get_year_range() %>% 
+    get_year_range(datapackage) %>% 
     select(-contains(c("log", "species", "name_sc")))
   
   return(resultaat)
@@ -580,14 +567,13 @@ statistics_dendro_species <- function(repo_path = path_to_git_forresdat){
 
 #' create statistics per forest reserve, based on dendro_by_diam_plot 
 #' 
-#' This function first selects all the circular, forested plots, and adds 
-#' zero values for all missing combinations of plot and diameter class.
-#' Then the managed part of 'Kluisbos' is changed into 'Kluisbos_managed' and 
-#' 'Kluisbos_managed_non_intervention'.
+#' This function first selects all the circular plots and splits some 
+#' forest_reserves further up.
+#' Then zero values for all missing combinations of plot and diameterclass are added.
 #' Finally the function `create_statistics()` is used to create statistics on 
 #' all of the variables in `dendro_by_diam_plot`.
 #' 
-#' @inheritParams get_open_area
+#' @inheritParams get_plotinfo_cp_for_stat
 #' 
 #' @return statistics (mean, variance, lci, uci, n_obs) per period, 
 #' forest_reserve and diameter class on all of the variables included in 
@@ -595,29 +581,26 @@ statistics_dendro_species <- function(repo_path = path_to_git_forresdat){
 #'
 #' @examples
 #' \dontrun{
-#' resultaat <- statistics_dendro_diam()
+#' datapackage <- read_forresdat(git_ref_type = "branch", git_reference = "develop")
+#' resultaat <- statistics_dendro_diam(datapackage)
 #' }
 #'
-#' @importFrom functions get_forest_plots differentiate_managed_plots
-#' @importFrom forrescalc read_forresdat add_zeros create_statistics
+#' @importFrom functions get_plotinfo_cp_for_stat get_year_range add_zeros
+#' @importFrom forrescalc read_resource create_statistics
 #'
 
-statistics_dendro_diam <- function(repo_path = path_to_git_forresdat){
+statistics_dendro_diam <- function(datapackage){
+  plotinfo <- get_plotinfo_cp_for_stat(datapackage)
   
-  # repo_path <- path_to_git_forresdat
-  forest_plot <- get_forest_plots()
-  
-  dataset <- read_forresdat("dendro_by_diam_plot", repo_path) %>% 
-    select(-contains("eg"), -contains("min40cm")) %>% 
-    filter(plottype == "CP" & plot_id %in% forest_plot$plot_id) 
+  dataset <- read_resource(datapackage, "dendro_by_diam_plot") %>% 
+    inner_join(plotinfo %>% select(forest_reserve, plot_id, period)) # only cp
   
   dataset_0 <- add_zeros(dataset = dataset %>% 
                            select(plot_id, period, dbh_class_5cm, contains("_ha")),
                          comb_vars = c("plot_id", "dbh_class_5cm"),
                          grouping_vars = c("period")
                          ) %>%
-    left_join(forest_plot %>% select(plot_id, period, forest_reserve)) %>% 
-    differentiate_managed_plots()
+    left_join(plotinfo %>% select(forest_reserve, plot_id, period))
   
   variables_for_statistics <- dataset_0 %>% 
     select(contains(c("_ha", "tree"))) %>% 
