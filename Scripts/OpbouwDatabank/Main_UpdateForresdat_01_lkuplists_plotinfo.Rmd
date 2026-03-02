@@ -496,7 +496,12 @@ plotinfo_ <- plotinfo %>%
   dplyr::mutate(survey_deadw = ifelse(forest_reserve == "Zoniën UITBR_1995" & plottype == "CP" 
                     & period == 1 & survey_trees
                     , TRUE
-                    , survey_deadw))
+                    , survey_deadw)
+                # extra tov laatste update (nog niet gerund (27/2/2026))
+                , diam_min_a4_logs = ifelse(forest_reserve == "Zoniën UITBR_1995" & plottype == "CP" 
+                    & period == 1 & survey_trees
+                    , 100
+                    , diam_min_a4_logs))
 
 plotinfo_ %>% dplyr::filter(forest_reserve == "Zoniën UITBR_1995" & plottype == "CP" 
                      & period == 1 & survey_trees) %>% head()
