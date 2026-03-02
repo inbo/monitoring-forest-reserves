@@ -63,8 +63,8 @@ forestreserve <- "Kersselaerspleyn"
 # forestreserve <- c("Kersselaerspleyn", "Harras", "Zwaenepoel")
 forestreserve_folder <- paste0(path_to_reserves, "4_KerssHarrasZwaenepoel")
 
-# plot_type <- "Core area"
-plot_type <- "Circular plot"
+# plot_type <- "CA"
+plot_type <- "CP"
 
 virt_plot <- 2070
 
