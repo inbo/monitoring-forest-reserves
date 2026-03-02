@@ -197,6 +197,10 @@ for (tablename in names(tbls)) {
      assign(tablename, tbls[[tablename]])
 } 
 
+# OF (< VBI code)
+list2env(tbls, envir = .GlobalEnv)
+
+
 ```
 
 
@@ -434,7 +438,8 @@ Twee opties:
 - dataset2_0 corrigeren
 - resultaat2 aanpassen
 
-Makkelijkste om dataset2_te corrigeren, want daar kunnen we nog link leggen met `lis_survey.`
+Makkelijkste om dataset2_0 te corrigeren, want daar kunnen we nog link leggen 
+met `lis_survey.`
 
 Onderstaande correctie moet mogelijks op termijn aangepast worden, mocht forrescalc voor 
 alle periodes  `vol_log_above30cm_m3_ha` berekenen (naast `vol_log_m3_ha`)

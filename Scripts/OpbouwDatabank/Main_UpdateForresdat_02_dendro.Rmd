@@ -674,6 +674,9 @@ for (tablename in names(dendro)) {
      assign(tablename, dendro[[tablename]])
 } 
 
+# OF (< VBI code)
+list2env(dendro, envir = .GlobalEnv)
+
 ```
 
 
