@@ -1369,11 +1369,12 @@ logs_per_plot_extra <- dendro_by_plot %>%
   # ungroup()
   anti_join(logs_per_plot1 %>% 
               filter(!is.na(biomass_lying_t_ha_dead) | 
-                       !is.na(biomass_lying_above40cm_t_ha_dead)))
+                       !is.na(biomass_lying_above40cm_t_ha_dead))
+            , by = c("plot_id", "period"))
 
 names(logs_per_plot_extra)
 
-# 160 extra records/plots waar deadwood = 0 of NA (LIS) of uit moniotringrapport
+# 160 extra records/plots waar deadwood = 0 of NA (LIS) of uit monitoringrapport
 # en bijgevolg niet opgenomen in deadw_by_decay_plot_species
 
 ```
