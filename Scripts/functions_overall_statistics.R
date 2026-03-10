@@ -684,7 +684,8 @@ statistics_dendro_species <- function(datapackage){
 #' 
 #' This function first selects all the circular plots and splits some 
 #' forest_reserves further up.
-#' Then zero values for all missing combinations of plot and diameterclass are added.
+#' Then zero values for all missing combinations of plot and diameterclass are 
+#' added.
 #' Finally the function `create_statistics()` is used to create statistics on 
 #' all of the variables in `dendro_by_diam_plot`.
 #' 
@@ -788,16 +789,26 @@ statistics_dendro_diam_species <- function(datapackage){
     select(ID, name_nl = Value1, name_sc = Value2)
   
   diam_spec_BR <- get_diamclasses_per_species_per_reserve(dataset)
-  # deze functie maakt een lijst van de diameter classes die per soort voorkomen 
-  # in elk BR (om onnodige zero's weer te verwijderen)
+  # deze functie maakt een lijst van de diameter classes die per soort en per 
+  #  periode in elk BR voorkomen (om onnodige zero's weer te verwijderen)
+  # ! niet per variabele, soms geen dood hout, maar wel levende bomen in een 
+  # diameterklasse => bij statistics ook de nullen verwijderen
   
-  dataset_0 <- add_zeros(dataset = dataset %>% 
-                           select(plot_id, period, dbh_class_5cm, species, contains("_ha")),
-                         comb_vars = c("plot_id", "dbh_class_5cm", "species"),
-                         grouping_vars = c("period")
+  dataset_0 <- add_zeros(dataset %>% 
+                           select(forest_reserve, plot_id, period
+                                  , dbh_class_5cm, species
+                                  , contains("_ha")),
+                         comb_vars = c("plot_id", "dbh_class_5cm", "species"
+                                       , "period"),
+                         grouping_vars = c("forest_reserve")
                          ) %>%
-    left_join(plotinfo %>% select(forest_reserve, plot_id, period)) %>% 
+    left_join(plotinfo %>% select(forest_reserve, plot_id, period
+                                  , year = year_dendro)) %>% 
     inner_join(diam_spec_BR)
+  
+  dataset_0 <- correct_deadw_after_add_zeros(dataset_0, plotinfo)
+  # vol_log soms incorrect als 0 toegevoegd mbv add_zeros()
+  # ook dbh_classes < 30 cm soms foute 0
   
   variables_for_statistics <- dataset_0 %>% 
     select(contains(c("_ha"))) %>% 
@@ -807,17 +818,16 @@ statistics_dendro_diam_species <- function(datapackage){
     dataset = dataset_0,
     level = c("period", "forest_reserve", "dbh_class_5cm", "species"),
     variables = variables_for_statistics,
-    include_year_range = FALSE,
-    na_rm = FALSE
+    include_year_range = TRUE,
+    na_rm = TRUE
   ) %>% 
-    filter(!is.na(mean)) %>% # Kerss periode 1 en Kluisbos_managed geen liggend dood hout
+    filter(!is.na(mean) & mean != 0) %>% 
     round_df(., 2) %>% 
-    left_join(qSpecies, by = c("species" = "ID")) %>% 
+    left_join(qspecies, by = c("species" = "ID")) %>% 
     mutate(strata = "dbh_class",
            stratum_name = dbh_class_5cm,
            strata2 = "species",
            stratum_name2 = name_sc) %>% 
-    get_year_range(datapackage) %>% 
     select(-contains(c("log", "dbh", "species", "name_sc")))
   
   return(resultaat)
@@ -831,9 +841,8 @@ statistics_dendro_diam_species <- function(datapackage){
 #' zero values for all missing combinations of plot and decaystage. 
 #' Then the managed part of 'Kluisbos' is changed into 'Kluisbos_managed' and 
 #' 'Kluisbos_managed_non_intervention'.
-#' Forest_reserves without decaystage of deadwood (Kersselaerspleyn, period 1), 
-#' or without full survey of deadwood (Kluisbos_managed, period 2: LIS) 
-#' were removed from the dataset.
+#' Forest reserves without decaystage or diameterclass of deadwood 
+#' (Kersselaerspleyn, period 1), aren't included in the results.
 #' Finally the function `create_statistics()` is used to create statistics on 
 #' all of the variables in `deadw_by_decay_plot`.
 #' 
@@ -846,7 +855,7 @@ statistics_dendro_diam_species <- function(datapackage){
 #' @examples
 #' \dontrun{
 #' datapackage <- read_forresdat(git_ref_type = "branch", git_reference = "develop")
-#' resultaat <- statistics_logs_decay(datapackage)
+#' resultaat <- statistics_deadw_decay(datapackage)
 #' }
 #'
 #' @importFrom functions get_plotinfo_cp_for_stat get_year_range 
@@ -857,6 +866,12 @@ statistics_dendro_diam_species <- function(datapackage){
 
 statistics_deadw_decay <- function(datapackage){
   plotinfo <- get_plotinfo_cp_for_stat(datapackage)
+  
+  # decaystage_txt uitbreiden met "unknown"
+  qdecaystage <- read_resource(datapackage, "qdecaystage") %>% 
+    select(ID, decaystage_txt = Value2)
+  tmp <- data.frame(ID = 9999, decaystage_txt = "unknown")
+  qdecaystage <- rbind(qdecaystage, tmp)
   
   dataset <- read_resource(datapackage, "deadw_by_decay_plot") %>% 
     mutate(decaystage = ifelse(is.na(decaystage)
@@ -869,12 +884,6 @@ statistics_deadw_decay <- function(datapackage){
   
   # NA's van extra plots op "0" zetten
   dataset <- correct_deadw_after_right_join(dataset, plotinfo) 
-  
-  # decaystage_txt uitbreiden met "unknown"
-  qdecaystage <- read_resource(datapackage, "qdecaystage") %>% 
-    select(ID, decaystage_txt = Value2)
-  tmp <- data.frame(ID = 9999, decaystage_txt = "unknown")
-  qdecaystage <- rbind(qdecaystage, tmp)
   
   dataset_0 <- add_zeros(dataset = dataset2 %>% 
                            select(forest_reserve, plot_id, period
@@ -924,9 +933,8 @@ statistics_deadw_decay <- function(datapackage){
 #' zero values for all missing combinations of plot and decaystage. 
 #' Then the managed part of 'Kluisbos' is changed into 'Kluisbos_managed' and 
 #' 'Kluisbos_managed_non_intervention'.
-#' Forest_reserves without decaystage of deadwood (Kersselaerspleyn, period 1), 
-#' or without full survey of deadwood (Kluisbos_managed, period 2: LIS) 
-#' were removed from the dataset.
+#' Forest reserves without decaystage or diameterclass of deadwood 
+#' (Kersselaerspleyn, period 1), aren't included in the results.
 #' Finally the function `create_statistics()` is used to create statistics on 
 #' all of the variables in `deadw_by_decay_plot_species`.
 #' 
@@ -939,7 +947,7 @@ statistics_deadw_decay <- function(datapackage){
 #' @examples
 #' \dontrun{
 #' datapackage <- read_forresdat(git_ref_type = "branch", git_reference = "develop")
-#' resultaat <- statistics_logs_decay_species(datapackage)
+#' resultaat <- statistics_deadw_decay_species(datapackage)
 #' }
 #'
 #' @importFrom functions get_plotinfo_cp_for_stat get_year_range
@@ -950,45 +958,49 @@ statistics_deadw_decay <- function(datapackage){
 
 statistics_deadw_decay_species <- function(repo_path = path_to_git_forresdat){
   
-  con <- odbcConnectAccess2007(path_to_fieldmap_db)
-  qDecaystage <- sqlFetch(con, "qdecaystage", stringsAsFactors = FALSE) %>% 
-    select(ID, decaystage_txt = Value2)  #afbraak = Value1
-  qSpecies <- sqlFetch(con, "qspecies", stringsAsFactors = FALSE) %>% 
+  plotinfo <- get_plotinfo_cp_for_stat(datapackage)
+  
+  qspecies <- read_resource(datapackage, "qspecies") %>% 
     select(ID, name_nl = Value1, name_sc = Value2)
-  odbcClose(con)
+  # decaystage_txt uitbreiden met "unknown"
+  qdecaystage <- read_resource(datapackage, "qdecaystage") %>% 
+    select(ID, decaystage_txt = Value2)
+  tmp <- data.frame(ID = 9999, decaystage_txt = "unknown")
+  qdecaystage <- rbind(qdecaystage, tmp)
   
-  forest_plot <- get_forest_plots()
-  
-  dataset <- read_forresdat("deadw_by_decay_plot_species", repo_path) %>% 
-    select(-contains("eg"), -contains("40cm")) %>% 
-    filter(plottype == "CP" & plot_id %in% forest_plot$plot_id) %>% 
-    full_join(forest_plot %>% 
-                filter(survey_deadw == TRUE) %>% 
-                select(forest_reserve, plot_id, period)) %>% 
-    filter(period != 1 | forest_reserve != "Kersselaerspleyn") %>% 
-    # geen decaystage genoteerd in Kerss, periode 1    
+  dataset <- read_resource(datapackage, "deadw_by_decay_plot_species") %>% 
     mutate(decaystage = ifelse(is.na(decaystage)
                                , 9999
-                               , decaystage),
-           vol_log_m3_ha = ifelse(is.na(vol_log_m3_ha)
-                                  , 0
-                                  , vol_log_m3_ha)
-    )
+                               , decaystage)) %>%
+    # enkel een right_join bij deadwood, want niet in elke plot deadwood
+    # anders voldoet een inner_join
+    right_join(plotinfo %>% select(forest_reserve, plot_id, period)) %>% # only cp
+    select(-contains("40cm"))
+  
+  # NA's van extra plots op "0" zetten
+  dataset <- correct_deadw_after_right_join(dataset, plotinfo) 
   
   species_BR <- get_species_per_reserve(dataset)
-  # deze functie maakt een lijst van de soorten die voorkomen in elk BR 
-  # (om onnodige zero's weer te verwijderen)
+  # deze functie maakt een lijst van de soorten die voorkomen per periode 
+  # in elk BR (om onnodige zero's weer te verwijderen)
+  # ! niet per variabele, soms geen dood hout, maar wel levende bomen van een 
+  # soort => bij statistics ook de nullen verwijderen
   
-  dataset_0 <- add_zeros(dataset = dataset %>% 
-                           select(plot_id, period, species, decaystage, contains("_ha")),
-                         comb_vars = c("plot_id", "species", "decaystage"),
-                         grouping_vars = c("period")
+  dataset_0 <- add_zeros(dataset %>% 
+                           select(forest_reserve, plot_id, period
+                                  , species, decaystage
+                                  , contains("_ha")),
+                         comb_vars = c("plot_id", "species", "decaystage"
+                                       , "period"),
+                         grouping_vars = c("forest_reserve")
                          ) %>% 
-    left_join(plotinfo %>% select(forest_reserve, plot_id, period)) %>% 
-    inner_join(species_BR) %>%
-    filter(forest_reserve != "Kluisbos_managed")
-  # niet in elke plot van managed deel van Kluisbos werden logs genoteerd
-  # => beter volledig weg, geen representatief gemiddelde anders
+    left_join(plotinfo %>% select(forest_reserve, plot_id, period
+                                  , year = year_dendro)) %>% 
+    inner_join(species_BR) 
+  
+  dataset_0 <- correct_deadw_after_add_zeros(dataset_0, plotinfo)
+  # vol_log/vol_lis soms incorrect als 0 toegevoegd mbv add_zeros()
+  # wanneer de soort helemaal niet voorkomt in de plot (ook niet levend of als log) 
   
   variables_for_statistics <- dataset_0 %>% 
     select(contains(c("_ha"))) %>% 
@@ -998,21 +1010,17 @@ statistics_deadw_decay_species <- function(repo_path = path_to_git_forresdat){
     dataset = dataset_0,
     level = c("period", "forest_reserve", "species", "decaystage"),
     variables = variables_for_statistics,
-    include_year_range = FALSE,
-    na_rm = FALSE
+    include_year_range = TRUE,
+    na_rm = TRUE
     ) %>% 
-    filter(!is.na(mean)) %>% 
+    filter(!is.na(mean) & mean != 0) %>% 
     round_df(., 2) %>% 
-    left_join(qDecaystage, by = c("decaystage" = "ID")) %>% 
-    left_join(qSpecies, by = c("species" = "ID")) %>% 
-    mutate(decaystage_txt = ifelse(decaystage == 9999
-                                  , "unknown"
-                                  , decaystage_txt),
-           strata = "decaystage",
+    left_join(qdecaystage, by = c("decaystage" = "ID")) %>% 
+    left_join(qspecies, by = c("species" = "ID")) %>% 
+    mutate(strata = "decaystage",
            stratum_name = decaystage_txt,
            strata2 = "species",
            stratum_name2 = name_sc) %>% 
-    get_year_range(datapackage) %>% 
     select(-contains(c("log", "decay", "species", "name_sc")))
   
   return(resultaat)
@@ -1057,7 +1065,7 @@ statistics_carbon <- function(datapackage){
     level = c("period", "forest_reserve"),
     variables = variables_for_statistics,
     include_year_range = TRUE,   
-    na_rm = FALSE
+    na_rm = TRUE
     ) %>% 
     round_df(., 2) %>% 
     mutate(strata = NA,
