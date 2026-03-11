@@ -1600,10 +1600,10 @@ statistics_herbs <- function(datapackage){
 
 #' create statistics on vegetation per forest reserve
 
-statistics_vegetation <- function(repo_path = path_to_git_forresdat){
+statistics_vegetation <- function(datapackage){
   
-  veg_by_reserve <- statistics_veg()
-  herbs_by_reserve <- statistics_herbs()
+  veg_by_reserve <- statistics_veg(datapackage)
+  herbs_by_reserve <- statistics_herbs(datapackage)
   
   return(
     list(
