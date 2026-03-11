@@ -91,45 +91,47 @@ Het zou ook handig zijn om ergens aan een commit te geraken
 Als ik binnenkort forrescalc terug opneem, zal ik nakijken hoe ik die hash kan meegeven in de functie read_forresdat(), of misschien meer algemeen eens nakijken wat de meest gebruikte of handigste methode is om de versie van gepubliceerde data te documenteren (hash of doi)?
 
 
-
-
-# Get_open_area / Get_forest_plot
-
-
-```{r }
-open_area <- get_open_area()
-forest_plot <- get_forest_plot()
-```
-
-
 # Differentiate_managed_plots
 
+Vervangen door de functie `get_plotinfo_cp_for_stat()` die enerzijds
+enkel cirkelplots selecteert en ook Kluisbos en Ename opsplitst in resp. SFR en 
+communal forets, en open en bosplots.
+
+Kluisbos wordt dus NIET opgesplits in beheerd en onbeheerd, maar eerder BR versus
+gemeentebos (waar ook 6 plots niet beheerd zijn).
+
+
 ```{r}
-dendro_by_plot <- read_forresdat("dendro_by_plot", path_to_git_forresdat) %>% 
-  filter(plottype == "CP")
+datapackage <- read_forresdat(git_ref_type = "branch", git_reference = "develop")
 
-dendro_by_plot_ <- differentiate_managed_plots(dataset = dendro_by_plot)
+plotinfo <- get_plotinfo_cp_for_stat(datapackage)
 
-dendro_by_plot_ %>% group_by(forest_reserve) %>% 
+dendro_by_plot <- read_resource(datapackage, "dendro_by_plot") %>% 
+  left_join(plotinfo %>% select(forest_reserve, plot_id, period))
+
+dendro_by_plot %>% group_by(forest_reserve) %>% 
   summarize(n_plots = n_distinct(plot_id)) %>% 
   ungroup() %>% 
-  filter(str_detect(forest_reserve, "Kluisbos|managed"))
+  filter(str_detect(forest_reserve, "Kluisbos|Ename"))
 
 ```
+
+# Get_open_area / Get_forest_plot 
+
+Niet meer nodig.
+
+Er zijn immers enkel open plekken in Enamebos. ZIe hoger
+
 
 # Statistics_dendrometry
 
 ## Test
 
-```{r}
-repo_path <- path_to_git_forresdat
-```
-
 ```{r per_file1}
-by_reserve <- statistics_dendro()
-by_species <- statistics_dendro_species()
-by_diam <- statistics_dendro_diam()
-by_decay <- statistics_logs_decay()
+by_reserve <- statistics_dendro(datapackage)
+by_species <- statistics_dendro_species(datapackage)
+by_diam <- statistics_dendro_diam(datapackage)
+by_decay <- statistics_deadw_decay(datapackage)
 
 carbon_by_reserve <- statistics_carbon()
 
