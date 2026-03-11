@@ -1459,42 +1459,47 @@ statistics_regeneration <- function(datapackage){
 #' resultaat <- statistics_veg(datapackage)
 #' }
 #'
-#' @importFrom functions   
+#' @importFrom functions get_plotinfo_cp_for_stat  
 #' @importFrom forrescalc read_resource create_statistics
 
-statistics_veg <- function(repo_path = path_to_git_forresdat){
-  forest_plot <- get_forest_plots()
-  
-  dataset <- read_forresdat("veg_by_plot", repo_path) %>% 
+statistics_veg <- function(datapackage){
+  plotinfo <- get_plotinfo_cp_for_stat(datapackage)
+    
+  dataset <- read_resource(datapackage, "veg_by_plot") %>% 
+    mutate(year = year(date_vegetation)) %>% 
     select(-contains(c("lci", "mean", "uci", "subplot"))) %>% 
-    filter(plottype == "CP" & plot_id %in% forest_plot$plot_id)
+    right_join(plotinfo %>% select(forest_reserve, plot_id
+                                   , period, survey_veg)) %>% 
+    filter(survey_veg == TRUE)
+  # only cp + info on forest_reserve
   
-  dataset <- differentiate_managed_plots(dataset)
+  if (dataset %>% filter(is.na(number_of_species)) %>% nrow() != 0)
+    stop('check NA-values in dataset after right_join with plotinfo')
   
   variables_for_statistics <- dataset %>% 
-    select(contains(c("mid", "perc", "number_of_species"))) %>% 
+    select(contains(c("mid", "perc", "number_of_species"))
+           , -contains("survey")) %>% 
     names()
-  # xxx_cover_mid, cumm_herb_coverage_class_average_perc, number_of_species
+  # approx_nr (x2), nr_tree_species, rubbing_damage_perc
   
   resultaat <- create_statistics(
     dataset = dataset,
     level = c("period", "forest_reserve"),
     variables = variables_for_statistics,
-    include_year_range = FALSE,
-    na_rm = TRUE   # regelmatig een NA bij één of andere bedekking, vaak op reesrvaatsniveau
+    include_year_range = TRUE,   
+    na_rm = TRUE # regelmatig een NA bij één of andere bedekking, vaak op reesrvaatsniveau
     # ingevulde bedekkingen beter toch meenemen (door na_rm = TRUE) en kijken naar n_obs 
-    ) %>% 
+  ) %>% 
     round_df(., 2) %>% 
     mutate(strata = NA,
            stratum_name = NA,
            strata2 = NA,
            stratum_name2 = NA) %>% 
-    get_year_range_veg() %>% 
     select(-contains(c("log")))
   
   return(resultaat)
+}  
 
-}
 
 #' create statistics per forest reserve, based on herblayer_by_plot
 #' 
@@ -1515,31 +1520,34 @@ statistics_veg <- function(repo_path = path_to_git_forresdat){
 #' resultaat <- statistics_herbs(datapackage)
 #' }
 #'
-#' @importFrom functions get_n_plots_per_reserve 
+#' @importFrom functions get_plotinfo_cp_for_stat get_n_plots_per_reserve 
+#' get_year_range_veg
 #'  
-#' @importFrom forrescalc read_resource create_statistics
+#' @importFrom forrescalc read_resource
 
-repo_path <- path_to_git_forresdat
-
-statistics_herbs <- function(repo_path = path_to_git_forresdat){
-  
-  con <- odbcConnectAccess2007(path_to_fieldmap_db)
-  qHerbSpecies <- sqlFetch(con, "qHerbSpecies240810", stringsAsFactors = FALSE) %>% 
+statistics_herbs <- function(datapackage){
+  qherbspecies <- read_resource(datapackage, "qherb_species240810") %>% 
     select(ID, name_nl = Value1, name_sc = Value2)
-  odbcClose(con)
-  
-  forest_plot <- get_forest_plots()
   
   # aantal plots obv veg-opname
-  veg_by_plot <- read_forresdat("veg_by_plot", repo_path) %>% 
-    filter(plottype == "CP" & plot_id %in% forest_plot$plot_id) %>% 
-    differentiate_managed_plots()
+  plotinfo <- get_plotinfo_cp_for_stat(datapackage)
+  veg_by_plot <- read_resource(datapackage, "veg_by_plot") %>% 
+    right_join(plotinfo %>% select(forest_reserve, plot_id
+                                   , period, survey_veg)) %>% 
+    filter(survey_veg == TRUE)
+  # only cp + info on forest_reserve
+  
+  if (veg_by_plot %>% filter(is.na(number_of_species)) %>% nrow() != 0)
+    stop('check NA-values in dataset after right_join with plotinfo')
+  
   n_plots_veg <- get_n_plots_per_reserve(veg_by_plot)
   
-  dataset <- read_forresdat("herblayer_by_plot", repo_path) %>% 
+  dataset <- read_resource(datapackage, "herblayer_by_plot") %>% 
     select(-contains(c("subplot"))) %>% 
-    filter(plottype == "CP" & plot_id %in% forest_plot$plot_id) %>% 
-    differentiate_managed_plots()
+    right_join(plotinfo %>% select(forest_reserve, plot_id
+                                   , period, survey_veg)) %>% 
+    filter(survey_veg == TRUE)
+  # only cp + info on forest_reserve
   
   # percentage plots waar soort voorkomt
   resultaat1 <- dataset %>% 
@@ -1549,7 +1557,7 @@ statistics_herbs <- function(repo_path = path_to_git_forresdat){
     ungroup() %>% 
     left_join(n_plots_veg) %>% 
     mutate(perc_plots = 100*n_plots/n_max_plots) %>% 
-    left_join(qHerbSpecies, by = c("species" = "ID")) %>% 
+    left_join(qherbspecies, by = c("species" = "ID")) %>% 
     round_df(., 2) %>% 
     mutate(variable = "perc_plots_species_herblayer"
            , n_obs = n_max_plots
@@ -1559,7 +1567,7 @@ statistics_herbs <- function(repo_path = path_to_git_forresdat){
            , stratum_name = name_sc
            , strata2 = NA
            , stratum_name2 = NA) %>% 
-    get_year_range_veg() 
+    get_year_range_veg(datapackage) 
   
   # karakt. bedekking
   resultaat2 <- dataset %>% 
@@ -1568,7 +1576,7 @@ statistics_herbs <- function(repo_path = path_to_git_forresdat){
     ungroup() %>% 
     left_join(resultaat1 %>% select(forest_reserve, period, species, n_plots, n_max_plots)) %>% 
     mutate(karakt_bedekking = sum_cover/n_plots) %>% 
-    left_join(qHerbSpecies, by = c("species" = "ID")) %>% 
+    left_join(qherbspecies, by = c("species" = "ID")) %>% 
     round_df(., 2) %>% 
     mutate(variable = "characteristic_cover"
            , n_obs = n_max_plots
@@ -1578,7 +1586,7 @@ statistics_herbs <- function(repo_path = path_to_git_forresdat){
            , stratum_name = name_sc
            , strata2 = NA
            , stratum_name2 = NA)  %>% 
-    get_year_range_veg()
+    get_year_range_veg(datapackage)
     
   resultaat1 <- resultaat1 %>% 
     select(-contains(c("plots", "species", "name_sc")))
