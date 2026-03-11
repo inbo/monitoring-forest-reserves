@@ -21,7 +21,7 @@
 #' This function is developed especially for Ename, which consists of open area 
 #' as well as forest.
 #' The function changes the field 'forest_reserve' from 'Ename' into 
-#' 'Ename_open_area' and 'Ename_forest'.
+#' 'Ename_open' and 'Ename_forest'.
 #' The input dataset can only contain circular plots and has to include the 
 #' variables `plot_id` & `forest_reserve`.
 #' 
@@ -29,7 +29,7 @@
 #' in open area and forest
 #'  
 #' @return same dataset as the input, with forest_reserve 'Ename' split up in 
-#' 'Ename_open_area' and 'Ename_forest'(resp. 27 plots and xx plots). 
+#' 'Ename_open' and 'Ename_forest'(resp. 27 plots and 46 plots). 
 #'
 #' @examples
 #' \dontrun{
@@ -419,7 +419,7 @@ get_n_plots_per_reserve <- function(dataset){
 #' resultaat <- statistics_dendro(datapackage)
 #' }
 #'
-#' @importFrom functions get_plotinfo_cp_for_stat get_year_range
+#' @importFrom functions get_plotinfo_cp_for_stat 
 #' @importFrom forrescalc read_resource create_statistics
 #'
 statistics_dendro <- function(datapackage){
@@ -456,18 +456,17 @@ statistics_dendro <- function(datapackage){
 #' This function is based on info on survey_lis and survey_deadw and is a helper 
 #' function for the statistics function to correct for false zeros
 #'  
-#' @inheritParams get_plotinfo_cp_for_stat
+#' @inheritParams 
 #' 
-#' @return dataframe woth correct NA or 0 value for llis- and log-volumes
+#' @return dataframe with correct NA or 0 value for lis- and log-volumes
 #'
 #' @examples
 #' \dontrun{
 #' datapackage <- read_forresdat(git_ref_type = "branch", git_reference = "develop")
-#' resultaat <- statistics_dendro_species(datapackage)
+#' plotinfo <- read_resource(datapackage, "plotinfo")
+#' dataset <- read_resource(datapackage, "dendro_by_diam_plot") 
+#' resultaat <- correct_deadw_after_add_zeros(dataset, plotinfo)
 #' }
-#'
-#' @importFrom functions get_plotinfo_cp_for_stat get_year_range
-#' @importFrom forrescalc read_resource add_zeros create_statistics 
 #'
 correct_deadw_after_add_zeros <- function(dataset, plotinfo){
   dataset <- dataset %>% 
@@ -557,16 +556,17 @@ correct_deadw_after_add_zeros <- function(dataset, plotinfo){
 #'  
 #' @inheritParams get_plotinfo_cp_for_stat
 #' 
-#' @return dataframe woth correct 0 value for deadwood volumes
+#' @return dataframe with correct 0 value for deadwood volumes
 #'
 #' @examples
 #' \dontrun{
 #' datapackage <- read_forresdat(git_ref_type = "branch", git_reference = "develop")
-#' resultaat <- statistics_dendro_species(datapackage)
+#' plotinfo <- read_resource(datapackage, "plotinfo")
+#' dataset <- read_resource(datapackage, "deadw_by_decay_plot") %>% 
+#' right_join(plotinfo %>% select(forest_reserve, plot_id, period)) 
+#' resultaat <- correct_deadw_after_right_join(dataset, plotinfo)
 #' }
-#'
-#' @importFrom functions get_plotinfo_cp_for_stat get_year_range
-#' @importFrom forrescalc read_resource add_zeros create_statistics 
+#' @importFrom 
 #'
 correct_deadw_after_right_join <- function(dataset, plotinfo){
   dataset <- dataset %>% 
@@ -627,7 +627,7 @@ correct_deadw_after_right_join <- function(dataset, plotinfo){
 #' resultaat <- statistics_dendro_species(datapackage)
 #' }
 #'
-#' @importFrom functions get_plotinfo_cp_for_stat get_year_range 
+#' @importFrom functions get_plotinfo_cp_for_stat  
 #' @importFrom functions correct_deadw_after_add_zeros
 #' @importFrom forrescalc read_resource add_zeros create_statistics 
 #'
@@ -701,7 +701,7 @@ statistics_dendro_species <- function(datapackage){
 #' resultaat <- statistics_dendro_diam(datapackage)
 #' }
 #'
-#' @importFrom functions get_plotinfo_cp_for_stat get_year_range add_zeros
+#' @importFrom functions get_plotinfo_cp_for_stat add_zeros
 #' @importFrom functions correct_deadw_after_add_zeros
 #' @importFrom forrescalc read_resource create_statistics
 #'
@@ -757,7 +757,7 @@ statistics_dendro_diam <- function(datapackage){
 #' 
 #' This function first selects all the circular plots and splits some 
 #' forest_reserves further up.
-#' Then zero values for all missing combinations of plot and species and
+#' Then zero values for all missing combinations of plot, species and
 #' diameterclasse are added.
 #' Finally the function `create_statistics()` is used to create statistics on 
 #' all of the variables in `dendro_by_diam_plot_species`.
@@ -774,7 +774,7 @@ statistics_dendro_diam <- function(datapackage){
 #' resultaat <- statistics_dendro_diam_species(datapackage)
 #' }
 #'
-#' @importFrom functions get_plotinfo_cp_for_stat get_year_range add_zeros
+#' @importFrom functions get_plotinfo_cp_for_stat add_zeros
 #' @importFrom functions correct_deadw_after_add_zeros
 #' @importFrom forrescalc read_resource create_statistics
 #'
@@ -837,10 +837,10 @@ statistics_dendro_diam_species <- function(datapackage){
 
 #' create statistics per forest reserve, based on deadw_by_decay_plot
 #' 
-#' This function first selects all the circular, forested plots, and adds 
-#' zero values for all missing combinations of plot and decaystage. 
-#' Then the managed part of 'Kluisbos' is changed into 'Kluisbos_managed' and 
-#' 'Kluisbos_managed_non_intervention'.
+#' This function first selects all the circular plots and splits some 
+#' forest_reserves further up. 
+#' Then zero values are added for all missing combinations of plot and 
+#' decaystage. 
 #' Forest reserves without decaystage or diameterclass of deadwood 
 #' (Kersselaerspleyn, period 1), aren't included in the results.
 #' Finally the function `create_statistics()` is used to create statistics on 
@@ -858,7 +858,7 @@ statistics_dendro_diam_species <- function(datapackage){
 #' resultaat <- statistics_deadw_decay(datapackage)
 #' }
 #'
-#' @importFrom functions get_plotinfo_cp_for_stat get_year_range 
+#' @importFrom functions get_plotinfo_cp_for_stat  
 #' @importFrom functions correct_deadw_after_right_join 
 #' @importFrom functions correct_deadw_after_add_zeros
 #' @importFrom forrescalc read_resource add_zeros create_statistics
@@ -929,10 +929,10 @@ statistics_deadw_decay <- function(datapackage){
 
 #' create statistics per forest reserve, based on deadw_by_decay_plot_species
 
-#' This function first selects all the circular, forested plots, and adds 
-#' zero values for all missing combinations of plot and decaystage. 
-#' Then the managed part of 'Kluisbos' is changed into 'Kluisbos_managed' and 
-#' 'Kluisbos_managed_non_intervention'.
+#' This function first selects all the circular plots and splits some 
+#' forest_reserves further up. 
+#' Then zero values are added for all missing combinations of plot, species and 
+#' decaystage. 
 #' Forest reserves without decaystage or diameterclass of deadwood 
 #' (Kersselaerspleyn, period 1), aren't included in the results.
 #' Finally the function `create_statistics()` is used to create statistics on 
@@ -950,7 +950,7 @@ statistics_deadw_decay <- function(datapackage){
 #' resultaat <- statistics_deadw_decay_species(datapackage)
 #' }
 #'
-#' @importFrom functions get_plotinfo_cp_for_stat get_year_range
+#' @importFrom functions get_plotinfo_cp_for_stat 
 #' @importFrom functions correct_deadw_after_right_join 
 #' @importFrom functions correct_deadw_after_add_zeros
 #' @importFrom forrescalc read_resource add_zeros create_statistics
@@ -1029,9 +1029,8 @@ statistics_deadw_decay_species <- function(repo_path = path_to_git_forresdat){
 
 #' create statistics per forest reserve, based on carbon_by_plot
 #' 
-#' This function first selects all the circular, forested plots.
-#' Then the managed part of 'Kluisbos' is changed into 'Kluisbos_managed' and 
-#' 'Kluisbos_managed_non_intervention'.
+#' This function first selects all the circular plots and splits some 
+#' forest_reserves further up.
 #' Finally the function `create_statistics()` is used to create statistics on 
 #' all of the variables in `carbon_by_plot`.
 #' 
@@ -1046,7 +1045,7 @@ statistics_deadw_decay_species <- function(repo_path = path_to_git_forresdat){
 #' resultaat <- statistics_carbon(datapackage)
 #' }
 #'
-#' @importFrom functions get_plotinfo_cp_for_stat get_year_range
+#' @importFrom functions get_plotinfo_cp_for_stat 
 #' @importFrom forrescalc read_resource create_statistics
 #'
 statistics_carbon <- function(datapackage){
@@ -1079,15 +1078,15 @@ statistics_carbon <- function(datapackage){
 
 #' create statistics on dendrometry per forest reserve
 
-statistics_dendrometry <- function(repo_path = path_to_git_forresdat){
+statistics_dendrometry <- function(datapackage){
   
-  by_reserve <- statistics_dendro()
-  by_species <- statistics_dendro_species()
-  by_diam <- statistics_dendro_diam()
-  by_diam_species <- statistics_dendro_diam_species()
-  by_decay <- statistics_logs_decay()
-  by_decay_species <- statistics_logs_decay_species()
-  carbon_by_reserve <- statistics_carbon()
+  by_reserve <- statistics_dendro(datapackage)
+  by_species <- statistics_dendro_species(datapackage)
+  by_diam <- statistics_dendro_diam(datapackage)
+  by_diam_species <- statistics_dendro_diam_species(datapackage)
+  by_decay <- statistics_deadw_decay(datapackage)
+  by_decay_species <- statistics_deadw_decay_species(datapackage)
+  carbon_by_reserve <- statistics_carbon(datapackage)
 
   return(
     list(
@@ -1106,11 +1105,15 @@ statistics_dendrometry <- function(repo_path = path_to_git_forresdat){
 
 #' create statistics per forest reserve, based on reg_by_plot
 #' 
-#' This function first selects all the circular, forested plots.
-#' Then the managed part of 'Kluisbos' is changed into 'Kluisbos_managed' and 
-#' 'Kluisbos_managed_non_intervention'.
+#' This function first selects all the circular plots and splits some 
+#' forest_reserves further up.
 #' Finally the function `create_statistics()` is used to create statistics on 
 #' all of the variables in `reg_by_plot`.
+#' ATTENTION: no statistics are calculated based on the field 
+#'  `rubbing_damage_perc`, as it is incorrect to simply calculate the average 
+#' of a percentage. Anyone interested in an average percentage can calculate 
+#' this themselves based on the ratio of the average `approx_nr_regeneration_ha`
+#' and the average `rubbing_damage_number_ha`. 
 #' 
 #' @inheritParams get_plotinfo_cp_for_stat
 #' 
@@ -1123,7 +1126,7 @@ statistics_dendrometry <- function(repo_path = path_to_git_forresdat){
 #' resultaat <- statistics_reg(datapackage)
 #' }
 #'
-#' @importFrom functions get_forest_plots differentiate_managed_plots get_year_range_reg
+#' @importFrom functions get_plotinfo_cp_for_stat 
 #' @importFrom forrescalc read_resource create_statistics
 
 
@@ -1132,17 +1135,15 @@ statistics_dendrometry <- function(repo_path = path_to_git_forresdat){
 # een mean en BI per reservaat te berekenen)
 # !! werkt volgens mij niet naar behoren
 
-statistics_reg <- function(repo_path = path_to_git_forresdat){
-  forest_plot <- get_forest_plots()
-  # plotinfo <- read_forresdat("plotinfo", repo_path, join_plotinfo = FALSE)
-  dataset <- read_forresdat("reg_by_plot", repo_path) %>% 
-    select(-contains(c("lci", "mean", "uci", "subplot"))) %>% 
-    filter(plottype == "CP" & plot_id %in% forest_plot$plot_id)
+statistics_reg <- function(datapackage){
+  plotinfo <- get_plotinfo_cp_for_stat(datapackage)
   
-  dataset <- differentiate_managed_plots(dataset)
+  dataset <- read_resource(datapackage, "reg_by_plot") %>% 
+    inner_join(plotinfo %>% select(forest_reserve, plot_id, period)) %>% # only cp
+    select(-contains(c("lci", "mean", "uci", "subplot")))
   
   variables_for_statistics <- dataset %>% 
-    select(contains(c("_ha", "tree", "perc")), -contains("survey")) %>% 
+    select(contains(c("_ha", "tree")), -contains("survey")) %>% 
     names()
   # approx_nr (x2), nr_tree_species, rubbing_damage_perc
   
@@ -1150,31 +1151,69 @@ statistics_reg <- function(repo_path = path_to_git_forresdat){
     dataset = dataset,
     level = c("period", "forest_reserve"),
     variables = variables_for_statistics,
-    include_year_range = FALSE,   
-    # year_range: nu nog bug in package, op termijn wel interessant
-    na_rm = TRUE # stems_per_tree soms NA
+    include_year_range = TRUE,   
+    na_rm = TRUE 
   ) %>% 
     round_df(., 2) %>% 
     mutate(strata = NA,
            stratum_name = NA,
            strata2 = NA,
            stratum_name2 = NA) %>% 
-    get_year_range_reg() %>% 
     select(-contains(c("log")))
   
   return(resultaat)
-
 }
-
-
+  
+#' correct NA and 0 values for rubbing damage after use of add_zero()
+#' 
+#' This function is based on info on survey_reg and game_impact_reg and is a
+#' helper function for the statistics function to correct for false zeros
+#'  
+#' @inheritParams 
+#' 
+#' @return dataframe with correct NA or 0 value for rubbing damage
+#'
+#' @examples
+#' \dontrun{
+#' datapackage <- read_forresdat(git_ref_type = "branch", git_reference = "develop")
+#' plotinfo <- read_resource(datapackage, "plotinfo")
+#' dataset <- read_resource(datapackage, "reg_by_plot_height") 
+#' resultaat <- correct_rubbing_after_add_zeros(dataset, plotinfo)
+#' }
+#' 
+#' @importFrom 
+#'
+correct_rubbing_after_add_zeros <- function(dataset, plotinfo){
+  dataset <- dataset %>% 
+    left_join(plotinfo %>% select(plot_id, period, game_impact_reg))
+  
+  dataset <- dataset %>% 
+      mutate(
+        rubbing_damage_number_ha = ifelse(
+          !is.na(game_impact_reg) & game_impact_reg == TRUE
+                 , rubbing_damage_number_ha
+                 , NA)
+         )
+  
+  dataset <- dataset %>% 
+    select(-game_impact_reg)
+  
+  return(dataset)
+}
 
 #' create statistics per forest reserve, based on reg_by_plot_height
 #' 
-#' This function first selects all the circular, forested plots.
-#' Then the managed part of 'Kluisbos' is changed into 'Kluisbos_managed' and 
-#' 'Kluisbos_managed_non_intervention'.
+#' This function first selects all the circular plots and splits some 
+#' forest_reserves further up.
+#' Then zero values are added for all missing combinations of plot and 
+#' height_class. 
 #' Finally the function `create_statistics()` is used to create statistics on 
 #' all of the variables in `reg_by_plot_height`.
+#' ATTENTION: no statistics are calculated based on the field 
+#' `rubbing_damage_perc`, as it is incorrect to simply calculate the average 
+#' of a percentage. Anyone interested in an average percentage can calculate 
+#' this themselves based on the ratio of the average `approx_nr_regeneration_ha`
+#' and the average `rubbing_damage_number_ha`. 
 #' 
 #' @inheritParams get_plotinfo_cp_for_stat
 #' 
