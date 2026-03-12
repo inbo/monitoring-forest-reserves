@@ -50,7 +50,7 @@ plot_type <- "CP"
 forestreserve_folder <- paste0(path_to_reserves, "4b_Terrijst")
 
 path_to_datarequest <- paste0(forestreserve_folder, "/verwerking_2024_1e2e3eSET/output_forrescalc/")
-path_to_datarequest_teamdrive <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverwerking/20_Per_gebied/2025_", forestreserve_short, "/01_datacontrole/")
+path_to_datarequest_teamdrive <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverwerking/20_Per_gebied/2026_", forestreserve_short, "/01_datacontrole/")
 path_to_html_teamdrive <- path_to_datarequest_teamdrive
 
 # plots_to_exclude <- c(701, 707, 709, 727, 728, 738, 739, 740, 759, 760)
@@ -655,6 +655,213 @@ unique(outlier_growth$anomaly)
 table(outlier_growth$aberrant_field, outlier_growth$anomaly)
 ```
 
+> op vraag van Peter soort en D1, D2, D3 overzichtelijk bij elkaar
+
+
+```{r}
+names(outlier_growth)
+unique(outlier_growth$period)
+# [1] "1_2" "2_3"
+
+# tree_measure_id: opsplitsen in ID1, ID2, ID3
+# afh. van period
+
+# aberrant_value: opsplitsen in ID1, ID2, ID3
+# afh. van period
+
+
+# en dan koppelen aan soort
+
+# ev. 2 tabellen maken: period == 1_2 en periode == 2_3
+# en achteraf terug koppelen
+# ev. ook aparte tabel height en diameter
+
+# en dan 4 sheets in een tabel
+```
+
+```{r split_id_trees, results = 'hide'}
+names(outlier_growth)
+outlier_growth_ <- outlier_growth %>% 
+  select(-alive_dead, -ind_sht_cop, -intact_snag
+         , -shoot_id, -lying_deadw_id, -subplot_id
+         , -heightclass_id, -regspecies_id, - herblayer_id) # allemaal leeg
+
+outlier_growth_ <- outlier_growth_ %>% 
+  dplyr::mutate(ID1 = ifelse(period == "1_2"
+                      , str_split_fixed(tree_measure_id, "_", 2)[,1]
+                      , NA)
+         , ID2 = ifelse(period == "1_2"
+                        , str_split_fixed(tree_measure_id, "_", 2)[,2]
+                        , ifelse(period == "2_3"
+                                 , str_split_fixed(tree_measure_id, "_", 2)[,1]
+                                 , NA))
+         , ID3 = ifelse(period == "2_3"
+                        , str_split_fixed(tree_measure_id, "_", 2)[,2]
+                        , NA)
+         ) 
+
+outlier_growth_dbh <- outlier_growth_ %>% 
+  filter(str_detect(anomaly, "diameter")) %>%  
+  dplyr::mutate(DBH1 = ifelse(period == "1_2"
+                      , str_split_fixed(aberrant_value, "_", 2)[,1]
+                      , NA)
+         , DBH2 = ifelse(period == "1_2"
+                        , str_split_fixed(aberrant_value, "_", 2)[,2]
+                        , ifelse(period == "2_3"
+                                 , str_split_fixed(aberrant_value, "_", 2)[,1]
+                                 , NA))
+         , DBH3 = ifelse(period == "2_3"
+                        , str_split_fixed(aberrant_value, "_", 2)[,2]
+                        , NA)
+         )
+
+outlier_growth_height <- outlier_growth_ %>% 
+  filter(str_detect(anomaly, "height")) %>%  
+  dplyr::mutate(H1 = ifelse(period == "1_2"
+                      , str_split_fixed(aberrant_value, "_", 2)[,1]
+                      , NA)
+         , H2 = ifelse(period == "1_2"
+                        , str_split_fixed(aberrant_value, "_", 2)[,2]
+                        , ifelse(period == "2_3"
+                                 , str_split_fixed(aberrant_value, "_", 2)[,1]
+                                 , NA))
+         , H3 = ifelse(period == "2_3"
+                        , str_split_fixed(aberrant_value, "_", 2)[,2]
+                        , NA)
+         )
+```
+
+
+```{r split_growth}
+outlier_1_2_dbh <- outlier_growth_dbh %>% 
+  filter(period == "1_2")
+
+outlier_2_3_dbh <- outlier_growth_dbh %>% 
+  filter(period == "2_3")
+
+outlier_1_2_height <- outlier_growth_height %>% 
+  filter(period == "1_2")
+
+outlier_2_3_height <- outlier_growth_height %>% 
+  filter(period == "2_3")
+
+nrow(outlier_1_2_height) + nrow(outlier_1_2_dbh) + nrow(outlier_2_3_dbh) +
+  nrow(outlier_2_3_height) == nrow(outlier_growth)
+```
+
+
+```{r load_data_trees}
+data_dendro <- load_data_dendrometry(database = path_to_fieldmap_db
+                                     # , plottype = plot_type
+                                     # , forest_reserve = forestreserve
+                                     , processed = TRUE  # default: data_processed = TRUE
+                                     , extra_variables = TRUE)
+
+data_shoots <- load_data_shoots(database = path_to_fieldmap_db
+                                , extra_variables = TRUE)
+
+# door shoots en trees te combineren,  blijft enkel gewenst BR over
+data_stems  <- compose_stem_data(data_dendro, data_shoots
+                                 , extra_variables = TRUE)
+
+load("height_model.RData")
+
+# height_model <- height_model %>%
+#   filter(forest_reserve == forestreserve)
+
+data_stems_calc <- calc_variables_stem_level(data_stems, height_model)
+
+data_dendro_calc <- calc_variables_tree_level(data_dendro, data_stems_calc)
+```
+
+```{r lkp_species}
+qspecies_ <- qspecies %>% 
+  select(ID, name_nl = Value1)
+
+```
+
+```{r}
+data_dendro_2 <- create_unique_tree_id(data_dendro)
+```
+
+```{r add_info_p3}
+# period == "1_2" => info van periode 3 nodig, indien aanwezig
+
+# trees van decade 3 nodig: koppelen via old_id = ID2
+# sowieso ook  decade 2 nodig om soort te achterhalen indien er geen derde meting gebeurd is 
+
+# names(data_dendro_2)
+# species
+outlier_1_2_dbh_ <- outlier_1_2_dbh %>% 
+  left_join(data_dendro_2 %>% filter(period == 2) %>% 
+              select(plot_id, tree_id
+                     , alive_dead_periode2 = alive_dead
+                     , species)
+            , by = c("tree_id", "plot_id")) %>% 
+  left_join(qspecies_, by = c("species" = "ID"))
+
+outlier_1_2_height_ <- outlier_1_2_height %>% 
+  left_join(data_dendro_2 %>% filter(period == 2) %>% 
+              select(plot_id, tree_id
+                     , alive_dead_periode2 = alive_dead
+                     , species)
+            , by = c("tree_id", "plot_id")) %>% 
+  left_join(qspecies_, by = c("species" = "ID"))
+
+outlier_2_3_dbh_ <- outlier_2_3_dbh %>% 
+  left_join(data_dendro_2 %>% filter(period == 3) %>% 
+              select(plot_id, tree_id
+                     , alive_dead_periode3 = alive_dead
+                     , species)
+            , by = c("tree_id", "plot_id")) %>% 
+  left_join(qspecies_, by = c("species" = "ID"))
+
+outlier_2_3_height_ <- outlier_2_3_height %>% 
+  left_join(data_dendro_2 %>% filter(period == 3) %>% 
+              select(plot_id, tree_id
+                     , alive_dead_periode3 = alive_dead
+                     , species)
+            , by = c("tree_id", "plot_id")) %>% 
+  left_join(qspecies_, by = c("species" = "ID"))
+
+```
+
+```{r}
+# height en dbh van decade 1 of decade 3
+outlier_1_2_dbh_final <- outlier_1_2_dbh_ %>% 
+  left_join(data_dendro_2 %>% filter(period == 3) %>% 
+              select(plot_id, tree_id, dbh_mm, IDTREE = tree_measure_id)
+            , by = c("tree_id", "plot_id")) %>% 
+  mutate(DBH3 = dbh_mm
+         ,ID3 = IDTREE) %>% 
+  select(-dbh_mm, -IDTREE)
+
+outlier_1_2_height_final <- outlier_1_2_height_ %>% 
+  left_join(data_dendro_2 %>% filter(period == 3) %>% 
+              select(plot_id, tree_id, height_m, IDTREE = tree_measure_id)
+            , by = c("tree_id", "plot_id")) %>% 
+  mutate(H3 = height_m
+         ,ID3 = IDTREE) %>% 
+  select(-height_m, -IDTREE)
+
+outlier_2_3_dbh_final <- outlier_2_3_dbh_ %>% 
+  left_join(data_dendro_2 %>% filter(period == 1) %>% 
+              select(plot_id, tree_id, dbh_mm, IDTREE = tree_measure_id)
+            , by = c("tree_id", "plot_id")) %>% 
+  mutate(DBH1 = dbh_mm
+         ,ID1 = IDTREE) %>% 
+  select(-dbh_mm, -IDTREE)
+
+outlier_2_3_height_final <- outlier_2_3_height_ %>% 
+  left_join(data_dendro_2 %>% filter(period == 1) %>% 
+              select(plot_id, tree_id, height_m, IDTREE = tree_measure_id)
+            , by = c("tree_id", "plot_id")) %>% 
+  mutate(H1 = height_m
+         ,ID1 = IDTREE) %>% 
+  select(-height_m, -IDTREE)
+
+
+```
 
 
 ```{r}
@@ -671,13 +878,34 @@ outlier_growth %>%
 ```{r export_growth, eval = FALSE}
 write.xlsx(outlier_growth
            , paste0(path_to_datacontrol, "outliers.xlsx")
-           , sheetName = "growth"
+           , sheetName = "growth_all"
            , showNA = FALSE
            , append = TRUE) 
 
+write.xlsx(outlier_1_2_dbh_final
+           , paste0(path_to_datacontrol, "outliers.xlsx")
+           , sheetName = "dbh_periode_1_2"
+           , showNA = FALSE
+           , append = TRUE) 
 
+write.xlsx(outlier_1_2_height_final
+           , paste0(path_to_datacontrol, "outliers.xlsx")
+           , sheetName = "height_periode_1_2"
+           , showNA = FALSE
+           , append = TRUE) 
+
+write.xlsx(outlier_2_3_dbh_final
+           , paste0(path_to_datacontrol, "outliers.xlsx")
+           , sheetName = "dbh_periode_2_3"
+           , showNA = FALSE
+           , append = TRUE) 
+
+write.xlsx(outlier_2_3_height_final
+           , paste0(path_to_datacontrol, "outliers.xlsx")
+           , sheetName = "height_periode_2_3"
+           , showNA = FALSE
+           , append = TRUE) 
 ```
-
 
 
 ## Overige anomalies
