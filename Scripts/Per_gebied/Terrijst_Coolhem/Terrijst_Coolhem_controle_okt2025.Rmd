@@ -59,7 +59,7 @@ path_to_datacontrol <- path_to_datarequest_teamdrive
 ```
 
 
-TIJDELIJK `path_to_fieldmap_db` aanpassen naar de werkversie van Jansheideberg en Heirnisse
+TIJDELIJK `path_to_fieldmap_db` aanpassen naar de werkversie van Terrijst en Coolhem
 
 ```{r Path_tmp}
 path_to_fieldmap_db <- "C:/03_BR_gebieden/4b_Terrijst/FMprojecten_2025/CTRL_BosTR_Coolhem_inbo2026_202509251405/FieldMapData_CTRL_BosTR_Coolhem_inbo2026.accdb"
@@ -145,6 +145,7 @@ data_plots <- data_plots_
 
 ```{r dendro}
 data_dendro <- load_data_dendrometry(database = path_to_fieldmap_db, 
+                                     extra_variables = TRUE,
                                      processed = FALSE) %>% 
   filter(plot_id %in% list_plots)
 
@@ -635,12 +636,11 @@ behalve populier vergelijken (species 51) *?? nog andere soorten uitsluiten? *
 
 
 Indien we hier alle bosreservaten samen nemen, zal er minder snel een outlier gedetecteerd worden, hier te beperkt.
-Laten we Heirnisse er bij nemen.
 
 
 ```{r}
-outlier_trees_evolution_all <- check_trees_evolution(database = path_to_fieldmap_db) %>% 
-  filter(str_detect(anomaly, "outlier"))
+# outlier_trees_evolution_all <- check_trees_evolution(database = path_to_fieldmap_db_all) %>% 
+#   filter(str_detect(anomaly, "outlier"))
 
 ```
 
@@ -651,6 +651,7 @@ outlier_growth <- incorrect_data_ %>%
 unique(outlier_growth$period)
 unique(outlier_growth$aberrant_field)
 unique(outlier_growth$anomaly)
+unique(outlier_growth$forest_reserve)
 
 table(outlier_growth$aberrant_field, outlier_growth$anomaly)
 ```
@@ -658,7 +659,7 @@ table(outlier_growth$aberrant_field, outlier_growth$anomaly)
 > op vraag van Peter soort en D1, D2, D3 overzichtelijk bij elkaar
 
 
-```{r}
+```{r results = 'hide'}
 names(outlier_growth)
 unique(outlier_growth$period)
 # [1] "1_2" "2_3"
@@ -750,28 +751,28 @@ nrow(outlier_1_2_height) + nrow(outlier_1_2_dbh) + nrow(outlier_2_3_dbh) +
 ```
 
 
-```{r load_data_trees}
-data_dendro <- load_data_dendrometry(database = path_to_fieldmap_db
-                                     # , plottype = plot_type
-                                     # , forest_reserve = forestreserve
-                                     , processed = TRUE  # default: data_processed = TRUE
-                                     , extra_variables = TRUE)
-
-data_shoots <- load_data_shoots(database = path_to_fieldmap_db
-                                , extra_variables = TRUE)
-
-# door shoots en trees te combineren,  blijft enkel gewenst BR over
-data_stems  <- compose_stem_data(data_dendro, data_shoots
-                                 , extra_variables = TRUE)
-
-load("height_model.RData")
-
-# height_model <- height_model %>%
-#   filter(forest_reserve == forestreserve)
-
-data_stems_calc <- calc_variables_stem_level(data_stems, height_model)
-
-data_dendro_calc <- calc_variables_tree_level(data_dendro, data_stems_calc)
+```{r load_data_trees, eval = FALSE}
+# data_dendro <- load_data_dendrometry(database = path_to_fieldmap_db
+#                                      # , plottype = plot_type
+#                                      # , forest_reserve = forestreserve
+#                                      , processed = TRUE  # default: data_processed = TRUE
+#                                      , extra_variables = TRUE)
+# 
+# data_shoots <- load_data_shoots(database = path_to_fieldmap_db
+#                                 , extra_variables = TRUE)
+# 
+# # door shoots en trees te combineren,  blijft enkel gewenst BR over
+# data_stems  <- compose_stem_data(data_dendro, data_shoots
+#                                  , extra_variables = TRUE)
+# 
+# load("height_model.RData")
+# 
+# # height_model <- height_model %>%
+# #   filter(forest_reserve == forestreserve)
+# 
+# data_stems_calc <- calc_variables_stem_level(data_stems, height_model)
+# 
+# data_dendro_calc <- calc_variables_tree_level(data_dendro, data_stems_calc)
 ```
 
 ```{r lkp_species}
@@ -781,6 +782,12 @@ qspecies_ <- qspecies %>%
 ```
 
 ```{r}
+data_dendro <- load_data_dendrometry(database = path_to_fieldmap_db, 
+                                     extra_variables = TRUE,
+                                     processed = FALSE) %>% 
+  filter(plot_id %in% list_plots)
+# hier ponieuw want period en tree-measure_id waren hierboven gewijzigd naar character
+names(data_dendro)
 data_dendro_2 <- create_unique_tree_id(data_dendro)
 ```
 
@@ -876,17 +883,17 @@ outlier_growth %>%
 
 
 ```{r export_growth, eval = FALSE}
-write.xlsx(outlier_growth
-           , paste0(path_to_datacontrol, "outliers.xlsx")
-           , sheetName = "growth_all"
-           , showNA = FALSE
-           , append = TRUE) 
+# write.xlsx(outlier_growth
+#            , paste0(path_to_datacontrol, "outliers.xlsx")
+#            , sheetName = "growth_all"
+#            , showNA = FALSE
+#            , append = TRUE) 
 
 write.xlsx(outlier_1_2_dbh_final
            , paste0(path_to_datacontrol, "outliers.xlsx")
            , sheetName = "dbh_periode_1_2"
            , showNA = FALSE
-           , append = TRUE) 
+           , append = FALSE) 
 
 write.xlsx(outlier_1_2_height_final
            , paste0(path_to_datacontrol, "outliers.xlsx")
