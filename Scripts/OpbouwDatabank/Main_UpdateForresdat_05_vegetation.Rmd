@@ -157,6 +157,10 @@ for (tablename in names(vegetation)) {
      assign(tablename, vegetation[[tablename]])
 } 
 
+# OF (< VBI code)
+list2env(vegetation, envir = .GlobalEnv)
+
+
 ```
 
 

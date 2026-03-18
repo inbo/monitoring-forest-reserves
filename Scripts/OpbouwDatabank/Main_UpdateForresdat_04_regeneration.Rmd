@@ -414,6 +414,10 @@ for (tablename in names(regeneration)) {
 } 
 
 # reg_by_plot_height_species: 38371 (18/3/2025) - 33678 vorige verwerking = 4693 extra records
+
+# OF (< VBI code)
+list2env(regeneration, envir = .GlobalEnv)
+
 ```
 
 

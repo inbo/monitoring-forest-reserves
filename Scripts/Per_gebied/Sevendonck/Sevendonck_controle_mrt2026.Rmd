@@ -1,6 +1,6 @@
 ---
 title: "Dataverwerking - controle"
-subtitle: "Terrijst & Coolhem - cirkelplots & kernvlakte"
+subtitle: "Sevendonck - cirkelplots & kernvlakte"
 author: "Anja Leyman"
 date: "`r Sys.Date()`"
 output: 
@@ -41,15 +41,15 @@ source(here::here("scripts/Setup.R"))
 
 
 ```{r Setup2}
-forestreserve <- c("Bos Terrijst", "Coolhem Q", "Coolhem A")   # FM-project onder folder Terrijst geplaatst
-forestreserve_short <- "Terrijst" # om paths aan te maken naar specifieke folders
+forestreserve <- c("Sevendonck")   # FM-project onder folder Terrijst geplaatst
+forestreserve_short <- "Sevendonck" # om paths aan te maken naar specifieke folders
 # forestreserve_short <- "Wijnendale"
 plot_type <- "CA"
 plot_type <- "CP"
 
-forestreserve_folder <- paste0(path_to_reserves, "4b_Terrijst")
+forestreserve_folder <- paste0(path_to_reserves, "08_Sevendonck")
 
-path_to_datarequest <- paste0(forestreserve_folder, "/verwerking_2024_1e2e3eSET/output_forrescalc/")
+path_to_datarequest <- paste0(forestreserve_folder, "/verwerking_2026_1e2e3eSET/output_forrescalc/")
 path_to_datarequest_teamdrive <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverwerking/20_Per_gebied/2026_", forestreserve_short, "/01_datacontrole/")
 path_to_html_teamdrive <- path_to_datarequest_teamdrive
 
@@ -59,13 +59,12 @@ path_to_datacontrol <- path_to_datarequest_teamdrive
 ```
 
 
-TIJDELIJK `path_to_fieldmap_db` aanpassen naar de werkversie van Terrijst en Coolhem
+TIJDELIJK `path_to_fieldmap_db` aanpassen naar de werkversie van Sevendonck
 
 ```{r Path_tmp}
-path_to_fieldmap_db <- "C:/03_BR_gebieden/4b_Terrijst/FMprojecten_2025/CTRL_BosTR_Coolhem_inbo2026_202509251405/FieldMapData_CTRL_BosTR_Coolhem_inbo2026.accdb"
-# versie van 25/9/2025
+path_to_fieldmap_db <- "C:/03_BR_gebieden/08_Sevendonck/FMprojecten_2026/CTRL_Sevendonck_inbo2026_202603131326/FieldMapData_CTRL_Sevendonck_inbo2026.accdb"
+# versie van 13/3/2026
 ```
-
 
 
 # Vraagstelling
@@ -195,6 +194,12 @@ data_reg_CP <- data_reg %>% filter(plottype == "CP")
 
 
 # Check
+
+> onderstaande datacontrole is gebeurd voor start opnames, dus
+enkel op basis van 1ste en 2de decade.
+Doel  was snel een beeld te krijgen van de shifters voor Peter, vooraleer ze op terrein gaan.
+De onderstaande comentaren zijn overgenomenvan Terrijsten nog niet aangepast 
+aan Sevendonck.
 
 ## Overview
 
@@ -610,6 +615,11 @@ incorrect_diff %>%
 
 ```
 
+Sevendonck 1e en 2e SET: maar één niet gekoppelde boom
+
+
+
+
 In `r forestreserve` gaat het vooral om walkers, species shifters en niet goed gekoppelde bomen.
 
 
@@ -931,7 +941,37 @@ incorrect_rest <- incorrect_data_ %>%
 unique(incorrect_rest$anomaly)
 table(incorrect_rest$anomaly)
 table(incorrect_rest$period, incorrect_rest$aberrant_field)
-```  
+```
+
+Sevendonck 1e en 2e SET: deviating date
+Hiervoor wordt gekeken naar plotdetails
+
+Mail aan Peter: Volgens mij is dat hier allemaal correct, de functie is zo opgebouwd dat er gekeken wordt of het jaartal van plotdetails al dan niet afwijkt van wat er overwegend in dat reservaat genoteerd werd. Hier zijn de meeste plots opgemeten in 2016, en wordt een signaal gegeven bij deze opgemeten in 2017. 
+
+```{r eval = FALSE}
+plotinfo_p2 <- data_plots %>% filter(period == 2)
+
+forest_reserve_date <-  median(plotinfo_p2$year_dendro, na.rm = T)
+forest_reserve_date
+
+
+dendro_p2 <- data_dendro %>% filter(period == 2)
+
+t <- dendro_p2 %>% 
+  filter(year(data_dendro) != forest_reserve_date)
+
+year(dendro_p2$date_dendro) != year(.data$forest_reserve_date)
+
+```
+
+
+```{r}
+data_dendro %>% group_by(date_dendro) %>% 
+  summarise(n_trees = n()
+            , n_plots = n_distinct(plot_id)) %>% 
+  ungroup()
+```
+
 
 
 ```{r}
@@ -956,8 +996,9 @@ write.xlsx(incorrect_rest
 
 # Check per layer
 
-Deze functies hoeven niet afzonderlijk gerund te worden, er bestaat één overkoepelende 
-functie die alles aggregeert (zie vorige paragraaf).
+Onderstaande functies hoeven niet afzonderlijk gerund te worden, er bestaat één overkoepelende functie die alles aggregeert (zie vorige paragraaf).
+
+Hierna dus enkel ter info.
 
 ```{r check_deadw, eval = FALSE}
 incorrect_deadwood <- check_data_deadwood(database = path_to_fieldmap_db)  
@@ -1156,7 +1197,7 @@ Na knitting - manueel
 
 ```{r eval = FALSE}
 # Specify the path of the file you want to copy
-source_file <- here::here(paste0("Scripts/Per_gebied/Terrijst_Coolhem/", "Terrijst_Coolhem_controle_okt2025.html"))
+source_file <- here::here(paste0("Scripts/Per_gebied/Sevendonck/", "Sevendonck_controle_mrt2026.html"))
 
 # Specify the destination directory where you want to copy the file
 destination_dir <- path_to_html_teamdrive

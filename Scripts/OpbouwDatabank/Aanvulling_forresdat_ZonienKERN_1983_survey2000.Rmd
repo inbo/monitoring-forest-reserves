@@ -285,9 +285,9 @@ Zelf beslist:
 
   * in afzonderlijke files met net iets andere diameterverdeling (5-10, 10-20, 20-30cm):
 
-      * Kerss_CA_5_30cm_by_plot(_species).csv
-      * Kerss_CA_5_30cm_by_diam_plot.csv
-      * Kerss_CA_5_30cm_by_diam_spec.csv
+      * kerss_ca_5_30cm_by_plot(_species).csv
+      * kerss_ca_5_30cm_by_diam_plot.csv
+      * kerss_ca_5_30cm_by_diam_spec.csv
 
   * proxy voor G obv mid-point diam-klasse
   * proxy voor V obv tarief met één ingang

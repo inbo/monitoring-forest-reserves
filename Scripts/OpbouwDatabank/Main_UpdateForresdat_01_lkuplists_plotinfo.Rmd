@@ -362,18 +362,18 @@ plotinfo_0 <- load_plotinfo(database = path_to_fieldmap_db, processed = FALSE) %
 ```{r}
 plotinfo <- plotinfo_0
 
-nrow(plotinfo) # 2629
+nrow(plotinfo) # 2629 / 2628?
 
 plotinfo %>% 
   filter(survey_trees == FALSE & data_processed == TRUE) %>% nrow()
 t <- plotinfo %>% 
   filter(survey_trees == TRUE & data_processed == FALSE) %>% nrow()
-nrow(t)  # 58
+nrow(t)  # 58 / 57? 
 # OK, bos terrijst
 
 plotinfo_ <- plotinfo %>% 
   filter(survey_trees == TRUE & !is.na(survey_trees))
-nrow(plotinfo_) # 2081
+nrow(plotinfo_) # 2081 / 2079?
 
 plotinfo <- plotinfo_
 ```
@@ -421,7 +421,7 @@ We gaan verder met enkel de processed plots!!!!
 ```{r processed_only}
 plotinfo <- plotinfo %>% filter(data_processed == TRUE)
 plotinfo %>% filter(is.na(forest_reserve)) %>% nrow() == 0
-nrow(plotinfo) # 2023
+nrow(plotinfo) # 2023 / 2022?
 ```
 
 ```{r tmp_check_lis_survey, eval = FALSE}
@@ -496,13 +496,66 @@ plotinfo_ <- plotinfo %>%
   dplyr::mutate(survey_deadw = ifelse(forest_reserve == "Zoniën UITBR_1995" & plottype == "CP" 
                     & period == 1 & survey_trees
                     , TRUE
-                    , survey_deadw))
+                    , survey_deadw)
+                # extra tov laatste update (nog niet gerund (27/2/2026))
+                , diam_min_a4_logs = ifelse(forest_reserve == "Zoniën UITBR_1995" & plottype == "CP" 
+                    & period == 1 & survey_trees
+                    , 100
+                    , diam_min_a4_logs))
 
 plotinfo_ %>% dplyr::filter(forest_reserve == "Zoniën UITBR_1995" & plottype == "CP" 
                      & period == 1 & survey_trees) %>% head()
 
 plotinfo <- plotinfo_
 
+```
+
+
+# Vergelijking met oude data
+
+17/12/2025 vergeleken met data op git (maart 2025 (?))
+
+```{r eval = FALSE, results='hide'}
+# 
+plotinfo_git <- read_forresdat_table(tablename = "plotinfo"
+                                           , join_plotinfo = FALSE
+                                           , plottype = "all"
+                                           , git_ref_type = "branch"
+                                           , git_reference = "develop")
+
+# vgl
+plotinfo_git <- plotinfo_git %>% 
+  select(plot_id, year_dendro, everything()) 
+# %>% 
+#   select(names(dendro_by_plot))    # vol_log_min40cm van naam veranderd!
+nrow(plotinfo) == nrow(plotinfo_git)
+names(plotinfo) == names(plotinfo_git)
+waldo::compare(plotinfo, plotinfo_git)
+
+plotinfo %>% select(-year_dendro) %>% arrange(plot_id, period) == plotinfo_git %>% select(-year_dendro) %>% arrange(plot_id, period)
+# OK denk ik andere ordening van variabelen (3/2025)
+# 12/2025: andere namen,  niet OK dus
+plotinfo == plotinfo_git
+
+head(plotinfo %>% arrange(desc(plot_id), period)); head(plotinfo_git %>% arrange(desc(plot_id), period))
+# lijkt OK
+
+t <- plotinfo %>% 
+  anti_join(plotinfo_git)
+
+head(plotinfo %>% arrange(desc(plot_id), period) %>% filter(plot_id == 830)); 
+head(plotinfo_git %>% arrange(desc(plot_id), period) %>% filter(plot_id == 830))
+
+plotinfo %>% filter(forest_reserve == "Zoniën UITBR_1995" & plottype == "CP" 
+                    & period == 1); plotinfo_git %>% filter(forest_reserve == "Zoniën UITBR_1995" & plottype == "CP" 
+                    & period == 1)
+
+
+w <- waldo::compare(plotinfo %>% filter(forest_reserve == "Zoniën UITBR_1995" & plottype == "CP" 
+                    & period == 1), plotinfo_git %>% filter(forest_reserve == "Zoniën UITBR_1995" & plottype == "CP" 
+                    & period == 1))
+# afronding is anders 
+# of enkele kleine aanpassingen wegens kleine correcties?
 ```
 
 

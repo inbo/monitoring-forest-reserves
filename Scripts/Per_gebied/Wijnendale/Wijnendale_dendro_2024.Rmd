@@ -656,11 +656,11 @@ for (tablename in names(tbls)) {
 Naast `vol_logs_m3_ha` en `vol_logs_above30cm_m3_ha` ook volgende velden berekenen
 (enkel voor LIS-plots)      
 
-- `vol_LIS_m3_ha`: alles > 10 cm
-- `vol_LIS_above30cm_m3_ha`
-- `vol_LIS_10_30cm_m3_ha`
+- `vol_lis_m3_ha`: alles > 10 cm
+- `vol_lis_above30cm_m3_ha`
+- `vol_lis_10_30cm_m3_ha`
 
-<!-- gecheckt: vol_LIS_above30cm_m3_ha + vol_LIS_10_30cm_m3_ha = vol_LIS_m3_ha -->
+<!-- gecheckt: vol_lis_above30cm_m3_ha + vol_lis_10_30cm_m3_ha = vol_lis_m3_ha -->
 
 We voegen deze data toe aan   
 
@@ -671,7 +671,7 @@ We voegen deze data toe aan
                
 
 Dus niet aan `dendro_by_diam_plot(_species)`.   
-We hebben immers `vol_LIS_above30cm_m3_ha` en/of `vol_LIS_10_30cm_m3_ha`
+We hebben immers `vol_lis_above30cm_m3_ha` en/of `vol_lis_10_30cm_m3_ha`
 
 
 Dat geeft de gebruiker van de data de mogelijkheid om zelf data te combineren.
@@ -787,7 +787,7 @@ LIS_by_decay_species <- data_LIS %>%
     # , v3_VolumeLogs_ha=pi^2/8/Li*sum((Diameter_cm^2)/cos(angle*pi/180),na.rm=T)   # cfrVBI, zelfde resultaat
     ) %>% 
   ungroup() %>% 
-  mutate(vol_LIS_m3_ha = volume_m3_m2 * 10000) %>% 
+  mutate(vol_lis_m3_ha = volume_m3_m2 * 10000) %>% 
   select(-volume_m3_m2)
 # bij mogelijkse verwarring tss VBI en BR: VBI rekent obv diam_cm en komt m3/ha uit, 
 # BR gebruikt diam_m en komt m3/m2 uit
@@ -803,7 +803,7 @@ LIS_by_decay <- data_LIS %>%
     # , v3_VolumeLogs_ha=pi^2/8/Li*sum((Diameter_cm^2)/cos(angle*pi/180),na.rm=T)   # cfrVBI, zelfde resultaat
     ) %>% 
   ungroup() %>% 
-  mutate(vol_LIS_m3_ha = volume_m3_m2 * 10000) %>% 
+  mutate(vol_lis_m3_ha = volume_m3_m2 * 10000) %>% 
   select(-volume_m3_m2)
 
 #
@@ -817,7 +817,7 @@ LIS_by_species <- data_LIS %>%
     # , v3_VolumeLogs_ha=pi^2/8/Li*sum((Diameter_cm^2)/cos(angle*pi/180),na.rm=T)   # cfrVBI, zelfde resultaat
     ) %>% 
   ungroup() %>% 
-  mutate(vol_LIS_m3_ha = volume_m3_m2 * 10000) %>% 
+  mutate(vol_lis_m3_ha = volume_m3_m2 * 10000) %>% 
   select(-volume_m3_m2)
 # bij mogelijkse verwarring tss VBI en BR: VBI rekent obv diam_cm en komt m3/ha uit, 
 # BR gebruikt diam_m en komt m3/m2 uit
@@ -833,7 +833,7 @@ LIS_by_plot <- data_LIS %>%
     # , v3_VolumeLogs_ha=pi^2/8/Li*sum((Diameter_cm^2)/cos(angle*pi/180),na.rm=T)   # cfrVBI, zelfde resultaat
     ) %>% 
   ungroup() %>% 
-  mutate(vol_LIS_m3_ha = volume_m3_m2 * 10000) %>% 
+  mutate(vol_lis_m3_ha = volume_m3_m2 * 10000) %>% 
   select(-volume_m3_m2)
 
 ```
@@ -864,7 +864,7 @@ LIS_by_decay_species_10_30cm <- data_LIS_10_30cm %>%
     volume_m3_m2=pi^2/8/Li*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
     ) %>% 
   ungroup() %>% 
-  mutate(vol_LIS_10_30cm_m3_ha = volume_m3_m2 * 10000) %>% 
+  mutate(vol_lis_10_30cm_m3_ha = volume_m3_m2 * 10000) %>% 
   select(-volume_m3_m2)
 
 #
@@ -876,7 +876,7 @@ LIS_by_decay_10_30cm <- data_LIS_10_30cm %>%
     volume_m3_m2=pi^2/8/Li*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
     ) %>% 
   ungroup() %>% 
-  mutate(vol_LIS_10_30cm_m3_ha = volume_m3_m2 * 10000) %>% 
+  mutate(vol_lis_10_30cm_m3_ha = volume_m3_m2 * 10000) %>% 
   select(-volume_m3_m2)
 
 #
@@ -888,7 +888,7 @@ LIS_by_species_10_30cm <- data_LIS_10_30cm %>%
     volume_m3_m2=pi^2/8/Li*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
     ) %>% 
   ungroup() %>% 
-  mutate(vol_LIS_10_30cm_m3_ha = volume_m3_m2 * 10000) %>% 
+  mutate(vol_lis_10_30cm_m3_ha = volume_m3_m2 * 10000) %>% 
   select(-volume_m3_m2)
 
 #
@@ -900,7 +900,7 @@ LIS_by_plot_10_30cm <- data_LIS_10_30cm %>%
     volume_m3_m2=pi^2/8/Li*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
     ) %>% 
   ungroup() %>% 
-  mutate(vol_LIS_10_30cm_m3_ha = volume_m3_m2 * 10000) %>% 
+  mutate(vol_lis_10_30cm_m3_ha = volume_m3_m2 * 10000) %>% 
   select(-volume_m3_m2)
 
 ```
@@ -908,29 +908,29 @@ LIS_by_plot_10_30cm <- data_LIS_10_30cm %>%
 
 **Aandachtspunt: NA's vervangen door nulwaarde**
 
-`vol_LIS_m3_ha = ifelse(survey_lis == TRUE & is.na(vol_LIS_m3_ha), 0, vol_LIS_m3_ha)`
+`vol_lis_m3_ha = ifelse(survey_lis == TRUE & is.na(vol_lis_m3_ha), 0, vol_lis_m3_ha)`
 
 ```{r}
 dendro_by_plot_ <- dendro_by_plot %>% 
   left_join(plotinfo %>% select(plot_id, period, survey_lis)) %>% 
   left_join(LIS_by_plot) %>% 
   left_join(LIS_by_plot_10_30cm) %>% 
-  mutate(vol_LIS_m3_ha = ifelse(survey_lis == TRUE & is.na(vol_LIS_m3_ha), 0, vol_LIS_m3_ha)
-         , vol_LIS_10_30cm_m3_ha = ifelse(survey_lis == TRUE & is.na(vol_LIS_10_30cm_m3_ha)
-                                          , 0, vol_LIS_10_30cm_m3_ha)) %>% 
-  mutate(vol_LIS_above30cm_m3_ha = vol_LIS_m3_ha - vol_LIS_10_30cm_m3_ha)
+  mutate(vol_lis_m3_ha = ifelse(survey_lis == TRUE & is.na(vol_lis_m3_ha), 0, vol_lis_m3_ha)
+         , vol_lis_10_30cm_m3_ha = ifelse(survey_lis == TRUE & is.na(vol_lis_10_30cm_m3_ha)
+                                          , 0, vol_lis_10_30cm_m3_ha)) %>% 
+  mutate(vol_lis_above30cm_m3_ha = vol_lis_m3_ha - vol_lis_10_30cm_m3_ha)
 
 
 t <- dendro_by_plot_ %>% 
   filter(survey_lis) %>% 
   select(plot_id, contains("above"), everything())
 
-mean(t$vol_log_above30cm_m3_ha); mean(t$vol_LIS_above30cm_m3_ha)
+mean(t$vol_log_above30cm_m3_ha); mean(t$vol_lis_above30cm_m3_ha)
 # 26 vs 32, ca 25% wordt niet gedetecteerd
 ```
 
 ```{r eval = FALSE, results='hide'}
-# vol_LIS_above30cm_m3_ha berekend vergeleken met vol_LIS_above30cm_m3_ha als verschil van vol_LIS_m3_ha en vol_LIS_10_30cm_m3_ha
+# vol_lis_above30cm_m3_ha berekend vergeleken met vol_lis_above30cm_m3_ha als verschil van vol_lis_m3_ha en vol_lis_10_30cm_m3_ha
 
 # is zelfde 
       # LIS_by_plot_above30cm <- data_LIS %>% 
@@ -942,11 +942,11 @@ mean(t$vol_log_above30cm_m3_ha); mean(t$vol_LIS_above30cm_m3_ha)
       #     volume_m3_m2=pi^2/8/Li*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
       #     ) %>% 
       #   ungroup() %>% 
-      #   mutate(vol_LIS_above30cm_m3_ha = volume_m3_m2 * 10000) %>% 
+      #   mutate(vol_lis_above30cm_m3_ha = volume_m3_m2 * 10000) %>% 
       #   select(-volume_m3_m2)
 
 # check
-dendro_by_plot_ %>% filter(vol_LIS_above30cm_m3_ha > 0) %>% 
+dendro_by_plot_ %>% filter(vol_lis_above30cm_m3_ha > 0) %>% 
   select(plot_id, contains("above"), everything())
 
 # op plotniveau is LIS hoger als er een snijpunt is, dat compenseert voor de plots 
@@ -979,10 +979,10 @@ dendro_by_plot_species_ <- dendro_by_plot_species %>%
   left_join(plotinfo %>% select(plot_id, period, survey_lis)) %>%
   left_join(LIS_by_species) %>% 
   left_join(LIS_by_species_10_30cm) %>% 
-  mutate(vol_LIS_m3_ha = ifelse(survey_lis == TRUE & is.na(vol_LIS_m3_ha), 0, vol_LIS_m3_ha)
-         , vol_LIS_10_30cm_m3_ha = ifelse(survey_lis == TRUE & is.na(vol_LIS_10_30cm_m3_ha)
-                                          , 0, vol_LIS_10_30cm_m3_ha)) %>% 
-  mutate(vol_LIS_above30cm_m3_ha = vol_LIS_m3_ha - vol_LIS_10_30cm_m3_ha)
+  mutate(vol_lis_m3_ha = ifelse(survey_lis == TRUE & is.na(vol_lis_m3_ha), 0, vol_lis_m3_ha)
+         , vol_lis_10_30cm_m3_ha = ifelse(survey_lis == TRUE & is.na(vol_lis_10_30cm_m3_ha)
+                                          , 0, vol_lis_10_30cm_m3_ha)) %>% 
+  mutate(vol_lis_above30cm_m3_ha = vol_lis_m3_ha - vol_lis_10_30cm_m3_ha)
 
 names(dendro_by_plot_species_)
 dendro_by_plot_species <- dendro_by_plot_species_ %>% 
@@ -993,10 +993,10 @@ deadw_by_decay_plot_ <- deadw_by_decay_plot %>%
   left_join(plotinfo %>% select(plot_id, period, survey_lis)) %>%
   left_join(LIS_by_decay) %>% 
   left_join(LIS_by_decay_10_30cm) %>% 
-  mutate(vol_LIS_m3_ha = ifelse(survey_lis == TRUE & is.na(vol_LIS_m3_ha), 0, vol_LIS_m3_ha)
-         , vol_LIS_10_30cm_m3_ha = ifelse(survey_lis == TRUE & is.na(vol_LIS_10_30cm_m3_ha)
-                                          , 0, vol_LIS_10_30cm_m3_ha)) %>% 
-  mutate(vol_LIS_above30cm_m3_ha = vol_LIS_m3_ha - vol_LIS_10_30cm_m3_ha)
+  mutate(vol_lis_m3_ha = ifelse(survey_lis == TRUE & is.na(vol_lis_m3_ha), 0, vol_lis_m3_ha)
+         , vol_lis_10_30cm_m3_ha = ifelse(survey_lis == TRUE & is.na(vol_lis_10_30cm_m3_ha)
+                                          , 0, vol_lis_10_30cm_m3_ha)) %>% 
+  mutate(vol_lis_above30cm_m3_ha = vol_lis_m3_ha - vol_lis_10_30cm_m3_ha)
 
 names(deadw_by_decay_plot_)
 deadw_by_decay_plot <- deadw_by_decay_plot_ %>% 
@@ -1007,10 +1007,10 @@ deadw_by_decay_plot_species_ <- deadw_by_decay_plot_species %>%
   left_join(plotinfo %>% select(plot_id, period, survey_lis)) %>%
   left_join(LIS_by_decay_species) %>% 
   left_join(LIS_by_decay_species_10_30cm) %>% 
-  mutate(vol_LIS_m3_ha = ifelse(survey_lis == TRUE & is.na(vol_LIS_m3_ha), 0, vol_LIS_m3_ha)
-         , vol_LIS_10_30cm_m3_ha = ifelse(survey_lis == TRUE & is.na(vol_LIS_10_30cm_m3_ha)
-                                          , 0, vol_LIS_10_30cm_m3_ha)) %>% 
-  mutate(vol_LIS_above30cm_m3_ha = vol_LIS_m3_ha - vol_LIS_10_30cm_m3_ha)
+  mutate(vol_lis_m3_ha = ifelse(survey_lis == TRUE & is.na(vol_lis_m3_ha), 0, vol_lis_m3_ha)
+         , vol_lis_10_30cm_m3_ha = ifelse(survey_lis == TRUE & is.na(vol_lis_10_30cm_m3_ha)
+                                          , 0, vol_lis_10_30cm_m3_ha)) %>% 
+  mutate(vol_lis_above30cm_m3_ha = vol_lis_m3_ha - vol_lis_10_30cm_m3_ha)
 
 names(deadw_by_decay_plot_species_)
 deadw_by_decay_plot_species <- deadw_by_decay_plot_species_ %>% 
@@ -1060,7 +1060,7 @@ Sowieso krijgen we NA compensatie voor dubbeltellingen, enkel wat effectief < 30
 in onze LIS-dataset.
 De LIS-dataset geeft dus info over volume < 30 cm en FAS-dataset over volume > 30 cm.
 
-Maar dat kunnen we ook halen uit `vol_LIS_10_30cm`.
+Maar dat kunnen we ook halen uit `vol_lis_10_30cm`.
 Daar zitten weliswaar ook de logs in die misschien elders wél zwaarder zijn dan 30 cm.
 Maar dat gaat ook in de andere richting: een log die een transect snijdt met diam < 100 mm wordt ook niet meegenomen, terwijl die mogelijks ook elders boven de 100mm uitkomt.
 

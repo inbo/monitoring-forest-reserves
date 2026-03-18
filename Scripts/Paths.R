@@ -78,6 +78,7 @@ path_to_output_gdrive <- paste0(path_to_teamdrive, "PRJ_BR_AanvraagGegevens/")
 path_to_plotlevel_gdrive <- paste0(path_to_output_gdrive, "00_METADATA-ALL_PLOTS/_plot-level-data/") 
 path_to_lulists_gdrive <- paste0(path_to_output_gdrive, "00_METADATA-ALL_PLOTS/_qXX_lookuplijsten/") 
 path_to_treelevel_gdrive <- paste0(path_to_output_gdrive, "00_METADATA-ALL_PLOTS/_tree-level-data/")
+path_to_statistics_gdrive <- paste0(path_to_output_gdrive, "00_METADATA-ALL_PLOTS/_statistics/") 
 
 
 # Strata, Externe data, .... ------

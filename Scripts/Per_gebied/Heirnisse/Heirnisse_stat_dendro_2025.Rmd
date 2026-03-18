@@ -275,7 +275,7 @@ dataset_ <- dataset %>%
   # left_join(plotinfo %>% select(plot_id, period, survey_lis)) %>% 
   # totaal volume liggend dood hout obv LIS en FAS samen
   mutate(vol_log_LISFAS_m3_ha = ifelse(survey_lis == TRUE
-                                       , vol_LIS_10_30cm_m3_ha + vol_log_above30cm_m3_ha
+                                       , vol_lis_10_30cm_m3_ha + vol_log_above30cm_m3_ha
                                        , NA)
          , vol_deadw_m3_ha = ifelse(survey_lis == FALSE
                                        , vol_log_m3_ha + vol_dead_standing_m3_ha
@@ -288,7 +288,7 @@ dataset <- dataset_
 
 ```{r variables1}
 variables_for_statistics <- dataset %>% 
-  dplyr::select(contains(c("_ha", "number_of_tree_species")), -vol_LIS_above30cm_m3_ha) %>% 
+  dplyr::select(contains(c("_ha", "number_of_tree_species")), -vol_lis_above30cm_m3_ha) %>% 
   names()
 
 variables_for_statistics
@@ -296,7 +296,7 @@ variables_for_statistics
 ```
 ```{r}
 # check of deadwood volumes die NA moeten zijn, niet 0 geworden zijn (LIS en log_above30cm)
-dataset %>% filter(period %in% c(1,2) & !is.na(vol_LIS_m3_ha)) %>% nrow() == 0
+dataset %>% filter(period %in% c(1,2) & !is.na(vol_lis_m3_ha)) %>% nrow() == 0
 ```
 
 ```{r stat1, results='hide'}
@@ -418,7 +418,7 @@ dataset2_ <- dataset2 %>%
   # left_join(plotinfo %>% select(plot_id, period, survey_lis)) %>% 
   # totaal volume liggend dood hout obv LIS en FAS samen
   mutate(vol_log_LISFAS_m3_ha = ifelse(survey_lis == TRUE
-                                       , vol_LIS_10_30cm_m3_ha + vol_log_above30cm_m3_ha
+                                       , vol_lis_10_30cm_m3_ha + vol_log_above30cm_m3_ha
                                        , NA)
          , vol_deadw_m3_ha = ifelse(survey_lis == FALSE
                                        , vol_log_m3_ha + vol_dead_standing_m3_ha
@@ -444,9 +444,9 @@ nrow(dataset2_0) #5916
 
 ```{r results='hide'}
 # check of deadwood volumes die NA moeten zijn, niet 0 geworden zijn (LIS en log_above30cm)
-dataset2_0 %>% filter(period %in% c(1,2) & !is.na(vol_LIS_m3_ha)) %>% nrow() 
+dataset2_0 %>% filter(period %in% c(1,2) & !is.na(vol_lis_m3_ha)) %>% nrow() 
 
-t <- dataset2_0 %>% filter(period %in% c(1,2) & !is.na(vol_LIS_m3_ha))
+t <- dataset2_0 %>% filter(period %in% c(1,2) & !is.na(vol_lis_m3_ha))
 # waar niks gemeten is, zijn ALLE variabelen op 0 gezet, als er iets gemeten is, zijn NA's behouden
 # => CORRECTIE NODIG
 # "defaults to na" is enkel nuttig dat iets NA moet zijn als er niks is, maar hier moet afhankelijk van survey_lis de waardes 0 of NA zijn. 
@@ -474,14 +474,14 @@ dataset2_0_ <- dataset2_0 %>%
           vol_log_above30cm_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
                                            , vol_log_above30cm_m3_ha
                                            , NA)
-         , vol_LIS_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
-                                           , vol_LIS_m3_ha
+         , vol_lis_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
+                                           , vol_lis_m3_ha
                                            , NA)
-         , vol_LIS_10_30cm_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
-                                           , vol_LIS_10_30cm_m3_ha
+         , vol_lis_10_30cm_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
+                                           , vol_lis_10_30cm_m3_ha
                                            , NA)
-         , vol_LIS_above30cm_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
-                                           , vol_LIS_above30cm_m3_ha
+         , vol_lis_above30cm_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
+                                           , vol_lis_above30cm_m3_ha
                                            , NA)
          , vol_log_LISFAS_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
                                            , vol_log_LISFAS_m3_ha
@@ -491,7 +491,7 @@ dataset2_0_ <- dataset2_0 %>%
                                            , vol_log_m3_ha
                                            , NA)
          )
-# t <- dataset2_0_ %>% filter(is.na(vol_LIS_m3_ha) & !is.na(vol_log_above30cm_m3_ha))
+# t <- dataset2_0_ %>% filter(is.na(vol_lis_m3_ha) & !is.na(vol_log_above30cm_m3_ha))
 
 dataset2_0 <- dataset2_0_
 ```
@@ -499,7 +499,7 @@ dataset2_0 <- dataset2_0_
 
 ```{r}
 variables_for_statistics2 <- dataset2_0 %>% 
-  select(contains(c("_ha", "stems")), -vol_LIS_above30cm_m3_ha) %>% 
+  select(contains(c("_ha", "stems")), -vol_lis_above30cm_m3_ha) %>% 
   names()
 
 variables_for_statistics2
@@ -625,7 +625,7 @@ dataset3_0_ <- dataset3_0 %>%
            , vol_log_m3_ha= ifelse(survey_lis == TRUE & dbh_class_5cm %in% diam_klasses_under_30cm
                                , NA, vol_log_m3_ha)
          )
-# t <- dataset2_0_ %>% filter(is.na(vol_LIS_m3_ha) & !is.na(vol_log_above30cm_m3_ha))
+# t <- dataset2_0_ %>% filter(is.na(vol_lis_m3_ha) & !is.na(vol_log_above30cm_m3_ha))
 
 dataset3_0 <- dataset3_0_
 ```
@@ -881,7 +881,7 @@ dataset5_ <- dataset5 %>%
   # left_join(plotinfo %>% select(plot_id, period, survey_lis)) %>% 
   # totaal volume liggend dood hout obv LIS en FAS samen
   mutate(vol_log_LISFAS_m3_ha = ifelse(survey_lis == TRUE
-                                       , vol_LIS_10_30cm_m3_ha + vol_log_above30cm_m3_ha
+                                       , vol_lis_10_30cm_m3_ha + vol_log_above30cm_m3_ha
                                        , NA)
          , vol_deadw_m3_ha = ifelse(survey_lis == FALSE
                                        , vol_log_m3_ha + vol_dead_standing_m3_ha
@@ -928,14 +928,14 @@ dataset5_0_ <- dataset5_0 %>%
           vol_log_above30cm_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
                                            , vol_log_above30cm_m3_ha
                                            , NA)
-         , vol_LIS_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
-                                           , vol_LIS_m3_ha
+         , vol_lis_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
+                                           , vol_lis_m3_ha
                                            , NA)
-         , vol_LIS_10_30cm_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
-                                           , vol_LIS_10_30cm_m3_ha
+         , vol_lis_10_30cm_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
+                                           , vol_lis_10_30cm_m3_ha
                                            , NA)
-         , vol_LIS_above30cm_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
-                                           , vol_LIS_above30cm_m3_ha
+         , vol_lis_above30cm_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
+                                           , vol_lis_above30cm_m3_ha
                                            , NA)
          , vol_log_LISFAS_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
                                            , vol_log_LISFAS_m3_ha
@@ -945,7 +945,7 @@ dataset5_0_ <- dataset5_0 %>%
                                            , vol_log_m3_ha
                                            , NA))
 
-# t <- dataset2_0_ %>% filter(is.na(vol_LIS_m3_ha) & !is.na(vol_log_above30cm_m3_ha))
+# t <- dataset2_0_ %>% filter(is.na(vol_lis_m3_ha) & !is.na(vol_log_above30cm_m3_ha))
 
 dataset5_0 <- dataset5_0_
 ```
@@ -954,7 +954,7 @@ dataset5_0 <- dataset5_0_
 
 ```{r}
 variables_for_statistics5 <- dataset5_0 %>% 
-  select(contains("_ha"), -vol_LIS_above30cm_m3_ha) %>% 
+  select(contains("_ha"), -vol_lis_above30cm_m3_ha) %>% 
   names()
 
 variables_for_statistics5
@@ -1073,21 +1073,21 @@ dataset6_0_ <- dataset6_0 %>%
           vol_log_above30cm_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
                                            , vol_log_above30cm_m3_ha
                                            , NA)
-         , vol_LIS_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
-                                           , vol_LIS_m3_ha
+         , vol_lis_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
+                                           , vol_lis_m3_ha
                                            , NA)
-         , vol_LIS_10_30cm_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
-                                           , vol_LIS_10_30cm_m3_ha
+         , vol_lis_10_30cm_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
+                                           , vol_lis_10_30cm_m3_ha
                                            , NA)
-         , vol_LIS_above30cm_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
-                                           , vol_LIS_above30cm_m3_ha
+         , vol_lis_above30cm_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
+                                           , vol_lis_above30cm_m3_ha
                                            , NA)
          # !! ook omgekeerd: vol_log_m3_ha = NA wanneer LIS gebruikt is
          , vol_log_m3_ha = ifelse(survey_lis == FALSE & !is.na(survey_lis)
                                            , vol_log_m3_ha
                                            , NA))
 
-# t <- dataset6_0_ %>% filter(is.na(vol_LIS_m3_ha) & !is.na(vol_log_above30cm_m3_ha))
+# t <- dataset6_0_ %>% filter(is.na(vol_lis_m3_ha) & !is.na(vol_log_above30cm_m3_ha))
 
 dataset6_0 <- dataset6_0_
 ```
@@ -1095,7 +1095,7 @@ dataset6_0 <- dataset6_0_
 
 ```{r}
 variables_for_statistics6 <- dataset6_0 %>% 
-  select(contains("_ha"), -vol_LIS_above30cm_m3_ha) %>% 
+  select(contains("_ha"), -vol_lis_above30cm_m3_ha) %>% 
   names()
 
 variables_for_statistics6
