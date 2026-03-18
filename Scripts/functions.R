@@ -317,7 +317,7 @@ query_database <-
 #' @importFrom lubridate round_date year
 #'
 
-load_data_dendrometry_all <-
+ load_data_dendrometry_all <-
   function(database, plottype = NA, forest_reserve = NA, extra_variables = TRUE) {
     selection <-
       translate_input_to_selectionquery(database, plottype, forest_reserve)

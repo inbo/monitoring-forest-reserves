@@ -879,7 +879,7 @@ statistics_deadw_decay <- function(datapackage){
   # NA's van extra plots op "0" zetten
   dataset <- correct_deadw_after_right_join(dataset, plotinfo) 
   
-  dataset_0 <- add_zeros(dataset = dataset2 %>% 
+  dataset_0 <- add_zeros(dataset = dataset %>% 
                            select(forest_reserve, plot_id, period
                                   , decaystage, contains("_ha")),
                          comb_vars = c("plot_id", "decaystage", "period"),
