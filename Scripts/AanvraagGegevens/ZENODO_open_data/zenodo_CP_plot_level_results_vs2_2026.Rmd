@@ -200,7 +200,7 @@ for (tablename in names(info_tables)) {
 
 
 ```{r plotinfo_split_Kluisbos}
-plotinfo <- split_Kluisbos_SFR(plotinfo)
+plotinfo <- split_Kluisbos(plotinfo)
 ```
 
 XY-coördinaten toevoegen aan `plotinfo` obv `strata_location`.
