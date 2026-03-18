@@ -97,7 +97,7 @@ Vervangen door de functie `get_plotinfo_cp_for_stat()` die enerzijds
 enkel cirkelplots selecteert en ook Kluisbos en Ename opsplitst in resp. SFR en 
 communal forets, en open en bosplots.
 
-Kluisbos wordt dus NIET opgesplits in beheerd en onbeheerd, maar eerder BR versus
+Kluisbos wordt dus NIET opgesplitst in beheerd en onbeheerd, maar eerder BR versus
 gemeentebos (waar ook 6 plots niet beheerd zijn).
 
 
@@ -120,7 +120,7 @@ dendro_by_plot %>% group_by(forest_reserve) %>%
 
 Niet meer nodig.
 
-Er zijn immers enkel open plekken in Enamebos. ZIe hoger
+Er zijn immers enkel open plekken in Enamebos. Zie hoger
 
 
 # Statistics_dendrometry
