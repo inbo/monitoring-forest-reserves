@@ -1,8 +1,8 @@
 ---
 title: "Ophalen data voor aanmaak DH-curves in een virtuele plot mbv FM-IA"
-subtitle: "2025 - decade 3"
+subtitle: "2026 - decade 3 - cirkelplots"
 author: "Anja Leyman"
-date: "28 feb 2025"
+date: "19 mrt 2026"
 output: 
   html_document:
     keep_md: FALSE
@@ -19,7 +19,7 @@ output:
 rm(list=ls())
 ```
 
-```{r Setup, include = FALSE}
+```{r Setup, include = FALSE, results = 'hide'}
 knitr::opts_chunk$set(
   echo = TRUE,
   eval = TRUE,
@@ -38,34 +38,45 @@ source(here::here("scripts/Setup.R"))
 ```
 
 
-```{r Setup2}
-forestreserve <- "Jansheideberg"
-forestreserve_folder <- "1_Jansheide_DEELS"
+```{r Setup2, results = 'hide'}
+forestreserve_short <- "Terrijst"
+source(here::here(paste0("Scripts/Per_gebied/", forestreserve_short, "/setup_paths_gebied.R")))
 
 # plot_type <- "CA"
 plot_type <- "CP"
 
-virt_plot <- 839
+virt_plot <- 899
+```
 
-# plots_to_exclude <- c(701, 707, 709, 727, 728, 738, 739, 740, 759, 760)
+```{r extra_paths}
+# resultatenzijn hier de virtuele bomen
+path_to_datarequest <- paste0(forestreserve_folder_pc, "/verwerking_2026_1e2e3eSET/2AanmaakDHcurves_1e2e3eSET/")
+# VirtualTreesHeightCurves
+
+path_to_html <-  path_to_heightcurves
+```
+
+```{r overview_paths}
+forestreserve_folder_pc
+
+forestreserve_folder_teamdrive
+path_to_datacontrol
+path_to_heightcurves
+path_to_plotdata_teamdrive
+
+# EVENTUEEL NIET MEER GEBRUIKEN??
+path_to_plotdata_pc
+
+# TIJDELIJK `path_to_fieldmap_db` naar nieuwe situatie mrt 2026 (met aanpassing nalv andere benadering hakhout)
+path_to_fieldmap_db <- paste0(path_to_fieldmap, dbFieldmap)
+
+# specifiek dit script
+path_to_datarequest
+path_to_html
 
 ```
 
 
-```{r Path}
-# deze worden ook in "Setup_ForresCalc.R" gedefinieerd, hier ev. extra "paths" toevoegen indien nodig voor huidig script
-      # path_to_fieldmap <- "C:/3BR/5_dB_Els_deel2/FieldMapData_dB_Els_deel2.accdb"
-      # path_to_git_forresdat <- "C:/3BR/2_VisualisatieDataBR/2Packages/forresdat"
-      # 
-      # path_to_analysis_set <- "C:/3BR/2_VisualisatieDataBR/1DataVerwerkingBR/Output/BR_analysedb.accdb"
-      # path_to_results <- "C:/3BR/2_VisualisatieDataBR/1DataVerwerkingBR/Output/BR_resultaten.accdb"
-      # path_to_forrescalc <- "C:/3BR/2_VisualisatieDataBR/2Packages/forrescalc/R/"
-
-# resultaten
-path_to_datarequest <- paste0(path_to_reserves, forestreserve_folder, "/verwerking_2025_1e2e3eSET/2AanmaakDHcurves_1e2e3eSET/VirtualTreesHeightCurves")
-
-path_to_html <-  paste0(path_to_reserves, forestreserve_folder, "/verwerking_2025_1e2e3eSET/2AanmaakDHcurves_1e2e3eSET")
-```
 
 # Vraagstelling
 
@@ -83,8 +94,17 @@ Onderstaand script voegt al deze data samen, om vervolgens in FM in te laden mbv
 
 Datacontrole dient vooraf te gebeuren, zie "...\Scripts\Per_gebied".
 
-Eens datacoontrole afgerond is, moet veld `processed` aangepast worden.
+Eens datacontrole afgerond is, moet veld `processed` aangepast worden.
 
+```{r check_processed}
+plotinfo <- load_plotinfo(path_to_fieldmap_db, plottype = plot_type
+                         , processed = FALSE) %>% 
+  # filter(forest_reserve == forestreserve & !plot_id %in% plots_to_exclude) %>% 
+  filter(forest_reserve == forestreserve) %>% 
+  mutate(fperiod = as.factor(period))
+
+table(plotinfo$period, plotinfo$data_processed)
+```
 Met behulp van een updatequery voor een vooraf geselecteerde decade, plottype en bosreservaat zetten we `DataProcessed_YN` op `10` (code 10 = 'ja'), indien `Survey_Trees_YN = 10`. 
 
 ```{r update_processed, eval = FALSE}
@@ -140,7 +160,9 @@ odbcClose(con)
 # trees_tmp <- load_data_dendrometry(database = path_to_fieldmap, plottype = "Core area", forest_reserve = "Muizenbos", extra_variables = TRUE)
 
 # gaf foutmelding => achteraf gefilterd
-trees <- load_data_dendrometry(database = path_to_fieldmap_db, plottype = plot_type, extra_variables = TRUE) %>% 
+trees <- load_data_dendrometry(database = path_to_fieldmap_db, plottype = plot_type
+                               , extra_variables = TRUE
+                               , processed = TRUE) %>% 
   # filter(forest_reserve == forestreserve & !plot_id %in% plots_to_exclude) %>% 
   filter(forest_reserve == forestreserve) %>% 
   mutate(fperiod = as.factor(period))
@@ -322,7 +344,7 @@ stems_modeled_height <- stems_for_model %>%
 
 ## Beuk
 
-Kan het zijn dat er bij periode 1 een overschatting gebeurd is bij de metingen? 
+Zit er verschil op de hoogtes van Beuk?
 
 ```{r include=FALSE}
 stems_height_beuk <- stems_modeled_height %>% filter(name_nl == "Beuk")
@@ -388,10 +410,9 @@ grid.arrange(d1, d2, d3, nrow = 1)
 
 ## Gewone es
 
-Zit er verschil op de hoogtes van es?
 
-(c)A: ik heb wel indruk dat de curve van es doorgechoven is, en dat we andere curves zouden moeten gebruiken 
-voor de derde decade
+Zit er verschil op de hoogtes van Gewone es?
+
 
 ```{r include=FALSE}
 stems_height_es <- stems_modeled_height %>% filter(name_nl == "Es (gewone)")
@@ -430,6 +451,8 @@ ggplot(stems_height_es, aes(dbh_mm, height_m)) +
 
 Zit er verschil op de hoogtes van eik?
 
+Volgens mij toch wat doorgeschoven ...
+
 
 ```{r include=FALSE}
 stems_height_eik <- stems_modeled_height %>% filter(name_nl == "Zomereik")
@@ -466,42 +489,44 @@ ggplot(stems_height_eik, aes(dbh_mm, height_m)) +
 ```
 
 
-## Lork
+## Populier
 
-Zit er verschil op de hoogtes van lork?
+Zit er verschil op de hoogtes van populier?
+
+Volgens mij toch wat doorgeschoven ...
 
 ```{r include=FALSE}
-stems_height_lork <- stems_modeled_height %>% filter(name_nl == "Europese lork")
+stems_height_pop <- stems_modeled_height %>% filter(name_nl == "Populier species")
 
-stems_height_lork_p1 <- stems_height_lork %>% filter(period == 1)
-stems_height_lork_p2 <- stems_height_lork %>% filter(period == 2)
-stems_height_lork_p3 <- stems_height_lork %>% filter(period == 3)
+stems_height_pop_p1 <- stems_height_pop %>% filter(period == 1)
+stems_height_pop_p2 <- stems_height_pop %>% filter(period == 2)
+stems_height_pop_p3 <- stems_height_pop %>% filter(period == 3)
 
-mean(stems_height_lork_p1$height_m)
-mean(stems_height_lork_p2$height_m)
-mean(stems_height_lork_p3$height_m)
+mean(stems_height_pop_p1$height_m)
+mean(stems_height_pop_p2$height_m)
+mean(stems_height_pop_p3$height_m)
 
 ```
 
 
-```{r vgl_lork}
-ggplot(stems_height_lork, aes(dbh_mm, height_m)) + 
+```{r vgl_pop}
+ggplot(stems_height_pop, aes(dbh_mm, height_m)) + 
   geom_point(aes(color = fperiod)) + 
   geom_smooth(aes(y = height_per_period, group = fperiod, color = fperiod))  
 
 # eenv. smoother
-ggplot(stems_height_lork, aes(dbh_mm, height_m)) +
+ggplot(stems_height_pop, aes(dbh_mm, height_m)) +
   geom_point(aes(color = fperiod)) +
   geom_smooth(aes(color = fperiod))
 
 # facet_wrap
-ggplot(stems_height_lork, aes(dbh_mm, height_m)) +
+ggplot(stems_height_pop, aes(dbh_mm, height_m)) +
   geom_point(aes(color = fperiod)) +
   geom_smooth(aes(y = height_per_period))
 
-ggplot(stems_height_lork, aes(dbh_mm, height_m)) + 
-  geom_point() + geom_smooth(aes(y = height_per_period)) + 
-  facet_wrap(~fperiod)
+# ggplot(stems_height_pop, aes(dbh_mm, height_m)) + 
+#   geom_point() + geom_smooth(aes(y = height_per_period)) + 
+#   facet_wrap(~fperiod)
 
 ```
 
@@ -605,7 +630,7 @@ t <- unique(output$unique_ID)
 De resultaten worden weggeschreven naar **TblVirtueleTrees_CP_1e2e3eSET.xlsx**
 
 ```{r WegschrijvenOutput}
-write_xlsx(output, paste0(path_to_datarequest, "/TblVirtueleTrees_CP_1e2e3eSET.xlsx"))
+write_xlsx(output, paste0(path_to_datarequest, "VirtualTreesHeightCurves/TblVirtueleTrees_CP_1e2e3eSET.xlsx"))
 
 ```
 
@@ -616,7 +641,7 @@ Na knitting - manueel
 
 ```{r eval = FALSE}
 # Specify the path of the file you want to copy
-source_file <- here::here(paste0("Scripts/AanmaakHoogteCurves/aanmaak_virt_trees_Jansheide_CP.html"))
+source_file <- here::here(paste0("Scripts/AanmaakHoogteCurves/aanmaak_virt_trees_Terrijst_CP_2026.html"))
 
 # Specify the destination directory where you want to copy the file
 destination_dir <- path_to_html

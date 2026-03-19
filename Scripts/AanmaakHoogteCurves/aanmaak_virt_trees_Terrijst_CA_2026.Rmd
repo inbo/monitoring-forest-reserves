@@ -1,6 +1,6 @@
 ---
 title: "Ophalen data voor aanmaak DH-curves in een virtuele plot mbv FM-IA"
-subtitle: "2026 - decade 3"
+subtitle: "2026 - decade 3 - kernvlakte"
 author: "Anja Leyman"
 date: "19 mrt 2026"
 output: 
@@ -37,25 +37,42 @@ source(here::here("scripts/Setup.R"))
 
 ```
 
-
-```{r Setup2}
+```{r Setup2, results='hide'}
 forestreserve_short <- "Terrijst"
 source(here::here(paste0("Scripts/Per_gebied/", forestreserve_short, "/setup_paths_gebied.R")))
 
 plot_type <- "CA"
 # plot_type <- "CP"
-virt_plot <- 101001
+virt_plot <- 111001
 
 ```
 
+```{r extra_paths}
+# resultatenzijn hier de virtuele bomen
+path_to_datarequest <- paste0(forestreserve_folder_pc, "/verwerking_2026_1e2e3eSET/2AanmaakDHcurves_1e2e3eSET/")
+# VirtualTreesHeightCurves
 
-```{r Path}
-# deze worden ook in "Paths.R" gedefinieerd, hier ev. extra "paths" toevoegen indien nodig voor huidig script
+path_to_html <-  path_to_heightcurves
+```
 
-# resultaten
-path_to_datarequest <- paste0(path_to_reserves, forestreserve_folder, "/verwerking_2025_1e2e3eSET/2AanmaakDHcurves_1e2e3eSET/VirtualTreesHeightCurves")
 
-path_to_html <-  paste0(path_to_reserves, forestreserve_folder, "/verwerking_2025_1e2e3eSET/2AanmaakDHcurves_1e2e3eSET")
+```{r overview_paths}
+forestreserve_folder_pc
+
+forestreserve_folder_teamdrive
+path_to_datacontrol
+path_to_heightcurves
+path_to_plotdata_teamdrive
+
+# EVENTUEEL NIET MEER GEBRUIKEN??
+path_to_plotdata_pc
+
+# TIJDELIJK `path_to_fieldmap_db` naar nieuwe situatie mrt 2026 (met aanpassing nalv andere benadering hakhout)
+path_to_fieldmap_db <- paste0(path_to_fieldmap, dbFieldmap)
+
+# specifiek dit script
+path_to_datarequest
+path_to_html
 
 ```
 
@@ -76,7 +93,18 @@ Onderstaand script voegt al deze data samen, om vervolgens in FM in te laden mbv
 
 Datacontrole dient vooraf te gebeuren, zie "...\Scripts\Per_gebied".
 
-Eens datacoontrole afgerond is, moet veld `processed` aangepast worden.
+Eens datacontrole afgerond is, moet veld `processed` aangepast worden.
+
+```{r check_processed}
+plotinfo <- load_plotinfo(path_to_fieldmap_db, plottype = plot_type
+                         , processed = FALSE) %>% 
+  # filter(forest_reserve == forestreserve & !plot_id %in% plots_to_exclude) %>% 
+  filter(forest_reserve == forestreserve) %>% 
+  mutate(fperiod = as.factor(period))
+
+table(plotinfo$period, plotinfo$data_processed)
+```
+
 
 Met behulp van een updatequery voor een vooraf geselecteerde decade, plottype en bosreservaat zetten we `DataProcessed_YN` op `10` (code 10 = 'ja'), indien `Survey_Trees_YN = 10`. 
 
@@ -388,50 +416,50 @@ stems_modeled_height <- stems_for_model %>%
 
 
 
-## Beuk
+<!-- ## Beuk -->
 
-Kan het zijn dat er bij periode 1 een overschatting gebeurd is bij de metingen? 
+<!-- Kan het zijn dat er bij periode 1 een overschatting gebeurd is bij de metingen?  -->
 
-```{r include=FALSE}
-stems_height_beuk <- stems_modeled_height %>% filter(name_nl == "Beuk")
+<!-- ```{r include=FALSE} -->
+<!-- stems_height_beuk <- stems_modeled_height %>% filter(name_nl == "Beuk") -->
 
-stems_height_beuk_p1 <- stems_height_beuk %>% filter(period == 1)
-stems_height_beuk_p2 <- stems_height_beuk %>% filter(period == 2)
-stems_height_beuk_p3 <- stems_height_beuk %>% filter(period == 3)
+<!-- stems_height_beuk_p1 <- stems_height_beuk %>% filter(period == 1) -->
+<!-- stems_height_beuk_p2 <- stems_height_beuk %>% filter(period == 2) -->
+<!-- stems_height_beuk_p3 <- stems_height_beuk %>% filter(period == 3) -->
 
-mean(stems_height_beuk_p1$height_m) # 30.6
-mean(stems_height_beuk_p2$height_m) # 32
-mean(stems_height_beuk_p3$height_m)
+<!-- mean(stems_height_beuk_p1$height_m) # 30.6 -->
+<!-- mean(stems_height_beuk_p2$height_m) # 32 -->
+<!-- mean(stems_height_beuk_p3$height_m) -->
 
-```
-
-
-```{r vgl_beuk}
-ggplot(stems_height_beuk, aes(dbh_mm, height_m)) + 
-  geom_point(aes(color = fperiod)) + 
-  geom_smooth(aes(y = height_per_period, group = fperiod, color = fperiod))  
-
-ggplot(stems_height_beuk, aes(dbh_mm, height_m)) +
-  geom_point(aes(color = fperiod)) +
-  geom_smooth(aes(y = height_per_period))
-
-ggplot(stems_height_beuk, aes(dbh_mm, height_m)) + 
-  geom_point() + geom_smooth(aes(y = height_per_period)) + 
-  facet_wrap(~fperiod)
+<!-- ``` -->
 
 
-```
+<!-- ```{r vgl_beuk} -->
+<!-- ggplot(stems_height_beuk, aes(dbh_mm, height_m)) +  -->
+<!--   geom_point(aes(color = fperiod)) +  -->
+<!--   geom_smooth(aes(y = height_per_period, group = fperiod, color = fperiod))   -->
 
-```{r vgl_beuk_curve}
-ggplot(stems_height_beuk, aes(dbh_mm, height_m)) + geom_point(aes(color = fperiod)) + geom_smooth(aes(color = fperiod)) 
+<!-- ggplot(stems_height_beuk, aes(dbh_mm, height_m)) + -->
+<!--   geom_point(aes(color = fperiod)) + -->
+<!--   geom_smooth(aes(y = height_per_period)) -->
 
-# ggplot(stems_height_beuk, aes(dbh_mm, height_m)) + geom_point() + geom_smooth() + facet_wrap(~fperiod)
+<!-- ggplot(stems_height_beuk, aes(dbh_mm, height_m)) +  -->
+<!--   geom_point() + geom_smooth(aes(y = height_per_period)) +  -->
+<!--   facet_wrap(~fperiod) -->
 
-ggplot(stems_height_beuk, aes(dbh_mm, height_m)) + geom_point(aes(color = fperiod)) + geom_smooth()
 
-```
+<!-- ``` -->
 
-Periode 2 ietsje hoger (1 m) => doorgroei, geen overschatting periode 1.
+<!-- ```{r vgl_beuk_curve} -->
+<!-- ggplot(stems_height_beuk, aes(dbh_mm, height_m)) + geom_point(aes(color = fperiod)) + geom_smooth(aes(color = fperiod))  -->
+
+<!-- # ggplot(stems_height_beuk, aes(dbh_mm, height_m)) + geom_point() + geom_smooth() + facet_wrap(~fperiod) -->
+
+<!-- ggplot(stems_height_beuk, aes(dbh_mm, height_m)) + geom_point(aes(color = fperiod)) + geom_smooth() -->
+
+<!-- ``` -->
+
+<!-- Periode 2 ietsje hoger (1 m) => doorgroei, geen overschatting periode 1. -->
 
 
 ## Gewone esdoorn
@@ -448,7 +476,6 @@ mean(stems_height_esd_p2$height_m, na.rm = T) # 18
 mean(stems_height_esd_p3$height_m, na.rm = T) 
 ```
 
-In 2eSET maar heel weinig esdoorn opgemeten.
 
 ```{r vgl_esd}
 ggplot(stems_height_esd, aes(dbh_mm, height_m)) + 
@@ -469,9 +496,6 @@ ggplot(stems_height_esd, aes(dbh_mm, height_m)) +
   facet_wrap(~fperiod)
 
 ```
-
-Niet zoveel verschil tss de curves, 2e set te weinig metingen voor afzonderlijke curve.
-
 
 ## Zomereik
 
@@ -508,10 +532,41 @@ ggplot(stems_height_eik, aes(dbh_mm, height_m)) +
 
 ```
 
-Niet zoveel verschil tss de curves.
-Periode 2 iets hoger, maar te weinig metingen voor afzonderlijke curve. 
-Ook weinig verschil in hoogtes va nperiode 2: bijna allemaal ts 20 en 27.5 m, vrij vlakke curve.
 
+## Tamme kastanje
+
+```{r include=FALSE}
+stems_height_tka <- stems_modeled_height %>% filter(name_nl == "Tamme kastanje")
+
+stems_height_tka_p1 <- stems_height_tka %>% filter(period == 1)
+stems_height_tka_p2 <- stems_height_tka %>% filter(period == 2)
+stems_height_tka_p3 <- stems_height_tka %>% filter(period == 3)
+
+mean(stems_height_tka_p1$height_m, na.rm = T) # 22.8
+mean(stems_height_tka_p2$height_m, na.rm = T) # 25
+mean(stems_height_tka_p3$height_m)
+```
+
+
+```{r vgl_tka}
+ggplot(stems_height_tka, aes(dbh_mm, height_m)) + 
+  geom_point(aes(color = fperiod)) + 
+  geom_smooth(aes(y = height_per_period, group = fperiod, color = fperiod))  
+
+# eenv. smoother
+ggplot(stems_height_tka, aes(dbh_mm, height_m)) +
+  geom_point(aes(color = fperiod)) +
+  geom_smooth(aes(color = fperiod))
+
+ggplot(stems_height_tka, aes(dbh_mm, height_m)) +
+  geom_point(aes(color = fperiod)) +
+  geom_smooth(aes(y = height_per_period))
+
+ggplot(stems_height_tka, aes(dbh_mm, height_m)) + 
+  geom_point() + geom_smooth(aes(y = height_per_period)) + 
+  facet_wrap(~fperiod)
+
+```
 
 # Dataset aanmaken voor import mbv Import2FM
 
@@ -578,7 +633,7 @@ nrow(output) - length(t) == 0
 De resultaten worden weggeschreven naar **TblVirtueleTrees_KV_1e2e3eSET.xlsx**
 
 ```{r WegschrijvenOutput}
-write_xlsx(output, paste0(path_to_datarequest, "/TblVirtueleTrees_KV_1e2e3eSET.xlsx"))
+write_xlsx(output, paste0(path_to_datarequest, "VirtualTreesHeightCurves/TblVirtueleTrees_KV_1e2e3eSET.xlsx"))
 
 ```
 
@@ -589,7 +644,7 @@ Na knitting - manueel
 
 ```{r eval = FALSE}
 # Specify the path of the file you want to copy
-source_file <- here::here(paste0("Scripts/AanmaakHoogteCurves/aanmaak_virt_trees_Jansheide_KV.html"))
+source_file <- here::here(paste0("Scripts/AanmaakHoogteCurves/aanmaak_virt_trees_Terrijst_CA_2026.html"))
 
 # Specify the destination directory where you want to copy the file
 destination_dir <- path_to_html
