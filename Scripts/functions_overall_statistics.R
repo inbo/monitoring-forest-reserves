@@ -1088,8 +1088,8 @@ statistics_dendrometry <- function(datapackage){
       , stat_dendro_by_species = by_species
       , stat_dendro_by_diam = by_diam
       , stat_dendro_by_diam_species = by_diam_species
-      , stat_logs_by_decay = by_decay
-      , stat_logs_by_decay_species = by_decay_species
+      , stat_deadw_by_decay = by_decay
+      , stat_deadw_by_decay_species = by_decay_species
       , stat_carbon = carbon_by_reserve
     )
   )
