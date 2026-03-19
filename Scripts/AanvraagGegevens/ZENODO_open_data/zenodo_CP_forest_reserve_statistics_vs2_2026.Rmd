@@ -98,10 +98,34 @@ names(list_statistics) <- tools::file_path_sans_ext(basename(files))
 
 ```
 
-```{r eval = FALSE}
+```{r eval = TRUE}
 # dataframes uit een lijst toevoegen aan environment
-list2env(df_list, envir = .GlobalEnv)
+# nodig om stat_carbon aan te passen
+list2env(list_statistics, envir = .GlobalEnv)
 ```
+# Variabelen carbon beperken
+
+Voor publicatie op zenodo is het overload om de volgende statistieken mee te nemen:
+
+- vol_bole_m3_ha_alive      
+- vol_stump_m3_ha_alive     
+- vol_bole_m3_ha_dead     
+- vol_stump_m3_ha_dead      
+- vol_lis_10_30cm_m3_ha       
+- vol_lis_m3_ha     
+- vol_log_above30cm_m3_ha     
+- vol_log_m3_ha       
+
+```{r}
+carbon_variables_to_delete <- c("vol_bole_m3_ha_alive", "vol_stump_m3_ha_alive"
+                         , "vol_bole_m3_ha_dead", "vol_stump_m3_ha_dead"
+                         , "vol_lis_10_30cm_m3_ha", "vol_lis_m3_ha"
+                         , "vol_log_above30cm_m3_ha", "vol_log_m3_ha")
+
+list_statistics[["stat_carbon"]] <- stat_carbon %>% 
+  filter(!(variable %in% carbon_variables_to_delete))
+```
+
 
 # Aanpassingen over alle dataframes heen
 
@@ -312,7 +336,7 @@ Statistieken op bosreservaatsniveau als echte open data publiceren op zenodo
 Reeds als list samengevoegd in de overkoepelende functies, en ook al afgerond
 (op 2 cijfers na de komma)
 
-De statistieken worden weggeschreven naar de teamdrive: `r paste0(path_to_datarequest_gdrive, "BR_niveau/")`     
+De statistieken worden weggeschreven naar de teamdrive: `r path_to_datarequest_gdrive`     
 
 ```{r list_export_gdrive, eval = FALSE}
 path_to_datarequest_gdrive
@@ -320,7 +344,7 @@ path_to_datarequest_gdrive
 # statistieken
 for (i in 1:length(list_statistics_zenodo)){
 	  write.csv2(list_statistics_zenodo[[i]]
-	             , paste0(path_to_datarequest_gdrive, "BR_niveau/statistics_per_reserve/", names(list_statistics_zenodo)[i], ".csv")) 
+	             , paste0(path_to_datarequest_gdrive, "statistics_per_reserve/", names(list_statistics_zenodo)[i], ".csv")) 
 }
 
 # sit_info
