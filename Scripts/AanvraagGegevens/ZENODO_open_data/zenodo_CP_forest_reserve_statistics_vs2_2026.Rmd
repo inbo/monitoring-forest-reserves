@@ -324,8 +324,28 @@ site_info <- list_BR %>%
   
 names(site_info) 
 ```
+
+# Aantal plots
+
 Eventueel ook aantal cirkelplots toevoegen?
 NEE, want zitten in n_obs.
+
+```{r}
+# dednro-plots
+n_distinct(plotinfo$plot_id)
+
+
+# evenveel plots dendro als veg
+# dendro_by_plot <- read_resource(datapackage, "dendro_by_plot")
+# n_distinct(dendro_by_plot$plot_id) == 1019 # ook beheerde reservaten
+# 
+# 
+# # aantal veg-plots
+# veg_by_plot <- read_resource(datapackage, "veg_by_plot")
+# n_distinct(veg_by_plot$plot_id)
+# 1019
+```
+
 
 
 # Export 
