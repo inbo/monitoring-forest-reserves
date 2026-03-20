@@ -329,7 +329,7 @@ grid.arrange(p1, p2, nrow = 2)
 # Welke periodes gebruiken?
 
 Kunnen we alle hoogtemetingen uit de drie periodes samengooien?
-(2005 en 2013 en 2023)
+(2005 en 2014 en 2024)
 
 ## Tabel
 
@@ -352,7 +352,7 @@ dt %>% DT :: datatable(options = list(dom = 'rt'), rownames = FALSE)
 
 ```
 
-Meer metingen in 2005, te weinig in 2013, geen in 2023 => beide gebruiken
+Meer metingen in 2005, te weinig in 2014 en 2024 => hoogtes van de drie periodes samen gebruiken
 
 
 ## Grafiek
@@ -373,9 +373,9 @@ Niet veel verschil
 
 Op basis van bovenstaande grafieken:  
 
-- 1eSET: data 1e + 2eSET
-- 2eSET: data 1e + 2eSET
-- 3eSET: data 1e + 2eSET
+- 1eSET: data 1e + 2eSET + 3eSET
+- 2eSET: data 1e + 2eSET + 3eSET
+- 3eSET: data 1e + 2eSET + 3eSET
 
 
 # Per boomsoort
