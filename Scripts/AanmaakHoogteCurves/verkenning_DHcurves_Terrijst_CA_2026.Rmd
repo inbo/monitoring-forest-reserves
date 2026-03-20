@@ -1,8 +1,8 @@
 ---
 title: "Verkenning DHcurves aangemaakt in FM-IA"
-subtitle: "2026 - decade 3 - cirkelplots"
+subtitle: "2026 - decade 3 - kernvlakte"
 author: "Anja Leyman"
-date: "19 maart 2026"
+date: "20 maart 2026"
 output: 
   html_document:
     keep_md: FALSE
@@ -44,10 +44,10 @@ source(here::here("scripts/Setup.R"))
 forestreserve_short <- "Terrijst"
 source(here::here(paste0("Scripts/Per_gebied/", forestreserve_short, "/setup_paths_gebied.R")))
 
-# plot_type <- "CA"
-plot_type <- "CP"
+plot_type <- "CA"
+# plot_type <- "CP"
 
-virt_plot <- 899
+virt_plot <- 111001
 ```
 
 
@@ -168,7 +168,7 @@ stems_height <- stems_ %>%
 
 ## Inladen en omvormen
 
-Eerst kolomnamen "plot" en "diff" toevoegen in `erraneous_records.xlsx`
+Eerst kolomnamen "plot", "diff", "vorm" toevoegen in `erraneous_records.xlsx`
 
 Vervolgens worden de erraneous records ingeladen en omgevormd naar IDPlots, ID, diff
 en gekoppeld met soort, dbh, hoogte en ev. remark. 
@@ -210,14 +210,16 @@ erraneous_ <- erraneous %>%
 # sub(".*xxx ", "", x)
 
 erraneous_ <- erraneous_ %>% 
-  select(plot_id, tree_measure_id, diff_m)
+  select(plot_id, tree_measure_id, diff_m, vorm)
 ```
 
 ```{r}
 # names(stems_height)
 
 erraneous_ <- erraneous_ %>% 
-  left_join(stems_height)
+  left_join(stems_height) %>% 
+  arrange(species, tree_measure_id, vorm) %>% 
+  select(species, name_nl, everything(), -plot_id)
 
 range(abs(erraneous_$diff_m))
 table(erraneous_$species)
@@ -242,12 +244,15 @@ write.xlsx(x = erraneous_, file = paste0(path_to_datarequest, "erraneous_records
 
 ## Besluit 
 
-Zowel bij log als bij exponentiële functie:  
+Esdoorn, tKa, Vlier en Zomereik
+16, 64, 69, 87 
 
-- zie `0_16_residuals.emf`: 1 outlier van esdoorn, maar geen invloed op curve en 
-mogelijks correct 
-- zie `0_87_residuals.emf`: 1 outlier van zomereik, maar geen invloed op curve en 
-mogelijks correct 
+Vlier (69): 3 m hoog => verwijderen
+Zomereik (97): 20m hoog en 60 cm dbh: kan, geen grote invloed op curve
+Esdoorn (16): twee smalle met hoogte > 25m, kan zijn, geen grote invloed op curve
+tKa (64): vooral outliers tov andere soorten, niet voor tKa zelf
+
+Zowel bij log als bij exponentiële functie (enkel vlier enkel bij log een outlier):  
  
  <!-- => hoogte verwijderen     -->
  <!-- **Hierna dh-curves opnieuw laten berekenen in FM-IA.** -->
@@ -277,7 +282,7 @@ hoogtes)
 
 <br> 
 
-**Terrijst CP: geen extrapolaties.**
+**Terrijst CA: geen extrapolaties.**
 
 <!-- Ev. aftoetsen aan alle bomen van een bepaalde soort om te kijken of de extrapolatie  -->
 <!-- geen te grote over- of onderschatting geeft?  -->
@@ -296,7 +301,7 @@ all_trees_ever <- load_data_dendrometry(database = path_to_fieldmap_db) %>%
 
 show existing charts - tabblad "Model Parameters" - Copy to clipboard
 
-Plakken in excel-file "HeightParams_Terrijst_CP.xlsx" in folder ".../06_Terrijst/verwerking_2026_1e2e3eSET/2AanmaakDHcurves_1e2e3eSET"
+Plakken in excel-file "HeightParams_Terrijst_CA.xlsx" in folder ".../06_Terrijst/verwerking_2026_1e2e3eSET/2AanmaakDHcurves_1e2e3eSET"
 
 - tabblad log    
 - tabblad exp
@@ -304,10 +309,10 @@ Plakken in excel-file "HeightParams_Terrijst_CP.xlsx" in folder ".../06_Terrijst
  
 ### Check in verkenner
 
-de emf-files uit ".../06_Terrijst/FMprojecten_2025/Terrijst_DHcurves_CP_22_inbo2026/InventoryAnalyst/Charts_Height_m" kopiëren naar
+de emf-files uit ".../06_Terrijst/FMprojecten_2025/Terrijst_DHcurves_CA_22_inbo2026/InventoryAnalyst/Charts_Height_m" kopiëren naar
 
-- ".../06_Terrijst/verwerking_2026_1e2e3eSET/2AanmaakDHcurves_1e2e3eSET/DH_curves_CP_exp"    
-- ".../06_Terrijst/verwerking_2026_1e2e3eSET/2AanmaakDHcurves_1e2e3eSET/DH_curves_CP_log"     
+- ".../06_Terrijst/verwerking_2026_1e2e3eSET/2AanmaakDHcurves_1e2e3eSET/DH_curves_CA_exp"    
+- ".../06_Terrijst/verwerking_2026_1e2e3eSET/2AanmaakDHcurves_1e2e3eSET/DH_curves_CA_log"     
 
 
 
@@ -330,30 +335,9 @@ Geen extrapolaties
 ### Exp vs log
 
 In 2021 obv 1e en 2e SET geopteerd voor log, was toen beter dan de exp.
-Nu lijkt het net andersom, toch als we naar de globale R-waarde kijken.
+Nu lijkt het net andersom, toch als we naar de gesommeerde (gewogen) R-waardes kijken.
 
-
-
-EXP:      
-- soort 24: onderschatting hogere diameters       
-- soort 14 en 7: ? beetje onderschatting hogere diameters     
-
-LOG:      
-- soort 3 en 64 en 7: kleine overschatting hogere diameters     
-
-EXP vs LOG:       
-- soort 7: volgens R-waarde is exp beter (0.001!! eigenlijk +/- zelfde), visueel exp 
-beter bij lagere dbh's, bij hogere gelijkaardig (exp onderschat en log overschat) => LOG      
-
-- soort 24: volgens R-waarde is exp beter, visueel log beter bij hogere dbh's, maar niet veel verschil => EXP     
-- soort 14: volgens R is log beter, maar scheelt niet veel      
-
-- soort 3: volgens R is log beter, visueel ook => LOG     
-- soort 64 volgens R is exp beter, visueel ook => EXP     
-
-DUS: Exp heeft precies overhand, ofwel behandelen we ze niet allemaal gelijk ...      
-
-Exp scoort vooral beter omdat de curve voor tKa heel duidelijk beter is dan de log-curve.     
+Exp scoort vooral beter omdat de curve voor Zomereik heel duidelijk beter is dan de log-curve.     
 Als we die buiten beschouwing laten, is log globaal beter.
 
 Op dit moment is het in R mogelijk om andere vorm voor de curves te gebruiken, 
@@ -361,9 +345,9 @@ afh van de soort.
 
 DAAROM R-waarde volgen:     
   
-- voor meeste soorten LOG gebruiken - cfr vorige dataverwerking én lagere R       
-- met uitz voor Beuk (7), tKa (64), Grauwe abeel(24), Boskers(9), Zwarte els (89) 
-en Ruwe berk (57) - lagere R        
+- voor meeste soorten LOG gebruiken - cfr vorige dataverwerking én lagere R voor 
+alle bomen samen      
+- met uitz voor Es (14), Grauwe abeel(24) en Zomereik (87) - lagere R        
 
 We maken tabblad "def" aan waarin we de juiste curves combineren.
 We schuiven dit naar voor in de excel-file.
@@ -431,7 +415,7 @@ nr_measured %>% arrange(desc(n_height_alive)) %>%
 
 ## Enkel dode bomen
 
-Er zijn drie soorten die enkel als dode boom voorkomen.
+<!-- Er zijn drie soorten die enkel als dode boom voorkomen. -->
 
 ```{r}
 nr_measured %>% filter(n_alive == 0) %>% 
@@ -445,8 +429,6 @@ met de algemene curve als curve, en n = 0.
 
 
 ## Geen hoogtes
-
-Er zijn 3 soorten waar geen hoogtes gemeten zijn: Rode kornoelje. 
 
 ```{r}
 nr_measured %>% filter(between(n_height_alive, 0, 0)) %>% 
@@ -485,12 +467,12 @@ We voegen soorten samen wanneer er van een bepaalde soort te weinig metingen zij
 Dit zien we soms al duidelijk bij het overlopen van de curves in FM-IA, maar
 bovenstaande tabel geeft soms nog wat meer duidelijkheid.
 
-Bij de CP's van Terrijst is dit niet nodig. 
+Bij de `r plot_type` van Terrijst is dit niet nodig. 
 
 
 # Aanpassen parameterfile
 
-De excel-file "HeightParams_Terrijst_CP.xlsx" aanpassen
+De excel-file "HeightParams_Terrijst_CA.xlsx" aanpassen
 
 
 ## Verklaring toevoegen
@@ -527,8 +509,8 @@ opgesteld kon worden (hier zijn dat soorten 69 en 17)
 
 ## Verwijderen plotmodellen
 
-De plotmodellen (plotID = `r virt_plot`) van soorten waar ook een globaal model (plotID = <ALL>) 
-van is, verwijderen, zodat soorten niet dubbel voorkomen in de lijst.
+De plotmodellen (plotID = `r virt_plot`) van soorten waar ook een globaal model 
+(plotID = <ALL>) van is, verwijderen, zodat soorten niet dubbel voorkomen in de lijst.
 
 
 ## Toevoegen plotmodellen van geclusterde soorten   
@@ -585,7 +567,7 @@ for (decade in c(1, 2)){
 
 - De parameterfile inlezen.    
 
-```{r}
+```{r eval = FALSE}
 parameters <- read_excel(path = paste0(path_to_datarequest, "HeightParams_", forestreserve_short, "_", plot_type, ".xlsx"))
 
 # eerste sheet inlezen
@@ -593,7 +575,7 @@ parameters <- read_excel(path = paste0(path_to_datarequest, "HeightParams_", for
 
 - De parameterfile opslaan onder `r path_to_height_models`, met een afzonderlijke file per decade.
 
-```{r}
+```{r eval = FALSE}
 write.xlsx(parameters, file = paste0(path_to_height_models, "HeightParams_", forestreserve_short, "_", plot_type, "_1.xlsx"), showNA = FALSE)  # row.names = TRUE geeft foutmelding
 
 write.xlsx(parameters, file = paste0(path_to_height_models, "HeightParams_", forestreserve_short, "_", plot_type, "_2.xlsx"), showNA = FALSE)
