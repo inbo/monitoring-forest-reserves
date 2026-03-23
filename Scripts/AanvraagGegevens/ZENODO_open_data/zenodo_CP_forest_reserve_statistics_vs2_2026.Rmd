@@ -218,53 +218,17 @@ names(stat_dendro_by_diam_species)
 
 Enkel de bosreservaten met cirkelplots.
 
-Shapefile dateert van 2012 en bevat volgende reservaten (nog) niet:
+Beter om enkel de XY mee te geven, dan is er geen verwarring met plots die gelegen
+zijn in andere dan de strikte bosreservaten.
 
-- ename
-- kluisbos
-- Zwaenepoel
+Shapefiles te vinden op de teamdrive onder "G:\Gedeelde drives\Team_Boseco_BR\PRJ_BR_AanvraagGegevens\00_METADATA-ALL_PLOTS\GIS-lagen_bosreservaten"
 
 ```{r eval = FALSE}
-path_to_shp <- "G:/Gedeelde drives/Team_Boseco/00_projecten/PRJ_BR_Bosreservaten/gebieden/0_overkoepelend/"
+path_to_shp <- "G:/Gedeelde drives/Team_Boseco_BR/PRJ_BR_AanvraagGegevens/00_METADATA-ALL_PLOTS/GIS-lagen_bosreservaten/"
 
-shp <- "bosreservaten_IntensieveMonitoring.shp"
-
-path_to_shp2 <- "G:/Gedeelde drives/Team_Boseco/00_projecten/PRJ_BR_AanvraagGegevens/00_METADATA-ALL_PLOTS/GIS-lagen bosreservaten/alle cirkelplots/"
-
-shp2 <- "Bosreservaten_allecirkels.shp"
+shp <- "alle_cirkelplots/Bosreservaten_allecirkels.shp"
 
 ```
-
-De shapefile `bosreservaten_IntensieveMonitoring.shp` bevat ook kernvlaktes en is onvolledig. 
-<!-- Enkel een KV => wegfilteren: -->
-<!-- - Hannecartbos -->
-<!-- - Rodebos -->
-<!-- - Walenbos -->
-<!-- - Harras -->
-
-<!-- Anderzijds zijn de volgende reservaten er bij gekomen: -->
-<!-- - Zwaenepoel -->
-<!-- - Kluisbos -->
-<!-- - Ename -->
-
-Shapefile `Bosreservaten_allecirkels.shp` is correcter/vollediger.
-<!-- Everzwijnbad (Meerdaalwoud) -->
-<!-- Withoefse Heide -->
-<!-- Wijnendalebos -->
-<!-- Heirnisse -->
-<!-- Jansheideberg (Hallerbos) -->
-<!-- Ter Rijst -->
-<!-- Pruikemakers (Meerdaalwoud) -->
-<!-- Liedekerkebos -->
-<!-- Sevendonck - eiken-berken -->
-<!-- Sevendonck - elzenbroek -->
-<!-- Muizenbos -->
-<!-- Bos t'Ename -->
-<!-- De Heide (Meerdaalwoud) -->
-<!-- Kluisbos -->
-<!-- Kolmontbos -->
-<!-- Kersselaerspleyn (ZoniÔö£┬¢nwoud) -->
-<!-- Harras (ZoniÔö£┬¢nwoud) -->
 
 
 # Strata op niveau van BR - BETER
