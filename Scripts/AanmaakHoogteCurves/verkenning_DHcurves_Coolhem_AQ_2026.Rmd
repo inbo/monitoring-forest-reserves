@@ -2,7 +2,7 @@
 title: "Verkenning DHcurves aangemaakt in FM-IA"
 subtitle: "2026 - decade 3 - kernvlakte"
 author: "Anja Leyman"
-date: "20 maart 2026"
+date: "23 maart 2026"
 output: 
   html_document:
     keep_md: FALSE
@@ -172,10 +172,6 @@ stems_height <- stems_ %>%
 
 ```
 
-> nu eerst in Inv Analist - subtype A
-
-
-
 # Erraneous records
 
 ## Inladen en omvormen
@@ -256,23 +252,21 @@ write.xlsx(x = erraneous_, file = paste0(path_to_datarequest, "erraneous_records
 
 ## Besluit 
 
-Esdoorn, tKa, Vlier en Zomereik
-16, 64, 69, 87 
+Subtype A:      
 
-Vlier (69): 3 m hoog => verwijderen
-Zomereik (97): 20m hoog en 60 cm dbh: kan, geen grote invloed op curve
-Esdoorn (16): twee smalle met hoogte > 25m, kan zijn, geen grote invloed op curve
-tKa (64): vooral outliers tov andere soorten, niet voor tKa zelf
+- Wilg: 15.5 m hoog en 75 cm diameter: verwijderen: 1e SET 19.5m en 2de SET 20 m hoog ...
+Toch invloed op hogere diameters
 
-Zowel bij log als bij exponentiële functie (enkel vlier enkel bij log een outlier):  
- 
- <!-- => hoogte verwijderen     -->
- <!-- **Hierna dh-curves opnieuw laten berekenen in FM-IA.** -->
+- Zomereik: hakhoutspil van 2.3 m en 11 cm diameter => verwijderen, wellicht niet veel invloed
+
+Subtype Q:   
+
+- geen echte outliers (populier blijkt geen outlier te zijn)
 
 
 # Hoogtemodellen checken
 
-De globale curves (0_xx.emf) en de curves op plotniveau (`r virt_plot`_xxx.emf) worden in 
+De globale curves (0_xx.emf) en de curves op plotniveau (`r as.character(virt_plot)`_xxx.emf) worden in 
 FM-IA overlopen.
 
 
@@ -285,7 +279,7 @@ Om snel te zien of globale curve ok is en er geen rare outliers zijn
 
 ## Plotmodellen per soort - extrapolaties
 
-bv. `r virt_plot`_xxx.emf: specifiek voor die ene plot, met ook aanduiding van de bomen 
+bv. `r as.character(virt_plot)`_xxx.emf: specifiek voor die ene plot, met ook aanduiding van de bomen 
 zonder hoogtes (in dit project enkel de levende bomen ingeladen)
 
 Dit laat toe om te zien of er een (onverantwoorde) extrapolatie gebeurd is 
@@ -294,7 +288,20 @@ hoogtes)
 
 <br> 
 
-**Terrijst CA: geen extrapolaties.**
+**Coolhem A: beperkte extrapolaties**
+
+- 63 spork - log beter
+- 67 meidoorn - log beter
+- 78 smalbladig lage dbh's: log vangt dit betere op, ook beter R
+- 77 breedbladige wilg - log iets beter
+
+**Coolhem Q: beperkte extrapolaties**
+
+- 13 meidoorn     
+- 57 berk     
+- 63 spork    
+- 77 breedbladige wilg      
+
 
 <!-- Ev. aftoetsen aan alle bomen van een bepaalde soort om te kijken of de extrapolatie  -->
 <!-- geen te grote over- of onderschatting geeft?  -->
@@ -341,7 +348,8 @@ Geen outliers
 
 ### Extrapolaties
 
-Geen extrapolaties
+Beetje extrapolaties bij minder voorkomends soorten, is OK
+(wilg, spork, berk en meidoorn)
 
 <!-- - Logaritmische functie zeker gebruiken bij Hazelaar (sp 28), Hulst (sp 31) -->
 <!-- en aEik (sp 3) -->
@@ -349,20 +357,23 @@ Geen extrapolaties
 
 ### Exp vs log
 
-In 2021 obv 1e en 2e SET geopteerd voor log, was toen beter dan de exp.
+In 2022 obv 1e en 2e SET geopteerd voor exp, was toen beter dan de log.
 Nu lijkt het net andersom, toch als we naar de gesommeerde (gewogen) R-waardes kijken.
 
-Exp scoort vooral beter omdat de curve voor Zomereik heel duidelijk beter is dan de log-curve.     
-Als we die buiten beschouwing laten, is log globaal beter.
-
-Op dit moment is het in R mogelijk om andere vorm voor de curves te gebruiken, 
+Op dit moment is het in R mogelijk om andere vorm voor de curves te gebruiken,    
 afh van de soort.
 
 DAAROM R-waarde volgen:     
   
-- voor meeste soorten LOG gebruiken - cfr vorige dataverwerking én lagere R voor 
-alle bomen samen      
-- met uitz voor Es (14), Grauwe abeel(24) en Zomereik (87) - lagere R        
+- voor meeste soorten **LOG** gebruiken - lagere R voor alle bomen samen      
+- met **uitz** voor enkele soorten met lagere R voor exponentiële curves          
+
+**Coolhem A**: exp voor Gewone es (14) en Zwarte els (89)     
+
+**Coolhem Q**: toch geen exp voor breedbladige wilg (77) en Ruwe berk (57), 
+want +/- geen verschil in curve én wilg beetje extrapolatie die beter opgevangen 
+wordt door log)
+
 
 We maken tabblad "def" aan waarin we de juiste curves combineren.
 We schuiven dit naar voor in de excel-file.
@@ -534,7 +545,7 @@ Dit is ahw het ontkoppelen van de geclusterde soorten.
 Hier niet nodig.
 
 
-## Parameters van twee subtypes samenvoegen in één file
+## Twee kernvlaktes samen bekijken?
 
 **Specifiek Coolhem**
 
@@ -555,7 +566,6 @@ verplaatsen naar folder "archief", met behulp van onderstaande code (! versienr 
 **Opgepast Coolhem**: oude parameterfile om te archiveren, noemt nu anders.
 Om te archiveren: "HeightParams_CoolhemAQ_CA_1.xlsx" (BR Coolhem A & Q in dezelfde 
 file opgeslagen).
-
 
 Pas dan de parameterfile kopiëren naar folder "C:/03_BR/1_DataVerwerkingBR/Data/Hoogtemodellen" 
 voor gebruik in R, package forrescalc.
