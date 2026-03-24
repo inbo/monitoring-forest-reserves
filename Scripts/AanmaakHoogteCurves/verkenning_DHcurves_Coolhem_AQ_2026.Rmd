@@ -54,10 +54,10 @@ forestreserve <- paste0(forestreserve_short, " ", subtype)
 virt_plot <- 171201
 
 # OF
-
-subtype <- "A"
-forestreserve <- paste0(forestreserve_short, " ", subtype)
-virt_plot <- 171101
+# 
+# subtype <- "A"
+# forestreserve <- paste0(forestreserve_short, " ", subtype)
+# virt_plot <- 171101
 ```
 
 ```{r extra_paths}
@@ -619,22 +619,28 @@ parameters <- read_excel(path = paste0(path_to_datarequest, "HeightParams_", for
 - De parameterfile opslaan onder `r path_to_height_models`, met een afzonderlijke file per decade en subtype.
 
 ```{r eval = FALSE}
-write.xlsx(parameters, file = paste0(path_to_height_models, "HeightParams_", forestreserve_short, "_", subtype, "_1.xlsx"), showNA = FALSE)  # row.names = TRUE geeft foutmelding
+write.xlsx(parameters, file = paste0(path_to_height_models, "HeightParams_", forestreserve_short, "_", subtype
+                                     , "_", plot_type,  "_1.xlsx"), showNA = FALSE)  # row.names = TRUE geeft foutmelding
 
-write.xlsx(parameters, file = paste0(path_to_height_models, "HeightParams_", forestreserve_short, "_", subtype, "_2.xlsx"), showNA = FALSE)
+write.xlsx(parameters, file = paste0(path_to_height_models, "HeightParams_", forestreserve_short, "_", subtype
+                                     , "_", plot_type,  "_2.xlsx"), showNA = FALSE)
 
-write.xlsx(parameters, file = paste0(path_to_height_models, "HeightParams_", forestreserve_short, "_", subtype, "_3.xlsx"), showNA = FALSE)
+write.xlsx(parameters, file = paste0(path_to_height_models, "HeightParams_", forestreserve_short, "_", subtype
+                                     , "_", plot_type,  "_3.xlsx"), showNA = FALSE)
 ```
 
 
 - De parameterfile ook direct opslaan in onze teamdrive `r path_to_heightmodels_teamdrive`
 
 ```{r eval = FALSE}
-write.xlsx(parameters, file = paste0(path_to_heightmodels_teamdrive, "HeightParams_", forestreserve_short, "_", subtype, "_1.xlsx"), showNA = FALSE)  # row.names = TRUE geeft foutmelding
+write.xlsx(parameters, file = paste0(path_to_heightmodels_teamdrive, "HeightParams_", forestreserve_short, "_"
+                                     , subtype, "_", plot_type, "_1.xlsx"), showNA = FALSE)  # row.names = TRUE geeft foutmelding
 
-write.xlsx(parameters, file = paste0(path_to_heightmodels_teamdrive, "HeightParams_", forestreserve_short, "_", subtype, "_2.xlsx"), showNA = FALSE)
+write.xlsx(parameters, file = paste0(path_to_heightmodels_teamdrive, "HeightParams_", forestreserve_short, "_"
+                                     , subtype, "_", plot_type, "_2.xlsx"), showNA = FALSE)
 
-write.xlsx(parameters, file = paste0(path_to_heightmodels_teamdrive, "HeightParams_", forestreserve_short, "_", subtype, "_3.xlsx"), showNA = FALSE)
+write.xlsx(parameters, file = paste0(path_to_heightmodels_teamdrive, "HeightParams_", forestreserve_short, "_"
+                                     , subtype, "_", plot_type, "_3.xlsx"), showNA = FALSE)
 ```
 
 
