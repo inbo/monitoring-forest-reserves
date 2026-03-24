@@ -66,7 +66,8 @@ path_to_meetgegevens
 
 # Load plotinfo
 
-Plotinfo samenstellen, zijnde plottype, naam forest_reserve en info over survey en data al dan niet processed.
+Plotinfo samenstellen, zijnde plottype, naam forest_reserve en info over survey 
+en data al dan niet processed.
 
 ```{r plotinfo_load}
 plotinfo <- load_plotinfo(database = path_to_fieldmap_db) %>% 
@@ -176,15 +177,16 @@ Dat is OK zo, strookt met de standaard methodiek.
 checkA1 <- data_regeneration %>%
   filter(subcircle == "A1" & is.na(number_class)) %>% 
   select(all_of(select_colnames_reg))
-nrow(checkA1) # 314 - allemaal periode 1 - hier wordt dan een exact aantal gebruikt ipv een klasse
+nrow(checkA1) # 0
+# OK, zoals 't zou moeten
 
 checkA2 <- data_regeneration %>% 
   filter(subcircle == "A2" & 
            is.na(nr_of_regeneration) &
            !is.na(number_class)) %>% 
   select(all_of(select_colnames_reg))
-nrow(checkA2) == 0
-# OK, zoals 't zou moeten
+nrow(checkA2) # 1, periode 2
+
 ```
 
 
@@ -215,6 +217,9 @@ data_regeneration %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
 
 # nr_of_regeneration vs number_class: één van beide moet ingevuld zijn
 data_regeneration %>% filter(is.na(nr_of_regeneration) & is.na(number_class)) %>% nrow() == 0
+# twee keer aantal vergeten invullen subplot 47 en 65 van de kernvlakte
+# gemaild naar Peter maar kan wellicht niet meer aangevuld worden
+
 ```
 OPGEPAST: per plot kan er ook een species NA en heightclass NA zijn, met aantal = 0: 
 dit is zo als er geen verjonging genoteerd werd in de plot
@@ -222,10 +227,10 @@ dit is zo als er geen verjonging genoteerd werd in de plot
 ```{r}
 species_NA <- data_regeneration %>% filter(is.na(species) | is.na(height_class))
 nrow(species_NA) 
-# 8 
+# 0 
 
 ```
-Voor `r forest_reserve` gaat het om volgende plots:
+Voor `r forestreserve` gaat het om volgende plots:
 `r species_NA$plot_id`, resp. uit periode `r species_NA$period`.
 
 Gevolg: `subcircle` en `subcirclearea_ha` = NA, want deze worden obv 
@@ -254,7 +259,7 @@ zodra `pd.GameImpactRegObserved == 10` (ongeacht of species al dan niet ingevuld
 
 ```{r check_rubbingnr_NA}
 check_rubbingnr_NA <- data_regeneration  %>% 
-  select(select_colnames_reg) %>% 
+  select(all_of(select_colnames_reg)) %>% 
   left_join(plotinfo %>% select(plot_id, period, game_impact_reg)) %>% 
   filter(is.na(rubbing_damage_number)) %>% 
   filter(game_impact_reg == TRUE)
@@ -262,7 +267,7 @@ check_rubbingnr_NA <- data_regeneration  %>%
 nrow(check_rubbingnr_NA) == 0
 
 check_rubbingnr_NA3 <- data_regeneration  %>% 
-  select(select_colnames_reg) %>% 
+  select(all_of(select_colnames_reg)) %>% 
   left_join(plotinfo %>% select(plot_id, period, game_impact_reg)) %>% 
   filter(!is.na(rubbing_damage_number)) %>% 
   filter(game_impact_reg == FALSE)
@@ -289,23 +294,22 @@ check_rubbingnr_NA2 %>% filter(rubbing_damage_number != 0) %>% nrow() == 0
 
 ```{r check_rubbing_perc, results= 'hide'}
 check_rubbing_perc <- data_regeneration %>% 
-  select(select_colnames_reg) %>% 
+  select(all_of(select_colnames_reg)) %>% 
   left_join(plotinfo %>% select(plot_id, period, game_impact_reg)) %>% 
   filter(game_impact_reg == TRUE) 
 
 table(check_rubbing_perc$rubbing_damage_perc)
-summary(check_rubbing_perc$rubbing_damage_perc)
+range(check_rubbing_perc$rubbing_damage_perc, na.rm = T)
 
 check_rubbing_perc %>% filter(is.na(rubbing_damage_perc)) %>% nrow() == 0
-# 1 plot waar een NA record aanwezig is:
-# subplot 78 van KV, één species niet ingevuld bij hoogteklasse 1000 (wél beuk genoteerd bij hoogteklasse 1000)
+# 2 subplots waar aantal van reg niet ingevuld is (zie ook hoger) 
+
 check_rubbing_perc %>% filter(is.na(rubbing_damage_perc) & !is.na(species)) %>% nrow() == 0
 
 check_rubbing_perc %>% filter(is.na(rubbing_damage_perc) & 
                                 (number_class > 0 | nr_of_regeneration > 0)) %>% 
   nrow() == 0
 ```
-
 
 # Calculate regeneration 
 
@@ -343,6 +347,10 @@ table(reg_by_plot_height$period, reg_by_plot_height$height_class)
 ```{r}
 reg_by_plot_height %>% filter(is.na(lci_number_of_regeneration_ha)) %>% nrow() == 0
 reg_by_plot_height %>% filter(is.na(approx_nr_regeneration_ha)) %>% nrow() == 0
+
+# allebei te maken met missing number, maar bij de ene is er maar één soort genoteerd
+# en bij ander subplot drie soorten, en dan wordt verder gerekend met de soorten die
+# wel een antal toegekend kregen (plot 65 en 47)
 ```
 
 # Check perc_rubbing op plot-niveau
@@ -375,6 +383,7 @@ check_rubbing_perc_NA <- reg_by_plot_height %>%
   filter(game_impact_reg == TRUE) 
 
 check_rubbing_perc_NA %>% nrow() == 0
+# 1, wegens missing number in subplot 65
 
 # wat als pd.GameImpactRegObserved = 20 (FALSE)
 check_rubbing_perc_NA2 <- reg_by_plot %>%
@@ -398,31 +407,30 @@ check_rubbing_perc_NA <- reg_by_core_area_height_species %>%
   filter(game_impact_reg == TRUE) 
 
 check_rubbing_perc_NA %>% nrow() == 0
-# door een NA bij hoogteklase 1000 in de KV, ontstond er een extra record met 
+# door een NA bij hoogteklasse 1000 in de KV, ontstond er een extra record met 
 # species = NA in die hoogteklasse ...
 # bij andere geen invloed want aantal = 0
 # AANGEPAST in db (zie verder)
 ```
 
 ```{r TMP_subplot78, eval = FALSE}
-check_subplot78 <- reg_by_plot_height %>% 
+# subplot 65 en 47 ander effect van missing number, want bij subplot 65 geen andere soorten
+check_subplot65 <- reg_by_plot_height %>% 
   left_join(plotinfo %>% select(plot_id, period, game_impact_reg)) %>%
-  filter(plot_id == 101000 & height_class == 1000 & period == 3 & subplot_id == 78) %>% 
+  filter(plot_id == 111000 & height_class == 1000 & period == 3 & subplot_id == 65) %>% 
   filter(game_impact_reg == TRUE) 
 
-check_subplot78 <- reg_by_plot %>% 
+check_subplot65 <- reg_by_plot %>% 
   left_join(plotinfo %>% select(plot_id, period, game_impact_reg)) %>%
-  filter(plot_id == 101000 & period == 3 & subplot_id == 78) %>% 
+  filter(plot_id == 111000 & period == 3 & subplot_id == 65) %>% 
   filter(game_impact_reg == TRUE) 
 
-check_subplot78 <- reg_by_core_area_height_species %>% 
+check_subplot65 <- reg_by_core_area_height_species %>% 
   left_join(plotinfo %>% select(plot_id, period, game_impact_reg)) %>%
-  filter(plot_id == 101000 & height_class == 1000 & period == 3) %>% 
+  filter(plot_id == 111000 & height_class == 4000 & period == 3) %>% 
   filter(game_impact_reg == TRUE) 
-# verwarrend: er is een subplot met species = NA in hoogteklasse 1000
-# het lijkt in deze output alsof er één subplot is waar geen soort genoteerd werd, maar dat is niet correct
-# => in db leeg record verwijderd
-# zelfde gevraagdd aan Peter in mail van 28/11/2025 of 1/12/2025
+# enkel approx_nr_reg vertaald NA door naar plotniveau
+# min, lci en uci rekenen gewoon alsof de NA er niet is
 ```
 
 
@@ -456,7 +464,7 @@ col <- c("number_of_tree_species", "approx_nr_established_ha", "approx_nr_seedli
          "mean_number_established_ha", "lci_number_established_ha", "uci_number_established_ha",
          "mean_number_seedlings_ha" , "lci_number_seedlings_ha", "uci_number_seedlings_ha")
 
-reg_by_plot %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+reg_by_plot %>% filter_at(col, any_vars(is.na(.))) %>% nrow() #0
 
 ```
 
@@ -465,7 +473,11 @@ col <- c("number_of_tree_species", "approx_nr_regeneration_ha",
          "mean_number_of_regeneration_ha", 
          "lci_number_of_regeneration_ha", "uci_number_of_regeneration_ha")
 
-reg_by_plot_height %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+reg_by_plot_height %>% filter_at(col, any_vars(is.na(.))) %>% nrow() # FALSE
+# mean, lci en uci soms wel en soms niet NA, afh. of er nog andere soorten waren in
+# die hoogteklasse
+# hier ook mean en lci, uci als NA , net als approx_nr_reg
+# wellicht omdat er van die soort en hoogteklasse maar één (NA-)record was
 
 ```
 
@@ -475,8 +487,10 @@ col <- c("approx_nr_established_ha", "approx_nr_seedlings_ha",
          "mean_number_established_ha", "lci_number_established_ha", "uci_number_established_ha",
          "mean_number_seedlings_ha" , "lci_number_seedlings_ha", "uci_number_seedlings_ha")
 
-reg_by_plot_species %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
-
+reg_by_plot_species %>% filter_at(col, any_vars(is.na(.))) %>% nrow() #0
+# hier NIET mean en lci, uci als NA, maar gewoon verder gerekend zonder de NA
+# blijkbaar approx_nr_established_ha en approx_nr_seedlings_ha wél berekend met weglating van de NA's
+# " en als het effectief approx_nr_reg is NIET"
 ```
 
 
@@ -485,8 +499,9 @@ col <- c("approx_nr_regeneration_ha",
          "mean_number_of_regeneration_ha", 
          "lci_number_of_regeneration_ha", "uci_number_of_regeneration_ha")
 
-reg_by_plot_height_species %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
-
+reg_by_plot_height_species %>% filter_at(col, any_vars(is.na(.))) %>% nrow()  # FALSE
+# hier ook mean en lci, uci als NA , net als approx_nr_reg
+# wellicht omdat er van die soort en hoogteklasse maar één (NA-)record was
 ```
 
 ```{r}
@@ -495,7 +510,9 @@ col <- c("nr_of_subplots_with_regeneration", "perc_subplots_with_regeneration",
          "mean_number_established_ha", "lci_number_established_ha", "uci_number_established_ha",
          "mean_number_seedlings_ha" , "lci_number_seedlings_ha", "uci_number_seedlings_ha")
 
-reg_by_core_area_species %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+reg_by_core_area_species %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0 # TRUE
+# approx_nr_established_ha en approx_nr_seedlings_ha wél berekend met weglating van de NA's
+# terwijl approx_nr_regeneration_ha NIEt (zie chunck hierna)
 
 ```
 
@@ -507,10 +524,33 @@ col <- c("nr_of_subplots_with_regeneration", "perc_subplots_with_regeneration",
          "lci_number_of_regeneration_ha", "uci_number_of_regeneration_ha")
 
 reg_by_core_area_height_species %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+# twee subplots zonder aantal => enkel approx_nr_regeneration_ha NA
 
 ```
 
+> er wordt anders omgegaan met NA's bij approx_nr_established_ha en approx_nr_seedlings_ha
+tegenover approx_nr_regeneration_ha
+de eerste laten NA's gewoon vallen, de tweede wordt NA als er één waarde ontbreekt
 
+Zie issue #178.
+
+Idealiter vallen NA's enkel weg als er andere data zijn, dus niet als er geen andere 
+data zijn, dan blijft resultaat best NA ipv "0"
+Zo is het ook geprogrammeerd voor intervals mbv functie `sum_intervals()`:
+```
+  if (na_rm) {
+    var_min <- var_min[!is.na(var_min)]
+    var_max <- var_max[!is.na(var_max)]
+  }
+  if (length(var_min) == 0) {
+    return(data.frame(n_obs = NA, sum = NA, lci = NA, uci = NA))
+  }
+```
+
+Voorlopig doen we zo verder.
+
+        
+        
 # Extra processing
 
 ## Plotinfo toevoegen
@@ -564,7 +604,8 @@ reg_by_plot_git <- read_forresdat_table(
   , join_plotinfo = TRUE) %>% 
   filter(forest_reserve == forestreserve)
 
-reg_by_plot_new <- reg_by_plot
+reg_by_plot_new <- reg_by_plot %>% 
+  filter(period != 3) 
 
 reg_by_plot_git <- reg_by_plot_git %>% 
   select(plot_id, year, everything()) 
@@ -636,7 +677,7 @@ Na knitting - manueel
 
 ```{r eval = FALSE}
 # Specify the path of the file you want to copy
-source_file <- here::here(paste0("Scripts/Per_gebied/", forestreserve_short, "/", forestreserve_short, "_reg_2025.html"))
+source_file <- here::here(paste0("Scripts/Per_gebied/", forestreserve_short, "/", forestreserve_short, "_reg_2026.html"))
 
 
 # Specify the destination directory where you want to copy the file

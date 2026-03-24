@@ -96,29 +96,10 @@ qDecaystage <- qDecaystage %>%
   select(ID, decaystage_txt = Value1)
 ```
 
-
-# Load info_survey
-
-```{r}
-# tresholds
-con <- odbcConnectAccess2007(path_to_strata_db)
- # strata_tables <- sqlTables(con) %>% filter(!str_detect(TABLE_NAME, "MSys"))
- # strata <- sqlFetch(con, "strata_remaining", stringsAsFactors = FALSE)
- # location <- sqlFetch(con, "strata_location", stringsAsFactors = FALSE)
- info_survey <- sqlFetch(con, "info_survey", stringsAsFactors = FALSE)
-odbcClose(con)
-
-info_survey <- info_survey %>% 
-  filter(forest_reserve == forestreserve)
-# 24/3/2026: wordt verder in script niks meegedaan, load_plotinfo is uitgebreider 
-# en meer up-to-date
-```
-
-
 # Load plotinfo
 
-Plotinfo samenstellen, zijnde plottype, naam forest_reserve en info over survey en data al dan niet processed.
-Wegschrijven naar git, access en opslaan als csv
+Plotinfo samenstellen, zijnde plottype, naam forest_reserve en info over survey en 
+data al dan niet processed.
 
 > 24/3/2023: load_plotinfo aangepast zdd lengte en min diam LIS mee opgenomen is
 

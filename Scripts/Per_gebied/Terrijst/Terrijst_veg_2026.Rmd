@@ -2,7 +2,7 @@
 title: "Dataverwerking - vegetatie"
 subtitle: "Bos Terrijst - cirkelplots & kernvlakte"
 author: "Anja Leyman"
-date: "`r Sys.Date()`"
+date: "24/3/2026"
 output: 
   html_document:
     keep_md: FALSE
@@ -154,12 +154,12 @@ col <- data_vegetation %>% select(contains(c("_cover_id", "_game_id"))) %>% coln
 
 totalcover_missing <- data_vegetation %>% 
   filter_at(col, any_vars(is.na(.))) %>% 
-  select(period, everything(), -contains(c("_m", "core")), -plotarea_ha)
+  select(period, everything(), -contains(c("_m", "core")), -plotarea_ha) %>% 
+  filter(!(is.na(total_soildisturbance_game_id) & period == 1))
 
-# 2 records: een subplot KV periode 2 en plot 830 periode2
+nrow(totalcover_missing)
+# eerst enkel 148 records van periode 1 met total_soildisturbance_game_id = NA
 ```
-
-Twee records hebben geen info over shrub en tree cover: 
 
 ```{r}
 totalcover_missing %>% 
@@ -227,7 +227,7 @@ total_TSHcover_missing2 <- data_vegetation %>%
            is.na(total_tree_cover_id) |
            is.na(total_herb_cover_id)) # 1
 nrow(total_TSHcover_missing2) == 0
-# 2, zie hoger, vergeten
+
 ```
 
 
@@ -237,16 +237,13 @@ Er bestaat geen veld in plotdetails die zegt of er al dan niet soil disturbance 
 
 ```{r results= 'hide'}
 # NA
-data_vegetation %>% filter(is.na(total_soildisturbance_game_id)) %>% nrow() == 0
+data_vegetation %>% filter(is.na(total_soildisturbance_game_id) & period != 1) %>% nrow() == 0
 
 # Niet beschikbaar
 total_soildist_missing20 <- data_vegetation %>% 
   filter(total_soildisturbance_game_id == 20) # 131 records periode 
-
+nrow(total_soildist_missing20)
 ```
-
-**In Jansheideberg zijn er geen NA's, enkel "Niet beschikbaar" (allemaal periode 1): **
-
 
 ```{r}
 total_soildist_missing20 %>% 
@@ -395,7 +392,8 @@ veg_by_plot_git <- read_forresdat_table(
   , join_plotinfo = TRUE) %>% 
   filter(forest_reserve == forestreserve)
 
-veg_by_plot_new <- veg_by_plot
+veg_by_plot_new <- veg_by_plot %>% 
+  filter(period != 3)
 
 veg_by_plot_git <- veg_by_plot_git %>% 
   select(plot_id, year_main_survey, everything()) 
@@ -518,7 +516,7 @@ Na knitting - manueel
 
 ```{r eval = FALSE}
 # Specify the path of the file you want to copy
-source_file <- here::here(paste0("Scripts/Per_gebied/", forestreserve_short, "/", forestreserve_short, "_veg_2025.html"))
+source_file <- here::here(paste0("Scripts/Per_gebied/", forestreserve_short, "/", forestreserve_short, "_veg_2026.html"))
 
 
 # Specify the destination directory where you want to copy the file
