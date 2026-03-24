@@ -18,7 +18,7 @@ forestreserve_folder_teamdrive <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverw
 path_to_datacontrol <- paste0(forestreserve_folder_teamdrive, "/01_datacontrole/")
 path_to_heightcurves <- paste0(forestreserve_folder_teamdrive, "/02_dh_curves/")
 
-path_to_plotdata_teamdrive <- paste0(forestreserve_folder_teamdrive, "/03_output_R_plotlevel")
+path_to_plotdata_teamdrive <- paste0(forestreserve_folder_teamdrive, "/03_output_R_plotlevel/")
 
 # EVENTUEEL NIET MEER GEBRUIKEN??
 path_to_plotdata_pc <- paste0(forestreserve_folder_pc, "/verwerking_2026_1e2e3eSET/output_forrescalc/") # c-schijf

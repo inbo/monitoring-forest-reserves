@@ -1,8 +1,8 @@
 ---
 title: "Dataverwerking - regeneration"
-subtitle: "Jansheideberg - cirkelplots & kernvlakte"
+subtitle: "Bos Terrijst - cirkelplots & kernvlakte"
 author: "Anja Leyman"
-date: "`r Sys.Date()`"
+date: "26/3/2026"
 output: 
   html_document:
     keep_md: FALSE
@@ -39,13 +39,13 @@ source(here::here("scripts/Setup.R"))
 
 ```
 
-> OPGEPAST: er zat een bug in forrescalc => branch bugfix_Al_2025 op dit moment (19/11/2025),
-tot gemerged met bugfix ...
+> OPGEPAST: er zat een bug in forrescalc => voorlopig steeds branch bugfix_Al_2025 
+gebruiken, tot gemerged met bugfix ...
 
 ```{r Setup2, include = FALSE}
-forest_reserve <- "Jansheideberg"
-source(here::here("scripts/Per_gebied/", forest_reserve, "/setup_paths_gebied.R"))
-path_to_datarequest_teamdrive <- paste0(path_to_teamdrive_gebied, "03_output_R_plotlevel/")
+forest_reserve_short <- "Terrijst"
+source(here::here("scripts/Per_gebied/", forest_reserve_short, "/setup_paths_gebied.R"))
+
 ```
 
 
@@ -594,8 +594,8 @@ Lijkt OK
 Resultaten worden opgeslagen op c-schijf en in teamdrive:
 
 ```{r}
-path_to_datarequest
-path_to_datarequest_teamdrive
+path_to_plotdata_pc
+path_to_plotdata_teamdrive 
 
 # names(reg_by_core_area_height_species)
 # names(reg_by_plot_height_species)
@@ -614,7 +614,7 @@ Enkele verduidelijkingen:
 ```{r save, eval=FALSE}
 save_results_xlsx(
     results = reg_plotinfo,
-    output_dir = path_to_datarequest
+    output_dir = path_to_plotdata_pc
   )
 
 ```
@@ -623,7 +623,7 @@ save_results_xlsx(
 ```{r save_teamdrive, eval=FALSE}
 save_results_xlsx(
     results = reg_plotinfo,
-    output_dir = path_to_datarequest_teamdrive
+    output_dir = path_to_plotdata_teamdrive
   )
 
 ```
@@ -640,7 +640,7 @@ source_file <- here::here(paste0("Scripts/Per_gebied/", forestreserve_short, "/"
 
 
 # Specify the destination directory where you want to copy the file
-destination_dir <- paste0(path_to_teamdrive_gebied, "03_output_R_plotlevel/")
+destination_dir <- path_to_plotdata_teamdrive
 
 # Copy the file to the destination directory
 file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
