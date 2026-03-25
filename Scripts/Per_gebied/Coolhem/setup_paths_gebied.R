@@ -3,8 +3,8 @@ library(here)
 # libraries & invoergegevens
 source(here::here("scripts/Setup.R"))
 
-forestreserve <- "Coolhem A"
-forestreserve <- "Coolhem Q"
+# forestreserve <- "Coolhem A"
+# forestreserve <- "Coolhem Q"
 forestreserve_short <- "Coolhem"
 # forestreserve_short <- "Wijnendale"
 # plot_type <- "CA"
