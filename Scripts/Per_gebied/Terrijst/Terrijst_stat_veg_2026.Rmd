@@ -1,6 +1,6 @@
 ---
 title: "Statistieken obv cirkelplots"
-subtitle: "Jansheideberg - vegetatie"
+subtitle: "Terrijst - vegetatie"
 author: "Anja Leyman"
 date: "`r Sys.Date()`"
 output:
@@ -37,11 +37,10 @@ source(here::here("scripts/Setup.R"))
 
 
 ```{r Setup2, include = FALSE}
-forest_reserve <- "Jansheideberg"
-source(here::here("scripts/Per_gebied/", forest_reserve, "/setup_paths_gebied.R"))
-path_to_datarequest_teamdrive <- paste0(path_to_teamdrive_gebied, "/04_statistieken_BR/")
-```
+forest_reserve_short <- "Terrijst"
+source(here::here("scripts/Per_gebied/", forest_reserve_short, "/setup_paths_gebied.R"))
 
+```
 
 # Vraagstelling
 
@@ -97,8 +96,10 @@ qtotalCover <- qtotalCover %>% select(ID, cover_txt = Value1)
 ## Plotinfo
 
 ```{r }
-plotinfo <- read_excel(paste0(path_to_datarequest, "plotinfo.xlsx")) %>% 
-   select(-1)
+plotinfo <- read_excel(paste0(path_to_plotdata_teamdrive, "plotinfo.xlsx")) %>% 
+   select(forest_reserve, plottype, plot_id, period
+          , contains("survey"), game_impact_veg
+          , diam_min_a4_logs, diam_min_lis)
 
 ```
 
@@ -106,15 +107,17 @@ plotinfo <- read_excel(paste0(path_to_datarequest, "plotinfo.xlsx")) %>%
 
 ```{r load_veg_all}
 veg_by_plot <- read_excel(
-  paste0(path_to_datarequest, "veg_by_plot.xlsx")
+  paste0(path_to_plotdata_teamdrive, "veg_by_plot.xlsx")
   ) %>% 
   select(-1) %>%   
   # select(-contains("eg"), -contains("min40cm")) %>%  # (veg en reg)
   left_join(plotinfo) %>% 
-  filter(plottype == "CP")
+  filter(plottype == "CP") %>% 
+  rename(year = year_main_survey)  
+    # "main_survey": zie issue #179: beter overal vervangen door year
 
 herblayer_by_plot <- read_excel(
-  paste0(path_to_datarequest, "herblayer_by_plot.xlsx")
+  paste0(path_to_plotdata_teamdrive, "herblayer_by_plot.xlsx")
         # bij het inlezen van Excel-bestanden in R met read_excel() uit het readxl-pakket: 
         # als de eerste rij (header) of de eerste niet-lege rij van een kolom leeg is, 
         # probeert R het type te raden en kiest vaak logical. 
@@ -131,7 +134,7 @@ herblayer_by_plot <- read_excel(
 
 # read.xlsx is veel trager, sheetIndex of SheetName verplicht
 # herblayer_by_plot <- read.xlsx(
-#   paste0(path_to_datarequest, "herblayer_by_plot.xlsx")
+#   paste0(path_to_plotdata_teamdrive, "herblayer_by_plot.xlsx")
 #   # , sheetIndex = 1
 #   , sheetName = "Sheet1"
 #   ) %>% 
@@ -214,12 +217,12 @@ dataset %>% filter(is.na(herb_cover_mid)) %>% nrow()
 dataset %>% filter(is.na(cumm_herb_coverage_class_average_perc)) %>% nrow()
 dataset %>% filter(is.na(cumulated_canopy_cover_mid)) %>% nrow()
 
-# [1] 33
-# [1] 1
-# [1] 1
 # [1] 0
 # [1] 0
-# [1] 1
+# [1] 0
+# [1] 0
+# [1] 0
+# [1] 0
 
 ```
 ```{r results='hide'}
@@ -240,7 +243,7 @@ resultaat <- create_statistics(
   dataset = dataset,
   level = c("period", "forest_reserve"),
   variables = variables_for_statistics,
-  include_year_range = FALSE,
+  include_year_range = TRUE,
   na_rm = TRUE   # regelmatig een NA bij één of andere bedekking, vaak op reservaatsniveau
   # door na_rm = TRUE te zetten (wegfilteren van de NA's vooraleer er statistiek op toe te passen)
   # heb je beter zicht op hoeveel bedekkingen er effectief genoteerd werden
@@ -299,8 +302,8 @@ We exporteren de resultaten naar een excel-file "veg_stat" met
 per tabblad de basisfile bv. veg_per_plot, ...
 
 ```{r}
-path_to_datarequest
-path_to_datarequest_teamdrive
+path_to_plotdata_pc
+path_to_stats_teamdrive
 
 ```
 
@@ -317,13 +320,13 @@ resultaat %>% distinct(variable)
 # waterlayer_cover_mid
 
 write.xlsx(resultaat
-           , paste0(path_to_datarequest, "stat_veg.xlsx")
+           , paste0(path_to_plotdata_pc, "stat_veg.xlsx")
            , sheetName = "veg_by_plot"
            , showNA = FALSE
            , append = FALSE) 
 
 write.xlsx(resultaat
-           , paste0(path_to_datarequest_teamdrive, "stat_veg.xlsx")
+           , paste0(path_to_stats_teamdrive, "stat_veg.xlsx")
            , sheetName = "veg_by_plot"
            , showNA = FALSE
            , append = FALSE) 
@@ -417,8 +420,8 @@ We exporteren de resultaten naar een excel-file "veg_stat" met
 per tabblad de basisfile bv. veg_per_plot, ...
 
 ```{r}
-path_to_datarequest
-path_to_datarequest_teamdrive
+path_to_plotdata_pc
+path_to_stats_teamdrive
 
 ```
 
@@ -428,13 +431,13 @@ resultaat2 %>% distinct(variable)
 
 # NIET NODIG, want ook in resultaat 3
 # write.xlsx(resultaat2
-#            , paste0(path_to_datarequest, "stat_veg.xlsx")
+#            , paste0(path_to_plotdata_pc, "stat_veg.xlsx")
 #            , sheetName = "perc_plots_with_species"
 #            , showNA = FALSE
 #            , append = TRUE) 
 # 
 # write.xlsx(resultaat2
-#            , paste0(path_to_datarequest_teamdrive, "stat_veg.xlsx")
+#            , paste0(path_to_stats_teamdrive, "stat_veg.xlsx")
 #            , sheetName = "perc_plots_with_species"
 #            , showNA = FALSE
 #            , append = TRUE) 
@@ -495,20 +498,20 @@ We exporteren de resultaten naar een excel-file "veg_stat" met
 per tabblad de basisfile bv. veg_per_plot, ...
 
 ```{r}
-path_to_datarequest
-path_to_datarequest_teamdrive
+path_to_plotdata_pc
+path_to_stats_teamdrive
 
 ```
 
 ```{r export3}
 write.xlsx(resultaat3
-           , paste0(path_to_datarequest, "stat_veg.xlsx")
+           , paste0(path_to_plotdata_pc, "stat_veg.xlsx")
            , sheetName = "karakt_bedekking"
            , showNA = FALSE
            , append = TRUE) 
 
 write.xlsx(resultaat3
-           , paste0(path_to_datarequest_teamdrive, "stat_veg.xlsx")
+           , paste0(path_to_stats_teamdrive, "stat_veg.xlsx")
            , sheetName = "karakt_bedekking"
            , showNA = FALSE
            , append = TRUE) 
@@ -590,20 +593,20 @@ We exporteren de resultaten naar een excel-file "veg_stat" met
 per tabblad de basisfile bv. veg_per_plot, ...
 
 ```{r}
-path_to_datarequest
-path_to_datarequest_teamdrive
+path_to_plotdata_pc
+path_to_stats_teamdrive
 
 ```
 
 ```{r export4}
 write.xlsx(resultaat4
-           , paste0(path_to_datarequest, "stat_veg.xlsx")
+           , paste0(path_to_plotdata_pc, "stat_veg.xlsx")
            , sheetName = "browsing"
            , showNA = FALSE
            , append = TRUE) 
 
 write.xlsx(resultaat4
-           , paste0(path_to_datarequest_teamdrive, "stat_veg.xlsx")
+           , paste0(path_to_stats_teamdrive, "stat_veg.xlsx")
            , sheetName = "browsing"
            , showNA = FALSE
            , append = TRUE) 
@@ -619,7 +622,7 @@ Na knitting - manueel
 source_file <- here::here(paste0("Scripts/Per_gebied/", forestreserve_short, "/", forestreserve_short, "_stat_veg_2025.html"))
 
 # Specify the destination directory where you want to copy the file
-destination_dir <- path_to_datarequest_teamdrive
+destination_dir <- path_to_stats_teamdrive
 
 # Copy the file to the destination directory
 file.copy(from = source_file, to = destination_dir, overwrite = TRUE)

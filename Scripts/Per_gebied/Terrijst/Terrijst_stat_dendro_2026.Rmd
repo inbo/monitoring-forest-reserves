@@ -1,8 +1,8 @@
 ---
 title: "Statistieken obv cirkelplots"
-subtitle: "Jansheideberg - dendrometrie"
+subtitle: "Terrijst - dendrometrie"
 author: "Anja Leyman"
-date: "`r Sys.Date()`"
+date: "25/3/2026"
 output:
   html_document:
     keep_md: false
@@ -37,9 +37,9 @@ source(here::here("scripts/Setup.R"))
 
 
 ```{r Setup2, include = FALSE}
-forest_reserve <- "Jansheideberg"
-source(here::here("scripts/Per_gebied/", forest_reserve, "/setup_paths_gebied.R"))
-path_to_datarequest_teamdrive <- paste0(path_to_teamdrive_gebied, "04_statistieken_BR/")
+forest_reserve_short <- "Terrijst"
+source(here::here("scripts/Per_gebied/", forest_reserve_short, "/setup_paths_gebied.R"))
+
 ```
 
 
@@ -137,8 +137,10 @@ qDecaystage <- qDecaystage %>% select(-Value3, -OrderField, -Active, -MasterID)
 ## Plotinfo
 
 ```{r }
-plotinfo <- read_excel(paste0(path_to_datarequest, "plotinfo.xlsx")) %>% 
-   select(-1)
+plotinfo <- read_excel(paste0(path_to_plotdata_teamdrive, "plotinfo.xlsx")) %>% 
+   select(forest_reserve, plot_id, period
+          , contains("survey"), game_impact_veg
+          , diam_min_a4_logs, diam_min_lis)
 
 ```
 
@@ -148,6 +150,8 @@ plotinfo <- read_excel(paste0(path_to_datarequest, "plotinfo.xlsx")) %>%
 Enkel cirkelplots   
 
 ```{r load_dendro_all}
+# names(plotinfo)
+
 tbl_namen <- c("dendro_by_plot", "dendro_by_diam_plot"
                , "dendro_by_diam_plot_species", "dendro_by_plot_species"
                , "deadw_by_decay_plot", "deadw_by_decay_plot_species")
@@ -157,7 +161,7 @@ tbl_namen <- c("dendro_by_plot", "dendro_by_diam_plot"
 
 inlezen_functie <- function(tab, info = plotinfo) {
   
-  tabel <- read_excel(paste0(path_to_datarequest, tab, ".xlsx")) %>%
+  tabel <- read_excel(paste0(path_to_plotdata_teamdrive, tab, ".xlsx")) %>%
     select(-1) %>%
     # select(-contains("eg"), -contains("min40cm")) %>%  # (veg en reg)
     left_join(info) %>% 
@@ -169,6 +173,11 @@ inlezen_functie <- function(tab, info = plotinfo) {
     tabel <- tabel %>% 
       left_join(qSpecies, by = c("species" = "ID"))
   }
+  
+    if ("vol_lis_above30cm_m3_ha" %in% colnames(tabel)) {
+    tabel <- tabel %>% 
+      select(-vol_lis_above30cm_m3_ha)
+    }
 
     # code hierna werkt niet, wordt sowieso verder toch gekoppeld
     # if ("decay" %in% colnames(tabel)) {
@@ -193,9 +202,9 @@ names(tbls) <- tbl_namen
 
 
 ```{r CreateSeparateDataframesDendro}
-for (tablename in names(tbls)) {
-     assign(tablename, tbls[[tablename]])
-} 
+# for (tablename in names(tbls)) {
+#      assign(tablename, tbls[[tablename]])
+# } 
 
 # OF (< VBI code)
 list2env(tbls, envir = .GlobalEnv)
@@ -246,7 +255,7 @@ Combinatie liggend en staand dood hout om totaal volume dood hout te bekomen.
 <!-- per plot op te tellen, dan correctere BI's -->
 
 
-```{r logs_total1}
+```{r logs_total1, results = 'hide'}
 names(dataset)
 
 dataset_ <- dataset %>% 
@@ -266,7 +275,7 @@ dataset <- dataset_
 
 ```{r variables1}
 variables_for_statistics <- dataset %>% 
-  dplyr::select(contains(c("_ha", "number_of_tree_species")), -vol_lis_above30cm_m3_ha) %>% 
+  dplyr::select(contains(c("_ha", "number_of_tree_species"))) %>% 
   names()
 
 variables_for_statistics
@@ -322,7 +331,7 @@ stat <- create_statistics(
    include_year_range = TRUE
    ) 
 
-summary(stat)
+view(stat)
 ```
 
 ```{r table1}
@@ -336,20 +345,20 @@ We exporteren de resultaten naar een excel-file "dendro_stat" met
 per tabblad de basisfile bv. dendro_per_plot, ...
 
 ```{r}
-path_to_datarequest
-path_to_datarequest_teamdrive
+path_to_plotdata_pc
+path_to_stats_teamdrive
 
 ```
 
 ```{r export1}
 write.xlsx(resultaat
-           , paste0(path_to_datarequest, "stat_dendro.xlsx")
+           , paste0(path_to_plotdata_pc, "stat_dendro.xlsx")
            , sheetName = "dendro_by_plot"
            , showNA = FALSE
            , append = FALSE) 
 
 write.xlsx(resultaat
-           , paste0(path_to_datarequest_teamdrive, "stat_dendro.xlsx")
+           , paste0(path_to_stats_teamdrive, "stat_dendro.xlsx")
            , sheetName = "dendro_by_plot"
            , showNA = FALSE
            , append = FALSE) 
@@ -386,10 +395,10 @@ Een species of diam-klasse die niet voorkomt, staat niet in resulterende tabel
 ```{r data2}
 dataset2 <- dendro_by_plot_species 
 # table(dataset2$forest_reserve, dataset2$period)
-nrow(dataset2) # 419
+nrow(dataset2) # 850
 ```
 
-```{r logs_total2}
+```{r logs_total2, results = 'hide'}
 names(dataset2)
 
 dataset2_ <- dataset2 %>% 
@@ -408,16 +417,17 @@ dataset2 <- dataset2_
 ```
 
 
-```{r add_zeros_all_species}
+```{r add_zeros_all_species, results = 'hide'}
 names(dataset2)
 dataset2_0 <- add_zeros(dataset = dataset2 %>% 
-                          select(forest_reserve, plot_id, period, species, contains(c("_ha", "stems"))),
+                          select(forest_reserve, plot_id, period, species
+                                 , contains(c("_ha", "stems"))),
                         comb_vars = c("plot_id", "species", "period"),
                         grouping_vars = c("forest_reserve"),
                         defaults_to_na = c("stems_per_tree")
                         ) 
 
-nrow(dataset2_0) #992
+nrow(dataset2_0) #3450
 ```
 
 ```{r}
@@ -447,7 +457,8 @@ Dan mag `vol_log_above30cm_m3_ha` NIET op NA gezet worden!
 
 ```{r corr_lis2}
 dataset2_0_ <- dataset2_0 %>% 
-  left_join(plotinfo %>% select(plot_id, period, survey_lis)) %>% 
+  left_join(plotinfo %>% select(plot_id, period, survey_lis
+                                , year = year_dendro)) %>% 
   mutate(# !!!! OPGEPAST: op termijn misschien voor alle periodes "vol_log_above30cm_m3_ha" berekend
          # dan mag "vol_log_above30cm_m3_ha" NIET op NA gezet worden !!!!!!!!!!!!!!
           vol_log_above30cm_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
@@ -458,9 +469,6 @@ dataset2_0_ <- dataset2_0 %>%
                                            , NA)
          , vol_lis_10_30cm_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
                                            , vol_lis_10_30cm_m3_ha
-                                           , NA)
-         , vol_lis_above30cm_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
-                                           , vol_lis_above30cm_m3_ha
                                            , NA)
          , vol_log_LISFAS_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
                                            , vol_log_LISFAS_m3_ha
@@ -478,20 +486,18 @@ dataset2_0 <- dataset2_0_
 
 ```{r}
 variables_for_statistics2 <- dataset2_0 %>% 
-  select(contains(c("_ha", "stems")), -vol_lis_above30cm_m3_ha) %>% 
+  select(contains(c("_ha", "stems"))) %>% 
   names()
 
 variables_for_statistics2
 ```
-
-
 ```{r stat2}
 # !! één resultaat per soort en per BR
 n_BR <- length(unique(dataset2$forest_reserve))
 n_species <- length(unique(dataset2$species))
 n_period <- length(unique(dataset2$period))
 n <- n_BR * n_species * n_period * length(variables_for_statistics2)
-n # 840
+n # 1035
 
 resultaat2 <- create_statistics(
   dataset = dataset2_0,
@@ -500,10 +506,12 @@ resultaat2 <- create_statistics(
   # level = c("period"),
   variables = variables_for_statistics2,
   # variables = "basal_area_alive_m2_ha",
-  include_year_range = FALSE,
-  na_rm = TRUE,   # moet TRUE zijn voor stems_per_tree, is NA als soort niet voorkomt in plot
-  # en zodra er één NA is, wordt som/gemiddelde ook NA, terwijl er enkel moet geteld worden met records/plots waar er een waarde is
-  # ook OK voor LIS, want daar in een bepaalde periode geen enkele meting en dan wordt som/gemiddelde van "niks" een NA en dat is OK
+  include_year_range = TRUE,
+  na_rm = TRUE,   # moet TRUE zijn voor stems_per_tree, is NA als soort niet voorkomt 
+  # in plot en zodra er één NA is, wordt som/gemiddelde ook NA, terwijl er enkel 
+  # moet geteld worden met records/plots waar er een waarde is
+  # ook OK voor LIS, want daar in een bepaalde periode geen enkele meting en 
+  # dan wordt som/gemiddelde van "niks" een NA en dat is OK
     interval_information = suppressMessages(read_csv2(system.file("extdata/class_data.csv",
     package = "forrescalc")))
   ) %>% 
@@ -554,13 +562,13 @@ resultaat2 %>% select(period, forest_reserve, name_nl, variable
 
 ```{r export2}
 write.xlsx(resultaat2
-           , paste0(path_to_datarequest, "stat_dendro.xlsx")
+           , paste0(path_to_plotdata_pc, "stat_dendro.xlsx")
            , sheetName = "dendro_by_plot_species"
            , showNA = FALSE
            , append = TRUE) 
 
 write.xlsx(resultaat2
-           , paste0(path_to_datarequest_teamdrive, "stat_dendro.xlsx")
+           , paste0(path_to_stats_teamdrive, "stat_dendro.xlsx")
            , sheetName = "dendro_by_plot_species"
            , showNA = FALSE
            , append = TRUE) 
@@ -578,7 +586,8 @@ dataset3 <- dendro_by_diam_plot
 
 ```{r add_zeros_all_dbhs}
 dataset3_0 <- add_zeros(dataset = dataset3 %>%
-                          select(forest_reserve, plot_id, period, dbh_class_5cm, contains(c("_ha"))),
+                          select(forest_reserve, plot_id, period, dbh_class_5cm
+                                 , contains(c("_ha"))),
                         comb_vars = c("plot_id", "dbh_class_5cm", "period"),
                         grouping_vars = c("forest_reserve")
                         )
@@ -598,7 +607,8 @@ diam_klasses_under_10cm <- c("5 - 10 cm")
 diam_klasses_under_30cm <- c("5 - 10 cm", "10 - 15 cm", "15 - 20 cm", "20 - 25 cm", "25 - 30 cm")
 
 dataset3_0_ <- dataset3_0 %>% 
-  left_join(plotinfo %>% select(plot_id, period, survey_lis)) %>% 
+  left_join(plotinfo %>% select(plot_id, period, survey_lis
+                                , year = year_dendro)) %>% 
   mutate(vol_log_m3_ha= ifelse(dbh_class_5cm %in% diam_klasses_under_10cm
                                , NA, vol_log_m3_ha)
            , vol_log_m3_ha= ifelse(survey_lis == TRUE & dbh_class_5cm %in% diam_klasses_under_30cm
@@ -626,13 +636,13 @@ n_BR <- length(unique(dataset3$forest_reserve))
 n_dbh <- length(unique(dataset3$dbh_class_5cm))
 n_period <- length(unique(dataset3$period))
 n <- n_BR * n_dbh * n_period * length(variables_for_statistics3)
-n # 702
+n # 675
 
 resultaat3 <- create_statistics(
   dataset = dataset3_0,
   level = c("period", "forest_reserve", "dbh_class_5cm"),
   variables = variables_for_statistics3,
-  include_year_range = FALSE,
+  include_year_range = TRUE,
   na_rm = TRUE,
     interval_information = suppressMessages(read_csv2(system.file("extdata/class_data.csv",
     package = "forrescalc")))
@@ -681,13 +691,13 @@ resultaat3 %>% select(period, forest_reserve, dbh_class_5cm, variable
 
 ```{r export3}
 write.xlsx(resultaat3
-           , paste0(path_to_datarequest, "stat_dendro.xlsx")
+           , paste0(path_to_plotdata_pc, "stat_dendro.xlsx")
            , sheetName = "dendro_by_plot_diam"
            , showNA = FALSE
            , append = TRUE) 
 
 write.xlsx(resultaat3
-           , paste0(path_to_datarequest_teamdrive, "stat_dendro.xlsx")
+           , paste0(path_to_stats_teamdrive, "stat_dendro.xlsx")
            , sheetName = "dendro_by_plot_diam"
            , showNA = FALSE
            , append = TRUE) 
@@ -726,7 +736,8 @@ diam_klasses_under_10cm <- c("5 - 10 cm")
 diam_klasses_under_30cm <- c("5 - 10 cm", "10 - 15 cm", "15 - 20 cm", "20 - 25 cm", "25 - 30 cm")
 
 dataset4_0_ <- dataset4_0 %>% 
-  left_join(plotinfo %>% select(plot_id, period, survey_lis)) %>% 
+  left_join(plotinfo %>% select(plot_id, period, survey_lis
+                                , year = year_dendro)) %>% 
   mutate(vol_log_m3_ha= ifelse(dbh_class_5cm %in% diam_klasses_under_10cm
                                , NA, vol_log_m3_ha)
            , vol_log_m3_ha= ifelse(survey_lis == TRUE & dbh_class_5cm %in% diam_klasses_under_30cm
@@ -752,7 +763,7 @@ n_species <- length(unique(dataset4$species))
 n_dbh <- length(unique(dataset4$dbh_class_5cm))
 n_period <- length(unique(dataset4$period))
 n <- n_BR * n_species * n_dbh * n_period * length(variables_for_statistics4)
-n # 22464
+n # 15525
 # veel records, daarom hier geopteerd om 0 en NA (xxxx_min40cm) te verwijderen 
 # mbv filter in onderstaande code, zie "GEEN NULLEN"
 
@@ -763,7 +774,7 @@ resultaat4 <- create_statistics(
   # level = c("period"),
   variables = variables_for_statistics4,
   # variables = "basal_area_alive_m2_ha",
-  include_year_range = FALSE,
+  include_year_range = TRUE,
   na_rm = TRUE,
     interval_information = suppressMessages(read_csv2(system.file("extdata/class_data.csv",
     package = "forrescalc")))
@@ -784,8 +795,8 @@ resultaat4 <- resultaat4 %>%
   select(-contains(c("log"))) # lege velden
 
 nrow(resultaat4); n
-# [1] 970
-# [1] 7254
+# [1] 2453
+# [1] 15525
 ```
 
 ```{r check_add_zeros4}
@@ -802,7 +813,7 @@ check_NGV <- totaal_NGV_per_BR %>%
   mutate(verschil = G - mean)
 
 range(check_NGV$verschil) # ok
-# -0.01 -0.01
+# 0.01 0.05
 ```
 
 ```{r table4}
@@ -820,13 +831,13 @@ resultaat4 %>%  select(period, forest_reserve, name_nl, dbh_class_5cm, variable
 
 ```{r export4}
 write.xlsx(resultaat4
-           , paste0(path_to_datarequest, "stat_dendro.xlsx")
+           , paste0(path_to_plotdata_pc, "stat_dendro.xlsx")
            , sheetName = "dendro_by_diam_plot_species"
            , showNA = FALSE
            , append = TRUE) 
 
 write.xlsx(resultaat4
-           , paste0(path_to_datarequest_teamdrive, "stat_dendro.xlsx")
+           , paste0(path_to_stats_teamdrive, "stat_dendro.xlsx")
            , sheetName = "dendro_by_diam_plot_species"
            , showNA = FALSE
            , append = TRUE) 
@@ -853,7 +864,7 @@ dataset5 <- deadw_by_decay_plot %>%
 
 
 
-```{r logs_total5}
+```{r logs_total5, results = 'hide'}
 names(dataset5)
 
 dataset5_ <- dataset5 %>% 
@@ -872,7 +883,7 @@ dataset5 <- dataset5_
 ```
 
 
-```{r add_zeros_all_decaystages}
+```{r add_zeros_all_decaystages, results = 'hide'}
 names(dataset5)
 
 dataset5_0 <- add_zeros(dataset = dataset5 %>% 
@@ -885,7 +896,7 @@ dataset5_0 <- add_zeros(dataset = dataset5 %>%
          decaystage_txt = Value2)
 
 nrow(dataset5_0)
-# 192
+# 1050
 
 #check
 n_BR <- length(unique(dataset5$forest_reserve))
@@ -900,7 +911,8 @@ Dan mag `vol_log_above30cm_m3_ha` NIET op NA gezet worden!
 
 ```{r corr_lis5}
 dataset5_0_ <- dataset5_0 %>% 
-  left_join(plotinfo %>% select(plot_id, period, survey_lis)) %>% 
+  left_join(plotinfo %>% select(plot_id, period, survey_lis
+                                , year = year_dendro)) %>% 
   # foutief 0 toegekend, waar NA moet blijven
   mutate(# !!!! OPGEPAST: op termijn misschien voor alle periodes "vol_log_above30cm_m3_ha" berekend
          # dan mag "vol_log_above30cm_m3_ha" NIET op NA gezet worden !!!!!!!!!!!!!!
@@ -912,9 +924,6 @@ dataset5_0_ <- dataset5_0 %>%
                                            , NA)
          , vol_lis_10_30cm_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
                                            , vol_lis_10_30cm_m3_ha
-                                           , NA)
-         , vol_lis_above30cm_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
-                                           , vol_lis_above30cm_m3_ha
                                            , NA)
          , vol_log_LISFAS_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
                                            , vol_log_LISFAS_m3_ha
@@ -933,7 +942,7 @@ dataset5_0 <- dataset5_0_
 
 ```{r}
 variables_for_statistics5 <- dataset5_0 %>% 
-  select(contains("_ha"), -vol_lis_above30cm_m3_ha) %>% 
+  select(contains("_ha")) %>% 
   names()
 
 variables_for_statistics5
@@ -947,13 +956,13 @@ n_BR <- length(unique(dataset5$forest_reserve))
 n_decay <- length(unique(dataset5$decaystage))
 n_period <- length(unique(dataset5$period))
 n <- n_BR * n_decay * n_period * length(variables_for_statistics5)
-n # 18
+n # 168
 
 resultaat5 <- create_statistics(
   dataset = dataset5_0,
   level = c("period", "forest_reserve", "decaystage"),
   variables = variables_for_statistics5,
-  include_year_range = FALSE,
+  include_year_range = TRUE,
   na_rm = TRUE,  #verschil met TRUE is enkel nObs, wordt 1 ipv 33 bij TRUE
     interval_information = suppressMessages(read_csv2(system.file("extdata/class_data.csv",
     package = "forrescalc")))
@@ -970,7 +979,7 @@ resultaat5 <- create_statistics(
          strata2 = NA,
          stratum_name2 = NA)
 
-nrow(resultaat5) # 18
+nrow(resultaat5) # 168
 nrow(resultaat5) == n_BR * n_decay * n_period * length(variables_for_statistics5)
 
 ```
@@ -989,7 +998,7 @@ check_NGV <- totaal_NGV_per_BR %>%
   mutate(verschil = G - mean)
 
 range(check_NGV$verschil, na.rm = T)
-# [1] 0 0
+# [1]  -0.01 0.00
 ```
 
 ```{r table5}
@@ -1003,13 +1012,13 @@ resultaat5 %>% select(period, forest_reserve, decaystage, variable, n_obs
 ```{r export5}
 
 write.xlsx(resultaat5
-           , paste0(path_to_datarequest, "stat_dendro.xlsx")
+           , paste0(path_to_plotdata_pc, "stat_dendro.xlsx")
            , sheetName = "deadw_by_decay_plot"
            , showNA = FALSE
            , append = TRUE) 
 
 write.xlsx(resultaat5
-           , paste0(path_to_datarequest_teamdrive, "stat_dendro.xlsx")
+           , paste0(path_to_stats_teamdrive, "stat_dendro.xlsx")
            , sheetName = "deadw_by_decay_plot"
            , showNA = FALSE
            , append = TRUE) 
@@ -1025,7 +1034,7 @@ write.xlsx(resultaat5
 dataset6 <- deadw_by_decay_plot_species 
 ```
 
-```{r add_zeros_all_decaystages_all_species}
+```{r add_zeros_all_decaystages_all_species, results = 'hide'}
 names(dataset6)
 
 dataset6_0 <- add_zeros(dataset = dataset6 %>% 
@@ -1045,7 +1054,8 @@ Dan mag `vol_log_above30cm_m3_ha` NIET op NA gezet worden!
 
 ```{r corr_lis6}
 dataset6_0_ <- dataset6_0 %>% 
-  left_join(plotinfo %>% select(plot_id, period, survey_lis)) %>% 
+  left_join(plotinfo %>% select(plot_id, period, survey_lis
+                                , year = year_dendro)) %>% 
   # foutief 0 toegekend, waar NA moet blijven
   mutate(# !!!! OPGEPAST: op termijn misschien voor alle periodes "vol_log_above30cm_m3_ha" berekend
          # dan mag "vol_log_above30cm_m3_ha" NIET op NA gezet worden !!!!!!!!!!!!!!
@@ -1057,9 +1067,6 @@ dataset6_0_ <- dataset6_0 %>%
                                            , NA)
          , vol_lis_10_30cm_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
                                            , vol_lis_10_30cm_m3_ha
-                                           , NA)
-         , vol_lis_above30cm_m3_ha = ifelse(survey_lis == TRUE & !is.na(survey_lis)
-                                           , vol_lis_above30cm_m3_ha
                                            , NA)
          # !! ook omgekeerd: vol_log_m3_ha = NA wanneer LIS gebruikt is
          , vol_log_m3_ha = ifelse(survey_lis == FALSE & !is.na(survey_lis)
@@ -1074,7 +1081,7 @@ dataset6_0 <- dataset6_0_
 
 ```{r}
 variables_for_statistics6 <- dataset6_0 %>% 
-  select(contains("_ha"), -vol_lis_above30cm_m3_ha) %>% 
+  select(contains("_ha")) %>% 
   names()
 
 variables_for_statistics6
@@ -1089,7 +1096,7 @@ n_species <- length(unique(dataset6$species))
 n_decay <- length(unique(dataset6$decaystage))
 n_period <- length(unique(dataset6$period))
 n <- n_BR * n_species * n_decay * n_period * length(variables_for_statistics6)
-n # 651
+n # 2646
 # veel records, daarom hier geopteerd om 0 en NA (xxxx_min40cm) te verwijderen 
 # mbv filter in onderstaande code, zie "GEEN NULLEN"
 
@@ -1098,7 +1105,7 @@ resultaat6 <- create_statistics(
   dataset = dataset6_0,
   level = c("period", "forest_reserve", "decaystage", "species"),
   variables = variables_for_statistics6,
-  include_year_range = FALSE,
+  include_year_range = TRUE,
   na_rm = TRUE,  # anders som/mean van NA's = 0, som/mean van niks is wél NA (! LIS)
     interval_information = suppressMessages(read_csv2(system.file("extdata/class_data.csv",
     package = "forrescalc")))
@@ -1117,8 +1124,8 @@ resultaat6 <- create_statistics(
          stratum_name2 = name_nl)
 
 nrow(resultaat6);n
-# [1] 142
-# [1] 651
+# [1] 428
+# [1] 2646
 ```
 
 ```{r check_add_zeros6}
@@ -1135,7 +1142,7 @@ check_NGV <- totaal_NGV_per_BR %>%
   mutate(verschil = G - mean)
 
 range(check_NGV$verschil, na.rm = T)
-# [1] 0 0
+# [1] 0 0.01
 ```
 
 ```{r table6}
@@ -1150,13 +1157,13 @@ resultaat6 %>% select(period, forest_reserve, decaystage, name_nl, variable, n_o
 ```{r export6}
 
 write.xlsx(resultaat6
-           , paste0(path_to_datarequest, "stat_dendro.xlsx")
+           , paste0(path_to_plotdata_pc, "stat_dendro.xlsx")
            , sheetName = "deadw_by_decay_plot_species"
            , showNA = FALSE
            , append = TRUE) 
 
 write.xlsx(resultaat6
-           , paste0(path_to_datarequest_teamdrive, "stat_dendro.xlsx")
+           , paste0(path_to_stats_teamdrive, "stat_dendro.xlsx")
            , sheetName = "deadw_by_decay_plot_species"
            , showNA = FALSE
            , append = TRUE) 
@@ -1170,10 +1177,10 @@ Na knitting - manueel
 
 ```{r eval = FALSE}
 # Specify the path of the file you want to copy
-source_file <- here::here(paste0("Scripts/Per_gebied/", forestreserve_short, "/", forestreserve_short, "_stat_dendro_2025.html"))
+source_file <- here::here(paste0("Scripts/Per_gebied/", forestreserve_short, "/", forestreserve_short, "_stat_dendro_2026.html"))
 
 # Specify the destination directory where you want to copy the file
-destination_dir <- path_to_datarequest_teamdrive
+destination_dir <- path_to_stats_teamdrive
 
 # Copy the file to the destination directory
 file.copy(from = source_file, to = destination_dir, overwrite = TRUE)

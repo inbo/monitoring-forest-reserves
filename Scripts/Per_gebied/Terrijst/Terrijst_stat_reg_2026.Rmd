@@ -1,6 +1,6 @@
 ---
 title: "Statistieken obv cirkelplots"
-subtitle: "Jansheideberg - verjonging"
+subtitle: "Terrijst - verjonging"
 author: "Anja Leyman"
 date: "`r Sys.Date()`"
 output:
@@ -34,11 +34,10 @@ source(here::here("scripts/Setup.R"))
 
 ```
 
-
 ```{r Setup2, include = FALSE}
-forest_reserve <- "Jansheideberg"
-source(here::here("scripts/Per_gebied/", forest_reserve, "/setup_paths_gebied.R"))
-path_to_datarequest_teamdrive <- paste0(path_to_teamdrive_gebied, "/04_statistieken_BR/")
+forest_reserve_short <- "Terrijst"
+source(here::here("scripts/Per_gebied/", forest_reserve_short, "/setup_paths_gebied.R"))
+
 ```
 
 
@@ -116,9 +115,10 @@ qnumber_regeneration_classes <- qnumber_regeneration_classes %>%
 ## Plotinfo
 
 ```{r }
-plotinfo <- read_excel(paste0(path_to_datarequest, "plotinfo.xlsx")) %>% 
-   select(-1)
-
+plotinfo <- read_excel(paste0(path_to_plotdata_teamdrive, "plotinfo.xlsx")) %>% 
+   select(forest_reserve, plottype, plot_id, period
+          , contains("survey"), game_impact_reg
+          , diam_min_a4_logs, diam_min_lis)
 ```
 
 
@@ -133,7 +133,7 @@ tbl_namen <- c("reg_by_plot", "reg_by_plot_species"
 
 inlezen_functie <- function(tab, info = plotinfo) {
   
-  tabel <- read_excel(paste0(path_to_datarequest, tab, ".xlsx")) %>%
+  tabel <- read_excel(paste0(path_to_plotdata_teamdrive, tab, ".xlsx")) %>%
     select(-1) %>%
     # select(-contains("eg"), -contains("min40cm")) %>%  # (veg en reg)
     left_join(info) %>% 
@@ -215,7 +215,7 @@ plotinfo %>% filter(plottype == "CP") %>% distinct(plot_id) %>% nrow() ==
 ```
 
 ```{r eval = FALSE}
-reg_by_plot %>% filter(plot_id == 808) %>% view()
+reg_by_plot %>% filter(plot_id == 842) %>% view()
 ```
 
 ```{r variables1}
@@ -234,7 +234,7 @@ resultaat <- create_statistics(
   dataset = dataset,
   level = c("period", "forest_reserve"),
   variables = variables_for_statistics,
-  include_year_range = FALSE
+  include_year_range = TRUE
   ) %>% 
   forestmangr::round_df(., 2) %>% 
   # rename(strata = forest_reserve) %>% 
@@ -287,20 +287,20 @@ per tabblad de basisfile bv. reg_per_plot, ...
 
 
 ```{r}
-path_to_datarequest
-path_to_datarequest_teamdrive
+path_to_plotdata_pc
+path_to_stats_teamdrive
 
 ```
 
 ```{r export1}
 write.xlsx(resultaat
-           , paste0(path_to_datarequest, "stat_reg.xlsx")
+           , paste0(path_to_plotdata_pc, "stat_reg.xlsx")
            , sheetName = "reg_by_plot"
            , showNA = FALSE
            , append = FALSE) 
 
 write.xlsx(resultaat
-           , paste0(path_to_datarequest_teamdrive, "stat_reg.xlsx")
+           , paste0(path_to_stats_teamdrive, "stat_reg.xlsx")
            , sheetName = "reg_by_plot"
            , showNA = FALSE
            , append = FALSE) 
@@ -321,7 +321,7 @@ dataset2 <- reg_by_plot_height
 ```
 
 ```{r eval = FALSE}
-reg_by_plot_height %>% filter(plot_id == 818) %>% view()
+reg_by_plot_height %>% filter(plot_id == 857) %>% view()
 ```
 
 ```{r n_subplots2, results='hide'}
@@ -346,10 +346,7 @@ heightclasses_BR <- dataset2 %>%
 
 as.tibble(heightclasses_BR)
 
-
-# bij periode 1 ook nog heightclass = NA, zie verder, geen probleem
-
-# n_distinct(dataset2$plot_id, dataset2$period) == 99
+# n_distinct(dataset2$plot_id, dataset2$period) == 149
 ```
 
 ### Add zeros
@@ -406,6 +403,8 @@ dataset2_0 <- add_zeros(dataset = dataset2 %>%
   inner_join(heightclasses_BR %>% select(-n_tree_species)) %>% 
   # periode 1&2 nog geen game_impact
   left_join(plotinfo %>% select(plot_id, period, game_impact_reg)) %>% 
+  # ook jaar terug toevoegen
+  left_join(reg_by_plot %>% select(plot_id, period, year)) %>% 
   mutate(rubbing_damage_number_ha = ifelse(game_impact_reg == FALSE
                                            , NA
                                            , rubbing_damage_number_ha)) %>% 
@@ -414,9 +413,8 @@ dataset2_0 <- add_zeros(dataset = dataset2 %>%
 ```
 
 ```{r eval = FALSE}
-dataset2_0 %>% filter(plot_id == 808) %>% view()
+dataset2_0 %>% filter(plot_id == 858) %>% view()
 
-dataset2_0 %>% filter(plot_id == 818) %>% view()
 ```
 
 Controleren of elke hoogteklasse het verwachte aantal keer voorkomt in elke plot, 
@@ -462,7 +460,7 @@ resultaat2 <- create_statistics(
   # level = c("period"),
   variables = variables_for_statistics2,
   # variables = "basal_area_alive_m2_ha",
-  include_year_range = FALSE,
+  include_year_range = TRUE,
   na_rm = FALSE,
     interval_information = suppressMessages(read_csv2(system.file("extdata/class_data.csv",
     package = "forrescalc")))
@@ -508,7 +506,7 @@ check_reg <- mean_reg_per_BR %>%
   mutate(verschil = reg_ha - mean.x - mean.y)
 
 range(check_reg$verschil, na.rm = TRUE)
-# [1]  -3.637979e-12  0.000000e+00
+# [1]  -0.01  0.00
 ```
 
 ```{r check_add_zeros2_rubbing, results='hide'}
@@ -541,13 +539,13 @@ resultaat2 %>% select(period, forest_reserve, heightclass_txt, variable
 
 ```{r export2}
 write.xlsx(resultaat2
-           , paste0(path_to_datarequest, "stat_reg.xlsx")
+           , paste0(path_to_plotdata_pc, "stat_reg.xlsx")
            , sheetName = "reg_by_plot_height"
            , showNA = FALSE
            , append = TRUE) 
 
 write.xlsx(resultaat2
-           , paste0(path_to_datarequest_teamdrive, "stat_reg.xlsx")
+           , paste0(path_to_stats_teamdrive, "stat_reg.xlsx")
            , sheetName = "reg_by_plot_height"
            , showNA = FALSE
            , append = TRUE) 
@@ -568,7 +566,7 @@ dataset4 <- reg_by_plot_species
 ```
 
 ```{r eval = FALSE}
-reg_by_plot_species %>% filter(plot_id == 808) %>% view()
+reg_by_plot_species %>% filter(plot_id == 858) %>% view()
 ```
 
 ```{r n_subplots4, results='hide'}
@@ -643,16 +641,18 @@ dataset4_0 <- add_zeros(dataset = dataset4 %>%
                                            , NA
                                            , rubbing_damage_nr_seedlings_ha)
          ) %>% 
+  # ook jaar terug toevoegen
+  left_join(reg_by_plot %>% select(plot_id, period, year)) %>% 
   select(-game_impact_reg)
 
 table(dataset4_0$period, dataset4_0$species)
-nrow(dataset4_0)
+nrow(dataset4_0) # 2400
 
 ```
 
 
-```{r results = 'hide'}
-dataset4_0 %>% filter(plot_id == 808) %>% view()
+```{r eval = FALSE, results = 'hide'}
+dataset4_0 %>% filter(plot_id == 858) %>% view()
 ```
 
 
@@ -691,7 +691,7 @@ n_BR <- length(unique(dataset4$forest_reserve))
 n_species <- length(unique(species_BR$species))
 n_period <- length(unique(dataset4$period))
 n <- n_BR * n_species * n_period * length(variables_for_statistics4)
-n # 168
+n # 240
 
 resultaat4 <- create_statistics(
   dataset = dataset4_0,
@@ -700,7 +700,7 @@ resultaat4 <- create_statistics(
   # level = c("period"),
   variables = variables_for_statistics4,
   # variables = "basal_area_alive_m2_ha",
-  include_year_range = FALSE,
+  include_year_range = TRUE,
   na_rm = FALSE,
     interval_information = suppressMessages(read_csv2(system.file("extdata/class_data.csv",
     package = "forrescalc")))
@@ -725,7 +725,7 @@ resultaat4 <- resultaat4 %>%
   select(-strata2, -stratum_name2, -contains(c("log"))) # lege velden
 
 nrow(resultaat4); n
-# in zelfde grootte-orde, OK, niet elke soort komt in de drie peridoes voor
+# in zelfde grootte-orde, OK, niet elke soort komt in de drie periodes voor
 ```
 
 ```{r check_add_zeros4, results='hide'}
@@ -744,7 +744,7 @@ check_reg <- mean_reg_per_BR %>%
   mutate(verschil = reg_ha - mean)
 
 range(check_reg$verschil, na.rm = TRUE)
-# [1] -0.01  0.02
+# [1] -0.01  0.00
 ```
 
 ```{r check_add_zeros4_rubbing, results='hide'}
@@ -761,7 +761,7 @@ check_reg <- mean_reg_per_BR %>%
   mutate(verschil = rubbing_ha - mean)
 
 range(check_reg$verschil, na.rm = TRUE)
-# [1] 0.01 0.01
+# [1] 0.0 0.0
 ```
 
 ```{r table4}
@@ -775,13 +775,13 @@ resultaat4 %>% select(period, forest_reserve, name_nl, variable
 
 ```{r export4}
 write.xlsx(resultaat4
-           , paste0(path_to_datarequest, "stat_reg.xlsx")
+           , paste0(path_to_plotdata_pc, "stat_reg.xlsx")
            , sheetName = "reg_by_plot_species"
            , showNA = FALSE
            , append = TRUE) 
 
 write.xlsx(resultaat4
-           , paste0(path_to_datarequest_teamdrive, "stat_reg.xlsx")
+           , paste0(path_to_stats_teamdrive, "stat_reg.xlsx")
            , sheetName = "reg_by_plot_species"
            , showNA = FALSE
            , append = TRUE) 
@@ -804,7 +804,7 @@ table(dataset3$forest_reserve, dataset3$period)
 
 
 ```{r results = 'hide'}
-reg_by_plot_height_species %>% filter(plot_id == 808) %>% view()
+reg_by_plot_height_species %>% filter(plot_id == 858) %>% view()
 ```
 
 
@@ -855,14 +855,16 @@ dataset3_0 <- add_zeros(dataset = dataset3 %>%
   mutate(rubbing_damage_number_ha = ifelse(game_impact_reg == FALSE
                                            , NA
                                            , rubbing_damage_number_ha)) %>% 
+  # ook jaar terug toevoegen
+  left_join(reg_by_plot %>% select(plot_id, period, year)) %>% 
   select(-game_impact_reg)
 
 nrow(dataset3_0)
 ```
 
 ```{r results = 'hide'}
-dataset3_0 %>% filter(plot_id == 808 & species == 87) %>% view()
-dataset3_0 %>% filter(plot_id == 808 & height_class == 4000) %>% view()
+dataset3_0 %>% filter(plot_id == 858 & species == 87) %>% view()
+dataset3_0 %>% filter(plot_id == 858 & height_class == 4000) %>% view()
 ```
 
 ```{r}
@@ -881,7 +883,7 @@ n_species <- length(unique(species_BR$species))
 n_height <- length(unique(dataset3$height_class))
 n_period <- length(unique(dataset3$period))
 n <- n_BR * n_species * n_height * n_period * length(variables_for_statistics3)
-n # 216
+n # 480
 # DAAROM: 0 voor species die niet voorkomen in een bepaalde hoogteklasse verwijderen
 # (!! moest wel nog in dataset3_0 zitten, om gemiddelde te nemen)
 
@@ -889,7 +891,7 @@ resultaat3 <- create_statistics(
   dataset = dataset3_0,
   level = c("period", "forest_reserve", "height_class", "species"),
   variables = variables_for_statistics3,
-  include_year_range = FALSE,
+  include_year_range = TRUE,
   na_rm = TRUE,
     interval_information = suppressMessages(read_csv2(system.file("extdata/class_data.csv",
     package = "forrescalc")))
@@ -935,7 +937,7 @@ check_reg3 <- mean_reg_per_BR %>%
   mutate(verschil = reg_ha - mean.x - mean.y)
 
 range(check_reg$verschil, na.rm = TRUE)
-# [1] 0.01 0.01
+# [1] 0.0 0.0
 ```
 
 
@@ -955,7 +957,7 @@ check_reg <- mean_reg_per_BR %>%
   mutate(verschil = rubbing_ha - mean.x - mean.y)
 
 range(check_reg$verschil, na.rm = TRUE)
-# [1] -0.01 -0.01
+# [1] 0  0
 ```
 
 
@@ -970,13 +972,13 @@ resultaat3 %>% select(period, forest_reserve, name_nl, heightclass_txt, variable
 
 ```{r export3}
 write.xlsx(resultaat3
-           , paste0(path_to_datarequest, "stat_reg.xlsx")
+           , paste0(path_to_plotdata_pc, "stat_reg.xlsx")
            , sheetName = "reg_by_plot_height_species"
            , showNA = FALSE
            , append = TRUE) 
 
 write.xlsx(resultaat3
-           , paste0(path_to_datarequest_teamdrive, "stat_reg.xlsx")
+           , paste0(path_to_stats_teamdrive, "stat_reg.xlsx")
            , sheetName = "reg_by_plot_height_species"
            , showNA = FALSE
            , append = TRUE) 
@@ -992,7 +994,7 @@ Na knitting - manueel
 source_file <- here::here(paste0("Scripts/Per_gebied/", forestreserve_short, "/", forestreserve_short, "_stat_reg_2025.html"))
 
 # Specify the destination directory where you want to copy the file
-destination_dir <- path_to_datarequest_teamdrive
+destination_dir <- path_to_stats_teamdrive
 
 # Copy the file to the destination directory
 file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
