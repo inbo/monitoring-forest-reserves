@@ -109,6 +109,7 @@ Els gemerged in haar branch "bugfix")
 - 15/12/2025: meest recente bosreservaten apart verwerkt mét implementatie LIS
 
 - jan 2026: volledige databank verwerkt mét implementatie LIS
+- mrt 2026: idem met terrijst en coolhem erbij
 
 
 # Load plotinfo
@@ -128,6 +129,7 @@ plotinfo <- read_forresdat_table(
   , join_plotinfo = FALSE
   , plottype = "all")  # NIET ENKEL CP's!
 
+names(plotinfo)
 ```
 
 
@@ -141,13 +143,12 @@ data deze telkens opnieuw inladen en berekenen)
 data_dendro <- load_data_dendrometry(database = path_to_fieldmap_db, 
                                      extra_variables = TRUE, 
                                      processed = TRUE) %>% 
-  filter(plottype != "OTHER") %>%  # enkel CP of CA
-  # nog onterecht data_processed = TRUE:
-  filter(!(forest_reserve == "Bos Terrijst" & period == 3))
+  filter(plottype != "OTHER") # enkel CP of CA
 
 # 79866 + 2455 = 82321 (rodebos)
 # 83171 (22/11/2022)
 # 87742 (18/12/2024)
+# 96662 (25/3/2026)
 
 data_shoots <- load_data_shoots(database = path_to_fieldmap_db, extra_variables = TRUE)
 
@@ -159,12 +160,10 @@ data_stems  <- compose_stem_data(data_dendro, data_shoots, extra_variables = TRU
 ```{r load_dendro2}
 # enkel processed
 data_deadwood <- load_data_deadwood(database = path_to_fieldmap_db, processed = TRUE) %>% 
-  filter(plottype != "OTHER") %>% 
-  # nog onterecht data_processed = TRUE:
-  filter(!(forest_reserve == "Bos Terrijst" & period == 3))
+  filter(plottype != "OTHER")
 
 data_deadwood %>% filter(max_diam_mm < 100)
-# 2 records => verwijderen, ook gevraagd aan Peter in mail van 17/12/25
+
 ```
 
 Op termijn in forrescalc opnemen dat als max_diam_mm < 100 mm (= treshold logs), 
@@ -269,7 +268,7 @@ t2 %>% filter(forest_reserve == "Zoniën UITBR_2010" & year == 2020) %>% distinc
 ```
 
 
-# Volume individuele logs bijwerken - OK - 15/12/2025
+# Volume individuele logs bijwerken - OK - 24/3/2026
 
 De volumeberekening van liggend dood hout baseert zich op het veld `calc_volume_m3`
 uit FM-databank (layer `Deadwood`).
@@ -318,8 +317,8 @@ in de moederdatabank zelf.
 **!!! ZEKER WANNEER ER EXTRA PLOTS TOEGEVOEGD ZIJN**
 Dan blijkt volume nog niet "inside plot" berekend te zijn!
 Zoals nu (10/3/2025) Withoefse heide, Heirnisse en Jansheideberg.
-> Laatste keer aangepast in db "C:/03_BR_db_monitoring/MDB_BR_22_inbo2026_20251014/FieldMapData_MDB_BR_22_inbo2026.accdb"
-op 21/1/2026
+> Laatste keer aangepast in db "C:/03_BR_db_monitoring/MDB_BR_22_inbo2026_20260313/FieldMapData_MDB_BR_22_inbo2026.accdb"
+op 23/3/2026
 (eerst in DC "volume inside plot" berekenen voor "all plots" (duudrde ca 10 minuten)
 en dan chunck hierna runnen om CalcLength_m en CalcVolume_m3 te berekenen)
 
@@ -424,31 +423,6 @@ nrow(check_deadw) == 0
 # summary(check_deadw$period) # enkel periode 3
 # unique(check_deadw$plot_id) # enkel plot 43000 
 # plotinfo %>% filter(plot_id %in% check_deadw$plot_id) # Rodebos KV
-
-```
-
-9 records transect withoefse heide, wel reeds afgesneden, maar calc_volume nog niet berekend in db
-> Nu in orde in mijn lokale moederdb "C:/03_BR_db_monitoring/MDB_BR_22_inbo2026_20251014/FieldMapData_MDB_BR_22_inbo2026.accdb"
-
-
-```{r tmp_WithHeide_T, eval = FALSE}
-data_deadwood_p1 <- load_data_deadwood(database = path_to_fieldmap_db, processed = TRUE) %>% 
-  filter(period == 1)
-
-# enkel deadw_1eSET
-qry_update_calc_vol <- paste0("UPDATE Deadwood SET Deadwood.CalcVolume_m3 = Deadwood.Volume_m3 WHERE ((Deadwood.CalcVolume_m3 Is Null) AND (Deadwood.IntactFragment=20))") %>%
-           noquote()
-
-qry_update_calc_length <- "UPDATE Deadwood SET Deadwood.CalcLength_m = Deadwood.Length_m WHERE ((Deadwood.CalcLength_m) Is Null)" %>%
-           noquote()
-  
-conn <- odbcConnectAccess2007(path_to_fieldmap_db)
-
-sqlQuery(conn,qry_update_calc_vol)
-sqlQuery(conn,qry_update_calc_length)
-
-odbcClose(conn)
-
 
 ```
 
@@ -645,29 +619,6 @@ data_dendro_calc <- calc_variables_tree_level(data_dendro, data_stems_calc)
 dendro <- calculate_dendrometry(data_dendro, data_deadwood, data_shoots, height_model, plotinfo)
 ```
 
-TEMP: overal `vol_deadw_m3_ha` verwijderen
-Combineert logs en standing dead trees, maar is onduidelijk welke logs gebruikt worden (lis/fas of beide?).
-Op te nemen in forrescalc, zie [issue 166](https://github.com/inbo/forrescalc/issues/166).
-Opgenomen in bugfix_AL2025 (22/12/2025).
-
-```{r TMP_NO_FIELD_vol_deadw_m3_ha, eval = FALSE}
-# voor alle dataframes in "dendro"
-names(dendro)
-
-NO_vol_deadw_m3_ha <- function(tab) {
-  tabel <- tab
-  if ("vol_deadw_m3_ha" %in% colnames(tabel)) {
-    tabel <- tabel %>% 
-      select(-vol_deadw_m3_ha)
-    }
-  tabel
-  }
-
-dendro_ <- map(dendro, \(x) NO_vol_deadw_m3_ha(x))
-dendro <- dendro_
-```
-
-
 
 ```{r CreateSeparateDataframesDendro}
 for (tablename in names(dendro)) {
@@ -741,6 +692,23 @@ nrow(data_dendro_calc  %>%
 #          contains(c("iufro", "remark"))
 #          ) %>%
 #   left_join(plotinfo, by = c("plot_id", "period"))
+# 
+# data_dendro_NA <- data_dendro_calc %>%
+#   filter_at(col, any_vars(is.na(.))) %>%
+#   select(plot_id, period,
+#          tree_measure_id,
+#          dbh_mm, species, alive_dead,
+#          height_m, calc_height_m, vol_bole_m3, 
+#          vol_bole_alive_m3_ha,vol_bole_dead_m3_ha,
+#          basal_area_m2, vol_crown_m3, vol_tot_m3,
+#          basal_area_alive_m2_ha, basal_area_dead_m2_ha,
+#          number_of_trees_alive_ha, number_of_trees_dead_ha,
+#          decaystage, intact_snag,
+#          ind_sht_cop, dbh_class_5cm) %>%
+#   left_join(plotinfo, by = c("plot_id", "period"))
+
+# dbh_class_5cm is NA? verklaring: dbh_mm was niet berekend op niveau van trees layer
+
 ```
 
 Mogelijk probleem kan zijn dat er geen hoogte ingevuld staat bij snag, dan wordt geen volume berekend.
@@ -774,7 +742,7 @@ col <- c("year", "number_of_trees_ha", "stem_number_ha",
          "vol_log_m3_ha")
 
 dendro_by_plot_species %>% filter_at(col, any_vars(is.na(.))) %>% nrow()
-# 100/101
+# 100
 
 check <- dendro_by_plot_species %>% filter_at(col, any_vars(is.na(.)))
 # is OK, zijn alle waar geen liggend dood hout gemeten is
@@ -802,9 +770,9 @@ dendro_by_plot %>% filter( stems_per_tree == 0) %>% nrow() == 0
 
 ```{r}
 dendro_by_plot_species %>% filter(is.na(stems_per_tree)) %>% nrow()
-# 1389 records / 1479 / 1480 / 1478
+# 1389 records / 1479 / 1480 / 1478 / 1518
 dendro_by_plot_species %>% filter(stem_number_ha == 0) %>% nrow()
-# ook 1389 /1479 /1480 / 1478 => OK
+# ook 1389 /1479 /1480 / 1478 /1518 => OK
 
 dendro_by_plot_species %>% filter( stems_per_tree == 0)
 # komt niet voor
@@ -821,7 +789,7 @@ col <- c("year", "stem_number_alive_ha", "stem_number_dead_ha",
          "vol_log_m3_ha")
 
 dendro_by_diam_plot %>% filter_at(col, any_vars(is.na(.))) %>% nrow() 
-# 280 / 281
+# 280
 
 check <- dendro_by_diam_plot %>% filter_at(col, any_vars(is.na(.)))
 # klopt, geen opname liggend dood hout
@@ -901,8 +869,8 @@ names(deadw_by_decay_plot)
 col <- c("year", "decaystage", "vol_log_m3_ha", "vol_bole_dead_m3_ha")
 
 deadw_by_decay_plot %>% filter_at(col, any_vars(is.na(.))) %>% 
-  filter(vol_bole_dead_m3_ha != 0 | vol_log_m3_ha != 0) %>% nrow() == 0
-# 60
+  filter(vol_bole_dead_m3_ha != 0 | vol_log_m3_ha != 0) %>% nrow()
+# 63
 # als volume 0 is, is het logisch dat decaystage = NA
 
 check <- deadw_by_decay_plot %>% filter_at(col, any_vars(is.na(.))) %>% 
@@ -929,8 +897,8 @@ col <- c("year", "decaystage", "species", "vol_log_m3_ha", "vol_bole_dead_m3_ha"
 
 deadw_by_decay_plot_species %>% filter_at(col, any_vars(is.na(.))) %>% 
   filter(vol_bole_dead_m3_ha != 0 | vol_log_m3_ha != 0) %>%
-  filter(!is.na(vol_log_m3_ha) & is.na(decaystage)) %>%  nrow() == 0
-# 67
+  filter(!is.na(vol_log_m3_ha) & is.na(decaystage)) %>%  nrow()
+# 67 / 71
 # vol_log_m3_ha = NA is OK, want geen deadwood opname
 
 check <- deadw_by_decay_plot_species %>% filter_at(col, any_vars(is.na(.))) %>% 
@@ -939,7 +907,7 @@ check <- deadw_by_decay_plot_species %>% filter_at(col, any_vars(is.na(.))) %>%
 # OK, kan vergeten zijn (vooral periode 1)
 table(check$period)
 #  1  2  3 
-#  45  9 13 
+#  45  10 16 
 ```
 
 <!-- # Add zero's - NIET MEER NODIG -->
@@ -1210,6 +1178,7 @@ for (tablename in names(tbls)) {
 
 ```
 
+> tot hier geraakt 25/3/2026
 
 # Implementatie "vol_log_above30cm_m3_ha"
 

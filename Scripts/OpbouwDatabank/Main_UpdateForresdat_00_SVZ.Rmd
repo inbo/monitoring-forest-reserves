@@ -47,6 +47,10 @@ DOEL van dit script is een update van forresdat gegevens naar
 
 # Stand van zaken
 
+## mrt 2026
+
+Toevoegen van Terrijst en Coolhem 3eSET
+
 ## dec 2025
 - Implementatie LIS
 - Bug mbt dendro vol_log_m3_ha 5-10 cm = NA ipv 0 (treshold liggend dood hout = 10 cm)

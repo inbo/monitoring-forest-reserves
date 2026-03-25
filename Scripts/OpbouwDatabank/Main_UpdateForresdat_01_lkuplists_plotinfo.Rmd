@@ -135,7 +135,7 @@ Els gemerged in haar branch "bugfix")
 - 15/12/2025: meest recente bosreservaten apart verwerkt mét implementatie LIS
 
 - jan 2026: volledige databank verwerkt mét implementatie LIS
-
+- mrt 2026: idem, met toevoeging van Terrijst en Coolhem
 
 # Update lookuplijsten - INDIEN GEWIJZIGD
 
@@ -362,18 +362,18 @@ plotinfo_0 <- load_plotinfo(database = path_to_fieldmap_db, processed = FALSE) %
 ```{r}
 plotinfo <- plotinfo_0
 
-nrow(plotinfo) # 2629 / 2628?
+nrow(plotinfo) # 2629 / 2628 / 2721
 
 plotinfo %>% 
-  filter(survey_trees == FALSE & data_processed == TRUE) %>% nrow()
+  filter(survey_trees == FALSE & data_processed == TRUE) %>% nrow() == 0
 t <- plotinfo %>% 
   filter(survey_trees == TRUE & data_processed == FALSE) %>% nrow()
-nrow(t)  # 58 / 57? 
-# OK, bos terrijst
+nrow(t)  # 0
+
 
 plotinfo_ <- plotinfo %>% 
   filter(survey_trees == TRUE & !is.na(survey_trees))
-nrow(plotinfo_) # 2081 / 2079?
+nrow(plotinfo_) # 2081
 
 plotinfo <- plotinfo_
 ```
@@ -403,7 +403,7 @@ check_survey_trees_summ %>%
 
 Wijnendalebos: 4 plots uit periode 1 die niet verder meegenomen werden in de verwerking - ok
 Kersselaerspleyn: plot 1999: Rgister+: OK, niet mee te nemen
-Bos Terrijst en Coolhem: nog niks mee gedaan, ook geen datacontrole
+TR Liedekerke 3de decade (plot 131000: nog geen forest_reesrve ingevuld)
 
 ```{r}
 plotinfo %>% filter(is.na(forest_reserve)) %>% nrow() == 0
@@ -421,7 +421,7 @@ We gaan verder met enkel de processed plots!!!!
 ```{r processed_only}
 plotinfo <- plotinfo %>% filter(data_processed == TRUE)
 plotinfo %>% filter(is.na(forest_reserve)) %>% nrow() == 0
-nrow(plotinfo) # 2023 / 2022?
+nrow(plotinfo) # 2023 / 2075
 ```
 
 ```{r tmp_check_lis_survey, eval = FALSE}
@@ -513,7 +513,7 @@ plotinfo <- plotinfo_
 
 # Vergelijking met oude data
 
-17/12/2025 vergeleken met data op git (maart 2025 (?))
+25/3/2026 vergeleken met data op git (17/12/2025)
 
 ```{r eval = FALSE, results='hide'}
 # 
