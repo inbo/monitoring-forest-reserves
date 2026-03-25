@@ -473,11 +473,7 @@ col <- c("number_of_tree_species", "approx_nr_regeneration_ha",
          "mean_number_of_regeneration_ha", 
          "lci_number_of_regeneration_ha", "uci_number_of_regeneration_ha")
 
-reg_by_plot_height %>% filter_at(col, any_vars(is.na(.))) %>% nrow() # FALSE
-# mean, lci en uci soms wel en soms niet NA, afh. of er nog andere soorten waren in
-# die hoogteklasse
-# hier ook mean en lci, uci als NA , net als approx_nr_reg
-# wellicht omdat er van die soort en hoogteklasse maar één (NA-)record was
+reg_by_plot_height %>% filter_at(col, any_vars(is.na(.))) %>% nrow() 
 
 ```
 
@@ -488,9 +484,7 @@ col <- c("approx_nr_established_ha", "approx_nr_seedlings_ha",
          "mean_number_seedlings_ha" , "lci_number_seedlings_ha", "uci_number_seedlings_ha")
 
 reg_by_plot_species %>% filter_at(col, any_vars(is.na(.))) %>% nrow() #0
-# hier NIET mean en lci, uci als NA, maar gewoon verder gerekend zonder de NA
-# blijkbaar approx_nr_established_ha en approx_nr_seedlings_ha wél berekend met weglating van de NA's
-# " en als het effectief approx_nr_reg is NIET"
+
 ```
 
 
@@ -511,8 +505,6 @@ col <- c("nr_of_subplots_with_regeneration", "perc_subplots_with_regeneration",
          "mean_number_seedlings_ha" , "lci_number_seedlings_ha", "uci_number_seedlings_ha")
 
 reg_by_core_area_species %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0 # TRUE
-# approx_nr_established_ha en approx_nr_seedlings_ha wél berekend met weglating van de NA's
-# terwijl approx_nr_regeneration_ha NIEt (zie chunck hierna)
 
 ```
 
@@ -524,33 +516,9 @@ col <- c("nr_of_subplots_with_regeneration", "perc_subplots_with_regeneration",
          "lci_number_of_regeneration_ha", "uci_number_of_regeneration_ha")
 
 reg_by_core_area_height_species %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
-# twee subplots zonder aantal => enkel approx_nr_regeneration_ha NA
 
 ```
 
-> er wordt anders omgegaan met NA's bij approx_nr_established_ha en approx_nr_seedlings_ha
-tegenover approx_nr_regeneration_ha
-de eerste laten NA's gewoon vallen, de tweede wordt NA als er één waarde ontbreekt
-
-Zie issue #178.
-
-Idealiter vallen NA's enkel weg als er andere data zijn, dus niet als er geen andere 
-data zijn, dan blijft resultaat best NA ipv "0"
-Zo is het ook geprogrammeerd voor intervals mbv functie `sum_intervals()`:
-```
-  if (na_rm) {
-    var_min <- var_min[!is.na(var_min)]
-    var_max <- var_max[!is.na(var_max)]
-  }
-  if (length(var_min) == 0) {
-    return(data.frame(n_obs = NA, sum = NA, lci = NA, uci = NA))
-  }
-```
-
-Voorlopig doen we zo verder.
-
-        
-        
 # Extra processing
 
 ## Plotinfo toevoegen
