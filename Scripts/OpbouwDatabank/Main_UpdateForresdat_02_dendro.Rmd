@@ -1178,7 +1178,6 @@ for (tablename in names(tbls)) {
 
 ```
 
-> tot hier geraakt 25/3/2026
 
 # Implementatie "vol_log_above30cm_m3_ha"
 
@@ -1220,7 +1219,7 @@ gaan we hier niet doen
 
 ```{r}
 plotinfo %>% filter(survey_lis) %>% distinct(period, plottype)
-# LIS enkel periode 2 (CP) en 3 (CP én 1 CA op 1/1/2026)
+# LIS enkel periode 2 (CP) en 3 (CP en CA op 26/3/2026)
 ```
 Forrescalc gaat er nog vanuit dat er opgemeten wordt vanaf 10 cm, waardoor de 
 volumes (`vol_log_m3_ha`) per diameterklasse foutief op nul gezet worden.
@@ -1292,7 +1291,7 @@ Nu (2/12/22025) dus opgenomen in functie `correctie_1`
 plotinfo %>% filter(period == 2 & survey_lis) %>% distinct(forest_reserve, plottype)
 
 # uitzondering voor correctie mbt survey_lis
-FAS_vanaf_10cm <- c("Zoniën UITBR_1995", "Zoniën KERN_1983", "Kluisbos")
+#     FAS_vanaf_10cm <- c("Zoniën UITBR_1995", "Zoniën KERN_1983", "Kluisbos")
 # ter info: slechts een deel van Kluisbos, het andere deel (beheerd) werd géén FAS uitgevoerd
 # (survey_deadw = FALSE) - maar dat heeft hier geen impact, want vol_log is daar sowieso al = NA
 ```
@@ -1320,20 +1319,22 @@ correctie_1 <- function(tab, info = plotinfo) {
                  vol_log_m3_ha == 0))
     }
   
-  tabel <- tabel %>% 
-    left_join(info %>% select(forest_reserve, plot_id, period, survey_lis)
-              , by = c("plot_id", "period")) %>% 
-    mutate(vol_log_above30cm_m3_ha = ifelse(survey_lis & !forest_reserve %in% FAS_vanaf_10cm
-                                            , vol_log_m3_ha, NA)
-           , vol_log_m3_ha = ifelse(survey_lis & !forest_reserve %in% FAS_vanaf_10cm
-                                    , NA, vol_log_m3_ha)
-           ) %>% 
-    select(-survey_lis, -forest_reserve)
+  info <- info %>% select(forest_reserve, plot_id, plottype, period
+                              , survey_deadw, survey_lis, diam_min_lis
+                              , diam_min_a4_logs, diam_min_core_area_logs) %>% 
+    mutate(diam_min_fas = ifelse(plottype == "CP", diam_min_a4_logs
+                                 , diam_min_core_area_logs))
   
-  if ("vol_deadw_m3_ha" %in% colnames(tabel)) {
-    tabel <- tabel %>% 
-      select(-vol_deadw_m3_ha)
-  }
+  tabel <- tabel %>% 
+    left_join(info, by = c("plot_id", "period", "plottype")) %>% 
+    mutate(vol_log_above30cm_m3_ha = ifelse(survey_lis & diam_min_fas == 300
+                                            , vol_log_m3_ha, NA)
+           , vol_log_m3_ha = ifelse(!is.na(diam_min_fas) & diam_min_fas == 100
+                                    , vol_log_m3_ha, NA)
+           ) %>% 
+    select(-survey_lis, -forest_reserve, -survey_deadw
+           , -diam_min_lis, -diam_min_a4_logs, -diam_min_core_area_logs
+           , -diam_min_fas)
   
     tabel <- tabel %>%
     relocate(vol_log_above30cm_m3_ha, .after = vol_log_m3_ha)
@@ -1355,6 +1356,28 @@ for (tablename in names(tbls)) {
 }
 ```
 
+```{r check_corr1, eval = FALSE}
+t <- dendro_by_plot %>% 
+  left_join(plotinfo %>% select(forest_reserve, plot_id, plottype, period
+                              , survey_deadw, survey_lis, diam_min_lis
+                              , diam_min_a4_logs, diam_min_core_area_logs) %>% 
+    mutate(diam_min_fas = ifelse(plottype == "CP", diam_min_a4_logs
+                                 , diam_min_core_area_logs))) %>% 
+  group_by(plottype, diam_min_lis
+                   , diam_min_a4_logs, diam_min_core_area_logs
+                   , diam_min_fas
+                   , survey_deadw, survey_lis
+                   , period) %>% 
+  reframe(vol_log_m3_ha = sum(vol_log_m3_ha)
+          , vol_log_above30cm_m3_ha = sum(vol_log_above30cm_m3_ha)
+          , vol_log_above40cm_m3_ha = sum(vol_log_above40cm_m3_ha)
+          , min_id = min(plot_id)
+          , max_id = max(plot_id))
+
+# OK
+# zonien_uitbr_1995 CP's: survey_deadw = T, maar geen decaystage &n species samen bepaald => NA
+
+```
 
 
 ```{r corr2}
@@ -1377,16 +1400,24 @@ diam_klasses_under_10cm <- c("5 - 10 cm")
 
 correctie_2 <- function(tab, info = plotinfo) {
   
+  # tab <- dendro_by_diam_plot
+  info <- info %>% select(forest_reserve, plot_id, plottype, period
+                              , survey_deadw, survey_lis, diam_min_lis
+                              , diam_min_a4_logs, diam_min_core_area_logs) %>% 
+    mutate(diam_min_fas = ifelse(plottype == "CP", diam_min_a4_logs
+                                 , diam_min_core_area_logs))
+    
   tabel <- tab %>% 
-    left_join(info %>% select(forest_reserve, plot_id, period, survey_lis)
-              , by = c("plot_id", "period")) %>% 
+    left_join(info, by = c("plot_id", "period", "plottype")) %>% 
     mutate(vol_log_m3_ha= ifelse(dbh_class_5cm %in% diam_klasses_under_10cm
                                , NA, vol_log_m3_ha)
-           , vol_log_m3_ha= ifelse(survey_lis & !forest_reserve %in% FAS_vanaf_10cm & 
+           , vol_log_m3_ha= ifelse(survey_lis & diam_min_fas == 300 & 
                                      dbh_class_5cm %in% diam_klasses_under_30cm
                                , NA, vol_log_m3_ha)
          ) %>% 
-    select(-survey_lis, -forest_reserve)
+    select(-survey_lis, -forest_reserve, -survey_deadw
+           , -diam_min_lis, -diam_min_a4_logs, -diam_min_core_area_logs
+           , -diam_min_fas)
   
   tabel
   }
@@ -1403,61 +1434,67 @@ for (tablename in names(tbls)) {
 }
 ```
 
+```{r check_corr2, eval = FALSE}
+t <- dendro_by_diam_plot %>% 
+  left_join(plotinfo %>% select(forest_reserve, plot_id, plottype, period
+                              , survey_deadw, survey_lis, diam_min_lis
+                              , diam_min_a4_logs, diam_min_core_area_logs) %>% 
+    mutate(diam_min_fas = ifelse(plottype == "CP", diam_min_a4_logs
+                                 , diam_min_core_area_logs))) %>% 
+  group_by(plottype, dbh_class_5cm, diam_min_lis
+                   , diam_min_a4_logs, diam_min_core_area_logs
+                   , diam_min_fas
+                   , survey_deadw, survey_lis
+                   , period) %>% 
+  reframe(vol_log_m3_ha = sum(vol_log_m3_ha)
+          , min_id = min(plot_id)
+          , max_id = max(plot_id))
+```
+
 Aandachtspunt: in Kluisbos is er een deel waar helemaal geen logs met FAS opgemeten zijn 
 (survey_deadw = FALSE).
 Daar is wél een LIS gebeurd.
 
 ```{r eval = FALSE}
 # check Kluisbos
-con <- odbcConnectAccess2007(path_to_fieldmap_db)
-
-  plotdetails_2 <- sqlFetch(con, "PlotDetails_2eSet", stringsAsFactors = FALSE)
-  plotdetails_3 <- sqlFetch(con, "PlotDetails_3eSet", stringsAsFactors = FALSE)
-  
-odbcClose(con)
-
-names(plotdetails_2)
-
 kluisbos <- dendro_by_plot %>% 
-  left_join(plotinfo %>% select(forest_reserve, plot_id, period
-                                , survey_lis, survey_deadw)
+    left_join(plotinfo %>% select(forest_reserve, plot_id, period
+                                , survey_lis, survey_deadw
+                                , diam_min_a4_logs, diam_min_core_area_logs
+                                , diam_min_lis)
               , by = c("plot_id", "period")) %>% 
-  filter(forest_reserve == "Kluisbos") %>% 
-  left_join(plotdetails_2 %>% select(forest_reserve = ForestReserve
-                                     , plot_id = IDPlots, 
-                                     , TresHoldDiam_Deadwood_A4
-                                     , TresHoldDiam_Deadwood_CoreArea)
-              , by = c("plot_id")) 
+  filter(forest_reserve == "Kluisbos") 
 
 table(kluisbos$survey_deadw,kluisbos$survey_lis)
   #       TRUE
   # FALSE   43
   # TRUE    85
 
-table(kluisbos$survey_deadw,kluisbos$TresHoldDiam_Deadwood_A4)
+table(kluisbos$survey_deadw,kluisbos$diam_min_a4_logs)
 
+kluisbos %>% filter(is.na(vol_log_m3_ha)) %>% nrow()
 ```
 
 ```{r eval = FALSE}
 # check Zonien
 zonien <- dendro_by_plot %>% 
   left_join(plotinfo %>% select(forest_reserve, plot_id, period
-                                , survey_lis, survey_deadw)
+                                , survey_lis, survey_deadw
+                                , diam_min_a4_logs, diam_min_core_area_logs
+                                , diam_min_lis)
               , by = c("plot_id", "period")) %>% 
-  filter(forest_reserve %in% c("Zoniën UITBR_1995", "Zoniën KERN_1983")) %>% 
-  left_join(plotdetails_2 %>% select(forest_reserve = ForestReserve
-                                     , plot_id = IDPlots, 
-                                     , TresHoldDiam_Deadwood_A4
-                                     , TresHoldDiam_Deadwood_CoreArea)
-              , by = c("plot_id")) 
+  filter(forest_reserve %in% c("Zoniën UITBR_1995", "Zoniën KERN_1983"))
 
-table(zonien$survey_deadw,zonien$survey_lis)
-  #       FALSE TRUE
-  # FALSE     2    0
-  # TRUE    119   64
+table(zonien$survey_deadw)
+# FALSE  TRUE 
+#     2   183
+table(zonien$survey_lis)
+# FALSE  TRUE 
+#   121    64
+table(zonien$survey_deadw,zonien$diam_min_a4_logs)
 
-table(zonien$survey_deadw,zonien$TresHoldDiam_Deadwood_A4)
-
+zonien %>% filter(is.na(vol_log_m3_ha) & is.na(vol_log_above40cm_m3_ha)) %>% nrow()
+# 2 kernvlaktes
 ```
 
 ```{r eval=FALSE}
@@ -1660,10 +1697,10 @@ odbcClose(con)
 data_LIS_p2 <- data_LIS_ %>% 
   mutate(period = 2) %>% 
   left_join(plotinfo %>% select(plot_id, forest_reserve, period
-                                , survey_lis, data_processed)) %>% 
+                                , survey_lis, length_transect_lis
+                                , data_processed)) %>% 
   mutate(angle_cde = ifelse(is.na(angle_cde), 10, angle_cde)) %>% 
   left_join(qLIangle, by = c("angle_cde" = "ID"))
-
 
 # 3eSET 
 query_LIS <- 
@@ -1686,7 +1723,8 @@ odbcClose(con)
 data_LIS_p3 <- data_LIS_ %>% 
   mutate(period = 3) %>% 
   left_join(plotinfo %>% select(plot_id, forest_reserve, period
-                                , survey_lis, data_processed)) %>% 
+                                , survey_lis, length_transect_lis
+                                , data_processed)) %>% 
   mutate(angle_cde = ifelse(is.na(angle_cde), 10, angle_cde)) %>% 
   left_join(qLIangle, by = c("angle_cde" = "ID")) %>% 
   rename(IDLineIntersect = IDLineIntersect_3eSet) %>% 
@@ -1697,12 +1735,17 @@ data_LIS <- rbind(data_LIS_p2, data_LIS_p3)
 
 data_LIS <- data_LIS %>% 
   # Li<-45  # lengte van de drie transecten   ! anders bij zonien
-  mutate(Li = ifelse(str_detect(forest_reserve, "Zon")
-                     , 120, 45)) %>% 
-  # ook anders bij KV Heirnisse
+  mutate(Li = length_transect_lis) %>% 
+  # ! nog niet allemaal aangevuld
+  mutate(Li = ifelse(is.na(length_transect_lis) & str_detect(forest_reserve, "Zon")
+                     , 120, 
+                     ifelse(is.na(length_transect_lis), 45, Li))) %>% 
+    # ook anders bij KV Heirnisse
   mutate(Li = ifelse(plot_id == "91000", 560, Li))
+
 table(data_LIS$forest_reserve, data_LIS$Li)
 table(data_LIS$forest_reserve, data_LIS$period)
+
 ```
 
 ```{r results='hide'}
@@ -1983,7 +2026,7 @@ gemaakt tss boven en onder 30 cm.
 
 # Vergelijking met oude data
 
-17/12/2025 vergeleken met data op git (maart 2025 (?))
+26/3/2026 vergeleken met data op git
 
 ```{r eval = FALSE, results='hide'}
 # 
@@ -2015,6 +2058,10 @@ dendro_by_plot %>% select(-year) %>% arrange(plot_id, period) == dendro_by_plot_
 # 12/2025: andere namen,  niet OK dus
 dendro_by_plot == dendro_by_plot_git
 
+t <- dendro_by_plot %>% 
+  anti_join(dendro_by_plot_git, by = c("period", "plot_id"))
+# de extra verwerkte data = OK
+
 head(dendro_by_plot %>% arrange(desc(plot_id), period)); head(dendro_by_plot_git %>% arrange(desc(plot_id), period))
 # lijkt OK
 
@@ -2026,9 +2073,10 @@ head(dendro_by_plot_git %>% arrange(desc(plot_id), period) %>% filter(plot_id ==
 
 # LIS is anders, is nu foutief 0 !!!
 
-w <- waldo::compare(dendro_by_plot %>% filter(plot_id == 91000), dendro_by_plot_git %>% filter(plot_id == 91000))
+w <- waldo::compare(dendro_by_plot %>% filter(plot_id == 857), dendro_by_plot_git %>% filter(plot_id == 857))
 # afronding is anders 
 # of enkele kleine aanpassingen wegens kleine correcties?
+dendro_by_plot %>% filter(plot_id == 857); dendro_by_plot_git %>% filter(plot_id == 857)
 ```
 
 ```{r results='hide'}
@@ -2038,7 +2086,7 @@ dendro_by_plot_species_git <- read_forresdat_table(tablename = "dendro_by_plot_s
                                            , plottype = "all"
                                            , git_ref_type = "branch"
                                            , git_reference = "develop")
-nrow(dendro_by_plot_species) == nrow(dendro_by_plot_species_git)
+nrow(dendro_by_plot_species); nrow(dendro_by_plot_species_git)
 ```
 
 ```{r results='hide'}
