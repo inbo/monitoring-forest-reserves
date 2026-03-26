@@ -1532,8 +1532,8 @@ table(test$period, test$forest_reserve)
 Naast `vol_logs_m3_ha` en `vol_logs_above30cm_m3_ha` ook volgende velden berekenen
 (enkel voor LIS-plots)      
 
-- `vol_lis_m3_ha`: alles > 10 cm
-- `vol_lis_10_30cm_m3_ha`
+- `vol_lis_m3_ha`: alles > 10 cm **(uitz: kluisbos > 7 cm, Zonien > 5 cm)**
+- `vol_lis_10_30cm_m3_ha`: ook voor Kluisbos en Zonien enkel tss 10 en 30 cm
 - `vol_lis_above30cm_m3_ha`
 
 <!-- gecheckt: vol_lis_above30cm_m3_ha + vol_lis_10_30cm_m3_ha = vol_lis_m3_ha -->
@@ -1741,7 +1741,7 @@ data_LIS <- data_LIS %>%
                      , 120, 
                      ifelse(is.na(length_transect_lis), 45, Li))) %>% 
     # ook anders bij KV Heirnisse
-  mutate(Li = ifelse(plot_id == "91000", 560, Li))
+  mutate(Li = ifelse(plot_id == "91000", 420, Li))
 
 table(data_LIS$forest_reserve, data_LIS$Li)
 table(data_LIS$forest_reserve, data_LIS$period)
@@ -1847,9 +1847,10 @@ We berekenen wel LIS < 30 cm, om te combineren met FAS > 30 cm.
 
 ```{r calc_LIS_10_30cm, results='hide'}
 colnames(data_LIS)
+range(data_LIS$diam_mm, na.rm = T)
 
 data_LIS_10_30cm <- data_LIS %>% 
-  filter(diam_mm < 300)
+  filter(diam_mm < 300 & diam_mm >= 100)
 
 #
 LIS_by_decay_species_10_30cm <- data_LIS_10_30cm %>%
