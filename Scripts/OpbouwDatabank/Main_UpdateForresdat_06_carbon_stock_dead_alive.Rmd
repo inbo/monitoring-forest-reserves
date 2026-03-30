@@ -344,9 +344,7 @@ We willen voor onze output ook enkel deze processed data mee.
 data_dendro <- load_data_dendrometry(database = path_to_fieldmap_db, 
                                      extra_variables = TRUE, 
                                      processed = TRUE) %>% 
-  filter(plottype != "OTHER") %>%  # enkel CP of CA
-  # nog onterecht data_processed = TRUE:
-  filter(!(forest_reserve == "Bos Terrijst" & period == 3))
+  filter(plottype != "OTHER")  # enkel CP of CA
 
 data_shoots <- load_data_shoots(database = path_to_fieldmap_db, extra_variables = TRUE)
 
@@ -375,11 +373,9 @@ data_deadwood <- load_data_deadwood(database = path_to_fieldmap_db, processed = 
   # nog onterecht data_processed = TRUE:
   filter(!(forest_reserve == "Bos Terrijst" & period == 3))
 
-data_deadwood %>% filter(max_diam_mm < 100)
-# 2 records => verwijderen, ook gevraagd aan Peter in mail van 17/12/25
+data_deadwood %>% filter(max_diam_mm < 100) %>%  nrow()
 
 ```
-
 
 ```{r TMP_te_kleine_logs}
 data_deadwood <- data_deadwood %>% 
@@ -423,7 +419,7 @@ Er zijn geen ontbrekende waarden.
 # Overzicht gebruikte factoren
 
 
-```{r}
+```{r FC}
 # hoger enkel vermeld: FC = 0.5
 # hier vastklikken
 FC_value <- 0.5
@@ -688,8 +684,7 @@ g
 
 ### Volume van de stomp (souche)
 
-Het stamvolume (`Volume_m3`) wordt verder aangevuld met het volume van de stomp.  
-> bij BR is dat StemVolumeBole_m3 ???
+Het stamvolume (`vol_bole_m3`) wordt verder aangevuld met het volume van de stomp.  
 
 De stomp is de onderste 10 cm van elke boom, en wordt berekend als het volume van een cilinder met   
 
@@ -755,9 +750,7 @@ trees_standing4 <- trees_standing4 %>%
 # C10 is itself estimated from C130
 names(trees_standing4)
 trees_standing4 <- trees_standing4 %>% 
-  mutate(vol_stump_m3 = 0.1 * (c0/100)^2 / (4*pi),
-         # stamvolume zonder stump (cfr Dagnelie/Quataert)
-         vol_bole_m3)
+  mutate(vol_stump_m3 = 0.1 * (c0/100)^2 / (4*pi))
 
 trees_standing4 %>% filter(vol_stump_m3 == 0 | is.na(vol_stump_m3)) %>% nrow() == 0
 
@@ -794,7 +787,9 @@ Vanaf 12/12/2024 (branch 'bugfix_AL') is minimaaal volume op 0.001 m gezet (ipv 
 cfr werkwijze oude dataverwerking VBI1.
 Dat vangt ook al een deel op.
 
-```{r tmp_replace_volume_0, results='hide'}
+```{r tmp_replace_volume_0, results='hide', eval = FALSE}
+range(trees_standing4$vol_bole_m3)
+
 trees_standing4 <- trees_standing4 %>% 
   mutate(vol_bole_m3 = ifelse(vol_bole_m3 == 0, 0.001, vol_bole_m3))
 ```
@@ -996,10 +991,15 @@ bovengrondse biomassa van een staande, intacte boom x soort-specifieke R-factor
 # agbtot = (vtotaer+vol_souche) * e.mean_wd
 
 names(trees_standing6)
-trees_standing6 %>% filter(is.na(decaystage)) %>% nrow()  #891
-# rekening houden met ontbrekden decaystage
-# onderscheid maken levend en dood
+trees_standing6 %>% filter(is.na(decaystage) & alive_dead != 11) %>% nrow()  #118 (of 0.8% van de dode)
+t <- trees_standing6 %>% filter(is.na(decaystage) & alive_dead != 11)
+table(t$period)
+# 1  2  3 
+# 91  4 23 
 
+# => rekening houden met ontbrekende decaystage
+# onderscheid maken levend en dood
+trees_standing6 %>% filter(alive_dead != 11) %>% nrow()
 trees_standing6_ <- trees_standing6 %>% 
   mutate(R = R_FRL
          , WD = WD_FRL
@@ -1020,6 +1020,7 @@ trees_standing6_ %>% filter(is.na(decomposition)) %>% nrow() == 0
 table(trees_standing6_$decaystage, trees_standing6_$decomposition)
 
 trees_standing6 <- trees_standing6_
+
 ```
 
 ### Totaal koolstofgehalte (ondergronds + bovengronds) 
@@ -1045,22 +1046,9 @@ Vertrekkende van *stems_calc*
 
 ### Onderscheid levende en dode biomassa
 
-```{r results='hide'}
+```{r plotniveau, results='hide'}
 colnames(trees_standing6)
-summary(trees_standing6$plotarea_ha)
-table(trees_standing6$subcirclearea_ha, trees_standing6$plotarea_ha)
-table(trees_standing6$core_area_ha, trees_standing6$plotarea_ha)
 
-
-trees_standing6 %>% filter(core_area_ha == 0.1 & plotarea_ha == 0.5)
-
-t <- trees_standing6 %>% select(forest_reserve, plot_id, plotarea_ha, dbh_mm)
-
-
-trees_standing6 %>% filter(core_area_ha == 0.1 & plotarea_ha == 0.5)
-```
-
-```{r plotniveau, results = 'hide'}
 analyseSet_plot0 <- trees_standing6 %>%
   dplyr::group_by(forest_reserve, plot_id, period) %>%   
   dplyr::summarise(    
@@ -1193,7 +1181,8 @@ vanaf 30 cm opgemeten in 3de decade).
 
 > KV Zoniën KERN_1983 - periode 2 & 3 pas vanaf 40 cm opgemeten (2010 en 2020)
 Daar is vol_log_m3_ha = NA (enkel `vol_log_above40cm_m3_ha` beschikbaar)
-Dat zouden we moeten doortrekken voor de LIS-opnames: Wijnendale, Everzwijnbad, Heirnisse en Jansheideberg periode 3
+Dat zouden we moeten doortrekken voor de LIS-opnames: Wijnendale, Everzwijnbad, 
+Heirnisse en Jansheideberg periode 3
 
 ### Biomassa obv decay en species
 
@@ -1507,7 +1496,7 @@ carbon_by_plot_git <- read_forresdat_table(tablename = "carbon_by_plot"
 # carbon_by_plot_git <- read.csv2(file = "C:/03_BR/1_DataVerwerkingBR/Output/_plot-level-data/carbon_by_plot.csv")
 names(carbon_by_plot_git)
 
-nrow(carbon_by_plot) == nrow(carbon_by_plot_git)
+nrow(carbon_by_plot); nrow(carbon_by_plot_git)
 summary(carbon_by_plot)
 names(carbon_by_plot) == names(carbon_by_plot_git)
 summary(carbon_by_plot_git)
@@ -1552,27 +1541,29 @@ carbon_plotinfo[[1]] %>%
 ```
 
 
+# Info mbt biomassa liggend dood hout
+
+**Combinatie LIS en FAS**     
+
+Indien we deadwood willen vanaf 10 cm moeten we hier werken met **data uit LIS**, 
+net zoals bij VBI.    
+
+Om biomassa van liggend dood hout te berekenen (vanaf 10 cm), hebben we de combinatie gemaakt van 
+10-30cm obv LIS en > 30 cm obv FAS.      
+Als enkel LIS uitgevoerd, dan volledig op basis van LIS.
+
+
+Voor meer info zie script `jansheideberg_dendro_2025.Rmd`.      
+Immers correctie nodig voor       
+
+- `vol_log_m3_ha`, `biomass_lying_t_ha_dead`, `carbon_lying_t_ha_dead` corrigeren: NA voor LIS-plots     
+- Extra velden toevoegen `vol_log_above_30cm_m3_ha`, `biomass_lying_above_30cm_t_ha_dead`, `carbon_lying_above_30cm_t_ha_dead`       
+
 
 # Export plot-level-data
 
 **!!!! ENKEL PLOTS EXPORTEREN WAARVAN DATA PROCESSED ZIJN!!**
 Is standaard parameter bij inladen dendro-data 
-
-
-Opgepast met plots waar combinatie is met LIS (zie plotdetails_3eSET)
-(!! voor Wijnendale en Everzwijnbad voledige logs vanaf 30 cm opgemeten in 3de decade).
-
-Zie script `jansheideberg_dendro_2025.Rmd`: correctie     
-- `vol_log_m3_ha`, `biomass_lying_t_ha_dead`, `carbon_lying_t_ha_dead` corrigeren: NA voor LIS-plots     
-- Extra velden toevoegen `vol_log_above_30cm_m3_ha`, `biomass_lying_above_30cm_t_ha_dead`, `carbon_lying_above_30cm_t_ha_dead`       
-
-
-**Combinatie LIS en FAS** 
-Indien we deadwood willen vanaf 10 cm moeten we hier werken met **data uit LIS**, 
-net zoals bij VBI.    
-Om biomassa van liggend dood hout te berekenen (vanaf 10 cm), hebben we de combinatie gemaakt van 
-10-30cm obv LIS en > 30 cm obv FAS.      
-Als enkel LIS uitgevoerd, dan volledig op basis van LIS.
 
 
 ```{r save_carbon_git, eval = FALSE}
@@ -1582,7 +1573,7 @@ save_results_forresdat(
   repo_path = path_to_git_forresdat,
   metadata_path = paste0(path_to_metadata, "_metadata_plotlevel_results_dendro.xlsx"),
   push = FALSE,
-  strict = FALSE,
+  strict = TRUE,
   branch = "develop"
 )
 

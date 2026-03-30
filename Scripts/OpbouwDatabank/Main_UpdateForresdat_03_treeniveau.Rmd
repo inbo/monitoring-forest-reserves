@@ -34,15 +34,6 @@ source(here::here("scripts/Setup.R"))
 
 ```
 
-```{r TMP_fieldmapdb}
-#tijdelijk
-path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_22_inbo2026_20251014/")
-dbFieldmap <- "FieldMapData_MDB_BR_22_inbo2026.accdb"
-path_to_fieldmap_db <- paste0(path_to_fieldmap, dbFieldmap)
-path_to_fieldmap_db_all <- paste0(path_to_fieldmap, dbFieldmap)
-```
-
-
 ```{r Setup2}
 path_to_html_teamdrive <- paste0(path_to_dataverwerking_teamdrive, "25_Overkoepelend")
 ```
@@ -82,6 +73,7 @@ Kersselaerspleyn blijkt op meerdere vlakken uitzonderingen te bevatten.
 Deze uitzonderingen worden na het inladen van de data gecorrigeerd. 
 
 ```{r results='hold', eval=TRUE}
+path_to_fieldmap_db
 path_to_forresdat_data
 path_to_dataverwerking
 path_to_dataverwerking_teamdrive
@@ -129,7 +121,7 @@ plotinfo <- read_forresdat_table(
 ```
 
 
-# Load dendro data - voorlopig OK - 16/12/2025
+# Load dendro data - voorlopig OK - 26/03/2025
 
 Standaard wordt enkel processed data ingeladen mbv de load-functies.
 We willen voor onze output ook enkel deze processed data mee (voor non-processed 
@@ -138,9 +130,7 @@ data deze telkens opnieuw inladen en berekenen)
 ```{r load_dendro1_processed, results = 'hide'}
 data_dendro <- load_data_dendrometry(database = path_to_fieldmap_db, 
                                      extra_variables = TRUE, 
-                                     processed = TRUE) %>% 
-  # nog onterecht data_processed = TRUE:
-  filter(!(forest_reserve == "Bos Terrijst" & period == 3))
+                                     processed = TRUE)
   
 # %>% ilter(plottype != "OTHER")  # enkel CP of CA - omdat processed = TRUE worden andere plottypes hier niet meegenomen
 unique(data_dendro$plottype)
@@ -301,22 +291,22 @@ nrow(data_dendro_calc  %>%
 
 ```{r eval = FALSE}
 trees_old <- read.csv2(file = paste0(path_to_treelevel_csv, "trees_calc.csv"))
-nrow(trees_old) - nrow(data_dendro_calc) == -29  # 36
+nrow(trees_old) - nrow(data_dendro_calc) == -2514  # 36
 summary(data_dendro_calc)
 summary(trees_old)
 check <- trees_old %>% 
   anti_join(data_dendro_calc, by = c("period", "plot_id", "tree_measure_id"))
-# 1: id = 0 => nu verwijderd  
+#0
 check <- data_dendro_calc %>% 
   anti_join(trees_old, by = c("period", "plot_id", "tree_measure_id"))
-# Rodebos KV1&2: periode 3: OK, wel nog niet in detail bekeken
 table(check$period, check$forest_reserve)
-# allemaal coppice, wellicht correcties
-# ervan uitgaan dat meest recente databank de correcte is
+  #   Bos Terrijst Coolhem A Coolhem Q
+  # 3         1607       440       467
+# ok, nieuwe reservaten
 
 #--------
 stems_old <- read.csv2(file = paste0(path_to_treelevel_csv, "stems_calc.csv"))          
-nrow(stems_old) - nrow(data_stems_calc) == 0 #-321
+nrow(stems_old) - nrow(data_stems_calc) == -3086
 summary(data_stems_calc)
 summary(stems_old)
 check2 <- stems_old  %>% 
@@ -324,7 +314,7 @@ check2 <- stems_old  %>%
 # 0  
 check2 <- data_stems_calc  %>% 
   anti_join(stems_old, by = c("period", "plot_id", "tree_measure_id"))
-
+#3086
 ```
 
 
@@ -338,7 +328,11 @@ save(data_dendro_calc, data_stems_calc, file = here::here("RData/main03_data_den
 ```
 
 
-# Create unique tree-id - 11/3/2025 laatste keer gerund (8/4/2022 // 31/5/2023 voorlaatste keer)
+# Create unique tree-id - 26/3/2026 laatste keer gerund (11/3/2025 voorlaatste keer)
+
+> doel is om in 2026 coppice om te vormen zdd levend en dood deel aan één boom toegekend wordt,
+daarom hier geen strenge datacontrole wat betreft hakhout. 
+> nieuwe opnamemethode vanaf Liedekerke, Pruikemakers in voege.
 
 **! nog niet in detail gecheckt voor KV's**  
 
@@ -441,7 +435,8 @@ Indien we een correcte link willen, moeten we _a en _b terug verwijderen, met al
 
 > !! controle van die coppice_id nodig obv aantal soorten en afwijking van XY
 > reeds gedaan voor de 11 bosreservaten (CP's) in forresdat op 30/5/2023)
-Nu zijn daar 3de decade wijnendale, everzwijnbad, with heide, heirnisse, jansheide bijgekomen
+Nu zijn daar 3de decade wijnendale, everzwijnbad, with heide, heirnisse, jansheide,
+terrijst, coolhem bijgekomen
 ? welke 2 nog extra? 
 Zoniën KERN_1983 afgesplitst van Zonien UITBR_1995
 Kluisbos?
@@ -474,7 +469,7 @@ Zodra er meer dan één per decade is, dan moeten we werken met coppice_id voor 
 
 ```{r NumberOfPartsPerCoppicePerDecade, results = 'hide'}
 tree_id %>% filter(coppice_id > 0) %>% nrow()
-# [1] 17224 - 18015 - 18481 - 21583
+# [1] 17224 - 18015 - 18481 - 21583 - 22361
 
 # coppice_id en plot_id samen uniek => hoeveel metingen zijn er per stoof en per decade 
 # (max.2, 1 levend en 1 dood deel- klopt)
@@ -483,7 +478,7 @@ summ_coppice_id <- tree_id %>%
   group_by(coppice_id, plot_id, period) %>% 
   summarise(aantal = n()) %>% 
   ungroup()
-# 16138 - 16536 - 19253  - 19265
+# 16138 - 16536 - 19253  - 19265 - 19962
 
 table(summ_coppice_id$aantal)  
 # per periode max 2 (voor levend en dood deel zelfde coppice-ide)=> OK
@@ -493,6 +488,8 @@ table(summ_coppice_id$aantal)
 # 16922  2331 
 #     1     2 
 # 16947  2318
+#     1     2 
+# 17563  2399 
 
 summ_coppice_id %>% filter(aantal > 2) %>% distinct(plot_id)
 summ_coppice_id %>% filter(aantal > 2) %>% nrow() == 0
@@ -507,7 +504,7 @@ summ_coppice_id_def <- summ_coppice_id %>%
   group_by(coppice_id, plot_id) %>% 
   summarise(max_aantal = max(aantal)) %>% 
   ungroup()
-# 9690 - 9774 - 10125 - 10136
+# 9690 - 9774 - 10125 - 10136 - 10209
 ```
 
 ```{r SplitDataTrees_OldID_CoppID, results = 'hide'}
@@ -628,12 +625,10 @@ Tree-id wordt overgenomen van boomniveau, aangemaakt via `old_id` of `coppice_id
 names(data_stems_calc)
 names(tree_id)
 tree_id %>%  filter(is.na(tree_id)) %>% nrow() == 0
-data_stems_calc %>% filter(tree_measure_id == 0) %>% nrow() 
+data_stems_calc %>% filter(tree_measure_id == 0) %>% nrow() == 0
 
 tree_id_ <- tree_id %>% 
-  select(plot_id, tree_measure_id, tree_id, tree_id_non_unique, period)
-# tree_id_ <- tree_id %>% 
-#   select(plot_id, tree_measure_id, tree_id, period)
+   select(plot_id, tree_measure_id, tree_id, tree_id_non_unique, period)
 
 stem_id <- data_stems_calc %>% 
   filter(tree_measure_id != 0) %>% 
@@ -642,8 +637,6 @@ stem_id <- data_stems_calc %>%
 names(stem_id)
 nrow(stem_id) == nrow(data_stems_calc)
 
-# 1 meer wegens een tree_measure_id == 0 in KV Jansheide (101000)
-data_stems_calc %>% filter(tree_measure_id == 0)
 ```
 
 ```{r check_id_hakhout, eval=FALSE, results = 'hide'}
@@ -690,10 +683,12 @@ nrow(check_dubbele_tree_id) == 0
 # 2   51000 1_51000_4_a        1                  2
 # 3   53000 1_53000_258_b      1                  2
 
+tree_id %>% filter(tree_id %in% check_dubbele_tree_id$tree_id)
+# hhstoofid 290
 ```
 ```{r results='hide', eval = FALSE}
 check_dubbele_tree_id %>% distinct(plot_id)
-# 13 rows
+# 0 rows
 
 check_dubbele_tree_id2 <- tree_id %>% 
   inner_join(check_dubbele_tree_id) %>% 
@@ -866,13 +861,13 @@ summary(tree_id_long)
 
 check <- trees_long_old %>% 
   anti_join(tree_id_long, by = c("decade", "plot_id", "tree_id"))
-# 1: id = 0 => nu verwijderd  
+# Coolhem en terrijst extra verwerkt - ok
+
 check2 <- tree_id_long %>% 
   anti_join(trees_long_old, by = c("decade", "plot_id", "tree_id"))
-# Rodebos KV1&2: periode 3: OK, wel nog niet in detail bekeken
-table(check$period, check$forest_reserve)
-# allemaal coppice, wellicht correcties
-# ervan uitgaan dat meest recente databank de correcte is
+# Coolhem en terrijst extra verwerkt - ok
+table(check$decade, check$forest_reserve)
+
 
 #--------
 trees_wide_old <- read.csv2(file = paste0(path_to_treelevel_csv, "trees_wide.csv"))
@@ -883,10 +878,10 @@ summary(trees_wide_old)
 summary(tree_survey_wide)
 check <- trees_wide_old  %>% 
   anti_join(tree_survey_wide, by = c("plot_id", "tree_id"))
-# 0  
+# Coolhem en terrijst extra verwerkt - ok
 check2 <- tree_survey_wide  %>% 
   anti_join(trees_wide_old, by = c("plot_id", "tree_id"))
-
+# Coolhem en terrijst extra verwerkt - ok
 ```
 
 

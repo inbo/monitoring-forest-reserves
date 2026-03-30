@@ -75,6 +75,7 @@ Deze uitzonderingen worden na het inladen van de data gecorrigeerd.
 
 
 ```{r results='hold', eval=TRUE}
+path_to_fieldmap_db
 path_to_forresdat_data
 path_to_analysis_set_db
 path_to_plotlevel_csv
@@ -147,16 +148,14 @@ odbcClose(con)
 
 ```
 
-# Load regeneration - OK - 8/4/2022 - 19/1/2023 - 18/3/2025 - 22/12/2025
+# Load regeneration - OK - 8/4/2022 - 19/1/2023 - 18/3/2025 - 22/12/2025 - 30/3/2026
 
 ```{r load_reg}
 data_regeneration <-
   load_data_regeneration(
     database = path_to_fieldmap_db,
     processed = TRUE
-  ) %>% 
-  # nog onterecht data_processed = TRUE:
-  filter(!(forest_reserve == "Bos Terrijst" & period == 3))
+  )
 ```
 
 
@@ -198,6 +197,7 @@ names(data_regeneration)
 data_regeneration %>% filter(!is.na(nr_of_regeneration) & !is.na(number_class)) %>% nrow()
 # 1211 van de 33000 // 177 van 2525 waar beide ingevuld staan
 # 2021 van de 38000
+# 2025 van de 40833
 
 test <- data_regeneration %>% filter(!is.na(nr_of_regeneration) & !is.na(number_class)) %>% 
   select(all_of(select_colnames_reg))
@@ -206,6 +206,8 @@ table(test$subcircle)
 # 89  1
 #   A1   A2 
 # 1248  128
+#   A1   A2 
+# 1249  132
 # komt meer voor bij seedlings: exact number dat vertaald is naar numberclass 
 # (is gebeurd bij de datacontrole of op terrein - zit niet in package)
 
@@ -241,7 +243,7 @@ checkA2 <- data_regeneration %>%
 # ? 1572
 table(checkA2$period)
  #  1    2    3 
- # 129 1437    6 
+ # 129 1437    7
 ```
 
 
@@ -320,13 +322,7 @@ too_high_gamedamage %>% nrow()
 # exporteren en laten nakijken door Peter
 write.xlsx(too_high_gamedamage
            , file = paste0(path_to_dataverwerking_teamdrive, 
-                         "30_Datacontrole/regeneration_20250318.xlsx")
-           , showNA = FALSE
-           , append = TRUE)
-
-write.xlsx(too_high_gamedamage
-           , file = paste0(path_to_dataverwerking,
-                         "Data_controle/regeneration_20250318.xlsx")
+                         "30_Datacontrole/regeneration_20260330.xlsx")
            , showNA = FALSE
            , append = TRUE)
 
@@ -338,24 +334,26 @@ write.xlsx(too_high_gamedamage
 
 > niet nodig voor reg_by_plot(_height_species).csv : alles wordt berekend op subplotniveau, met opp 0.01 ha 
     plotarea_ha wordt aangepast bij begin van elke calc_reg-functie:
-      plotarea_ha = ifelse(.data$plottype == "CA", 0.01, .data$plotarea_ha)
+      `plotarea_ha = ifelse(.data$plottype == "CA", 0.01, .data$plotarea_ha)`
       
 > wél nodig voor de resultaten op niveau van de core area
   
 ----
-Regeneration: counted in standard height classes in subplots: 750 plots of 10x10m in 2001;
+**Methodology report (p.84):**   
+
+- Regeneration: counted in standard height classes in subplots: 750 plots of 10x10m in 2001;
 selection of 140 subplots (every 5th row) of 10x10m in 2010/11 and 2020/21 (see transects on
-map)
-Vegetation : standard relevé on 10x10m subplots: 750 plots, only summer survey in 2001; 140
+map).      
+- Vegetation : standard relevé on 10x10m subplots: 750 plots, only summer survey in 2001; 140
 plots in 2011 and 2021 - spring and summer survey; additional survey in spring 2015 (vernal
-flora).
+flora).       
 
 
-< dataverwerking 2012:
+**Extra info uit de dataverwerking 2012:**     
 "AFWIJKENDE METHODIEK in de kernvlakte van Kersselaerspleyn  
 -   Zeer grote kernvlakte (107485 m² = 10.75 ha) + onregelmatige vorm   
 -   verjonging en vegetatie werden uitzonderlijk niet volledig heropgemeten in 2011, aangezien er niet zoveel veranderd was + hoge werkdruk  
--   Er werd geopteerd om een selectie van bandtransecten opnieuw in te meten:  
+-   Er werd geopteerd om een **selectie van bandtransecten** opnieuw in te meten:  
 o    Bandtransekten van 10m breed, telkens NZ-gericht (loodrecht op de verdunningsdreef), telkens de eerste strook ten oosten van de 50x50m gridpunten  
 o    Dat zijn dan 3 stroken van 300x10 m, 1 van 250, 1 van 150 en eentje van 100 m lang, oftewel 140 proefvlakjes (ipv 107485 m² / 100 m² = 1074 proefvlakjes //  750 in 2000) 
 30*3+25+15+10 == 140
@@ -409,9 +407,9 @@ regeneration <- calculate_regeneration(data_regeneration)
 
 
 ```{r CreateSeparateDataframesReg}
-for (tablename in names(regeneration)) {
-     assign(tablename, regeneration[[tablename]])
-} 
+# for (tablename in names(regeneration)) {
+#      assign(tablename, regeneration[[tablename]])
+# } 
 
 # reg_by_plot_height_species: 38371 (18/3/2025) - 33678 vorige verwerking = 4693 extra records
 
@@ -464,7 +462,6 @@ col <- c("nr_of_subplots_with_regeneration", "perc_subplots_with_regeneration",
 reg_by_core_area_species %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
 
 ```
-
 
 ```{r}
 col <- c("nr_of_subplots_with_regeneration", "perc_subplots_with_regeneration", 
@@ -532,7 +529,7 @@ nrow(check0) == 0
 ```
 
 
-# TEMP: check KV Kersselaerspleyn - OPGELOST
+## TEMP: check KV Kersselaerspleyn - OPGELOST
 
 > is opgelost (25/11/2022 & 18/3/2025)
 (vóór 25/11/2022 een factor 10.75/1.4 verschil)
@@ -574,7 +571,7 @@ check_Kerss$approx_nr_regeneration_ha
 Resultaten stemmen overeen met dataverwerking uit 2012.
 
 
-# TEMP: Check perc_rubbing op plot-niveau
+## TEMP: Check perc_rubbing op plot-niveau
 
 Initiële fout deels opgelost door bij `load_data_regeneration()` 
 `GameImpactRegObserved = 10` te gebruiken voor toekennen van 0 ipv NA.
@@ -634,7 +631,15 @@ check_rubbing_perc_NA %>% nrow() == 0
 
 # in totaal 9  kernvlaktes waar er subplots zijn zonder verjonging, dus zonder soort en hoogteklasse,
 # dat is OK, maar misschien wat verwarrend => wegfilteren
+
+check_rubbing_perc_NA <- reg_by_core_area_species %>% 
+  left_join(plotinfo %>% select(plot_id, period, game_impact_reg)) %>%
+  filter(is.na(approx_rubbing_damage_perc_established) & nr_of_subplots_with_regeneration > 0) %>% 
+  filter(game_impact_reg == TRUE) 
+
+check_rubbing_perc_NA %>% nrow() == 0
 ```
+## Wegfilteren species NA in de kernvlaktes
 
 ```{r CA_wegfilteren_species_NA}
 # wegfilteren van species = NA
@@ -665,35 +670,37 @@ check_rubbing_perc_NA %>% nrow() == 0
 
 ```
 
-# Vergelijking met recente verwerking JHB/Wijn
+# Vergelijking met recente verwerking JHB/Wijn/Terrijst
 
 ```{r eval = FALSE}
-path_to_JHB <- "G:/Gedeelde drives/Team_Boseco_BR/PRJ_BR_Gegevensverwerking/20_Per_gebied/2025_Jansheideberg/03_output_R_plotlevel/"
-reg_by_plot_JHB_gdrive <- read_xlsx(paste0(path_to_JHB, "reg_by_plot.xlsx"))
+path_to_X <- "G:/Gedeelde drives/Team_Boseco_BR/PRJ_BR_Gegevensverwerking/20_Per_gebied/2026_Terrijst/03_output_R_plotlevel/"
+reg_by_plot_X_gdrive <- read_xlsx(paste0(path_to_X, "reg_by_plot.xlsx"))
 
-reg_by_plot_JHB <- reg_by_plot %>% 
+reg_by_plot_X <- reg_by_plot %>% 
   left_join(plotinfo %>% select(forest_reserve, plot_id, period)) %>% 
-  filter(forest_reserve == "Jansheideberg") 
+  filter(forest_reserve == "Bos Terrijst") 
                            
 # vgl
-reg_by_plot_JHB_gdrive <- reg_by_plot_JHB_gdrive %>% 
+reg_by_plot_X_gdrive <- reg_by_plot_X_gdrive %>% 
   select(-1, -survey_number) 
 
-nrow(reg_by_plot_JHB_gdrive);nrow(reg_by_plot_JHB)
-summary(reg_by_plot_JHB_gdrive)
-names(reg_by_plot_JHB_gdrive) == names(reg_by_plot_JHB)
-summary(reg_by_plot_JHB)
-waldo::compare(reg_by_plot_JHB_gdrive, reg_by_plot_JHB)
+nrow(reg_by_plot_X_gdrive);nrow(reg_by_plot_X)
+summary(reg_by_plot_X_gdrive)
+names(reg_by_plot_X_gdrive) == names(reg_by_plot_X)
+summary(reg_by_plot_X)
+waldo::compare(reg_by_plot_X_gdrive, reg_by_plot_X)
 
-t <- reg_by_plot_JHB_gdrive %>% 
-  anti_join(reg_by_plot_JHB)
+t <- reg_by_plot_X_gdrive %>% 
+  anti_join(reg_by_plot_X)
 
-t <- reg_by_plot_JHB %>% 
-  anti_join(reg_by_plot_JHB_gdrive)
+t <- reg_by_plot_X %>% 
+  anti_join(reg_by_plot_X_gdrive)
 
-head(reg_by_plot %>% arrange(desc(plot_id), period)); 
-head(reg_by_plot_JHB %>% arrange(desc(plot_id), period))
-         
+head(reg_by_plot_X %>% arrange(desc(plot_id), period)); 
+head(reg_by_plot_X_gdrive %>% arrange(desc(plot_id), period))
+
+head(reg_by_plot_X %>% arrange(plot_id, desc(period))); 
+head(reg_by_plot_X_gdrive %>% arrange(plot_id, desc(period)))       
                              
 ```
 
@@ -754,7 +761,7 @@ head(reg_by_plot_height_species_gdrive %>% arrange(desc(plot_id), period))
 
 # Vergelijking met oude data
 
-22/12/2025 vergeleken met data op git (maart 2025 (?))
+30/3/2026 vergeleken met data op git (dec 2025)
 
 ```{r eval = FALSE, results='hide'}
 # 
@@ -811,6 +818,21 @@ t <- reg_by_core_area_species %>%
 head(reg_by_core_area_species %>% arrange(desc(plot_id), period)); 
 head(reg_by_core_area_species_git %>% arrange(desc(plot_id), period))
 
+```
+
+
+# Aanmaak list
+
+```{r new_list_reg}
+# opnieuw list van maken na correcties om te exporteren en plotinfo aan te koppelen
+regeneration <- list(
+      reg_by_plot = reg_by_plot,
+      reg_by_plot_height = reg_by_plot_height,
+      reg_by_plot_species = reg_by_plot_species,
+      reg_by_plot_height_species = reg_by_plot_height_species,
+      reg_by_core_area_species = reg_by_core_area_species,
+      reg_by_core_area_height_species = reg_by_core_area_height_species
+    )
 ```
 
 
