@@ -94,6 +94,9 @@ en Zwaenepoel werden vervangen door
 Nu ook With heide, Heirnisse en Jansheideberg 3de decade in info_survey       
 Alle plots ook opgenomen in tabel "dominant tree"
 
+30/3/2026:
+3de decade: terrijst en coolhem
+
 
 # Import data
 
@@ -1561,11 +1564,10 @@ strata <- list(
     )
 
 # snel - enkel gewijzigde tables
-    # strata <- list(
-    #       link_EUFORIA_fieldmap = LINK_EUFORIA_fieldmap,
-    #       link_EUFORIA_wildcard = LINK_EUFORIA_wildcard,
-    #       info_EUFORIA = info_EUFORIA
-    #     )
+# strata <- list(
+#       info_survey = plotinfo_def,
+#       dominant_tree = dominant_tree
+#     )
 
 # strata <- list(strata_soil = strata_bodem)
 ```
@@ -1668,7 +1670,7 @@ strata_strict <- list(
       info_survey = plotinfo_def
     )
 
-# update 10/2/202s - strata_soil
+# update 30/3/2026
 # strata_strict <- strata  
 
 save_results_forresdat(
