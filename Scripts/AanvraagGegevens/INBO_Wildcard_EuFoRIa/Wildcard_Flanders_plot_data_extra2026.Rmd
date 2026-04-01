@@ -47,7 +47,7 @@ path_to_project_teamdrive <- paste0(path_to_output_gdrive, "EUFORIA_WILDCARD_202
 # path_to_datarequest <- paste0(path_to_project, "/output/")
 path_to_datarequest_teamdrive <- paste0(path_to_project_teamdrive, "/output_R/extra_data_2026/")
 path_to_datarequest_old <- paste0(path_to_project_teamdrive
-                                  , "/output_R/versie_gecorrigeerde_consistent_id/")
+                                  , "/output_R/versie_feb2025/")
 path_to_html_teamdrive <- path_to_datarequest_teamdrive
 # path_to_html <- path_to_datarequest
 
@@ -59,7 +59,7 @@ path_to_html_teamdrive <- path_to_datarequest_teamdrive
 
 ```{r brondata}
 print(paste0("Brondata: ", path_to_fieldmap_db))
-
+print(paste0("Brondata strata: ", path_to_strata_db))
 ```
 
 
@@ -213,7 +213,16 @@ con <- odbcConnectAccess2007(path_to_strata_db)
   info_beheer <- sqlFetch(con, "strata_remaining", stringsAsFactors = FALSE)
   link_wildcard_fieldmap <- sqlFetch(con, "link_wildcard_fieldmap", stringsAsFactors = FALSE)
   # dominant_tree <- sqlFetch(con, "dominant_tree", stringsAsFactors = FALSE)
+  # strata_soil <- sqlFetch(con, "strata_soil", stringsAsFactors = FALSE) %>% 
+  #   select(Unieknr, plot_id, SiteName, SubArea, forest_reserve_fieldmap)
+  link_plotid_wildcard <- sqlFetch(con, "link_plotid_wildcard", stringsAsFactors = FALSE) 
 odbcClose(con)
+
+# strata_soil enkel nodig om SubArea van Sevendonck te onderscheiden (A vs Q)
+# andere subarea's zijn enkel verwarrend en hier niet nodig
+subarea_sevendonck <- link_plotid_wildcard %>% 
+  filter(forest_reserve_fieldmap == "Sevendonck") %>% 
+  select(plot_id, forest_reserve_fieldmap, SITE_NAME, subarea = WILDCARD_sub_ID)
 ```
 
 
@@ -276,6 +285,8 @@ SPI_ID	Plot ID in Sampling plot inventory (SPI) grid within the site (reserve).
 
 ```{r results = 'hide'}
 names(plotinfo)
+names(info_beheer)
+names(info_XY)
 
 # tijdelijk nog geen link leggen - mogelijks aan Yannick overlaten
 plotdata0 <- plotinfo %>%
@@ -285,8 +296,8 @@ plotdata0 <- plotinfo %>%
   # left_join(link_WC_FM, by = c(forest_reserve_fieldmap", plottype))
   left_join(info_beheer) %>% 
   filter(Management == "unmanaged") %>% 
-  mutate(SITE_ID = NA, SITE_NAME = NA, WILDCARD_sub_ID = NA
-         , INVENTORY_YEAR = year_dendro
+  mutate(INVENTORY_YEAR = year_dendro
+         # , SITE_ID = NA, SITE_NAME = NA, WILDCARD_sub_ID = NA
          , LPI_ID = ifelse(plottype == "CA", plot_id, NA)
          , SPI_ID = ifelse(plottype == "CP", plot_id, NA)
          # , CIRCLE_NO = ifelse(plottype == "CP", "1 / 2", NA)   #zie verder
@@ -304,7 +315,18 @@ plotdata0 <- plotinfo %>%
          , X = XLon_wgs84
          , Y = YLat_wgs84
          , Z = Z_m_TAW
-         ) 
+         ) %>% 
+  # onderscheid A en Q cirkelplots Sevendonck ...
+  left_join(subarea_sevendonck, by = c("plot_id", "forest_reserve_fieldmap")) %>% 
+  # forest_reserve_FM_adjusted aanmaken
+  # om verder te kunnen koppelen aan site-id's wildcard
+  mutate(forest_reserve_FM_adjusted = 
+           ifelse(!is.na(subarea) & subarea == "Alnion", "Sevendonck A",
+                  ifelse(!is.na(subarea) & subarea == "Quercion", "Sevendonck Q",
+                         forest_reserve))
+         ) %>% 
+  select(-subarea)
+
 names(plotdata0)
 
 ```
@@ -407,7 +429,7 @@ plotdata <- plotdata0 %>%
   left_join(CP_CA_tresholds, by = c("forest_reserve", "period", "plottype")) %>% 
   mutate(SAMPLED_AREA = ifelse(plottype == "CP", pi*CIRCLE_RADIUS^2, core_area_ha*10000))   # in m2 !!A3 <> A4 
 
-plotdata %>% filter(plot_id == 11000)
+plotdata %>% filter(plot_id == 91000)
 plotdata %>% filter(plot_id == 205)
 plotdata %>% filter(plot_id == 101)
 ```
@@ -507,12 +529,8 @@ CONSISTENT_ID_STANDING	CONSISTENT_ID_LYING	OTHER	X	Y	Z	WKT_GEOM
 
 ```{r plotdata_vars, results = 'hide'}
 names(plotdata)
-names(link_wildcard_fieldmap)
-
 
 plotdata_def <- plotdata %>%
-  left_join(link_wildcard_fieldmap
-            , by = c("forest_reserve" = "forest_reserve_fieldmap", "plottype")) %>% 
   select(INVENTORY_YEAR
          # , SITE_ID, SITE_NAME, WILDCARD_sub_ID
          , LPI_ID, SPI_ID
@@ -569,9 +587,9 @@ list_plots <- plotdata_def %>%   # sampled_area nodig, maar
   summarize(SAMPLED_AREA = max(SAMPLED_AREA)) %>% 
   ungroup()
 
-t <- list_plots %>% filter(str_detect(forest_reserve_FM_adjusted, "Sevendonck"))
+t <- list_plots %>% filter(str_detect(forest_reserve_FM_adjusted, "Sevend"))
 list_plots %>% filter(is.na(forest_reserve_FM_adjusted)) %>% nrow() == 0
-list_plots %>% filter(forest_reserve_FM_adjusted == "Everzwijnbad" & period == 3)
+list_plots %>% filter(forest_reserve_FM_adjusted == "Jansheideberg" & period == 3 & plottype == "CA")
 
 nrow(plotdata_def); nrow(list_plots)*2
 # enkel de CP's hebben twee records in plotdata_def: A3 en A4 => +/- gelijk
@@ -598,7 +616,7 @@ list_BR <- list_plots %>%
 # t2 <- list_BR_ %>% 
 #   anti_join(list_BR, by = c("forest_reserve", "plottype", "PLOTS_LIST"))
 
-list_BR %>% filter(str_detect(forest_reserve_FM_adjusted,"Sevendonck"))
+list_BR %>% filter(str_detect(forest_reserve_FM_adjusted,"Sevend") & plottype == "CP")
 list_BR %>% filter(str_detect(forest_reserve_FM_adjusted,"Everzw") & period == 3)
 ```
 
@@ -755,7 +773,7 @@ t <- data_dendro %>% filter(is.na(tree_id)) %>%
 ```
 
 
-**!! OPGEPAST**: doordat we hoger de bomen met dbh < 30 cm verwijdered hebben uit 
+**!! OPGEPAST**: doordat we hoger de bomen met dbh < 30 cm verwijderd hebben uit 
 plot 11000 (periode 1 - jaar 2000), zijn er nu bomen zonder (unieke) `tree_id`
 (waar `old_id` verwees naar één van deze "verwijderde" bomen)
 
@@ -1263,7 +1281,7 @@ table(lying$DECAY_TEXT)
 #check
 lying %>% filter(plot_id == 101)
 lying %>% filter(plot_id == 2001)
-lying %>% filter(plot_id == 11000)
+t <- lying %>% filter(plot_id == 91000)
 
 ```
 
@@ -1807,10 +1825,10 @@ design_ <- plotdata %>%
          ) 
 
 names(design_)
-nrow(design_)  # 118/155
+nrow(design_)  # 118/155/128
 
 t <- design_ %>% filter(str_detect(forest_reserve_FM_adjusted,"Sevendonck"))
-design_ %>% filter(str_detect(forest_reserve_FM_adjusted,"Zoni"))
+design_ %>% filter(str_detect(forest_reserve_FM_adjusted,"Heirn") & plottype == "CA")
 ```
 
 
@@ -2130,13 +2148,6 @@ names(ground_veg_link_new) == names(ground_veg_link)
 
 
 ```{r eval = FALSE}
-# With heide en Heirnisse al aangeleverd - gecheckt 30/3/2026
-# (toch in ...\EUFORIA_WILDCARD_2024\output_R\versie_gecorrigeerde_consistent_id)
-
-
-# ? - Withoefse heide: data van 2023
-# - Heirnisse: data van 2024
-
 new_vegdata <- ground_veg_link %>% 
   anti_join(old_vegdata, by = c("SITE_ID", "SITE_NAME", "WILDCARD_sub_ID"
                                 , "INVENTORY_YEAR"))
