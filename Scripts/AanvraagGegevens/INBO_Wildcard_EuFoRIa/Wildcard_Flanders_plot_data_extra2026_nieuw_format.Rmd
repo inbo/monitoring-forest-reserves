@@ -1,8 +1,8 @@
 ---
 title: "Wildcard - Flemish forest reserve network"
-subtitle: "Design, plot en tree data - aanvulling 2026"
+subtitle: "Design, plot en tree data - aanvulling 2026, nieuw dataformaat"
 author: "Anja Leyman"
-date: "25/03/2026"  
+date: "06/04/2026"  
 output: 
   html_document:
     keep_md: FALSE
@@ -45,7 +45,7 @@ source(here::here("scripts/Setup.R"))
 path_to_project_teamdrive <- paste0(path_to_output_gdrive, "EUFORIA_WILDCARD_2024")
 
 # path_to_datarequest <- paste0(path_to_project, "/output/")
-path_to_datarequest_teamdrive <- paste0(path_to_project_teamdrive, "/output_R/extra_data_2026/")
+path_to_datarequest_teamdrive <- paste0(path_to_project_teamdrive, "/output_R/extra_data_2026_nieuw_format/")
 path_to_datarequest_old <- paste0(path_to_project_teamdrive
                                   , "/output_R/versie_feb2025/")
 path_to_html_teamdrive <- path_to_datarequest_teamdrive
@@ -84,6 +84,21 @@ Extra ten opzichte van 2024:
 Wijnendale, With heide en Heirnisse waren reeds toegevoegd 
 (toch in ...\EUFORIA_WILDCARD_2024\output_R\versie_gecorrigeerde_consistent_id\csv)
 Gecheckt op 30/3/2026.
+
+## Aanpassingen aan gevraagd formaat
+
+Zie word-doc "Opmerkingen nieuwe data delivery wildcard.docx".
+
+O.a.
+
+- LPI_ID en SPI_id in één kolom
+- extra inventory_ID
+- standing en lying in één tabel
+- veld composed_id ipv site_name, site_id, wildcard_subid
+- Institue bij design toevoegen
+
+Voor vegetatie niet echt noodzakelijk (komt bij andere mensen, andere db), 
+maar voor gemak toch meenemen.
 
 
 ## Design  level data
@@ -2341,7 +2356,7 @@ Na knitting - manueel
 
 ```{r eval = FALSE}
 # Specify the path of the file you want to copy
-source_file <- here::here(paste0("Scripts/AanvraagGegevens/INBO_Wildcard_EuFoRIa/Wildcard_Flanders_plot_data_extra2026.html"))
+source_file <- here::here(paste0("Scripts/AanvraagGegevens/INBO_Wildcard_EuFoRIa/Wildcard_Flanders_plot_data_extra2026_nieuw_format.html"))
 
 # Specify the destination directory where you want to copy the file
 destination_dir <- path_to_html_teamdrive

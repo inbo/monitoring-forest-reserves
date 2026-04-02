@@ -74,7 +74,7 @@ Ik heb het protocol eens doorgenomen en wat voor SenseForest interessant kan zij
 - op boomniveau   
 
   - levende bomen: soort, DBH, hoogte, locatie, (vitaliteitsklasse)     
-  -  bomen:  DBH, hoogte, locatie, (soort)      
+  - bomen:  DBH, hoogte, locatie, (soort)      
   - liggend dood hout: diameter, lengte, locatie        
 
 - in A3 en A4: aantallen per soort (snap ik niet helemaal misschien)      
@@ -214,21 +214,22 @@ names(plotinfo_recent)
 
 ```{r dendro_by_plot}
 names(dendro_by_plot)
-names(dendro_by_plot_recent)
 
 dendro_by_plot_recent <- dendro_by_plot %>% 
   inner_join(most_recent_survey
              , by = c("plot_id", "period")) %>% 
+  # datum van opname
   left_join(plotinfo %>% select(plot_id, period, date_dendro)) %>% 
   select(forest_reserve, plottype, plot_id, period
          , year, date_dendro
          , everything()) %>% 
   select(-contains(c("lis", "vol_log_above40cm_m3_ha")))
+
+names(dendro_by_plot_recent)
 ```
 
 ```{r dendro_by_plot_species}
 names(dendro_by_plot_species)
-names(dendro_by_plot_species_recent)
 
 dendro_by_plot_species_recent <- dendro_by_plot_species %>% 
   inner_join(most_recent_survey
@@ -239,11 +240,12 @@ dendro_by_plot_species_recent <- dendro_by_plot_species %>%
          , everything()) %>% 
   select(-contains(c("lis")), -vol_log_above40cm_m3_ha
                    , -stems_per_tree)
+
+names(dendro_by_plot_species_recent)
 ```
 
 ```{r veg_by_plot}
 names(veg_by_plot)
-names(veg_by_plot_recent)
 
 veg_by_plot_recent <- veg_by_plot %>% 
   inner_join(most_recent_survey
@@ -251,6 +253,8 @@ veg_by_plot_recent <- veg_by_plot %>%
   mutate(year_veg = year(date_vegetation)) %>% 
   select(forest_reserve, plottype, plot_id, subplot_id, period
          , date_vegetation, year_veg, number_of_species)
+
+names(veg_by_plot_recent)
 ```
 
 
@@ -308,19 +312,54 @@ xy_all %>% filter(is.na(x_global_plot)) %>% nrow() == 0
 names(xy_all)
 ```
 
-> nog plain settngs bij project van KV's doen
-en den export data deadwood in een aparte access-db
+<!-- > nog plain settngs bij project van KV's doen -->
+<!-- en den export data deadwood in een aparte access-db -->
 
 ```{r stems}
 stems <- read_csv2(paste0(path_to_treelevel_gdrive, "stems_calc.csv"))
-
 names(stems)
+
+stems_recent <- stems %>% 
+  inner_join(most_recent_survey
+             , by = c("plot_id", "period")) %>% 
+  # datum van opname
+  left_join(plotinfo %>% select(forest_reserve, plot_id, period, date_dendro)) %>% 
+  left_join(xy_all) %>% 
+  mutate(x_global = x_global_plot + x_local
+         , y_global = y_global_plot + y_local) %>% 
+  select(forest_reserve, plottype, plot_id, period
+         , year, date_dendro
+         , tree_measure_id, shoot_measure_id
+         , contains(c("local", "global"))
+         , species, dbh_mm, height_m, calc_height_m
+         , alive_dead, ind_sht_cop, intact_snag
+         , contains("iufro"))
+
+ names(stems_recent)
+
 
 ```
 
 ```{r trees}
-
 trees <- read_csv2(paste0(path_to_treelevel_gdrive, "trees_calc.csv"))
+names(trees)
+
+trees_recent <- trees %>% 
+  inner_join(most_recent_survey
+             , by = c("plot_id", "period")) %>% 
+  # datum van opname
+  left_join(plotinfo %>% select(forest_reserve, plot_id, period, date_dendro)) %>% 
+  left_join(xy_all) %>% 
+  mutate(x_global = x_global_plot + x_local
+         , y_global = y_global_plot + y_local) %>% 
+  select(forest_reserve, plottype, plot_id, period
+         , year, date_dendro, tree_measure_id
+         , contains(c("local", "global"))
+         , species, dbh_mm, height_m, calc_height_m
+         , alive_dead, ind_sht_cop, intact_snag
+         , contains("iufro"))
+
+ names(trees_recent)
 
 ```
 
@@ -368,32 +407,115 @@ Deze tabellen bevatten de XY-coördinaten van start- en eindpunt van het liggend
 dood hout, en van eventuele extra "breekpunten" (tot max. 6)
 
 
-```{r df}
+```{r CP}
 # path_to_deadw_db <- paste0(path_to_project, "/input/deadwood_test.accdb")
-path_to_deadw_db <- paste0(path_to_project, "/input/deadwood_export_moederdb20240613.accdb")
+path_to_deadw_db <- paste0(path_to_project, "/input/deadwood_export_moederdb20260313_CP.accdb")
 
 con <- odbcConnectAccess2007(path_to_deadw_db)
-  deadw_details  <- sqlFetch(con, "Deadwood_2eSET_Details", stringsAsFactors = FALSE)
+  deadw_details_p2  <- sqlFetch(con, "Deadwood_2eSET_Details", stringsAsFactors = FALSE) 
+  deadw_details_p3  <- sqlFetch(con, "Deadwood_3eSET_Details", stringsAsFactors = FALSE)
 odbcClose(con)
+
+names(deadw_details_p2)
+
+deadw_details_p2_ <- deadw_details_p2 %>% 
+  mutate(period = 2) %>% 
+  rename(plot_id = IDPlots
+         , IDDeadwood = IDDeadwood_2eSET)
+
+deadw_details_p3_ <- deadw_details_p3 %>% 
+  mutate(period = 3) %>% 
+  rename(plot_id = IDPlots
+         , IDDeadwood = IDDeadwood_3eSET)
+
+t <- deadw_details_p3 %>% filter(!IDPlots %in% deadw_details_p3_$plot_id)
+# Pruikemakers, Liedekerke, Prognoses
+
+deadw_details_CP <- rbind(deadw_details_p2_, deadw_details_p3_) %>% 
+  inner_join(most_recent_survey) %>% 
+  # in lokale coordinaten
+  rename(x_local = X_m, y_local = Y_m) %>% 
+  left_join(xy_all) %>% 
+  mutate(x_global = x_global_plot + x_local
+         , y_global = y_global_plot + y_local) %>% 
+  select(-contains(c("_local", "global_plot")))
+
+n_distinct(deadw_details_CP$plot_id) # 764
+most_recent_survey_ %>% 
+  filter(plottype == "CP") %>% 
+  summarise(n_plots = n_distinct(plot_id)) 
+# 926
+
+# niet elke cirkelplot bevat dood hout
+
 ```
 
-```{r}
-names(deadw_details)
-n_distinct(deadw_details$IDPlots) # 902
 
-# only CP's 
-deadw_xy <- deadw_details %>% 
-  select(plot_id = IDPlots, lying_deadw_id = IDDeadwood_2eSET,
+```{r CA}
+# path_to_deadw_db <- paste0(path_to_project, "/input/deadwood_test.accdb")
+path_to_deadw_db <- paste0(path_to_project, "/input/deadwood_export_moederdb20260313_KV.accdb")
+
+con <- odbcConnectAccess2007(path_to_deadw_db)
+  deadw_details_p2  <- sqlFetch(con, "Deadwood_2eSET_Details", stringsAsFactors = FALSE) 
+  deadw_details_p3  <- sqlFetch(con, "Deadwood_3eSET_Details", stringsAsFactors = FALSE)
+odbcClose(con)
+
+
+names(deadw_details_p2)
+
+deadw_details_p2_ <- deadw_details_p2 %>% 
+  mutate(period = 2) %>% 
+  rename(plot_id = IDPlots
+         , IDDeadwood = IDDeadwood_2eSET)
+
+deadw_details_p3_ <- deadw_details_p3 %>% 
+  mutate(period = 3) %>% 
+  rename(plot_id = IDPlots
+         , IDDeadwood = IDDeadwood_3eSET) 
+
+t <- deadw_details_p3 %>% filter(!IDPlots %in% deadw_details_p3_$plot_id)
+# Pruikemakers, Liedekerke
+
+deadw_details_CA <- rbind(deadw_details_p2_, deadw_details_p3_) %>% 
+  inner_join(most_recent_survey) %>% 
+  # in globale coordinaten
+  rename(x_global = X_m, y_global = Y_m)
+
+n_distinct(deadw_details_CA$plot_id) # 17
+most_recent_survey_ %>% 
+  filter(plottype == "CA") %>% 
+  summarise(n_plots = n_distinct(plot_id)) 
+# 17
+
+```
+
+
+```{r all}
+deadw_xy <- rbind(deadw_details_CP, deadw_details_CA) %>% 
+  select(plot_id, lying_deadw_id = IDDeadwood,
          id = ID, diam_mm = Diam_mm,
-         x_local = X_m, y_local = Y_m) %>% 
-  inner_join(plotinfo %>% select(plot_id))
+         x_global, y_global) 
+
+names(deadw_xy)
+n_distinct(deadw_xy$plot_id) # 781
 
 # klopt aantal?
-n_distinct(deadw_xy$plot_id) == data_deadwood %>% 
-  inner_join(plotinfo %>% select(plot_id)) %>% 
-  select(plot_id) %>% n_distinct() # 781
+data_deadwood <- load_data_deadwood(path_to_fieldmap_db)
 
+n_distinct(deadw_xy$plot_id) == data_deadwood %>% 
+  inner_join(most_recent_survey) %>% 
+  select(plot_id) %>% n_distinct() # 777 vs 781
+
+data_deadw_recent <- data_deadwood %>% 
+  inner_join(most_recent_survey) 
+
+t <- deadw_xy %>% 
+  filter(!plot_id %in% data_deadw_recent$plot_id)
+unique(t$plot_id) 
+# [1] 1582 1609 1611 1613
+# waarom zitten die niet in data_deadwood maar wel in CP die van moederdb komt? 
 ```
+
 
 
 
@@ -406,7 +528,7 @@ n_distinct(deadw_xy$plot_id) == data_deadwood %>%
 
 Metadata kopiëren naar folder `r path_to_datarequest_teamdrive`.
 
-```{r}
+```{r eval = FALSE}
 path_source <- path_to_metadata
 path_to <- path_to_datarequest_teamdrive
 
@@ -426,5 +548,95 @@ map(metadata, ~ file.copy(from = paste0(path_source, .x)
 #           , to = path_to, overwrite = TRUE)
 ```
 
+
+
+## Lookuplijsten
+
+Lookuplijsten wat duidelijker/compacter maken en exporteren naar folder `r path_to_datarequest_teamdrive`.
+
+```{r eval = FALSE}
+resources(datapackage)
+table_names <- c("qalive_dead", "qintact_snag", "qind_shoot_cop"
+                 , "qplot_type", "qspecies"
+                 , "qiufroheight", "qiufrovitality", "qiufrosocialstatus")
+
+# #tabellen in een lijst ifv purrr::map
+# read_resource(datapackage, "plotinfo") 
+tbls <- map(table_names, ~ read_resource(datapackage, .x))
+names(tbls) <- table_names
+
+# CreateSeparateDataframes
+list2env(tbls, envir = .GlobalEnv)
+
+# beetje omvormen zdd niet verwarrend
+qalive_dead <- qalive_dead %>% 
+  filter(ID != 15) %>% 
+  select(-Value3, -OrderField, -Active)
+
+qplot_type <- qplot_type %>% 
+  filter(ID %in% c(20,30)) %>% 
+  select(ID = Value3, Value1, Value2)
+
+qintact_snag <- qintact_snag %>% 
+  select(-Value3, -OrderField, -Active)
+
+qind_shoot_cop <- qind_shoot_cop %>% 
+  select(-Value3, -OrderField, -Active)
+
+qspecies <- qspecies %>% 
+  select(-Value3, -OrderField, -Active)
+
+qiufroheight <- qiufroheight %>% 
+  filter(ID != 50) %>% 
+  select(-MasterID, -Value3, -OrderField, -Active)
+
+qiufrovitality <- qiufrovitality %>% 
+  filter(ID != 50) %>% 
+  select(-MasterID, -Value3, -OrderField, -Active)
+
+qiufrosocialstatus <- qiufrosocialstatus %>% 
+  filter(ID != 50) %>% 
+  select(-MasterID, -Value3, -OrderField, -Active)
+
+# terug in lijst stoppen
+list_lkp <- map(table_names, get)  %>%  
+  set_names(table_names)
+
+# wegschrijven naar path_to_datarequest_teamdrive
+save_results_csv(list_lkp, path_to_datarequest_teamdrive)
+```
+
+
+## Resultaten plotniveau  
+
+```{r}
+table_names <- c("dendro_by_plot_recent", "dendro_by_plot_species_recent"
+                 , "veg_by_plot_recent"
+                 , "most_recent_survey_")
+
+# terug in lijst stoppen
+list_plotlevel <- map(table_names, get)  %>%  
+  set_names(table_names)
+
+# wegschrijven naar path_to_datarequest_teamdrive
+save_results_csv(list_plotlevel, path_to_datarequest_teamdrive)
+```
+
+
+## Resultaten boomniveau 
+
+Voor de volledigheid zowel trees als stems.
+
+Er wordt gebruik gemaakt van lookuplijsten voor oa soort, status levend/dood,
+iufro-klasses, ....
+
+XY_global werd afgeleid van plotcoördinaten in combinatie met lokale boomcoördinaten.
+
+```{r}
+list_treelevel <- list(trees_recent = trees_recent
+                   , stems_recent = stems_recent)
+
+save_results_csv(list_treelevel, path_to_datarequest_teamdrive)
+```
 
 
