@@ -26,7 +26,8 @@
 
 save_results_csv <- function(results, output_dir){
   for (tablename in names(results)) {
-    write.csv2(results[[tablename]], file = paste0(output_dir, tablename, ".csv"))
+    write.csv2(results[[tablename]], file = paste0(output_dir, tablename, ".csv")
+               , row.names = FALSE)
   }
 }
 
