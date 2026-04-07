@@ -45,7 +45,7 @@ source(here::here("scripts/Setup.R"))
 path_to_project_teamdrive <- paste0(path_to_output_gdrive, "EUFORIA_WILDCARD_2024")
 
 # path_to_datarequest <- paste0(path_to_project, "/output/")
-path_to_datarequest_teamdrive <- paste0(path_to_project_teamdrive, "/output_R/extra_data_2026_nieuw_format/")
+path_to_datarequest_teamdrive <- paste0(path_to_project_teamdrive, "/output_R/extra_data_2026_new_format/")
 path_to_datarequest_old <- paste0(path_to_project_teamdrive
                                   , "/output_R/versie_feb2025/")
 path_to_html_teamdrive <- path_to_datarequest_teamdrive
@@ -1346,7 +1346,7 @@ Combine both
 ```{r}
 names(lying); names(standing)
 
-standing_lying <- rbind(standing, lying)
+trees <- rbind(standing, lying)
 
 
 ```
@@ -2006,11 +2006,11 @@ plotdata_def_link <- plotdata_def %>%
 
 nrow(plotdata_def_link) == nrow(plotdata_def) 
 ```
-```{r link_LYING_STANDING, results='hide'}
+```{r link_TREES, results='hide'}
 names(link_WC_FM)
-names(standing_lying)
+names(trees)
 
-standing_lying_link <- standing_lying %>% 
+trees_link <- trees %>% 
   left_join(list_BR %>% select(forest_reserve_FM_adjusted, plottype
                                , period, INVENTORY_YEAR)) %>% 
   left_join(link_WC_FM %>% select(-comment, -subarea, -`LPI_ID / SPI_ID`)
@@ -2019,7 +2019,7 @@ standing_lying_link <- standing_lying %>%
   select(composed_site_id, everything())
 
 
-nrow(standing_lying_link) == nrow(standing_lying) 
+nrow(trees_link) == nrow(trees) 
 ```
 
 
@@ -2107,20 +2107,8 @@ ipv veld "BOUNDARY" in DESIGN.txt (gevraagd aan Yannick (mail 25/9/2024)):
 
 ```{r final_check, eval = FALSE}
 #
-summary(lying_link)
-# 45 NA's voor D1/2: OK, want intacte bomen
-# 87 NA's voor decay - OK, kan
-names(lying_link)
-lying_link %>% filter(is.na(VOLUME)) %>% nrow() == 0
-# period 3: nog niet bijgewerkt (calc_volume inside plot en bijwerken calc_volume)
-# ok 25/9/2024
-
-#
-# summary(cwd_link)
-
-#
-summary(standing_link)
-standing_link %>% filter(is.na(VOLUME)) %>% nrow() == 0
+summary(trees_link)
+trees_link %>% filter(is.na(VOLUME)) %>% nrow() == 0
 # standing0 %>% filter(is.na(vol_bole_m3)) %>% 
 #   select(plot_id, period
 #          , tree_id, tree_measure_id, old_id, coppice_id
@@ -2136,7 +2124,7 @@ plotdata_def_link %>% filter(is.na(SAMPLED_AREA)) %>% nrow() == 0
 #
 summary(design_def_link)
 design_def_link %>% filter(is.na(LYING_DEAD_THRESHOLD)) %>% nrow() 
-design_def_link %>% filter(is.na(LYING_DEAD_THRESHOLD)) %>% distinct(SITE_NAME, WILDCARD_sub_ID, period)
+design_def_link %>% filter(is.na(LYING_DEAD_THRESHOLD)) %>% distinct(composed_site_id, period)
 # OK, geen deadwood opname gebeurd
 ```
 
@@ -2147,7 +2135,7 @@ col <- c("composed_site_id")
 
 design_def_link %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
 plotdata_def_link %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
-standing_lying_link %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+trees_link %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
 # lying_link %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
 # cwd_link %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
 ground_veg_link %>% filter(PLOT_SAMPLED == "Y") %>% 
@@ -2173,7 +2161,7 @@ table(new_data$composed_site_id)
 # onderscheid met reeds aangeleverde obv extra_vars (plottype, period, forest_reserve_FM_adjusted)
 names(new_data)
 new_data <- new_data %>% 
-  select(SITE_ID, SITE_NAME, WILDCARD_sub_ID
+  select(composed_site_id
          , forest_reserve_FM_adjusted, plottype, period) %>% 
   unique()
 
@@ -2193,16 +2181,16 @@ names(plotdata_def_link_new) == names(plotdata_def_link_new)
 
 
 # 3
-names(standing_link)
-standing_link_new <- standing_link %>% 
+names(trees_link)
+trees_link_new <- trees_link %>% 
   inner_join(new_data)
-names(standing_link_new) == names(standing_link)
+names(trees_link_new) == names(trees_link)
 
 # 4
-names(lying_link)
-lying_link_new <- lying_link %>% 
-  inner_join(new_data)
-names(lying_link_new) == names(lying_link)
+# names(lying_link)
+# lying_link_new <- lying_link %>% 
+#   inner_join(new_data)
+# names(lying_link_new) == names(lying_link)
 
 
 # 5
@@ -2218,22 +2206,20 @@ names(ground_veg_link_new) == names(ground_veg_link)
 
 ```{r eval = FALSE}
 new_vegdata <- ground_veg_link %>% 
-  anti_join(old_vegdata, by = c("SITE_ID", "SITE_NAME", "WILDCARD_sub_ID"
-                                , "INVENTORY_YEAR"))
-table(new_vegdata$SITE_NAME)
-with <- old_vegdata %>% filter(str_detect(SITE_NAME, "With"))
-heirni <- old_vegdata %>% filter(str_detect(SITE_NAME, "Heirn"))
+  anti_join(old_vegdata, by = c("composed_site_id", "INVENTORY_YEAR"))
+table(new_vegdata$composed_site_id)
+with <- old_vegdata %>% filter(str_detect(composed_site_id, "With"))
+heirni <- old_vegdata %>% filter(str_detect(composed_site_id, "Heirn"))
 
 
 # ? - Withoefse heide: data van 2023
 # - Heirnisse: data van 2024
 
-new_treedata <- standing_link %>% 
-  anti_join(old_treedata, by = c("SITE_ID", "SITE_NAME", "WILDCARD_sub_ID"
-                                , "INVENTORY_YEAR"))
-table(new_treedata$SITE_NAME)
-with <- old_treedata %>% filter(str_detect(SITE_NAME, "With"))
-heirni <- old_treedata %>% filter(str_detect(SITE_NAME, "Heirn"))
+new_treedata <- trees_link %>% 
+  anti_join(old_treedata, by = c("composed_site_id", "INVENTORY_YEAR"))
+table(new_treedata$composed_site_id)
+with <- old_treedata %>% filter(str_detect(composed_site_id, "With"))
+heirni <- old_treedata %>% filter(str_detect(composed_site_id, "Heirn"))
 ```
 
 
@@ -2249,8 +2235,8 @@ write.table(plotdata_def_link_new %>% select(-all_of(extra_vars), -composed_site
             , paste0(path_to_datarequest_teamdrive, "INBO_Plots.txt")
             , sep = " ", dec = ".")
 
-write.table(standing_link_new %>% select(-all_of(extra_vars), -tree_measure_id, -composed_site_id)
-            , paste0(path_to_datarequest_teamdrive, "INBO_Standing.txt")
+write.table(trees_link_new %>% select(-all_of(extra_vars), -tree_measure_id, -composed_site_id)
+            , paste0(path_to_datarequest_teamdrive, "INBO_Trees.txt")
             , sep = " ", dec = ".")
 # lookuplists
     # write.table(qSpecies, paste0(path_to_datarequest_teamdrive, "qSpecies.txt")
@@ -2261,9 +2247,9 @@ write.table(standing_link_new %>% select(-all_of(extra_vars), -tree_measure_id, 
     #             , sep = " ", dec = ".")
 
 
-write.table(lying_link_new %>% select(-all_of(extra_vars), -composed_site_id)
-            , paste0(path_to_datarequest_teamdrive, "INBO_Lying.txt")
-            , sep = " ", dec = ".")
+# write.table(lying_link_new %>% select(-all_of(extra_vars), -composed_site_id)
+#             , paste0(path_to_datarequest_teamdrive, "INBO_Lying.txt")
+#             , sep = " ", dec = ".")
 
 # write.table(cwd_link %>% select(-all_of(extra_vars))
 #             , paste0(path_to_datarequest_teamdrive, "INBO_CWD.txt")
