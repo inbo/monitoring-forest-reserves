@@ -91,11 +91,11 @@ Zie word-doc "Opmerkingen nieuwe data delivery wildcard.docx".
 
 O.a.
 
-- LPI_ID en SPI_id in één kolom
+- LPI_ID en SPI_ID in één kolom
 - extra inventory_ID
 - standing en lying in één tabel
 - veld composed_id ipv site_name, site_id, wildcard_subid
-- Institue bij design toevoegen
+- Institute bij design toevoegen
 
 Voor vegetatie niet echt noodzakelijk (komt bij andere mensen, andere db), 
 maar voor gemak toch meenemen.
@@ -235,9 +235,9 @@ odbcClose(con)
 
 # strata_soil enkel nodig om SubArea van Sevendonck te onderscheiden (A vs Q)
 # andere subarea's zijn enkel verwarrend en hier niet nodig
-subarea_sevendonck <- link_plotid_wildcard %>% 
+subarea_sevendonck <- link_plotid_subarea %>% 
   filter(forest_reserve_fieldmap == "Sevendonck") %>% 
-  select(plot_id, forest_reserve_fieldmap, SITE_NAME, subarea = WILDCARD_sub_ID)
+  select(plot_id, forest_reserve_fieldmap, subarea = SubArea)
 ```
 
 
@@ -354,8 +354,8 @@ plotdata0 <- plotinfo %>%
   # forest_reserve_FM_adjusted aanmaken
   # om verder te kunnen koppelen aan site-id's wildcard
   mutate(forest_reserve_FM_adjusted = 
-           ifelse(!is.na(subarea) & subarea == "Alnion", "Sevendonck A",
-                  ifelse(!is.na(subarea) & subarea == "Quercion", "Sevendonck Q",
+           ifelse(!is.na(subarea) & subarea == "Alder forest SFR", "Sevendonck A",
+                  ifelse(!is.na(subarea) & subarea == "Oak forest SFR", "Sevendonck Q",
                          forest_reserve))
          ) %>% 
   select(-subarea)
