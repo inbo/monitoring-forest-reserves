@@ -215,14 +215,14 @@ con <- odbcConnectAccess2007(path_to_strata_db)
   dominant_tree <- sqlFetch(con, "dominant_tree", stringsAsFactors = FALSE)
   # strata_soil <- sqlFetch(con, "strata_soil", stringsAsFactors = FALSE) %>% 
   #   select(Unieknr, plot_id, SiteName, SubArea, forest_reserve_fieldmap)
-  link_plotid_wildcard <- sqlFetch(con, "link_plotid_wildcard", stringsAsFactors = FALSE) 
+  link_plotid_subarea <- sqlFetch(con, "link_plotid_subarea", stringsAsFactors = FALSE) 
 odbcClose(con)
 
 # strata_soil enkel nodig om SubArea van Sevendonck te onderscheiden (A vs Q)
 # andere subarea's zijn enkel verwarrend en hier niet nodig
-subarea_sevendonck <- link_plotid_wildcard %>% 
+subarea_sevendonck <- link_plotid_subarea %>% 
   filter(forest_reserve_fieldmap == "Sevendonck") %>% 
-  select(plot_id, forest_reserve_fieldmap, SITE_NAME, subarea = WILDCARD_sub_ID)
+  select(plot_id, forest_reserve_fieldmap, subarea = SubArea)
 ```
 
 
@@ -339,8 +339,8 @@ plotdata0 <- plotinfo %>%
   # forest_reserve_FM_adjusted aanmaken
   # om verder te kunnen koppelen aan site-id's wildcard
   mutate(forest_reserve_FM_adjusted = 
-           ifelse(!is.na(subarea) & subarea == "Alnion", "Sevendonck A",
-                  ifelse(!is.na(subarea) & subarea == "Quercion", "Sevendonck Q",
+           ifelse(!is.na(subarea) & subarea == "Alder forest SFR", "Sevendonck A",
+                  ifelse(!is.na(subarea) & subarea == "Oak forest SFR", "Sevendonck Q",
                          forest_reserve))
          ) %>% 
   select(-subarea)
