@@ -74,18 +74,8 @@ The script below generates all info and data according to the guidelines stipula
 
 The managed plots in the mainly non-managed forest reserves (EUFORIA-sites) are removed prior to analysis.
 
-## Update with more recent data
 
-Extra ten opzichte van 2024:
-
-- Bos Terrijst: data van 2025
-- Coolhem A en Q: data van 2025
-
-Wijnendale, With heide en Heirnisse waren reeds toegevoegd 
-(toch in ...\EUFORIA_WILDCARD_2024\output_R\versie_gecorrigeerde_consistent_id\csv)
-Gecheckt op 30/3/2026.
-
-## Aanpassingen aan gevraagd formaat
+## April 2026: aanpassingen aan gevraagd formaat
 
 Zie word-doc "Opmerkingen nieuwe data delivery wildcard.docx".
 
@@ -99,6 +89,20 @@ O.a.
 
 Voor vegetatie niet echt noodzakelijk (komt bij andere mensen, andere db), 
 maar voor gemak toch meenemen.
+
+
+
+## March 2026: update with more recent data
+
+Extra ten opzichte van 2024:
+
+- Bos Terrijst: data van 2025
+- Coolhem A en Q: data van 2025
+
+Wijnendale, With heide en Heirnisse waren reeds toegevoegd 
+(toch in ...\EUFORIA_WILDCARD_2024\output_R\versie_gecorrigeerde_consistent_id\csv)
+Gecheckt op 30/3/2026.
+
 
 
 ## Design  level data
@@ -230,7 +234,7 @@ con <- odbcConnectAccess2007(path_to_strata_db)
   dominant_tree <- sqlFetch(con, "dominant_tree", stringsAsFactors = FALSE)
   # strata_soil <- sqlFetch(con, "strata_soil", stringsAsFactors = FALSE) %>% 
   #   select(Unieknr, plot_id, SiteName, SubArea, forest_reserve_fieldmap)
-  link_plotid_wildcard <- sqlFetch(con, "link_plotid_wildcard", stringsAsFactors = FALSE) 
+  link_plotid_subarea <- sqlFetch(con, "link_plotid_subarea", stringsAsFactors = FALSE) 
 odbcClose(con)
 
 # strata_soil enkel nodig om SubArea van Sevendonck te onderscheiden (A vs Q)
@@ -325,7 +329,6 @@ plotdata0 <- plotinfo %>%
   # enkel plots waar XY van berekend is => inner_join
   # (niet 61000 transect: immers enkel 1eSet een opname, dan niet meer)
   inner_join(info_XY %>% select(plot_id, XLon_wgs84, YLat_wgs84, Z_m_TAW), by = c("plot_id")) %>% 
-  # left_join(link_WC_FM, by = c(forest_reserve_fieldmap", plottype))
   left_join(info_beheer) %>% 
   filter(Management == "unmanaged") %>% 
   anti_join(poplar_kluisbos %>% select(plot_id)) %>% 
@@ -964,6 +967,7 @@ standing <- standing0 %>%
   # left_join(list_plots) %>% 
   mutate(TREE_ID = tree_id
          , STEM_ID = shoot_measure_id
+         , PIECE_ID = NA
          , CONSISTENT_ID = ifelse(CONSISTENT_ID_STANDING == "P"
                                   # op stemniveau => "Y" voor single trees, "N" voor coppice
                                   , ifelse(ind_sht_cop == 10, "Y", "N")
@@ -974,6 +978,8 @@ standing <- standing0 %>%
          , HEIGHT = height_m # measured!
          , DATE = as.Date(date_dendro, format = "%d/%m/%Y") # Date of measurement of particular stem (format yyyy-mm-dd): 2002-12-01
          , DBH_mm = dbh_mm
+         , D1_mm = NA, D2_mm = NA
+         , LENGTH = NA
          , TREE_SPECIES_FULL_SCIENTIFIC = name_sc
          , TREE_SPECIES_CODE = species	
          , DECAY_NUMERIC = ifelse(alive_dead == 12, decaystage, NA)
@@ -985,11 +991,13 @@ standing <- standing0 %>%
          , VOLUME = round(vol_bole_m3, 2)
          , VITALITY = vitality_txt
          ) %>% 
-  select(LPI_ID,	SPI_ID,	TREE_ID,	STEM_ID,	INVENTORY_YEAR,	CONSISTENT_ID
+  select(LPI_ID,	SPI_ID,	TREE_ID,	STEM_ID, PIECE_ID
+         , INVENTORY_YEAR,	CONSISTENT_ID
          , LIFE, POSITION, INTEGRITY
          , HEIGHT, DATE
          , TREE_SPECIES_FULL_SCIENTIFIC, TREE_SPECIES_CODE
          , DBH_mm
+         , D1_mm, D2_mm, LENGTH
          , DECAY_NUMERIC, DECAY_TEXT
          , x_local, y_local, 
          , HOM_m, HEIGHT_model, VOLUME, VITALITY
@@ -1264,7 +1272,8 @@ lying <- lying0 %>%
   left_join(qSpecies %>% select(-name_nl), by = c("species" = "ID")) %>% 
   left_join(qDecaystage, by = c("decaystage" = "ID")) %>% 
   left_join(qVdagnVfm, by = c("intact_fragm" = "ID")) %>% 
-  mutate(TREE_ID = NA
+  mutate(tree_measure_id = NA
+         , TREE_ID = NA
          , STEM_ID = NA
          , PIECE_ID = lying_deadw_id
          , CONSISTENT_ID = ifelse(CONSISTENT_ID_LYING == "N"
@@ -1273,6 +1282,7 @@ lying <- lying0 %>%
          , LIFE	= "D"  # liggend is steeds dood bij ons
          , POSITION	= "L"
          , INTEGRITY = ifelse(intact_fragm == 10, "C", "F")	 # Complete (C) or Fragmented stem (F)
+         , HEIGHT = NA
          , DATE = as.Date(date_dendro, format = "%d/%m/%Y") # Date of measurement of particular stem (format yyyy-mm-dd): 2002-12-01
          , TREE_SPECIES_FULL_SCIENTIFIC = name_sc
          , TREE_SPECIES_CODE = species	
@@ -1291,20 +1301,26 @@ lying <- lying0 %>%
          , LENGTH = round(calc_length_m, 1)
          , DECAY_NUMERIC = ifelse(decaystage == 0, NA, decaystage)
          , DECAY_TEXT = decaystage_txt
+         , x_local = NA, y_local = NA, HOM_m = NA, HEIGHT_model = NA
          , VOLUME = round(calc_volume_m3, 2)
+         , VITALITY = NA
          ) %>% 
   select(LPI_ID,	SPI_ID,	TREE_ID,	STEM_ID, PIECE_ID
          , INVENTORY_YEAR,	CONSISTENT_ID
          , LIFE, POSITION, INTEGRITY
+         , HEIGHT
          , DATE
          , TREE_SPECIES_FULL_SCIENTIFIC, TREE_SPECIES_CODE
          , DBH_mm, D1_mm, D2_mm
          # , X_1, X_2, Y_1, Y_2
          , LENGTH
          , DECAY_NUMERIC, DECAY_TEXT
+         , x_local, y_local, HOM_m, HEIGHT_model
          , VOLUME
+         , VITALITY
          , all_of(extra_vars)
          # , forest_reserve_FM_adjusted, plot_id, plottype, period
+         , tree_measure_id
          )
 
 names(lying)
@@ -1322,6 +1338,21 @@ t <- lying %>% filter(plot_id == 91000)
 names(lying)
 ```
 <br>
+
+# LYING-STANDING
+
+Combine both
+
+```{r}
+names(lying); names(standing)
+
+standing_lying <- rbind(standing, lying)
+
+
+```
+
+
+
 
 # CWD - NIET
 
@@ -1800,6 +1831,8 @@ ground_veg <- ground_veg_
 
 # DESIGN
 
+New format: INSTITUTE
+
 Request:
 SITE_ID	SITE_NAME	WILDCARD_sub_ID	INVENTORY_YEAR	INVENTORY_TYPE	PLOTS_LIST	CIRCLE_NO	CIRCLE_RADIUS	CIRCLE_AZIMUTH	CIRCLE_DISTANCE	POM_MARK	STANDING_ALIVE_THRESHOLD	STANDING_DEAD_THRESHOLD	LYING_ALIVE_THRESHOLD	LYING_DEAD_THRESHOLD	SPECIES_POOL	LIS_CWD	BOUNDARY	STEM_COORD_REF_POINT	EPSG_CODE
 
@@ -1808,6 +1841,8 @@ Coordinate system (epsg code) used is specified in DESIGN sheet. If using WSG 84
 **Wordt opgeslagen in `design_def`**
 
 ## Variables
+
+INSTITUTE
 
 SITE_ID	SITE_NAME	WILDCARD_sub_ID	composed_site_id inventory_id
 INVENTORY_YEAR	
@@ -1841,8 +1876,8 @@ design_ <- plotdata %>%
       #             summarize() %>% ungroup() %>% 
       #             mutate(cwd_survey = TRUE)
       #           , by = c("forest_reserve_FM_adjusted", "plottype", "period")) %>% 
-  # left_join(link_WC_FM, by = c("forest_reserve", plottype))
-  mutate(INVENTORY_TYPE = ifelse(plottype == "CA", "LPI", 
+  mutate(INSTITUTE = "INBO"
+         , INVENTORY_TYPE = ifelse(plottype == "CA", "LPI", 
                                    ifelse(plottype == "CP", "SPI", NA))
          # , PLOTS_LIST
          , CIRCLE_AZIMUTH = ifelse(plottype == "CP", 0, NA)  # centre of the appropriate sub-circle
@@ -1867,7 +1902,8 @@ design_ %>% filter(str_detect(forest_reserve_FM_adjusted,"Heirn") & plottype == 
 
 ```{r}
 design_def <- design_ %>%
-  select(INVENTORY_YEAR
+  select(INSTITUTE
+         , INVENTORY_YEAR
          # ,SITE_ID, SITE_NAME, WILDCARD_sub_ID # op einde pas link leggen
          , INVENTORY_TYPE
          , PLOTS_LIST
@@ -1897,9 +1933,9 @@ Dan pas alles koppelen.
 
 Wildcard id's:
 
-- SITE_ID	
-- SITE_NAME	
-- WILDCARD_sub_ID
+<!-- - SITE_ID	 -->
+<!-- - SITE_NAME	 -->
+<!-- - WILDCARD_sub_ID -->
 - composed_site_id
 
 
@@ -1911,6 +1947,7 @@ Wildcard id's:
 - plottype
 
 ```{r link_WC_FM, results = 'hide'}
+names(link_wildcard_fieldmap)
 link_WC_FM <- link_wildcard_fieldmap %>% 
   select(-forest_reserve_fieldmap)
 
@@ -1919,14 +1956,14 @@ names(design_def)
 ```
 
 ```{r link_DESIGN, results='hide'}
-
 design_def_link <- design_def %>% 
   left_join(link_WC_FM %>% select(-comment, -subarea, -`LPI_ID / SPI_ID`)
             , by = c("forest_reserve_FM_adjusted", "plottype")) %>% 
   # inventory_id = institute__dataset__inventory_year__site_id__wildcard_sub_id__inventory_type
-  mutate(inventory_id = paste("INBO__NA", INVENTORY_YEAR, SITE_ID, WILDCARD_sub_ID, INVENTORY_TYPE, sep = "__")) %>% 
-  select(SITE_ID, SITE_NAME, WILDCARD_sub_ID, composed_site_id, inventory_id
-         , everything())
+  mutate(inventory_id = paste("INBO__NA", INVENTORY_YEAR, SITE_ID, WILDCARD_sub_ID
+                              , INVENTORY_TYPE, sep = "__")) %>% 
+  select(-SITE_ID, -SITE_NAME, -WILDCARD_sub_ID) %>% 
+  select(INSTITUTE, composed_site_id, inventory_id, everything())
 
 head(design_def_link)
 
@@ -1938,10 +1975,10 @@ t <- design_def_link %>% filter(str_detect(forest_reserve_FM_adjusted, "Sevendon
 names(list_BR)
 names(list_plots)
 t2 <- design_def_link %>% filter(forest_reserve_FM_adjusted == "Zoniën UITBR_1995")
-t3 <- design_def_link %>% filter(str_detect(SITE_NAME, "Zoni"))
+t3 <- design_def_link %>% filter(str_detect(composed_site_id, "Zoni"))
 
 # overal link?
-design_def_link %>% filter(is.na(SITE_ID)) %>% nrow() == 0
+design_def_link %>% filter(is.na(composed_site_id)) %>% nrow() == 0
 ```
 
 ```{r eval= FALSE, results='hide'}
@@ -1964,42 +2001,42 @@ plotdata_def_link <- plotdata_def %>%
                                , period, INVENTORY_YEAR)) %>% 
   left_join(link_WC_FM %>% select(-comment, -subarea, -`LPI_ID / SPI_ID`)
             , by = c("forest_reserve_FM_adjusted", "plottype")) %>% 
-  select(SITE_ID, SITE_NAME, WILDCARD_sub_ID
-         , everything())
+  select(-SITE_ID, -SITE_NAME, -WILDCARD_sub_ID) %>% 
+  select(composed_site_id, everything())
 
 nrow(plotdata_def_link) == nrow(plotdata_def) 
 ```
-```{r link_STANDING, results='hide'}
+```{r link_LYING_STANDING, results='hide'}
 names(link_WC_FM)
-names(standing)
+names(standing_lying)
 
-standing_link <- standing %>% 
+standing_lying_link <- standing_lying %>% 
   left_join(list_BR %>% select(forest_reserve_FM_adjusted, plottype
                                , period, INVENTORY_YEAR)) %>% 
   left_join(link_WC_FM %>% select(-comment, -subarea, -`LPI_ID / SPI_ID`)
             , by = c("forest_reserve_FM_adjusted", "plottype")) %>% 
-  select(SITE_ID, SITE_NAME, WILDCARD_sub_ID
-         , everything())
+  select(-SITE_ID, -SITE_NAME, -WILDCARD_sub_ID) %>% 
+  select(composed_site_id, everything())
 
-nrow(standing_link) == nrow(standing) 
+
+nrow(standing_lying_link) == nrow(standing_lying) 
 ```
 
 
 ```{r link_LYING, results='hide'}
-names(link_WC_FM)
-names(lying)
-
-lying_link <- lying %>% 
-  left_join(list_BR %>% select(forest_reserve_FM_adjusted, plottype
-                               , period, INVENTORY_YEAR)) %>% 
-  left_join(link_WC_FM %>% select(-comment, -subarea, -`LPI_ID / SPI_ID`)
-            , by = c("forest_reserve_FM_adjusted", "plottype")) %>% 
-  select(SITE_ID, SITE_NAME, WILDCARD_sub_ID
-         , everything())
-
-nrow(lying_link) == nrow(lying) 
+# names(link_WC_FM)
+# names(lying)
+# 
+# lying_link <- lying %>% 
+#   left_join(list_BR %>% select(forest_reserve_FM_adjusted, plottype
+#                                , period, INVENTORY_YEAR)) %>% 
+#   left_join(link_WC_FM %>% select(-comment, -subarea, -`LPI_ID / SPI_ID`)
+#             , by = c("forest_reserve_FM_adjusted", "plottype")) %>% 
+#   select(-SITE_ID, -SITE_NAME, -WILDCARD_sub_ID) %>% 
+#   select(composed_site_id, everything())
+# 
+# nrow(lying_link) == nrow(lying) 
 ```
-
 
 ```{r link_CWD_NIET, results='hide', eval = FALSE}
 # names(link_WC_FM)
@@ -2032,8 +2069,8 @@ ground_veg_link <- ground_veg %>%
                                , period, INVENTORY_YEAR)) %>% 
   left_join(link_WC_FM %>% select(-comment, -subarea, -`LPI_ID / SPI_ID`)
             , by = c("forest_reserve_FM_adjusted", "plottype")) %>% 
-  select(SITE_ID, SITE_NAME, WILDCARD_sub_ID
-         , everything())
+  select(-SITE_ID, -SITE_NAME, -WILDCARD_sub_ID) %>% 
+  select(composed_site_id, everything())
 
 nrow(ground_veg_link) == nrow(ground_veg) 
 
@@ -2106,12 +2143,12 @@ design_def_link %>% filter(is.na(LYING_DEAD_THRESHOLD)) %>% distinct(SITE_NAME, 
 ```{r results='hide'}
 # check voor NA's site-id
 names(design_def_link)
-col <- c("SITE_ID", "SITE_NAME", "INVENTORY_YEAR")
+col <- c("composed_site_id")
 
 design_def_link %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
 plotdata_def_link %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
-standing_link %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
-lying_link %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+standing_lying_link %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+# lying_link %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
 # cwd_link %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
 ground_veg_link %>% filter(PLOT_SAMPLED == "Y") %>% 
   filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
@@ -2128,9 +2165,8 @@ old_vegdata <- read_csv2(paste0(path_to_datarequest_old, "csv/INBO_ground_veg.cs
 old_treedata <- read_csv2(paste0(path_to_datarequest_old, "csv/INBO_Standing.csv"))
 
 new_data <- design_def_link %>% 
-  anti_join(old_designdata, by = c("SITE_ID", "SITE_NAME", "WILDCARD_sub_ID"
-                                   , "composed_site_id", "inventory_id"))
-table(new_data$SITE_NAME)
+  anti_join(old_designdata, by = c("composed_site_id", "inventory_id"))
+table(new_data$composed_site_id)
 ```
 
 ```{r}
