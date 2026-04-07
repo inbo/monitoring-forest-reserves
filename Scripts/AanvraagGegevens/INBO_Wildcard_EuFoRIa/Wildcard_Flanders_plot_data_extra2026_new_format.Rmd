@@ -2328,28 +2328,12 @@ table(plots_check$CONSISTENT_ID_STANDING)
 
 
 #
-standing_check <- read.table(paste0(path_to_datarequest_teamdrive, "INBO_Standing.txt")
+trees_check <- read.table(paste0(path_to_datarequest_teamdrive, "INBO_Trees.txt")
                            , sep = " ", dec = ".")
 
-# standing_check <- standing_link %>% select(-all_of(extra_vars), -tree_measure_id)
-head(standing_check)
-names(standing_check)
-
-
-#
-lying_check <- read.table(paste0(path_to_datarequest_teamdrive, "INBO_Lying.txt")
-                           , sep = " ", dec = ".")
-head(lying_check)
-names(lying_check)
-
-lying_check %>% filter(is.na(VOLUME)) %>% nrow() == 0
-
-#
-# cwd_check <- read.table(paste0(path_to_datarequest_teamdrive, "INBO_CWD.txt")
-#                            , sep = " ", dec = ".")
-# head(cwd_check)
-# names(cwd_check)
-# table(cwd_check$SITE_NAME)
+# trees_check <- trees_link %>% select(-all_of(extra_vars), -tree_measure_id)
+head(trees_check)
+names(trees_check)
 
 #
 ground_veg_check <- read.table(paste0(path_to_datarequest_teamdrive, "INBO_ground_veg.txt")
@@ -2378,7 +2362,7 @@ Na knitting - manueel
 
 ```{r eval = FALSE}
 # Specify the path of the file you want to copy
-source_file <- here::here(paste0("Scripts/AanvraagGegevens/INBO_Wildcard_EuFoRIa/Wildcard_Flanders_plot_data_extra2026_nieuw_format.html"))
+source_file <- here::here(paste0("Scripts/AanvraagGegevens/INBO_Wildcard_EuFoRIa/Wildcard_Flanders_plot_data_extra2026_new_format.html"))
 
 # Specify the destination directory where you want to copy the file
 destination_dir <- path_to_html_teamdrive
