@@ -116,7 +116,8 @@ table_names <- resources(datapackage)
 table_names <- c("dendro_by_plot", "dendro_by_plot_species"
                  , "veg_by_plot", "veg_by_core_area_species"
                  , "herblayer_by_plot"
-                 , "strata_location", "plotinfo")
+                 , "strata_location", "plotinfo"
+                 , "link_plotid_subarea")
 
 # #tabellen in een lijst ifv purrr::map
 # read_resource(datapackage, "plotinfo") 
@@ -126,7 +127,7 @@ names(tbls) <- table_names
 # CreateSeparateDataframes
 list2env(tbls, envir = .GlobalEnv)
 ```
-```{r XY}
+```{r XY, results = 'hide'}
 # nog XY toevoegen : CP's obv shp, maar KV's obv GPSreference points
 
 xy_shp <- strata_location %>% 
@@ -148,16 +149,17 @@ xy_FM <- xy_FM %>%
 Van alle tabellen enkel de laatste 10 jaar, mét datum (niet enkel jaar).
 Andere datum en jaar voor dendro en veg.
 
-```{r }
-most_recent_survey_ <- plotinfo %>% 
-  group_by(forest_reserve, plottype, plot_id) %>% 
+```{r results = 'hide'}
+most_recent_survey <- plotinfo %>% 
+  group_by(forest_reserve, plottype, plot_id
+           , survey_trees, survey_deadw, survey_veg) %>% 
   summarise(max_period = max(period)
             , max_year_dendro = max(year_dendro)) %>% 
   ungroup() %>% 
   filter(max_period > 1 & max_year_dendro > 2014)  
 # transect with heide niet verder meegenomen, Walenbos ook niet
 
-most_recent_survey <- most_recent_survey_ %>% 
+list_recent <- most_recent_survey %>% 
   select(forest_reserve, plot_id, period = max_period)
 ```
 
@@ -187,7 +189,7 @@ nodig zijn.
     
 
 
-```{r plotinfo}
+```{r plotinfo, results = 'hide'}
 names(plotinfo)
 names(veg_by_plot)
 
@@ -205,57 +207,71 @@ plotinfo_ <- plotinfo %>%
 
 # OPGEPAST ! op subplotniveau om datum van vegetatie mee te hebben
 plotinfo_recent <- plotinfo_ %>% 
-  inner_join(most_recent_survey
+  inner_join(list_recent
              , by = c("plot_id", "forest_reserve", "period"))
 summary(plotinfo_recent)
-names(plotinfo_recent)
 
 ```
+```{r}
+names(plotinfo_recent)
+```
 
-```{r dendro_by_plot}
+
+```{r dendro_by_plot, results = 'hide'}
 names(dendro_by_plot)
 
 dendro_by_plot_recent <- dendro_by_plot %>% 
-  inner_join(most_recent_survey
+  inner_join(list_recent
              , by = c("plot_id", "period")) %>% 
   # datum van opname
   left_join(plotinfo %>% select(plot_id, period, date_dendro)) %>% 
   select(forest_reserve, plottype, plot_id, period
          , year, date_dendro
          , everything()) %>% 
-  select(-contains(c("lis", "vol_log_above40cm_m3_ha")))
+  select(-contains(c("lis")))
 
+
+```
+```{r}
 names(dendro_by_plot_recent)
 ```
 
-```{r dendro_by_plot_species}
+
+```{r dendro_by_plot_species, results = 'hide'}
 names(dendro_by_plot_species)
 
 dendro_by_plot_species_recent <- dendro_by_plot_species %>% 
-  inner_join(most_recent_survey
+  inner_join(list_recent
              , by = c("plot_id", "period")) %>% 
   left_join(plotinfo %>% select(plot_id, date_dendro)) %>% 
   select(forest_reserve, plottype, plot_id, period
          , year, date_dendro
          , everything()) %>% 
-  select(-contains(c("lis")), -vol_log_above40cm_m3_ha
-                   , -stems_per_tree)
+  select(-contains(c("lis")), -stems_per_tree)
 
+
+```
+```{r}
 names(dendro_by_plot_species_recent)
 ```
 
-```{r veg_by_plot}
+
+```{r veg_by_plot, results = 'hide'}
 names(veg_by_plot)
 
 veg_by_plot_recent <- veg_by_plot %>% 
-  inner_join(most_recent_survey
+  inner_join(list_recent
              , by = c("plot_id", "period")) %>% 
   mutate(year_veg = year(date_vegetation)) %>% 
   select(forest_reserve, plottype, plot_id, subplot_id, period
          , date_vegetation, year_veg, number_of_species)
 
+
+```
+```{r}
 names(veg_by_plot_recent)
 ```
+
 
 
 ## Data op boomniveau
@@ -270,7 +286,7 @@ Deze is terug te vinden in `strata_location` voor wat betreft de cirkelplots.
 
 Bij de kernvlaktes is de XY van de shapefile (uit `strata_location`) niet noodzakelijk dezelfde als deze die in fieldmap gebruikt wordt om de bomen te positioneren. Die vinden we in de tabel `GPSReferencePoints` in de fieldmap db.
 
-```{r vgl_XY_FM_shp}
+```{r vgl_XY_FM_shp, results = 'hide'}
 names(xy_FM)
 names(xy_shp)
 
@@ -297,10 +313,10 @@ range(check_xy_kv$diff_x, na.rm = T); range(check_xy_kv$diff_y, na.rm = T)
 # [1] -305.832   13.292
 
 ```
-```{r}
+```{r results = 'hide'}
 # enkel xy uit shapefile als GPSGlobalCoord uit FM niet ingevuld staat
 xy_all <- xy_FM %>% 
-  inner_join(most_recent_survey %>% select(-period) %>% unique()
+  inner_join(list_recent %>% select(-period) %>% unique()
            , by = c("plot_id")) %>% 
   left_join(xy_shp, by = c("plot_id")) %>% 
   mutate(x_global_plot = ifelse(is.na(Xproj_m), XLambert72, Xproj_m)
@@ -315,12 +331,12 @@ names(xy_all)
 <!-- > nog plain settngs bij project van KV's doen -->
 <!-- en den export data deadwood in een aparte access-db -->
 
-```{r stems}
+```{r stems, results = 'hide'}
 stems <- read_csv2(paste0(path_to_treelevel_gdrive, "stems_calc.csv"))
 names(stems)
 
 stems_recent <- stems %>% 
-  inner_join(most_recent_survey
+  inner_join(list_recent
              , by = c("plot_id", "period")) %>% 
   # datum van opname
   left_join(plotinfo %>% select(forest_reserve, plot_id, period, date_dendro)) %>% 
@@ -335,17 +351,19 @@ stems_recent <- stems %>%
          , alive_dead, ind_sht_cop, intact_snag
          , contains("iufro"))
 
- names(stems_recent)
-
-
 ```
 
-```{r trees}
+```{r}
+ names(stems_recent)
+```
+
+
+```{r trees, results = 'hide'}
 trees <- read_csv2(paste0(path_to_treelevel_gdrive, "trees_calc.csv"))
 names(trees)
 
 trees_recent <- trees %>% 
-  inner_join(most_recent_survey
+  inner_join(list_recent
              , by = c("plot_id", "period")) %>% 
   # datum van opname
   left_join(plotinfo %>% select(forest_reserve, plot_id, period, date_dendro)) %>% 
@@ -359,43 +377,27 @@ trees_recent <- trees %>%
          , alive_dead, ind_sht_cop, intact_snag
          , contains("iufro"))
 
- names(trees_recent)
-
 ```
 
-
- 
-  
-
-
-
-
+```{r}
+ names(trees_recent)
+```
 
 
 ## Liggend dood hout
 
-liggend dood hout: diameter, lengte, locatie
+Liggend dood hout: diameter, lengte, locatie
 
-Daarvoor moet export gebeuren van 
+OPGEPAST: vanaf 2023 werden de logs pas vanaf 30 cm opgemeten worden.
+Deze info is te vinden in plotinfo, `diam_min_logs`.
 
-Aandacht dat bij de meest recente opnames, de logs pas vanaf 30 cm opgemeten orden.
-Deze info is te vinden in plotinfo, diam_min_logs
+Om de export minder zwaar te maken, heb ik deadwood layer 1e SET leeggemaakt, want 
+daar zijn we niet in geïnteresseerd.
 
-Om de export minder zwaar te maken, deadwood layer 1e SET leegmaken, daar zijn we niet in geïnteresseerd
+Voor 't zekerste ook cirkelplots en kernvlaktes weggeschreven naar twee aparte databanken.
 
-Ev. cirkelplots en kernvlaktes apart behandelen?
-Dan FM-DC - Fieldmap settings - global - plainshape settings 
-
-bij allebei
-
-
-
-
-
-```{r}
-
-```
-
+Dan FM-DC - Fieldmap settings - global - plainshape settings.
+En vervolgens FM-PM - export data - access.
 
 
 ### Load deadwood XY
@@ -404,10 +406,10 @@ Via de tool "Export data" in de Acces dB (PlainSHP setting) worden de tabellen
 `Deadwood_details` gegenereerd, en opgeslagen in een nieuwe acces-db 
 `deadwood_export_moederdb20240613.accdb` (in folder "input").
 Deze tabellen bevatten de XY-coördinaten van start- en eindpunt van het liggend 
-dood hout, en van eventuele extra "breekpunten" (tot max. 6)
+dood hout, en van eventuele extra "breekpunten" (tot max. 6).
 
 
-```{r CP}
+```{r CP, results = 'hide'}
 # path_to_deadw_db <- paste0(path_to_project, "/input/deadwood_test.accdb")
 path_to_deadw_db <- paste0(path_to_project, "/input/deadwood_export_moederdb20260313_CP.accdb")
 
@@ -432,7 +434,7 @@ t <- deadw_details_p3 %>% filter(!IDPlots %in% deadw_details_p3_$plot_id)
 # Pruikemakers, Liedekerke, Prognoses
 
 deadw_details_CP <- rbind(deadw_details_p2_, deadw_details_p3_) %>% 
-  inner_join(most_recent_survey) %>% 
+  inner_join(list_recent) %>% 
   # in lokale coordinaten
   rename(x_local = X_m, y_local = Y_m) %>% 
   left_join(xy_all) %>% 
@@ -441,7 +443,7 @@ deadw_details_CP <- rbind(deadw_details_p2_, deadw_details_p3_) %>%
   select(-contains(c("_local", "global_plot")))
 
 n_distinct(deadw_details_CP$plot_id) # 764
-most_recent_survey_ %>% 
+most_recent_survey %>% 
   filter(plottype == "CP") %>% 
   summarise(n_plots = n_distinct(plot_id)) 
 # 926
@@ -451,7 +453,7 @@ most_recent_survey_ %>%
 ```
 
 
-```{r CA}
+```{r CA, results = 'hide'}
 # path_to_deadw_db <- paste0(path_to_project, "/input/deadwood_test.accdb")
 path_to_deadw_db <- paste0(path_to_project, "/input/deadwood_export_moederdb20260313_KV.accdb")
 
@@ -477,12 +479,12 @@ t <- deadw_details_p3 %>% filter(!IDPlots %in% deadw_details_p3_$plot_id)
 # Pruikemakers, Liedekerke
 
 deadw_details_CA <- rbind(deadw_details_p2_, deadw_details_p3_) %>% 
-  inner_join(most_recent_survey) %>% 
+  inner_join(list_recent) %>% 
   # in globale coordinaten
   rename(x_global = X_m, y_global = Y_m)
 
 n_distinct(deadw_details_CA$plot_id) # 17
-most_recent_survey_ %>% 
+most_recent_survey %>% 
   filter(plottype == "CA") %>% 
   summarise(n_plots = n_distinct(plot_id)) 
 # 17
@@ -490,9 +492,9 @@ most_recent_survey_ %>%
 ```
 
 
-```{r all}
+```{r all, results = 'hide'}
 deadw_xy <- rbind(deadw_details_CP, deadw_details_CA) %>% 
-  select(plot_id, lying_deadw_id = IDDeadwood,
+  select(period, plot_id, lying_deadw_id = IDDeadwood,
          id = ID, diam_mm = Diam_mm,
          x_global, y_global) 
 
@@ -502,27 +504,85 @@ n_distinct(deadw_xy$plot_id) # 781
 # klopt aantal?
 data_deadwood <- load_data_deadwood(path_to_fieldmap_db)
 
-n_distinct(deadw_xy$plot_id) == data_deadwood %>% 
-  inner_join(most_recent_survey) %>% 
-  select(plot_id) %>% n_distinct() # 777 vs 781
-
 data_deadw_recent <- data_deadwood %>% 
-  inner_join(most_recent_survey) 
+  inner_join(list_recent) 
+
+n_distinct(deadw_xy$plot_id); n_distinct(data_deadw_recent$plot_id)
+# [1] 781
+# [1] 777
 
 t <- deadw_xy %>% 
   filter(!plot_id %in% data_deadw_recent$plot_id)
 unique(t$plot_id) 
 # [1] 1582 1609 1611 1613
 # waarom zitten die niet in data_deadwood maar wel in CP die van moederdb komt? 
+# reden: survey_deadw = FALSE
+
+plotinfo %>% filter(plot_id %in% t$plot_id)
+```
+
+```{r results = 'hide'}
+# reeds hoger ook al gefilterd op meest recente survey
+deadw_xy_recent <- deadw_xy %>% 
+  inner_join(list_recent) 
+```
+
+```{r}
+names(deadw_xy_recent)
 ```
 
 
+> er zijn enkele plots in Kluisbos waar survey_deadw = FALSE, maar waar toch gemeten 
+is. 
+Ik dacht dat er enkel in het eigenlijke reservaat dood hout opgemeten werd en in 
+het nog beheerde deel niet. Maar wat met de onbeheerde plots die geen reservaat zijn?  
+DAAROM: enkel de plots uit Kluisbos SFR meenemen hier, dat is duidelijk, daar 
+is zeker een opname gebeurd.
+(mail van 3/4/2026 aan Peter met vraag welke plots wel en niet opgemeten; zie ook
+qry_survey_deadw in mijn lokale moederdb: bepaalde plots uit beheerd deel wél 
+survey_deadw, maar andere dan weer niet)
 
+
+```{r corr_kluisbos_deadw, results = 'hide'}
+# correctie om correct om te kunnen gaan met nulwaardes
+# Er is immers verwarring over beheerd deel van kluisbos: welke plots wél en niet 
+# opgemeten, er voorlopg van uitgaan dat enkel reservaatsdeel gemeten werd
+names(link_plotid_subarea)
+names(deadw_xy_recent)
+
+deadw_xy_recent_ <- deadw_xy_recent %>% 
+  left_join(link_plotid_subarea) %>% 
+  filter(!SubArea %in% c("Kluisbos Communal Forest", "Kluisbos State Forest")) %>% 
+  select(-SubArea, -forest_reserve_fieldmap, -SiteName)
+
+unique(deadw_xy_recent_$SubArea)
+```
+
+```{r corr_kluisbos_dendro_plotinfo, results = 'hide'}
+# om geen verwarring te creëren ivm deadwood 
+dendro_by_plot_recent_ <- dendro_by_plot_recent %>% 
+  left_join(link_plotid_subarea) %>% 
+  mutate(vol_log_m3_ha = ifelse(SubArea %in% c("Kluisbos Communal Forest", "Kluisbos State Forest")
+                                , NA, vol_log_m3_ha)) %>% 
+  select(-SubArea, -forest_reserve_fieldmap, -SiteName)
+dendro_by_plot_recent <- dendro_by_plot_recent_ 
+
+dendro_by_plot_species_recent_ <- dendro_by_plot_species_recent %>% 
+  left_join(link_plotid_subarea) %>% 
+  mutate(vol_log_m3_ha = ifelse(SubArea %in% c("Kluisbos Communal Forest", "Kluisbos State Forest")
+                                , NA, vol_log_m3_ha)) %>% 
+  select(-SubArea, -forest_reserve_fieldmap, -SiteName)
+dendro_by_plot_species_recent <- dendro_by_plot_species_recent_
+
+plotinfo_recent_ <- plotinfo_recent %>% 
+  left_join(link_plotid_subarea) %>% 
+  mutate(survey_deadw = ifelse(SubArea %in% c("Kluisbos Communal Forest", "Kluisbos State Forest")
+                                , FALSE, survey_deadw)) %>% 
+  select(-SubArea, -forest_reserve_fieldmap, -SiteName)
+plotinfo_recent <- plotinfo_recent_
+```
 
 # Export 
-
-
-
 
 ## Metadata
 
@@ -609,10 +669,19 @@ save_results_csv(list_lkp, path_to_datarequest_teamdrive)
 
 ## Resultaten plotniveau  
 
-```{r}
-table_names <- c("dendro_by_plot_recent", "dendro_by_plot_species_recent"
+
+Hier ook 
+
+- overzicht van de meest recente survey, met aanduiding of er al dan niet 
+liggend dood hout opgemeten werd
+- plotinfo met tresholds
+
+
+```{r eval = FALSE}
+table_names <- c("plotinfo_recent"
+                 , "dendro_by_plot_recent", "dendro_by_plot_species_recent"
                  , "veg_by_plot_recent"
-                 , "most_recent_survey_")
+                 , "most_recent_survey")
 
 # terug in lijst stoppen
 list_plotlevel <- map(table_names, get)  %>%  
@@ -632,7 +701,7 @@ iufro-klasses, ....
 
 XY_global werd afgeleid van plotcoördinaten in combinatie met lokale boomcoördinaten.
 
-```{r}
+```{r eval = FALSE}
 list_treelevel <- list(trees_recent = trees_recent
                    , stems_recent = stems_recent)
 
@@ -640,3 +709,32 @@ save_results_csv(list_treelevel, path_to_datarequest_teamdrive)
 ```
 
 
+## Resultaten liggend dood hout 
+
+XY_global in de cirkelplots werd afgeleid van plotcoördinaten in combinatie met lokale boomcoördinaten.
+XY_global in de kernvlaktes was reeds als global uitgedrukt.
+
+
+```{r eval = FALSE}
+list_logs <- list(logs_xy_recent = deadw_xy_recent)
+
+save_results_csv(list_logs, path_to_datarequest_teamdrive)
+```
+
+
+
+# Copy html to teamdrive
+
+Na knitting - manueel
+
+```{r eval = FALSE}
+# Specify the path of the file you want to copy
+source_file <- here::here(paste0("Scripts/AanvraagGegevens/INBO_SenseForest_StienH/SenseForest_Stien.html"))
+
+# Specify the destination directory where you want to copy the file
+destination_dir <- path_to_html_teamdrive
+
+# Copy the file to the destination directory
+file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
+# ? file.copy
+```
