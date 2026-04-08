@@ -521,66 +521,37 @@ unique(t$plot_id)
 plotinfo %>% filter(plot_id %in% t$plot_id)
 ```
 
+
+Er zijn enkele plots in Kluisbos waar survey_deadw = FALSE, maar waar toch gemeten 
+is. 
+Na mailverkeer met Peter: plotdetails zijn correct, dit zijn 4 plots waar niet 
+gebiedsdekkend wel enkele logs opgemeten zijn.
+Die verwijderen we uit de dataset.      
+
+Immers, enkel in volgende plots is met zekerheid een FAS-opname gebeurd:      
+-plot 1501 t/m 1573 = bosreservaat, onbeheerd, full area survey     
+-plot 1595 t/m 1606 = geen bosreservaat, onbeheerd, wel full area survey      
+
+
 ```{r results = 'hide'}
 # reeds hoger ook al gefilterd op meest recente survey
+# hier extra de logs wegfilteren waar volgens plotdetails geen dood hout opname 
+# (FAS) gebeurd is
 deadw_xy_recent <- deadw_xy %>% 
-  inner_join(list_recent) 
+  inner_join(list_recent) %>% 
+  left_join(plotinfo %>% select(period, plot_id, survey_deadw)) %>% 
+  filter(survey_deadw == TRUE) %>% 
+  select(-survey_deadw)
+
+deadw_xy_recent %>% 
+  filter(!plot_id %in% data_deadw_recent$plot_id) %>% nrow() == 0
+
 ```
 
 ```{r}
 names(deadw_xy_recent)
 ```
 
-
-> er zijn enkele plots in Kluisbos waar survey_deadw = FALSE, maar waar toch gemeten 
-is. 
-Ik dacht dat er enkel in het eigenlijke reservaat dood hout opgemeten werd en in 
-het nog beheerde deel niet. Maar wat met de onbeheerde plots die geen reservaat zijn?  
-DAAROM: enkel de plots uit Kluisbos SFR meenemen hier, dat is duidelijk, daar 
-is zeker een opname gebeurd.
-(mail van 3/4/2026 aan Peter met vraag welke plots wel en niet opgemeten; zie ook
-qry_survey_deadw in mijn lokale moederdb: bepaalde plots uit beheerd deel wél 
-survey_deadw, maar andere dan weer niet)
-
-
-```{r corr_kluisbos_deadw, results = 'hide'}
-# correctie om correct om te kunnen gaan met nulwaardes
-# Er is immers verwarring over beheerd deel van kluisbos: welke plots wél en niet 
-# opgemeten, er voorlopg van uitgaan dat enkel reservaatsdeel gemeten werd
-names(link_plotid_subarea)
-names(deadw_xy_recent)
-
-deadw_xy_recent_ <- deadw_xy_recent %>% 
-  left_join(link_plotid_subarea) %>% 
-  filter(!SubArea %in% c("Kluisbos Communal Forest", "Kluisbos State Forest")) %>% 
-  select(-SubArea, -forest_reserve_fieldmap, -SiteName)
-
-unique(deadw_xy_recent_$SubArea)
-```
-
-```{r corr_kluisbos_dendro_plotinfo, results = 'hide'}
-# om geen verwarring te creëren ivm deadwood 
-dendro_by_plot_recent_ <- dendro_by_plot_recent %>% 
-  left_join(link_plotid_subarea) %>% 
-  mutate(vol_log_m3_ha = ifelse(SubArea %in% c("Kluisbos Communal Forest", "Kluisbos State Forest")
-                                , NA, vol_log_m3_ha)) %>% 
-  select(-SubArea, -forest_reserve_fieldmap, -SiteName)
-dendro_by_plot_recent <- dendro_by_plot_recent_ 
-
-dendro_by_plot_species_recent_ <- dendro_by_plot_species_recent %>% 
-  left_join(link_plotid_subarea) %>% 
-  mutate(vol_log_m3_ha = ifelse(SubArea %in% c("Kluisbos Communal Forest", "Kluisbos State Forest")
-                                , NA, vol_log_m3_ha)) %>% 
-  select(-SubArea, -forest_reserve_fieldmap, -SiteName)
-dendro_by_plot_species_recent <- dendro_by_plot_species_recent_
-
-plotinfo_recent_ <- plotinfo_recent %>% 
-  left_join(link_plotid_subarea) %>% 
-  mutate(survey_deadw = ifelse(SubArea %in% c("Kluisbos Communal Forest", "Kluisbos State Forest")
-                                , FALSE, survey_deadw)) %>% 
-  select(-SubArea, -forest_reserve_fieldmap, -SiteName)
-plotinfo_recent <- plotinfo_recent_
-```
 
 # Export 
 
