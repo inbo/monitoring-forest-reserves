@@ -197,12 +197,17 @@ path_to_datarequest_teamdrive
 SITE_ID	SITE_NAME			LPI_ID	SPI_ID		SLOPE	TOPO	EXPO	ELEV_CENTER	ELEV_RANGE
 		WILDCARD_sub_ID	INVENTORY_YEAR CIRCLE_NO	CIRCLE_RADIUS	PLOT_SAMPLED	SAMPLED_AREA	CONSISTENT_ID_STANDING	CONSISTENT_ID_LYING	OTHER	X	Y	Z	WKT_GEOM		
 		
-LPI_ID	Plot ID in Large plot inventory (LPI) within the site (reserve).    
-SPI_ID	Plot ID in Sampling plot inventory (SPI) grid within the site (reserve).
-
-=> plot_id's van CA en CP's afzonderlijk
 
 **Wordt opgeslagen in `plotdata_def`**
+
+New format: 
+
+composed_site_id
+inventory_id
+inventory_type
+plot_id
+circle_no
+
 
 ## Load plotinfo
 
@@ -313,11 +318,14 @@ unique(poplar_kluisbos$plot_id)
 SITE_ID	SITE_NAME			LPI_ID	SPI_ID		SLOPE	TOPO	EXPO	ELEV_CENTER	ELEV_RANGE
 WILDCARD_sub_ID	INVENTORY_YEAR CIRCLE_NO	CIRCLE_RADIUS	PLOT_SAMPLED	SAMPLED_AREA
 CONSISTENT_ID_STANDING	CONSISTENT_ID_LYING	OTHER	X	Y	Z	WKT_GEOM		
-		
-LPI_ID	Plot ID in Large plot inventory (LPI) within the site (reserve).
-SPI_ID	Plot ID in Sampling plot inventory (SPI) grid within the site (reserve).
 
-=> plot_id's van CA en CP's afzonderlijk in een kolom
+New format: 
+
+composed_site_id  (op einde mbv link_wildcard_FM)
+inventory_id
+inventory_type
+plot_id
+circle_no
 
 ```{r results = 'hide'}
 names(plotinfo)
@@ -334,8 +342,8 @@ plotdata0 <- plotinfo %>%
   anti_join(poplar_kluisbos %>% select(plot_id)) %>% 
   mutate(INVENTORY_YEAR = year_dendro
          # , SITE_ID = NA, SITE_NAME = NA, WILDCARD_sub_ID = NA
-         , LPI_ID = ifelse(plottype == "CA", plot_id, NA)
-         , SPI_ID = ifelse(plottype == "CP", plot_id, NA)
+         # , LPI_ID = ifelse(plottype == "CA", plot_id, NA)
+         # , SPI_ID = ifelse(plottype == "CP", plot_id, NA)
          # , CIRCLE_NO = ifelse(plottype == "CP", "1 / 2", NA)   #zie verder
          # , CIRCLE_RADIUS = ifelse(plottype == "CP", "rA4 / rA3", NA) #zie verder
          , PLOT_SAMPLED = "Y"  # enkel processed data hier
@@ -561,22 +569,36 @@ plotdata <- plotdata %>%
 SITE_ID	SITE_NAME			LPI_ID	SPI_ID		SLOPE	TOPO	EXPO	ELEV_CENTER	ELEV_RANGE
 WILDCARD_sub_ID	INVENTORY_YEAR CIRCLE_NO	CIRCLE_RADIUS	PLOT_SAMPLED	SAMPLED_AREA
 CONSISTENT_ID_STANDING	CONSISTENT_ID_LYING	OTHER	X	Y	Z	WKT_GEOM		
-		
+
+
+composed_site_id
+inventory_id
+inventory_type
+plot_id
+circle_no
+
 
 ```{r plotdata_vars, results = 'hide'}
 names(plotdata)
 
 plotdata_def <- plotdata %>%
+  mutate(GEOM = NA   # over te nemen uit reeds opgeladen data (< shapefile)
+         , INVENTORY_TYPE = ifelse(plottype == "CA", "LPI", 
+                                   ifelse(plottype == "CP", "SPI", NA))
+         ) %>%  
   select(INVENTORY_YEAR
          # , SITE_ID, SITE_NAME, WILDCARD_sub_ID
-         , LPI_ID, SPI_ID
+         # , LPI_ID, SPI_ID
+         , plot_id
+         , INVENTORY_TYPE
          , CIRCLE_NO, CIRCLE_RADIUS
          , PLOT_SAMPLED, SAMPLED_AREA
          , CONSISTENT_ID_STANDING, CONSISTENT_ID_LYING, OTHER
          , X, Y, Z
+         , GEOM
          # extra vars
          , forest_reserve_FM_adjusted
-         , plot_id, plottype, period
+         , plottype, period
          )
 
 
@@ -598,7 +620,7 @@ names(plotdata_def)
 # unique(plotdata_def$forest_reserve)
 # names(plotdata_def)
 
-plotdata_def %>% group_by(forest_reserve_FM_adjusted, plottype, LPI_ID) %>% 
+plotdata_def %>% group_by(forest_reserve_FM_adjusted, plottype) %>% 
   summarize(n_surveys = n_distinct(INVENTORY_YEAR)
             , min_year = min(INVENTORY_YEAR)
             , max_year = max(INVENTORY_YEAR)) %>% 
@@ -617,7 +639,8 @@ list_plots <- plotdata_def %>%   # sampled_area nodig, maar
   group_by(plot_id, period
          , forest_reserve_FM_adjusted
          , plottype
-         , X, Y, Z, LPI_ID, SPI_ID
+         , X, Y, Z
+         # , LPI_ID, SPI_ID
          , INVENTORY_YEAR, 
          , CONSISTENT_ID_STANDING, CONSISTENT_ID_LYING) %>% 
   summarize(SAMPLED_AREA = max(SAMPLED_AREA)) %>% 
@@ -922,7 +945,7 @@ t <- plotinfo %>% anti_join(list_plots)
 
 ## Variables
 
-SITE_ID	LPI_ID	SPI_ID	TREE_ID	STEM_ID	INVENTORY_YEAR	CONSISTENT_ID	
+SITE_ID	plot_id	TREE_ID	STEM_ID	INVENTORY_YEAR	CONSISTENT_ID	
 STATUS : LIFE	POSITION	INTEGRITY	
 HEIGHT	DATE
 
@@ -965,7 +988,9 @@ standing <- standing0 %>%
   left_join(qDecaystage, by = c("decaystage" = "ID")) %>% 
   left_join(qiufrovitality, by = c("iufro_vital" = "ID")) %>% 
   # left_join(list_plots) %>% 
-  mutate(TREE_ID = tree_id
+  mutate(INVENTORY_TYPE = ifelse(plottype == "CA", "LPI", 
+                                 ifelse(plottype == "CP", "SPI", NA))
+         , TREE_ID = tree_id
          , STEM_ID = shoot_measure_id
          , PIECE_ID = NA
          , CONSISTENT_ID = ifelse(CONSISTENT_ID_STANDING == "P"
@@ -991,7 +1016,10 @@ standing <- standing0 %>%
          , VOLUME = round(vol_bole_m3, 2)
          , VITALITY = vitality_txt
          ) %>% 
-  select(LPI_ID,	SPI_ID,	TREE_ID,	STEM_ID, PIECE_ID
+  select(INVENTORY_TYPE
+         , plot_id
+         # , LPI_ID,	SPI_ID
+         ,	TREE_ID,	STEM_ID, PIECE_ID
          , INVENTORY_YEAR,	CONSISTENT_ID
          , LIFE, POSITION, INTEGRITY
          , HEIGHT, DATE
@@ -1021,7 +1049,7 @@ names(standing)
 
 ```{r check_consistent}
 consist_summ <- standing %>% 
-  group_by(forest_reserve_FM_adjusted, plottype, LPI_ID
+  group_by(forest_reserve_FM_adjusted, plottype, plot_id
            , period, CONSISTENT_ID) %>% 
   summarize(n = n()) %>% 
   ungroup()
@@ -1272,7 +1300,10 @@ lying <- lying0 %>%
   left_join(qSpecies %>% select(-name_nl), by = c("species" = "ID")) %>% 
   left_join(qDecaystage, by = c("decaystage" = "ID")) %>% 
   left_join(qVdagnVfm, by = c("intact_fragm" = "ID")) %>% 
-  mutate(tree_measure_id = NA
+  mutate(INVENTORY_TYPE = ifelse(plottype == "CA", "LPI", 
+                                 ifelse(plottype == "CP", "SPI", NA))
+         , CIRCLE_NO = 1  # altijd in A4
+         , tree_measure_id = NA
          , TREE_ID = NA
          , STEM_ID = NA
          , PIECE_ID = lying_deadw_id
@@ -1305,7 +1336,10 @@ lying <- lying0 %>%
          , VOLUME = round(calc_volume_m3, 2)
          , VITALITY = NA
          ) %>% 
-  select(LPI_ID,	SPI_ID,	TREE_ID,	STEM_ID, PIECE_ID
+  select(INVENTORY_TYPE
+         , plot_id
+         # , LPI_ID, SPI_ID
+         ,	TREE_ID,	STEM_ID, PIECE_ID
          , INVENTORY_YEAR,	CONSISTENT_ID
          , LIFE, POSITION, INTEGRITY
          , HEIGHT
@@ -1350,168 +1384,6 @@ trees <- rbind(standing, lying)
 
 
 ```
-
-
-
-
-# CWD - NIET
-
-Sheet "CWD_metadata" contains explanations of attributes of coarse woody debris (CWD data sheet) which is about plot level deadwood volume estimates, but unlike LYING data table does not include information on individual objects - dead stems and decaying logs. Please provide your methodology.													
-														
-CWD:	This data table is designed to provide plot level estimates of coarse woody debris volume (by line intersect sampling) summed by species and decay classes.
-
-SITE_ID
-SPI_ID
-TREE_SPECIES
-DECAY
-VOLUME
-
-**Wordt opgeslagen in `cwd`**
-
-26/11/2024: afgesproken om dit NIET mee te nemen, gaat ook maar over beperkt 
-aantal reservaten, waar daarnaast wél een gewone deadwood opname gebeurd is,
-maar met een andere treshold (vanaf 30 cm, ipv 10 cm)
-
-"We stumbled upon another 'issue'. 
-For the line intersect method used for CWD, no upper diameter threshold was used. 
-As a consequence, there is some overlap between the measurements for CWD and 
-the trees measured in the LYING table, more specifically for dbh > 30 cm If this 
-is a problem we would suggest omitting the CWD table, as this only covers 2 sites 
-and one survey. Furthermore the line intersect sampling doesn't give accurate 
-information on plot level (designed for estimating deadwood on the level of 
-a reserve), and it only gives extra information on the fraction 10 to 30 cm diameter."
-
-
-## Load LIS data
-
-Het package forrescalc berekent deze data nog niet => rechtstreeks uit de databank te halen
-
-Enkel uitgevoerd bij 
-- Wijnendale CP
-- Everzwijnbad CP
-- Heirnisse CA: nog niet verwerkt
-
-```{r results='hide', eval = FALSE}
-range(list_plots$INVENTORY_YEAR)
-BR_LIS <- list_plots %>% 
-  filter(INVENTORY_YEAR >= 2021 & plot_id < 11000)
-unique(BR_LIS$forest_reserve)
-```
-
-```{r load_LIS, results='hide', eval = FALSE}
-# enkel bij 3eSET beschikbaar
-query_LIS <- 
-    "SELECT lis.IDPlots AS plot_id, 
-    lis.IDLineIntersect_3eSet, 
-    lis.ID, 
-    lis.TreeSpecies AS species,
-    lis.AliveDead,
-    lis.DecayStage AS decaystage,
-    lis.Diameter_mm AS diam_mm, 
-    lis.Angle as angle_cde
-    FROM LI_data_3eSet lis;"
-
-con <- odbcConnectAccess2007(path_to_fieldmap_db)
-  data_LIS_ <- sqlQuery(con, query_LIS, stringsAsFactors = TRUE)
-  qLIangle <- sqlFetch(con, "qLIangle", stringsAsFactors = TRUE) %>% 
-    select(ID, angle = Value2)
-odbcClose(con)
-
-
-names(data_LIS_)
-nrow(data_LIS_)  # 991
-range(data_LIS_$plot_id)
-unique(data_LIS_$AliveDead) == 12  # enkel dood
-```
-```{r results='hide', eval = FALSE}
-data_LIS <- data_LIS_ %>% 
-  mutate(period = 3) %>% 
-  inner_join(list_plots %>% select(plot_id, forest_reserve_FM_adjusted, period))
-
-unique(data_LIS$forest_reserve_FM_adjusted)
-
-data_LIS %>% filter(is.na(diam_mm)) %>% nrow() == 0
-data_LIS %>% filter(is.na(angle_cde)) %>% nrow() == 0
-# mocht er in toekomst voor degrees niks ingevuld staan 
-# => vervangen door "0" (anders geen berekening mogelijk voor die plot)
-
-data_LIS <- data_LIS %>% 
- left_join(qLIangle, by = c("angle_cde" = "ID"))
-
-```
-
-
-```{r results='hide', eval = FALSE}
-colnames(data_LIS)
-summary(data_LIS) # ok
-
-Li<-45  # lengte van de drie transecten   
-
-cwd_ <- data_LIS %>%
-  mutate(diam_m = diam_mm/1000) %>% 
-  dplyr::group_by(plot_id, period, species, decaystage) %>%
-  dplyr::summarise(
-    volume_m3_m2=pi^2/8/Li*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)) %>% 
-  ungroup()
-# bij mogelijkse verwarring tss VBI en BR: VBI rekent obv diam_cm en komt m3/ha uit, 
-# BR gebruikt diam_m en komt m3/m2 uit
-
- 
-```
-
-
-
-## Variables				
-
-SITE_ID	SPI_ID	
-INVENTORY YEAR	
-TREE_SPECIES	
-DECAY	
-VOLUME
-
-
-```{r cwd_vars, results='hide', eval = FALSE}
-## Add variables from reserve
-cwd0 <- cwd_ %>% 
-  inner_join(list_plots, by = c("plot_id", "period"))
-
-names(cwd0)
-names(qSpecies)
-names(qDecaystage)
-unique(cwd0$decaystage) # 12 13 11 14 10 15
-
-cwd <- cwd0 %>%
-  left_join(qSpecies %>% select(-name_nl), by = c("species" = "ID")) %>% 
-  left_join(qDecaystage, by = c("decaystage" = "ID")) %>% 
-  mutate(TREE_SPECIES_FULL_SCIENTIFIC = name_sc
-         , TREE_SPECIES_CODE = species	
-         , DECAY_NUMERIC = ifelse(decaystage == 0, NA, decaystage)
-         , DECAY_TEXT = decaystage_txt
-         , VOLUME = round(volume_m3_m2 * SAMPLED_AREA, 2)
-         ) %>% 
-  select(SPI_ID
-         , INVENTORY_YEAR
-         , TREE_SPECIES_FULL_SCIENTIFIC, TREE_SPECIES_CODE
-         , DECAY_NUMERIC, DECAY_TEXT
-         , VOLUME
-         , all_of(extra_vars)
-         # , forest_reserve_FM_adjusted, plot_id, plottype, period
-         )
-
-names(cwd)
-table(cwd$DECAY_NUMERIC)
-table(cwd$DECAY_TEXT)
-
-#check
-cwd %>% filter(plot_id == 101)
-
-```
-
-```{r, eval = FALSE}
-names(cwd)
-```
-
-<br>
 
 # BIODIV
 
@@ -1778,7 +1650,9 @@ ground_veg <- data_herblayer %>%
                                      plot_id %in% c(31000, 43000)
                                    , 2001, year)   #
          ) %>% 
-  select(LPI_ID, SPI_ID, LPI_sub_ID
+  select(plot_id, 
+         # , LPI_ID, SPI_ID
+         , LPI_sub_ID
          , INVENTORY_YEAR 
          , PLOT_SAMPLED, SAMPLED_AREA
          , SPECIES_CODE = species
@@ -1831,7 +1705,7 @@ ground_veg <- ground_veg_
 
 # DESIGN
 
-New format: INSTITUTE
+New format: INSTITUTE GEOM (ipv EPSG)
 
 Request:
 SITE_ID	SITE_NAME	WILDCARD_sub_ID	INVENTORY_YEAR	INVENTORY_TYPE	PLOTS_LIST	CIRCLE_NO	CIRCLE_RADIUS	CIRCLE_AZIMUTH	CIRCLE_DISTANCE	POM_MARK	STANDING_ALIVE_THRESHOLD	STANDING_DEAD_THRESHOLD	LYING_ALIVE_THRESHOLD	LYING_DEAD_THRESHOLD	SPECIES_POOL	LIS_CWD	BOUNDARY	STEM_COORD_REF_POINT	EPSG_CODE
@@ -1889,7 +1763,8 @@ design_ <- plotdata %>%
               # , LIS_CWD = ifelse(cwd_survey & !is.na(cwd_survey), "Y", "N")
          , LIS_CWD = "N"
          , STEM_COORD_REF_POINT = "BHC"
-         , EPSG_CODE = "4326"  # GCS_WGS_1984 - EPSG:4326
+         # , EPSG_CODE = "4326"  # GCS_WGS_1984 - EPSG:4326
+         , GEOM = NA  # over te nemen uit reeds opgeladen data (< shapefile) 
          ) 
 
 names(design_)
@@ -1915,7 +1790,9 @@ design_def <- design_ %>%
          , SPECIES_POOL 
          , LIS_CWD
          # , BOUNDARY: NIET, shapefiles te bezorgen
-         , STEM_COORD_REF_POINT, EPSG_CODE
+         , STEM_COORD_REF_POINT
+         # , EPSG_CODE
+         , GEOM 
          # extra vars (! zonder plot_id)
          , forest_reserve_FM_adjusted, plottype, period
          )
@@ -2001,6 +1878,8 @@ plotdata_def_link <- plotdata_def %>%
                                , period, INVENTORY_YEAR)) %>% 
   left_join(link_WC_FM %>% select(-comment, -subarea, -`LPI_ID / SPI_ID`)
             , by = c("forest_reserve_FM_adjusted", "plottype")) %>% 
+  mutate(inventory_id = paste("INBO__NA", INVENTORY_YEAR, SITE_ID, WILDCARD_sub_ID
+                              , INVENTORY_TYPE, sep = "__")) %>%
   select(-SITE_ID, -SITE_NAME, -WILDCARD_sub_ID) %>% 
   select(composed_site_id, everything())
 
@@ -2015,6 +1894,8 @@ trees_link <- trees %>%
                                , period, INVENTORY_YEAR)) %>% 
   left_join(link_WC_FM %>% select(-comment, -subarea, -`LPI_ID / SPI_ID`)
             , by = c("forest_reserve_FM_adjusted", "plottype")) %>% 
+  mutate(inventory_id = paste("INBO__NA", INVENTORY_YEAR, SITE_ID, WILDCARD_sub_ID
+                              , INVENTORY_TYPE, sep = "__")) %>%
   select(-SITE_ID, -SITE_NAME, -WILDCARD_sub_ID) %>% 
   select(composed_site_id, everything())
 
