@@ -2217,15 +2217,15 @@ heirni <- old_treedata %>% filter(str_detect(composed_site_id, "Heirn"))
 
 write.table(design_def_link_new %>% select(-forest_reserve_FM_adjusted, -plottype, -period)
             , paste0(path_to_datarequest_teamdrive, "UPLOAD_INBO_DESIGN_", Sys.Date(), ".txt")
-            , sep = " ", dec = ".")
+            , sep = " ", na = "/N", dec = ".")
 
 write.table(plotdata_def_link_new %>% select(-all_of(extra_vars), -circle_radius)
             , paste0(path_to_datarequest_teamdrive, "UPLOAD_INBO_PLOTS_", Sys.Date(), ".txt")
-            , sep = " ", dec = ".")
+            , sep = " ", na = "/N", dec = ".")
 
 write.table(trees_link_new %>% select(-all_of(extra_vars), -tree_measure_id)
             , paste0(path_to_datarequest_teamdrive, "UPLOAD_INBO_TREES_", Sys.Date(), ".txt")
-            , sep = " ", dec = ".")
+            , sep = " ", na = "/N", dec = ".")
 # lookuplists
     # write.table(qSpecies, paste0(path_to_datarequest_teamdrive, "qSpecies.txt")
     #             , sep = " ", dec = ".")
@@ -2237,7 +2237,7 @@ write.table(trees_link_new %>% select(-all_of(extra_vars), -tree_measure_id)
 
 write.table(ground_veg_link_new %>% select(-all_of(extra_vars))
             , paste0(path_to_datarequest_teamdrive, "INBO_ground_veg_", Sys.Date(), ".txt")
-            , sep = " ", dec = ".")
+            , sep = " ", na = "/N", dec = ".")
 # lookuplists
   # write.table(qHerbSpecies, paste0(path_to_datarequest_teamdrive, "qHerbSpecies.txt")
   #             , sep = " ", dec = ".")
