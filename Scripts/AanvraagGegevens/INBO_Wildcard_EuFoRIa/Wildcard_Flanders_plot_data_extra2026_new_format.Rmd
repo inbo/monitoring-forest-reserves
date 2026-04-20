@@ -192,6 +192,156 @@ path_to_datarequest_teamdrive
 <br>
 
 
+# Load extra data 2026
+
+geom-files die vorige keer gebruikt zijn hergebruiken:      
+- plots_geom    
+- design_geom     
+
+
+Scientific names uniek voor wildcard:       
+- WP2_SPECIES.xlsx      
+
+
+
+```{r}
+# path_to_project_teamdrive
+
+WP2_SPECIES <- read_excel(file.path(path_to_project_teamdrive, "WP2_SPECIES.xlsx"))
+
+
+plots_geom <- read.table(file.path(path_to_project_teamdrive, "plots_geom")
+                         , header = TRUE
+                           , sep = ",", dec = ".") %>% 
+  unique()
+
+design_geom <- read.table(file.path(path_to_project_teamdrive, "plots_geom")
+                         , header = TRUE
+                           , sep = ",", dec = ".") %>% 
+  unique()
+
+waldo::compare(design_geom, plots_geom)
+# ✔ No differences
+```
+
+```{r load_lkp}
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+
+  qIndShootCop <- sqlFetch(con, "qIndShootCop", stringsAsFactors = FALSE)
+  # deadw_test <- sqlFetch(con, "Deadwood_3eSET", stringsAsFactors = FALSE)
+  qAliveDead <- sqlFetch(con, "qAliveDead", stringsAsFactors = FALSE)
+  qSpecies <- sqlFetch(con, "qSpecies", stringsAsFactors = FALSE)
+  qDecaystage <- sqlFetch(con, "qdecaystage", stringsAsFactors = FALSE)
+  qIntactSnag <- sqlFetch(con, "qIntactSnag", stringsAsFactors = FALSE)
+  qiufrovitality <- sqlFetch(con, "qiufrovitality", stringsAsFactors = FALSE)
+  qcommonremark <- sqlFetch(con, "qcommonremark", stringsAsFactors = FALSE)
+  qVdagnVfm <- sqlFetch(con, "qVdagnVfm", stringsAsFactors = FALSE)
+  
+odbcClose(con)
+
+# 
+qIndShootCop <- qIndShootCop %>% select(ID, ind_sht_cop_txt = Value1)
+qIntactSnag <- qIntactSnag %>% select(ID, intact_snag_txt = Value1)
+qAliveDead <- qAliveDead %>% select(ID, alive_dead_txt = Value1)
+qSpecies <- qSpecies %>% select(ID, name_nl = Value1, name_sc = Value2)
+qDecaystage <- qDecaystage %>% select(ID, decaystage_txt = Value2)
+qiufrovitality <- qiufrovitality %>% select(ID, vitality_txt = Value2) %>% 
+  unique() %>% filter(ID < 40)
+qVdagnVfm <- qVdagnVfm %>% select(ID, intact_fragment_txt = Value1)
+
+```
+
+
+```{r specieslist}
+names(WP2_SPECIES); names(qSpecies)
+
+qSpecies$name_sc_short <- gsub(" L\\.$", "", qSpecies$name_sc)
+qSpecies$name_sc_short <- gsub(" Ehrh\\.$", "", qSpecies$name_sc_short)
+qSpecies$name_sc_short <- gsub(" Mill\\.$", "", qSpecies$name_sc_short)
+qSpecies$name_sc_short <- gsub(" Huds\\.$", "", qSpecies$name_sc_short)
+qSpecies$name_sc_short <- gsub(" Gaertn\\.$", "", qSpecies$name_sc_short)
+qSpecies$name_sc_short <- gsub(" Jacq\\.$", "", qSpecies$name_sc_short)
+qSpecies$name_sc_short <- gsub(" Moench$", "", qSpecies$name_sc_short)
+qSpecies$name_sc_short <- gsub(" Lieblein$", "", qSpecies$name_sc_short)
+qSpecies$name_sc_short <- gsub(" Roth$", "", qSpecies$name_sc_short)
+
+qSpecies$name_sc_short <- gsub("\\s+\\(L\\.\\)$", "", qSpecies$name_sc_short)
+qSpecies$name_sc_short <- gsub(" Jacq\\.$", "", qSpecies$name_sc_short)
+
+# Mill.
+# Huds.
+# Moench
+# Gaertn.
+# Lieblein
+# Jacq.
+# Roth
+
+specieslist <- WP2_SPECIES %>% 
+  left_join(qSpecies, by = c("DATABASE" = "name_sc_short"))
+
+specieslist2 <- qSpecies %>% 
+  left_join(WP2_SPECIES, by = c("name_sc_short" = "DATABASE"))
+
+
+```
+
+```{r}
+qSpecies <- qSpecies %>% 
+  mutate(name_sc_short = ifelse(str_detect(name_sc, "Crataegus")
+                                , "Crataegus spp."
+                                , name_sc_short)) %>% 
+  mutate(name_sc_short = ifelse(str_detect(name_sc, "Populus species")
+                                , "Populus spp."
+                                , name_sc_short)) %>% 
+  mutate(name_sc_short = ifelse(str_detect(name_sc, "Populus canescens")
+                                , "Populus x canescens"
+                                , name_sc_short)) %>% 
+  mutate(name_sc_short = ifelse(str_detect(name_sc, "Larix deciduas")
+                                , "Larix decidua"
+                                , name_sc_short)) %>% 
+  mutate(name_sc_short = ifelse(str_detect(name_sc, "Larix species")
+                                , "Larix spp."
+                                , name_sc_short)) %>% 
+  mutate(name_sc_short = ifelse(str_detect(name_sc, "Hardwood species")
+                                , "Unknown broadleaf"
+                                , name_sc_short)) %>% 
+  mutate(name_sc_short = ifelse(str_detect(name_sc, "Salix spp.")
+                                , "Salix spp."
+                                , name_sc_short)) %>% 
+  mutate(name_sc_short = ifelse(str_detect(name_sc, "Betula pendula/pubescens")
+                                , "Betula spp."
+                                , name_sc_short))
+
+
+
+# Betula spp.
+# Salix spp.
+# Hardwood species
+# Larix deciduas
+# Populus x canescens
+```
+
+Aandacht:       
+- pinus pinaster zit niet in lijst van wildcard => gewoon behouden
+- Betula pendula/pubescens wordt vervangen door Betula spp.
+
+
+
+```{r}
+# welke soorten ook effectief in de db?
+trees_check <- read.table(paste0(path_to_datarequest_teamdrive
+                                 , "UPLOAD_INBO_TREES_2026-04-09.txt")
+                           , sep = " ", dec = ".")
+species_trees <- trees_check %>% 
+  select(full_scientific) %>% 
+  left_join(qSpecies, by = c("full_scientific" = "name_sc")) %>% 
+  unique()
+
+check_not_coupled_species <- species_trees %>% 
+  left_join(WP2_SPECIES, by = c("name_sc_short" = "DATABASE"))
+
+```
+
 # PLOTS
 
 composed_site_id
@@ -769,32 +919,6 @@ STANDING: This data table is designed to characterize alive and dead STANDING st
 
 ## Load data dendrometry														
 
-```{r load_lkp}
-con <- odbcConnectAccess2007(path_to_fieldmap_db)
-
-  qIndShootCop <- sqlFetch(con, "qIndShootCop", stringsAsFactors = FALSE)
-  # deadw_test <- sqlFetch(con, "Deadwood_3eSET", stringsAsFactors = FALSE)
-  qAliveDead <- sqlFetch(con, "qAliveDead", stringsAsFactors = FALSE)
-  qSpecies <- sqlFetch(con, "qSpecies", stringsAsFactors = FALSE)
-  qDecaystage <- sqlFetch(con, "qdecaystage", stringsAsFactors = FALSE)
-  qIntactSnag <- sqlFetch(con, "qIntactSnag", stringsAsFactors = FALSE)
-  qiufrovitality <- sqlFetch(con, "qiufrovitality", stringsAsFactors = FALSE)
-  qcommonremark <- sqlFetch(con, "qcommonremark", stringsAsFactors = FALSE)
-  qVdagnVfm <- sqlFetch(con, "qVdagnVfm", stringsAsFactors = FALSE)
-  
-odbcClose(con)
-
-# 
-qIndShootCop <- qIndShootCop %>% select(ID, ind_sht_cop_txt = Value1)
-qIntactSnag <- qIntactSnag %>% select(ID, intact_snag_txt = Value1)
-qAliveDead <- qAliveDead %>% select(ID, alive_dead_txt = Value1)
-qSpecies <- qSpecies %>% select(ID, name_nl = Value1, name_sc = Value2)
-qDecaystage <- qDecaystage %>% select(ID, decaystage_txt = Value2)
-qiufrovitality <- qiufrovitality %>% select(ID, vitality_txt = Value2) %>% 
-  unique() %>% filter(ID < 40)
-qVdagnVfm <- qVdagnVfm %>% select(ID, intact_fragment_txt = Value1)
-
-```
 
 
 ```{r load_dendro}
@@ -1051,7 +1175,7 @@ names(qDecaystage)
 # = sowieso NA in eerste survey
 
 standing <- standing0 %>%
-  left_join(qSpecies %>% select(-name_nl), by = c("species" = "ID")) %>% 
+  left_join(qSpecies %>% select(-name_nl, -name_sc), by = c("species" = "ID")) %>% 
   left_join(qDecaystage, by = c("decaystage" = "ID")) %>% 
   left_join(qiufrovitality, by = c("iufro_vital" = "ID")) %>% 
   # left_join(list_plots) %>% 
@@ -1076,7 +1200,7 @@ standing <- standing0 %>%
          , height = height_m # measured!
          , length = NA
          , date = as.Date(date_dendro, format = "%d/%m/%Y") # date of measurement of particular stem (format yyyy-mm-dd): 2002-12-01
-         , full_scientific = name_sc
+         , full_scientific = name_sc_short
          # , TREE_SPECIES_CODE = species	
          , dbh = dbh_mm
          , diameter_1 = NA, diameter_2 = NA
@@ -1379,7 +1503,7 @@ unique(lying0$intact_fragm)
 unique(lying0$decaystage)
 
 lying <- lying0 %>%
-  left_join(qSpecies %>% select(-name_nl), by = c("species" = "ID")) %>% 
+  left_join(qSpecies %>% select(-name_nl, -names_sc), by = c("species" = "ID")) %>% 
   left_join(qDecaystage, by = c("decaystage" = "ID")) %>% 
   left_join(qVdagnVfm, by = c("intact_fragm" = "ID")) %>% 
   mutate(geom = NA
@@ -1398,7 +1522,7 @@ lying <- lying0 %>%
          , integrity = ifelse(intact_fragm == 10, "C", "F")	 # Complete (C) or Fragmented stem (F)
          , height = NA
          , date = as.Date(date_dendro, format = "%d/%m/%Y") # date of measurement of particular stem (format yyyy-mm-dd): 2002-12-01
-         , full_scientific = name_sc
+         , full_scientific = name_sc_short
          # , TREE_SPECIES_CODE = species	
          , dbh = ifelse(intact_fragm == 10, max_diam_mm, NA) # Diameter at distance of 1.3 m from the lower end of the lying log.
          , diameter_1 = ifelse(intact_fragm == 10, NA, max_diam_mm)  
@@ -2284,14 +2408,14 @@ Checken of de geëxporteerde files goed in R ingelezen worden
 ```{r check_read, eval = FALSE, results='hide'}
 #
 design_check <- read.table(paste0(path_to_datarequest_teamdrive
-                                  , "UPLOAD_INBO_DESIGN_", Sys.Date(), ".txt")
+                                  , "UPLOAD_INBO_DESIGN_2026-04-09.txt")
                            , sep = " ", dec = ".")
 head(design_check)
 names(design_check)
 
 #
 plots_check <- read.table(paste0(path_to_datarequest_teamdrive
-                                 , "UPLOAD_INBO_PLOTS_", Sys.Date(), ".txt")
+                                 , "UPLOAD_INBO_PLOTS_2026-04-09.txt")
                            , sep = " ", dec = ".")
 head(plots_check)
 names(plots_check)
@@ -2300,7 +2424,7 @@ table(plots_check$consistent_id_standing)
 
 #
 trees_check <- read.table(paste0(path_to_datarequest_teamdrive
-                                 , "UPLOAD_INBO_TREES_", Sys.Date(), ".txt")
+                                 , "UPLOAD_INBO_TREES_2026-04-09.txt")
                            , sep = " ", dec = ".")
 
 # trees_check <- trees_link %>% select(-all_of(extra_vars), -tree_measure_id)
@@ -2309,7 +2433,7 @@ names(trees_check)
 
 #
 ground_veg_check <- read.table(paste0(path_to_datarequest_teamdrive
-                                      , "INBO_ground_veg_", Sys.Date(), ".txt")
+                                      , "INBO_ground_veg_2026-04-09.txt")
                            , sep = " ", dec = ".")
 head(ground_veg_check)
 names(ground_veg_check)
