@@ -459,9 +459,11 @@ t <- unmanaged %>%
 
 ```
 
-### Kluisbos: no Poplar
+### Kluisbos: no Poplar en no Communal Forest
 
 6 plots with poplar in unmanaged deel van bosreservaat NIET meenemen.
+
+Ook Kluisbos Communal Forest niet meenemen (onbeheerd deel).
 
 ```{r}
 # names(info_survey)
@@ -471,8 +473,13 @@ poplar_kluisbos <- info_survey %>%
   select(plot_id) %>% 
   left_join(info_beheer)
 
-unique(poplar_kluisbos$plot_id)
-# worden verderop weggfilterd (plotdata0: anti_join(poplar_kluisbos))
+communal_kluisbos <- info_beheer %>% 
+  filter(SubArea == "Kluisbos Communal Forest")
+
+excluded_kluisbos <- rbind(poplar_kluisbos, communal_kluisbos)
+
+unique(excluded_kluisbos$plot_id)
+# worden verderop weggfilterd (plotdata0: anti_join(excluded_kluisbos))
 ```
 
 
@@ -514,7 +521,7 @@ plotdata0 <- plotinfo %>%
   inner_join(info_XY %>% select(plot_id, XLon_wgs84, YLat_wgs84, Z_m_TAW), by = c("plot_id")) %>% 
   left_join(info_beheer) %>% 
   filter(Management == "unmanaged") %>% 
-  anti_join(poplar_kluisbos %>% select(plot_id)) %>% 
+  anti_join(excluded_kluisbos %>% select(plot_id)) %>% 
   mutate(inventory_year = year_dendro
          # , SITE_ID = NA, SITE_NAME = NA, WILDCARD_sub_ID = NA
          # , LPI_ID = ifelse(plottype == "CA", plot_id, NA)
@@ -765,12 +772,31 @@ inventory_type - ok
 plot_id - ok
 circle_no - ok
 
+```{r plots_geom_check, eval = FALSE}
+names(plotdata); nrow(plotdata)
+names(plots_geom); nrow(plots_geom)
+length(unique(plotdata$plot_id)) == length(unique(plots_geom$plot_id))
 
+no_geom <- plotdata %>% 
+  filter(!plot_id %in% plots_geom$plot_id)
+# 1512 tem 1517 zaten nog niet in de db: Kluisbos Communal Forest, onbeheerd - opgelost
+
+no_geom <-  plots_geom %>% 
+  filter(!plot_id %in% plotdata$plot_id)
+# 1140 en 1137 van sevendonck, zitten in geom, maar niet (meer) in onze plotdata?
+# omdat ze nu als open area in beheer zitten ....
+# nu ook opgenomen in plots_excluded_from_network:
+      # forest_reserve	plot_id	info
+      # Sevendonck	1137	kap tvv open ruimte (2023)
+      # Sevendonck	1140	kap tvv open ruimte (2023)
+
+# is OK, nu toch enkel de nieuwe aan te leveren
+
+```
 ```{r plotdata_vars, results = 'hide'}
-names(plotdata)
-
 plotdata_def <- plotdata %>%
-  mutate(geom = NA   # over te nemen uit reeds opgeladen data (< shapefile)
+  left_join(plots_geom, by = c("plot_id")) %>% 
+  mutate(geom = st_asewkt  # over te nemen uit reeds opgeladen data (< shapefile)
          , inventory_type = ifelse(plottype == "CA", "LPI", 
                                    ifelse(plottype == "CP", "SPI", NA))
          ) %>%  
@@ -1503,7 +1529,7 @@ unique(lying0$intact_fragm)
 unique(lying0$decaystage)
 
 lying <- lying0 %>%
-  left_join(qSpecies %>% select(-name_nl, -names_sc), by = c("species" = "ID")) %>% 
+  left_join(qSpecies %>% select(-name_nl, -name_sc), by = c("species" = "ID")) %>% 
   left_join(qDecaystage, by = c("decaystage" = "ID")) %>% 
   left_join(qVdagnVfm, by = c("intact_fragm" = "ID")) %>% 
   mutate(geom = NA
@@ -1965,6 +1991,7 @@ lis_cwd
 geom
 other
 
+
 ```{r results='hide'}
 names(plotdata)
 names(plotdata_def)
@@ -1980,7 +2007,8 @@ design_ <- plotdata %>%
            , circle_no
            , circle_radius
            , standing_alive_threshold, standing_dead_threshold
-           , lying_dead_threshold, lying_alive_threshold) %>% 
+           , lying_dead_threshold, lying_alive_threshold
+           ) %>% 
   summarize(n_plots = n()) %>% 
   ungroup() %>% 
   # beslist om geen CWD aan te leveren
@@ -2408,14 +2436,14 @@ Checken of de geëxporteerde files goed in R ingelezen worden
 ```{r check_read, eval = FALSE, results='hide'}
 #
 design_check <- read.table(paste0(path_to_datarequest_teamdrive
-                                  , "UPLOAD_INBO_DESIGN_2026-04-09.txt")
+                                  , "UPLOAD_INBO_DESIGN_2026-04-20.txt")
                            , sep = " ", dec = ".")
 head(design_check)
 names(design_check)
 
 #
 plots_check <- read.table(paste0(path_to_datarequest_teamdrive
-                                 , "UPLOAD_INBO_PLOTS_2026-04-09.txt")
+                                 , "UPLOAD_INBO_PLOTS_2026-04-20.txt")
                            , sep = " ", dec = ".")
 head(plots_check)
 names(plots_check)
@@ -2424,7 +2452,7 @@ table(plots_check$consistent_id_standing)
 
 #
 trees_check <- read.table(paste0(path_to_datarequest_teamdrive
-                                 , "UPLOAD_INBO_TREES_2026-04-09.txt")
+                                 , "UPLOAD_INBO_TREES_2026-04-20.txt")
                            , sep = " ", dec = ".")
 
 # trees_check <- trees_link %>% select(-all_of(extra_vars), -tree_measure_id)
@@ -2433,7 +2461,7 @@ names(trees_check)
 
 #
 ground_veg_check <- read.table(paste0(path_to_datarequest_teamdrive
-                                      , "INBO_ground_veg_2026-04-09.txt")
+                                      , "INBO_ground_veg_2026-04-20.txt")
                            , sep = " ", dec = ".")
 head(ground_veg_check)
 names(ground_veg_check)
