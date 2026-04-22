@@ -48,14 +48,7 @@ plot_type <- "CA"
 plot_type <- "CP"
 
 forestreserve_folder <- paste0(path_to_reserves, "08_Sevendonck")
-
-path_to_datarequest <- paste0(forestreserve_folder, "/verwerking_2026_1e2e3eSET/output_forrescalc/")
-path_to_datarequest_teamdrive <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverwerking/20_Per_gebied/2026_", forestreserve_short, "/01_datacontrole/")
-path_to_html_teamdrive <- path_to_datarequest_teamdrive
-
-# plots_to_exclude <- c(701, 707, 709, 727, 728, 738, 739, 740, 759, 760)
-
-path_to_datacontrol <- path_to_datarequest_teamdrive
+destination_dir <- "C:/03_BR_gebieden/08_Sevendonck/FMprojecten_2026/"
 ```
 
 
@@ -85,23 +78,49 @@ In 3 stappen FM-db aanpassen en goed bijhouden hoe om dan in moederdb ook te doe
 
 
 ```{r results='hold', eval=TRUE}
-path_to_datacontrol
 path_to_fieldmap_db
-path_to_html_teamdrive
 ```
+
+
+# Kiezen welke set
+
+1eSET, 2eSET of 3eSET
+
+```{r}
+set <- "1eSET"
+# set <- "2eSET"
+# set <- "3eSET"
+
+```
+
+
 
 # Aaanpassing FM-PM
 
-Om via R updates te kunne doen in de databank, is het noodzakelijk dat coppice id
-ook in layer shoots aanwezig is.
+Om via R updates te kunnen doen in de databank, is het noodzakelijk dat het veld
+`CoppiceID` ook in layer shoots aanwezig is.
 
 Dit veld toevoegen in FM-PM en vervolgens onderstaande updatequery uitvoeren.
 
-Reden: coppice_id zit in layer trees en koppeling met die layer trees gebeurt net obv de 
-IDTrees die we verderop willen aanpassen
+**Reden:** `CoppiceID` zit in layer trees en koppeling met layer trees gebeurt net 
+obv het veld `IDTrees` die we verderop willen aanpassen, dus die koppeling kunnen 
+we niet aanhouden om `CoppiceID` uit d elayer trees te halen.
 
-```{r sql1_update_coppiceid}
-qry_update <- paste0("UPDATE Trees INNER JOIN Shoots ON (Trees.ID = Shoots.IDTrees) AND (Trees.Y_m = Shoots.YTrees) AND (Trees.X_m = Shoots.XTrees) AND (Trees.IDPlots = Shoots.IDPlots) SET Shoots.CoppiceID = Trees.CoppiceID;") %>% noquote()
+
+```{r sql1_update_coppiceid, eval = FALSE}
+if (set == "1eSET") {
+  # code to be executed if condition is TRUE
+  qry_update <- paste0("UPDATE Trees t INNER JOIN Shoots s ON (t.ID = s.IDTrees) AND (t.Y_m = s.YTrees) AND (t.X_m = s.XTrees) AND (t.IDPlots = s.IDPlots) SET s.CoppiceID = t.CoppiceID;") %>% noquote()
+} else {
+  # code to be executed if condition is FALSE
+    if (set == "2eSET") {
+    # code to be executed if condition is TRUE
+    qry_update <- paste0("UPDATE Trees_2eSET t INNER JOIN Shoots_2eSET s ON (t.ID = s.IDTrees_2eSET) AND (t.Y_m = s.YTrees_2eSET) AND (t.X_m = s.XTrees_2eSET) AND (t.IDPlots = s.IDPlots) SET s.CoppiceID = t.CoppiceID;") %>% noquote()
+  } else {
+    # code to be executed if condition is FALSE
+    qry_update <- paste0("UPDATE Trees_3eSET t INNER JOIN Shoots_3eSET s ON (t.ID = s.IDTrees_3eSET) AND (t.Y_m = s.YTrees_3eSET) AND (t.X_m = s.XTrees_3eSET) AND (t.IDPlots = s.IDPlots) SET s.CoppiceID = t.CoppiceID;") %>% noquote()
+  }
+}
 
 con <- odbcConnectAccess2007(path_to_fieldmap_db)
 sqlQuery(con, qry_update, stringsAsFactors = TRUE)
@@ -112,47 +131,121 @@ odbcClose(con)
 
 # Inladen data
 
-## Queries 1eSET
+## Queries
 
 ```{r load}
-query_trees_1eSET<-"
-SELECT
-Trees.IDPlots
-, Trees.ID
-, Trees.X_m
-, Trees.Y_m
-, Trees.AliveDead
-, Trees.Species
-, Trees.IndShtCop
-, Trees.CoppiceID
-, Trees.Remark as trees_remark
-, Trees.CommonRemark as trees_commonremark
-FROM Trees
-WHERE Trees.IndShtCop = 12
-;"
 
-query_shoots_1eSET<-"
-SELECT
-Shoots.IDPlots
-, Shoots.IDTrees
-, Shoots.ID
-, Shoots.XTrees
-, Shoots.YTrees
-, Shoots.CoppiceID as CoppiceID_shoots
-, Shoots.AliveDeadShoots
-, Shoots.Remark as shoots_remark
-, Shoots.CommonRemark as shoots_commonremark
-FROM Shoots
-;"
+if (set == "1eSET") {
+  # code to be executed if condition is TRUE
+  query_trees<-"
+  SELECT
+  Trees.IDPlots
+  , Trees.ID
+  , Trees.X_m
+  , Trees.Y_m
+  , Trees.AliveDead
+  , Trees.Species
+  , Trees.IndShtCop
+  , Trees.CoppiceID
+  , Trees.Remark as trees_remark
+  , Trees.CommonRemark as trees_commonremark
+  FROM Trees
+  WHERE Trees.IndShtCop = 12
+  ;"
+
+  query_shoots<-"
+  SELECT
+  Shoots.IDPlots
+  , Shoots.IDTrees
+  , Shoots.ID
+  , Shoots.XTrees
+  , Shoots.YTrees
+  , Shoots.CoppiceID as CoppiceID_shoots
+  , Shoots.AliveDeadShoots
+  , Shoots.Remark as shoots_remark
+  , Shoots.CommonRemark as shoots_commonremark
+  FROM Shoots
+  ;"
+
+} else {
+  # code to be executed if condition is FALSE
+    if (set == "2eSET") {
+    # code to be executed if condition is TRUE
+  query_trees<-"
+  SELECT
+  Trees_2eSET.IDPlots
+  , Trees_2eSET.ID
+  , Trees_2eSET.X_m
+  , Trees_2eSET.Y_m
+  , Trees_2eSET.AliveDead
+  , Trees_2eSET.Species
+  , Trees_2eSET.IndShtCop
+  , Trees_2eSET.CoppiceID
+  , Trees_2eSET.Remark as trees_remark
+  , Trees_2eSET.CommonRemark as trees_commonremark
+  FROM Trees_2eSET
+  WHERE Trees_2eSET.IndShtCop = 12
+  ;"
+  
+  query_shoots<-"
+  SELECT
+  Shoots_2eSET.IDPlots
+  , Shoots_2eSET.IDTrees_2eSET as IDTrees
+  , Shoots_2eSET.ID
+  , Shoots_2eSET.XTrees_2eSET as XTrees
+  , Shoots_2eSET.YTrees_2eSET as YTrees
+  , Shoots_2eSET.CoppiceID as CoppiceID_shoots
+  , Shoots_2eSET.AliveDeadShoots
+  , Shoots_2eSET.Remark as shoots_remark
+  , Shoots_2eSET.CommonRemark as shoots_commonremark
+  FROM Shoots_2eSET
+  ;"    
+      
+  } else {
+    # code to be executed if condition is FALSE
+  query_trees<-"
+  SELECT
+  Trees_3eSET.IDPlots
+  , Trees_3eSET.ID
+  , Trees_3eSET.X_m
+  , Trees_3eSET.Y_m
+  , Trees_3eSET.AliveDead
+  , Trees_3eSET.Species
+  , Trees_3eSET.IndShtCop
+  , Trees_3eSET.CoppiceID
+  , Trees_3eSET.Remark as trees_remark
+  , Trees_3eSET.CommonRemark as trees_commonremark
+  FROM Trees_3eSET
+  WHERE Trees_3eSET.IndShtCop = 12
+  ;"
+  
+  query_shoots<-"
+  SELECT
+  Shoots_3eSET.IDPlots
+  , Shoots_3eSET.IDTrees_3eSET as IDTrees
+  , Shoots_3eSET.ID
+  , Shoots_3eSET.XTrees_3eSET as XTrees
+  , Shoots_3eSET.YTrees_3eSET as YTrees
+  , Shoots_3eSET.CoppiceID as CoppiceID_shoots
+  , Shoots_3eSET.AliveDeadShoots
+  , Shoots_3eSET.Remark as shoots_remark
+  , Shoots_3eSET.CommonRemark as shoots_commonremark
+  FROM Shoots_3eSET
+  ;"    
+  }
+}
+
 
 con <- odbcConnectAccess2007(path_to_fieldmap_db)
 
-trees <- sqlQuery(con, query_trees_1eSET, stringsAsFactors = TRUE)
-shoots <- sqlQuery(con, query_shoots_1eSET, stringsAsFactors = TRUE)
+trees <- sqlQuery(con, query_trees, stringsAsFactors = TRUE)
+shoots <- sqlQuery(con, query_shoots, stringsAsFactors = TRUE)
 
 odbcClose(con)
 
 ```
+
+
 
 ```{r}
 con <- odbcConnectAccess2007(path_to_fieldmap_db)
@@ -161,7 +254,6 @@ con <- odbcConnectAccess2007(path_to_fieldmap_db)
   # deadw_test <- sqlFetch(con, "Deadwood_3eSET", stringsAsFactors = FALSE)
   qalive_dead <- sqlFetch(con, "qAliveDead", stringsAsFactors = FALSE)
   qspecies <- sqlFetch(con, "qSpecies", stringsAsFactors = FALSE)
-  
   qcommonremark <- sqlFetch(con, "qcommonremark", stringsAsFactors = FALSE)
 
 odbcClose(con)
@@ -175,6 +267,7 @@ shoots_ <- shoots %>%
                           , "XTrees" = "X_m", "YTrees" = "Y_m"))
 
 nrow(shoots_) == nrow(shoots)
+# 1712 2eSET
 
 shoots <- shoots_
 
@@ -201,16 +294,29 @@ Zie ook queries in access
 
 
 ```{r sql2_update_AliveDeadShoots, EVAL = FALSE}
-# enkel 1eSET
-qry_update <- paste0("UPDATE Trees INNER JOIN Shoots ON (Trees.ID = Shoots.IDTrees) AND (Trees.Y_m = Shoots.YTrees) AND (Trees.X_m = Shoots.XTrees) AND (Trees.IDPlots = Shoots.IDPlots) SET     Shoots.AliveDeadShoots = [AliveDead];") %>% noquote()
+if (set == "1eSET") {
+  # code to be executed if condition is TRUE
+  qry_update <- paste0("UPDATE Trees t INNER JOIN Shoots s ON (t.ID = s.IDTrees) AND (t.Y_m = s.YTrees) AND (t.X_m = s.XTrees) AND (t.IDPlots = s.IDPlots) SET  s.AliveDeadShoots = t.AliveDead;") %>% noquote()
+  
+} else {
+  # code to be executed if condition is FALSE
+    if (set == "2eSET") {
+    # code to be executed if condition is TRUE
+    qry_update <- paste0("UPDATE Trees_2eSET t INNER JOIN Shoots_2eSET s ON (t.ID = s.IDTrees_2eSET) AND (t.Y_m = s.YTrees_2eSET) AND (t.X_m = s.XTrees_2eSET) AND (t.IDPlots = s.IDPlots) SET s.AliveDeadShoots = t.AliveDead;") %>% noquote()
+    
+  } else {
+    # code to be executed if condition is FALSE
+    qry_update <- paste0("UPDATE Trees_3eSET t INNER JOIN Shoots_3eSET s ON (t.ID = s.IDTrees_3eSET) AND (t.Y_m = s.YTrees_3eSET) AND (t.X_m = s.XTrees_3eSET) AND (t.IDPlots = s.IDPlots) SET s.AliveDeadShoots = t.AliveDead;") %>% noquote()
+  }
+}
 
 con <- odbcConnectAccess2007(path_to_fieldmap_db)
-
 sqlQuery(con, qry_update, stringsAsFactors = TRUE)
-
 odbcClose(con)
 
 ```
+
+
 Als we de dode spillen willen toevoegen aan het levende deel van een stoof, moeten
 we zorgen dat de ID's van de spillen uniek zijn.
 Daarom passen we de ID's van de dode spillen aan naar ID + 5000.
@@ -218,13 +324,24 @@ Daarom passen we de ID's van de dode spillen aan naar ID + 5000.
 (gecheckt in moederdb en max ID was +/- 4000)
 
 ```{r sql3_update_unieke_id_shoots, EVAL = FALSE}
-# enkel 1eSET
-qry_update <- paste0("UPDATE Shoots SET Shoots.ID = [Shoots]![ID] + 5000 WHERE (Shoots.AliveDeadShoots=12);") %>% noquote()
+if (set == "1eSET") {
+  # code to be executed if condition is TRUE
+  qry_update <- paste0("UPDATE Shoots SET Shoots.ID = [Shoots]![ID] + 5000 WHERE (Shoots.AliveDeadShoots=12);") %>% noquote()
+  
+} else {
+  # code to be executed if condition is FALSE
+    if (set == "2eSET") {
+    # code to be executed if condition is TRUE
+    qry_update <- paste0("UPDATE Shoots_2eSET SET Shoots_2eSET.ID = [Shoots_2eSET]![ID] + 5000 WHERE (Shoots_2eSET.AliveDeadShoots=12);") %>% noquote()
+    
+  } else {
+    # code to be executed if condition is FALSE
+    qry_update <- paste0("UPDATE Shoots_3eSET SET Shoots_3eSET.ID = [Shoots_3eSET]![ID] + 5000 WHERE (Shoots_3eSET.AliveDeadShoots=12);") %>% noquote()
+  }
+}
 
 con <- odbcConnectAccess2007(path_to_fieldmap_db)
-
 sqlQuery(con, qry_update, stringsAsFactors = TRUE)
-
 odbcClose(con)
 
 ```
@@ -232,8 +349,8 @@ odbcClose(con)
 ```{r check_sql2_3}
 con <- odbcConnectAccess2007(path_to_fieldmap_db)
 
-trees_sql2_3 <- sqlQuery(con, query_trees_1eSET, stringsAsFactors = TRUE)
-shoots_sql2_3 <- sqlQuery(con, query_shoots_1eSET, stringsAsFactors = TRUE)
+trees_sql2_3 <- sqlQuery(con, query_trees, stringsAsFactors = TRUE)
+shoots_sql2_3 <- sqlQuery(con, query_shoots, stringsAsFactors = TRUE)
 
 odbcClose(con)
 ```
@@ -249,6 +366,7 @@ shoots_sql2_3_ <- shoots_sql2_3 %>%
 nrow(shoots_sql2_3_) == nrow(shoots)
 
 max(shoots_sql2_3_$ID) > 5000
+range(shoots_sql2_3_$ID)
 
 unique(shoots_sql2_3_$AliveDead); unique(shoots_sql2_3_$AliveDeadShoots)
 shoots_sql2_3_ %>% filter(AliveDeadShoots != AliveDead) %>% nrow()
@@ -275,17 +393,20 @@ stoven_levend_en_dood_deel <- trees_sql2_3 %>%
   summarize(n = n()) %>% 
   ungroup() %>% 
   filter(n == 2)
-nrow(stoven_levend_en_dood_deel) # 105
+nrow(stoven_levend_en_dood_deel) # 105 1eSET / 81 2eSET
 
 ```
 
 ```{r}
+# shoots_levend_en_dood_deel <- shoots_sql2_3 %>% 
+#   filter(CoppiceID %in% stoven_levend_en_dood_deel$CoppiceID)
+
 shoots_levend_en_dood_deel <- shoots_sql2_3 %>% 
-  filter(CoppiceID %in% stoven_levend_en_dood_deel$CoppiceID)
+  inner_join(stoven_levend_en_dood_deel, by = c("IDPlots", "CoppiceID"))
 
 # test of aantal records klopt
 shoots_enkel_levend_of_enkel_dood <- shoots_sql2_3 %>% 
-  filter(!CoppiceID %in% stoven_levend_en_dood_deel$CoppiceID)
+  anti_join(stoven_levend_en_dood_deel, by = c("IDPlots", "CoppiceID"))
 
 nrow(shoots) == nrow(shoots_enkel_levend_of_enkel_dood) + nrow(shoots_levend_en_dood_deel)
 
@@ -299,7 +420,7 @@ XY_levend_deel <- shoots_levend_en_dood_deel %>%
   filter(AliveDeadShoots == 11) %>% 
   select(IDPlots, IDTrees_levend = IDTrees, CoppiceID
          , XTrees_levend = XTrees, YTrees_levend = YTrees) %>% 
-  unique()
+  unique() # 105 1eSET / 81 2eSET
 
 # check: toch geen dubbele XY voor het levende deel?
 XY_levend_deel %>% group_by(IDPlots, IDTrees_levend) %>% summarize(n = n()) %>% 
@@ -330,14 +451,49 @@ shoots_levend_en_dood_deel_ %>%
 
 ```
 
-Volgende stap moet een updatequery worden, zodat dit rechtstreeks in de databank 
+Volgende stap is terug een updatequery, zodat dit rechtstreeks in de databank 
 aangepast wordt.
 
 Als de dode spillen van een deels levende stoof, de IDTrees en XYTrees krijgen
 van het levende deel, worden ze automatisch gekoppeld aan dit levende deel.
 
 Het dode deel (op niveau van layer trees) wordt dan "leeg", bevat geen spillen 
-meer, en moet verwijderd worden (zie stap 3 en 4).
+meer, en moet verwijderd worden (zie stap 3 en 5).
+
+**OPGEPAST**
+We baseren ons hier enkel op de CoppiceID, dus wemoeten zeker zijn dat die klopt.
+Daarom eerst checken of species wel zelfde is én of XY niet te ver uit elkaar ligt.
+
+```{r CONTROLE_coppice_id_species, eval = FALSE}
+check_coppice_id_species <- shoots_levend_en_dood_deel_ %>% 
+  group_by(IDPlots, CoppiceID) %>% 
+  summarize(n_species = n_distinct(Species)) %>% 
+  ungroup() %>% 
+  filter(n_species > 1)
+
+double_species <- shoots_levend_en_dood_deel_ %>% 
+  inner_join(check_coppice_id_species)
+
+write.csv2(double_species, paste0(destination_dir, "double_species_", set, ".csv"))
+```
+
+```{r CONTROLE_coppice_id_xy, eval = FALSE}
+check_coppice_id_xy <- shoots_levend_en_dood_deel_ %>% 
+  group_by(IDPlots, CoppiceID) %>% 
+  summarize(x1 = min(XTrees)
+            , x2 = max(XTrees)
+            , y1 = min(YTrees)
+            , y2 = max(YTrees)) %>% 
+  ungroup() %>% 
+  mutate(shift_x = x1 - x2
+         , shift_y = y1 - y2) %>% 
+  filter(abs(shift_x) > 1 | abs(shift_y) > 1)
+
+xy_shift <- shoots_levend_en_dood_deel_ %>% 
+  inner_join(check_coppice_id_xy)
+
+write.csv2(xy_shift, paste0(destination_dir, "xy_shift_", set, ".csv"))
+```
 
 ```{r update_XY_shoots_dood_deel}
 # OK, nu verder gaan met XY én IDTrees overnemen van levend deel
@@ -351,18 +507,10 @@ shoots_levend_en_dood_deel_ <- shoots_levend_en_dood_deel_ %>%
 ```{r sql4_update_XY_shoots_dood_deel, eval = FALSE}
 # voor elk record in XY_levend_deel
 
-# UPDATE Shoots
-# SET
-#     Shoots.IDTrees = 186
-# WHERE
-#     (
-#         ((Shoots.IDPlots) = 1108)
-#         AND ((Shoots.CoppiceID) = 35)
-#         AND ((Shoots.AliveDeadShoots) = 12)
-#     );
-
 con <- odbcConnectAccess2007(path_to_fieldmap_db)
 
+if (set == "1eSET") {
+  # code to be executed if condition is TRUE
    for (i in 1 : nrow(XY_levend_deel)){
      # IDTrees = IDTrees_levend
           # i <- 1
@@ -388,13 +536,73 @@ con <- odbcConnectAccess2007(path_to_fieldmap_db)
         
     }
 
+  
+} else {
+  # code to be executed if condition is FALSE
+    if (set == "2eSET") {
+    # code to be executed if condition is TRUE
+       for (i in 1 : nrow(XY_levend_deel)){
+     # IDTrees = IDTrees_levend
+          # i <- 1
+     
+       newValue <- XY_levend_deel[i,"IDTrees_levend"]
+       qry_update <- paste0("UPDATE Shoots_2eSET SET IDTrees_2eSET = ", newValue, " WHERE (IDPlots = ",  XY_levend_deel[i,"IDPlots"], ")", " AND (CoppiceID = ", XY_levend_deel[i,"CoppiceID"], ")", " AND (AliveDeadShoots = 12);") %>%
+           noquote()
+        sqlQuery(con,qry_update)
+        
+    # XTrees = XTrees_levend  
+        
+       newValue <- XY_levend_deel[i,"XTrees_levend"]
+       qry_update <- paste0("UPDATE Shoots_2eSET SET XTrees_2eSET = ", newValue, " WHERE (IDPlots = ",  XY_levend_deel[i,"IDPlots"], ")", " AND (CoppiceID = ", XY_levend_deel[i,"CoppiceID"], ")", " AND (AliveDeadShoots = 12)") %>%
+           noquote()
+        sqlQuery(con,qry_update)
+        
+   # YTrees = YTrees_levend    
+        
+       newValue <- XY_levend_deel[i,"YTrees_levend"]
+       qry_update <- paste0("UPDATE Shoots_2eSET SET YTrees_2eSET = ", newValue, " WHERE (IDPlots = ",  XY_levend_deel[i,"IDPlots"], ")", " AND (CoppiceID = ", XY_levend_deel[i,"CoppiceID"], ")", " AND (AliveDeadShoots = 12)") %>%
+           noquote()
+        sqlQuery(con,qry_update)
+        
+    }
+
+    
+  } else {
+    # code to be executed if condition is FALSE
+           for (i in 1 : nrow(XY_levend_deel)){
+     # IDTrees = IDTrees_levend
+          # i <- 1
+     
+       newValue <- XY_levend_deel[i,"IDTrees_levend"]
+       qry_update <- paste0("UPDATE Shoots_3eSET SET IDTrees_3eSET = ", newValue, " WHERE (IDPlots = ",  XY_levend_deel[i,"IDPlots"], ")", " AND (CoppiceID = ", XY_levend_deel[i,"CoppiceID"], ")", " AND (AliveDeadShoots = 12);") %>%
+           noquote()
+        sqlQuery(con,qry_update)
+        
+    # XTrees = XTrees_levend  
+        
+       newValue <- XY_levend_deel[i,"XTrees_levend"]
+       qry_update <- paste0("UPDATE Shoots_3eSET SET XTrees_3eSET = ", newValue, " WHERE (IDPlots = ",  XY_levend_deel[i,"IDPlots"], ")", " AND (CoppiceID = ", XY_levend_deel[i,"CoppiceID"], ")", " AND (AliveDeadShoots = 12)") %>%
+           noquote()
+        sqlQuery(con,qry_update)
+        
+   # YTrees = YTrees_levend    
+        
+       newValue <- XY_levend_deel[i,"YTrees_levend"]
+       qry_update <- paste0("UPDATE Shoots_3eSET SET YTrees_3eSET = ", newValue, " WHERE (IDPlots = ",  XY_levend_deel[i,"IDPlots"], ")", " AND (CoppiceID = ", XY_levend_deel[i,"CoppiceID"], ")", " AND (AliveDeadShoots = 12)") %>%
+           noquote()
+        sqlQuery(con,qry_update)
+        
+    }
+  }
+}
+
 odbcClose(con)
 
 ```
 
 ```{r check_sql4}
 con <- odbcConnectAccess2007(path_to_fieldmap_db)
-shoots_sql4 <- sqlQuery(con, query_shoots_1eSET, stringsAsFactors = TRUE)
+shoots_sql4 <- sqlQuery(con, query_shoots, stringsAsFactors = TRUE)
 odbcClose(con)
 
 # opnieuw koppelen aan trees, zou nu een andere koppeling moeten zijn
@@ -408,7 +616,10 @@ unique(shoots_sql4_$AliveDead); unique(shoots_sql4_$AliveDeadShoots)
 shoots_sql4_ %>% filter(AliveDeadShoots != AliveDead) %>% nrow()
 shoots_sql4_ %>% filter(is.na(AliveDeadShoots)) %>% nrow()
 
-t <- shoots_sql4_ %>% filter(IDPlots == 1103)
+# 1eSET: soort overgenomen van het levende deel
+t <- shoots_sql4_ %>% filter(IDPlots == 141100 & IDTrees %in% c(252, 251))
+# 2eSET
+t <- shoots_sql4_ %>% filter(IDPlots == 1113 & IDTrees == 4)
 ```
 
 
@@ -422,11 +633,14 @@ check_unieke_id_shoots <- shoots_sql4 %>%
   group_by(IDPlots, IDTrees, ID) %>% 
   summarize(n = n()) %>% 
   ungroup()
+check_unieke_id_shoots %>% filter(n > 1) %>% nrow() == 0
 
 check_unieke_id_shoots2 <- shoots_sql4 %>% 
   group_by(IDPlots, CoppiceID_shoots, ID) %>% 
   summarize(n = n()) %>% 
   ungroup()
+check_unieke_id_shoots2 %>% filter(n > 1) %>% nrow() == 0
+
 ```
 
 
@@ -453,7 +667,7 @@ Op basis van dit veld vervolgens aan Ifer vragen om deze allemaal weg te gooien.
 
 ```{r}
 trees_levend_en_dood_deel <- trees_sql2_3 %>% 
-  filter(CoppiceID %in% stoven_levend_en_dood_deel$CoppiceID)
+  inner_join(stoven_levend_en_dood_deel, by = c("IDPlots", "CoppiceID"))
 
 # check: toch zeker twee delen?
 trees_levend_en_dood_deel %>% group_by(IDPlots, CoppiceID) %>% 
@@ -473,12 +687,34 @@ trees_levend_en_dood_deel_ %>% filter(trees_remark == "TO_DELETE") %>%
 ```{r sql5_update_trees_dood_deel, eval = FALSE}
 con <- odbcConnectAccess2007(path_to_fieldmap_db)
 
-   for (i in 1 : nrow(XY_levend_deel)){
+if (set == "1eSET") {
+  # code to be executed if condition is TRUE
+  for (i in 1 : nrow(XY_levend_deel)){
        qry_update <- paste0("UPDATE Trees SET Remark = 'TO DELETE' WHERE (CoppiceID = ", XY_levend_deel[i,"CoppiceID"], ")", " AND (AliveDead = 12)") %>%
            noquote()
         sqlQuery(con,qry_update)
-        
     }
+  
+} else {
+  # code to be executed if condition is FALSE
+    if (set == "2eSET") {
+    # code to be executed if condition is TRUE
+    for (i in 1 : nrow(XY_levend_deel)){
+       qry_update <- paste0("UPDATE Trees_2eSET SET Remark = 'TO DELETE' WHERE (CoppiceID = ", XY_levend_deel[i,"CoppiceID"], ")", " AND (AliveDead = 12)") %>%
+           noquote()
+        sqlQuery(con,qry_update)
+    }
+    
+  } else {
+    # code to be executed if condition is FALSE
+    for (i in 1 : nrow(XY_levend_deel)){
+       qry_update <- paste0("UPDATE Trees_3eSET SET Remark = 'TO DELETE' WHERE (CoppiceID = ", XY_levend_deel[i,"CoppiceID"], ")", " AND (AliveDead = 12)") %>%
+           noquote()
+        sqlQuery(con,qry_update)
+    }
+  }
+    
+}
 
 odbcClose(con)
 ```
@@ -486,8 +722,8 @@ odbcClose(con)
 
 ```{r check_sql5}
 con <- odbcConnectAccess2007(path_to_fieldmap_db)
-trees_sql5 <- sqlQuery(con, query_trees_1eSET, stringsAsFactors = TRUE)
-shoots_sql5 <- sqlQuery(con, query_shoots_1eSET, stringsAsFactors = TRUE)
+trees_sql5 <- sqlQuery(con, query_trees, stringsAsFactors = TRUE)
+shoots_sql5 <- sqlQuery(con, query_shoots, stringsAsFactors = TRUE)
 odbcClose(con)
 ```
 
@@ -538,9 +774,24 @@ trees_ <- trees %>%
 
 
 ```{r sql6_update_all_trees, eval = FALSE}
-
-qry_update <- paste0("UPDATE Trees SET Trees.AliveDead = 15;") %>%
+if (set == "1eSET") {
+  # code to be executed if condition is TRUE
+  qry_update <- paste0("UPDATE Trees SET Trees.AliveDead = 15;") %>%
            noquote()
+  
+} else {
+  # code to be executed if condition is FALSE
+    if (set == "2eSET") {
+    # code to be executed if condition is TRUE
+    qry_update <- paste0("UPDATE Trees_2eSET SET Trees_2eSET.AliveDead = 15;") %>%
+           noquote()
+    
+  } else {
+    # code to be executed if condition is FALSE
+    qry_update <- paste0("UPDATE Trees_3eSET SET Trees_3eSET.AliveDead = 15;") %>%
+           noquote()
+  }
+}
 
 con <- odbcConnectAccess2007(path_to_fieldmap_db)
 sqlQuery(con,qry_update)
@@ -550,7 +801,7 @@ odbcClose(con)
 
 ```{r check_sql6}
 con <- odbcConnectAccess2007(path_to_fieldmap_db)
-trees_sql6 <- sqlQuery(con, query_trees_1eSET, stringsAsFactors = TRUE)
+trees_sql6 <- sqlQuery(con, query_trees, stringsAsFactors = TRUE)
 odbcClose(con)
 ```
 
