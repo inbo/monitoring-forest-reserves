@@ -346,7 +346,7 @@ veg_by_plot_git <- read_forresdat_table(
 veg_by_plot_new <- veg_by_plot
 
 veg_by_plot_git <- veg_by_plot_git %>% 
-  select(plot_id, year_main_survey, everything()) 
+  select(plot_id, year, everything()) 
 
 nrow(veg_by_plot_new) == nrow(veg_by_plot_git)
 summary(veg_by_plot_new)

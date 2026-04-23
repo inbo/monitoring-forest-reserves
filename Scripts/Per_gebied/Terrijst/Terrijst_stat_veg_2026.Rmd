@@ -113,7 +113,7 @@ veg_by_plot <- read_excel(
   # select(-contains("eg"), -contains("min40cm")) %>%  # (veg en reg)
   left_join(plotinfo) %>% 
   filter(plottype == "CP") %>% 
-  rename(year = year_main_survey)  
+  rename(year = year)  
     # "main_survey": zie issue #179: beter overal vervangen door year
 
 herblayer_by_plot <- read_excel(
