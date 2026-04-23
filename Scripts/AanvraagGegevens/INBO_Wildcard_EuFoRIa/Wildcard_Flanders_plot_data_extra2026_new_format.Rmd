@@ -215,13 +215,11 @@ plots_geom <- read.table(file.path(path_to_project_teamdrive, "plots_geom")
                            , sep = ",", dec = ".") %>% 
   unique()
 
-design_geom <- read.table(file.path(path_to_project_teamdrive, "plots_geom")
+design_geom <- read.table(file.path(path_to_project_teamdrive, "design_geom")
                          , header = TRUE
                            , sep = ",", dec = ".") %>% 
   unique()
 
-waldo::compare(design_geom, plots_geom)
-# ✔ No differences
 ```
 
 ```{r load_lkp}
@@ -338,8 +336,9 @@ species_trees <- trees_check %>%
   unique()
 
 check_not_coupled_species <- species_trees %>% 
-  left_join(WP2_SPECIES, by = c("name_sc_short" = "DATABASE"))
-
+  left_join(WP2_SPECIES, by = c("name_sc_short" = "DATABASE")) %>% 
+  filter(is.na(SOURCE))
+# enkel nog Pinus pinaster
 ```
 
 # PLOTS
@@ -663,7 +662,8 @@ names(plotdata0)
 names(CP_CA_tresholds)
 # groeperen per plot-id (geen)
 plotdata <- plotdata0 %>% 
-  left_join(CP_CA_tresholds, by = c("forest_reserve", "period", "plottype")) %>% 
+  left_join(CP_CA_tresholds, by = c("forest_reserve", "period", "plottype")
+            , relationship = "many-to-many") %>% 
   mutate(sampled_area = ifelse(plottype == "CP", pi*circle_radius^2, core_area_ha*10000))   # in m2 !!A3 <> A4 
 
 plotdata %>% filter(plot_id == 91000)
@@ -765,12 +765,15 @@ SITE_ID	SITE_NAME			LPI_ID	SPI_ID		SLOPE	TOPO	EXPO	ELEV_CENTER	ELEV_RANGE
 WILDCARD_sub_ID	inventory_year circle_no	circle_radius	plot_sampled	sampled_area
 consistent_id_standing	consistent_id_lying	OTHER	X	Y	Z	WKT_geom		
 
-
+**Extra:**
 composed_site_id
 inventory_id
-inventory_type - ok
-plot_id - ok
-circle_no - ok
+inventory_type
+plot_id
+circle_no
+
+**Geom: **
+Overgenomen van databank
 
 ```{r plots_geom_check, eval = FALSE}
 names(plotdata); nrow(plotdata)
@@ -1122,10 +1125,8 @@ t2 <- not_included %>% group_by(forest_reserve, plottype, year) %>%
 
 # nrows?
 nrow(standing0) == nrow(data_stems_calc) - sum(t2$n_trees)
-nrow(list_plots) == 2059
-nrow(list_plots) == 1848 # 1848-1717=131
 
-plotinfo %>% anti_join(list_plots) %>% nrow() == 174 / 167
+plotinfo %>% anti_join(list_plots) %>% nrow() == 179
 t <- plotinfo %>% anti_join(list_plots)
 # table(t$forest_reserve)
 # De heide    Ename Kluisbos Sevendonck Withoefse heide T 
@@ -1186,6 +1187,11 @@ geom
     * dus ook ingroei krijgt "Y"
 
 
+**Geom:**
+
+Volgens Yannick: `geom` vormen op basis van de lokale x en y coördinaten:
+SRID=0;POINT(x_local y_local)
+
 ```{r extra vars}
 # tijdelijk extra vars mee selecteren, vooraleer weg te schrijven terug verwijderen
 extra_vars <- c("forest_reserve_FM_adjusted", "plot_id", "plottype", "period")
@@ -1211,7 +1217,8 @@ standing <- standing0 %>%
                                      , ifelse(!is.na(subcircle) & subcircle == "A4"
                                               , 1, 2) 
                                      , 9999))
-         , geom = NA
+         , x_local = round(x_local, 3), y_local = round(y_local, 3)
+         , geom = paste0("SRID=0;POINT(",x_local, " ",y_local, ")")
          , inventory_type = ifelse(plottype == "CA", "LPI", 
                                  ifelse(plottype == "CP", "SPI", NA))
          , stem_id = shoot_measure_id
@@ -1234,10 +1241,10 @@ standing <- standing0 %>%
          # , DECAY_TEXT = ifelse(alive_dead == 12, decaystage_txt, NA)
          # , X = X + x_local  # !! geldt niet bij WGS84 (Lat&Long), enkel bij Lambert
          # , Y = Y + y_local	
-         , HOM_m = 1.3
-         , HEIGHT_model = ifelse(intact_snag == 11, round(calc_height_m, 1), NA)
-         , VOLUME = round(vol_bole_m3, 2)
-         , VITALITY = vitality_txt
+         , hom_m = 1.3
+         , height_model = ifelse(intact_snag == 11, round(calc_height_m, 1), NA)
+         , volume = round(vol_bole_m3, 2)
+         , vitality = vitality_txt
          ) %>% 
   # With heide en Liedekerke maar één plot A3 = A4:
         # CP_CA_tresholds <- CP_CA_tresholds %>% 
@@ -1258,8 +1265,9 @@ standing <- standing0 %>%
          , dbh, diameter_1, diameter_2
          , decay
          # , DECAY_TEXT
-         , x_local, y_local
+         # , x_local, y_local
          , geom
+         , hom_m, height_model, volume, vitality
          # , HOM_m, HEIGHT_model, VOLUME, VITALITY
          , all_of(extra_vars)
          # , forest_reserve, plot_id, plottype, period
@@ -1318,7 +1326,7 @@ t2 <- not_included %>% group_by(forest_reserve, plottype, year) %>%
 
 # nrows?
 nrow(lying0) == nrow(data_deadwood) - sum(t2$n_trees)
-nrow(list_plots) == 2059 # 1848?
+nrow(list_plots) == 1895
 ```
 
 ## Data control
@@ -1566,9 +1574,9 @@ lying <- lying0 %>%
          , decay = ifelse(decaystage == 0, NA, decaystage)
          # , DECAY_TEXT = decaystage_txt
          , x_local = NA, y_local = NA
-         , HOM_m = NA, HEIGHT_model = NA
-         , VOLUME = round(calc_volume_m3, 2)
-         , VITALITY = NA
+         , hom_m = NA, height_model = NA
+         , volume = round(calc_volume_m3, 2)
+         , vitality = NA
          ) %>% 
   select(inventory_type
          , plot_id
@@ -1584,19 +1592,17 @@ lying <- lying0 %>%
          , dbh, diameter_1, diameter_2
          , decay
          # , DECAY_TEXT
-         , x_local, y_local
+         # , x_local, y_local
          # , X_1, X_2, Y_1, Y_2
          , geom
-         # , HOM_m, HEIGHT_model, VOLUME, VITALITY
+         , hom_m, height_model, volume, vitality
          , all_of(extra_vars)
          # , forest_reserve, plot_id, plottype, period
          , tree_measure_id
          )
 
-
 names(lying)
 table(lying$decay)
-table(lying$DECAY_TEXT)
 
 #check
 lying %>% filter(plot_id == 101)
@@ -1813,7 +1819,7 @@ Zie ook verder.
 ```{r check_NA, results='hide'}
 data_herblayer_ <- data_herblayer %>% 
   left_join(data_vegetation %>% select(forest_reserve, plot_id, subplot_id
-                                       , period, year_main_survey, date_vegetation
+                                       , period, year, date_vegetation
                                        , total_herb_cover_id)) %>% 
   # by = join_by(forest_reserve, plot_id, subplot_id, period, date_vegetation)
   left_join(info_survey %>% select(plot_id, period, survey_veg, plotsize_veg)) 
@@ -1991,7 +1997,6 @@ lis_cwd
 geom
 other
 
-
 ```{r results='hide'}
 names(plotdata)
 names(plotdata_def)
@@ -2030,7 +2035,7 @@ design_ <- plotdata %>%
          , lis_cwd = "N"
          , stem_coord_ref_point = "BHC"
          # , EPSG_CODE = "4326"  # GCS_WGS_1984 - EPSG:4326
-         , geom = NA  # over te nemen uit reeds opgeladen data (< shapefile) 
+         , geom = NA  # te linken obv composed_site_id, zie verder 
          , other = "\\N"
          ) 
 
@@ -2041,6 +2046,10 @@ t <- design_ %>% filter(str_detect(forest_reserve_FM_adjusted,"Sevendonck"))
 t <- design_ %>% filter(str_detect(forest_reserve_FM_adjusted,"With"))
 design_ %>% filter(str_detect(forest_reserve_FM_adjusted,"Heirn") & plottype == "CA")
 ```
+
+
+
+
 
 
 ```{r}
@@ -2154,6 +2163,37 @@ design_def_link %>% filter(is.na(composed_site_id)) %>% nrow() == 0
 # 
 # design_def_link <- design_def_link_
 ```
+
+Hier pas mogelijk om `design_geom` te koppelen, want `compose_site_id` nodig.
+
+```{r design_geom_check, eval = FALSE}
+names(design_def_link); nrow(design_def_link)
+names(design_geom); nrow(design_geom)
+length(unique(design_def_link$composed_site_id)) == length(unique(design_geom$composed_site_id))
+
+# no geom?
+design_def_link %>% 
+  filter(!composed_site_id %in% design_geom$composed_site_id) %>% nrow()
+
+# extra geom?
+design_geom %>% 
+  filter(!composed_site_id %in% design_def_link$composed_site_id) %>% nrow()
+
+```
+
+```{r link_design_geom}
+design_def_link_ <- design_def_link %>% 
+  left_join(design_geom, by = c("composed_site_id")) %>%
+  mutate(geom = st_asewkt) %>% 
+  select(-st_asewkt)
+
+design_def_link_ %>% filter(is.na(geom)) %>% nrow() == 0
+
+#als ok, dan 
+design_def_link <- design_def_link_
+```
+
+
 
 ```{r link_PLOTS, results='hide'}
 names(link_WC_FM)
@@ -2436,14 +2476,14 @@ Checken of de geëxporteerde files goed in R ingelezen worden
 ```{r check_read, eval = FALSE, results='hide'}
 #
 design_check <- read.table(paste0(path_to_datarequest_teamdrive
-                                  , "UPLOAD_INBO_DESIGN_2026-04-20.txt")
+                                  , "UPLOAD_INBO_DESIGN_2026-04-23.txt")
                            , sep = " ", dec = ".")
 head(design_check)
 names(design_check)
 
 #
 plots_check <- read.table(paste0(path_to_datarequest_teamdrive
-                                 , "UPLOAD_INBO_PLOTS_2026-04-20.txt")
+                                 , "UPLOAD_INBO_PLOTS_2026-04-23.txt")
                            , sep = " ", dec = ".")
 head(plots_check)
 names(plots_check)
@@ -2452,7 +2492,7 @@ table(plots_check$consistent_id_standing)
 
 #
 trees_check <- read.table(paste0(path_to_datarequest_teamdrive
-                                 , "UPLOAD_INBO_TREES_2026-04-20.txt")
+                                 , "UPLOAD_INBO_TREES_2026-04-23.txt")
                            , sep = " ", dec = ".")
 
 # trees_check <- trees_link %>% select(-all_of(extra_vars), -tree_measure_id)
@@ -2461,7 +2501,7 @@ names(trees_check)
 
 #
 ground_veg_check <- read.table(paste0(path_to_datarequest_teamdrive
-                                      , "INBO_ground_veg_2026-04-20.txt")
+                                      , "INBO_ground_veg_2026-04-23.txt")
                            , sep = " ", dec = ".")
 head(ground_veg_check)
 names(ground_veg_check)
