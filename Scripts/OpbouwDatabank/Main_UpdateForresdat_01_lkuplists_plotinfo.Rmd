@@ -356,7 +356,7 @@ vergeten zijn op `processed` te zetten)
 ```{r plotinfo_load_all}
 plotinfo_0 <- load_plotinfo(database = path_to_fieldmap_db, processed = FALSE) %>% 
   filter(plottype != "OTHER")
-
+names(plotinfo_0)
 ```
 
 ```{r}

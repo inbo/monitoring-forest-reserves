@@ -32,12 +32,38 @@ source(here::here("scripts/Setup.R"))
 ```
 
 
-```{r testdb}
+```{r testdb, eval = FALSE}
 
 path_to_testdb <- "C:/03_BR/2_Forrescalc/inst/example/testdb/mdb_bosres_test.sqlite"
 path_to_testdb <-
   system.file("example/testdb/mdb_bosres_test.sqlite", package = "forrescalc")
+
+path_to_fieldmapdb <- "C:/R/library/forrescalc/example/database/mdb_bosres.sqlite"
+path_to_fieldmapdb <- path_to_testdb
 ```
+
+```{r}
+plotinfo <- load_plotinfo(path_to_fieldmap_db)
+names(plotinfo)
+
+test <- c("forest_reserve", "plot_id", "plottype",
+        "period", "survey_number", "year_dendro",
+        "survey_trees", "survey_deadw", "survey_lis",
+        "survey_veg", "survey_reg",
+        "game_impact_veg", "game_impact_reg", "data_processed",
+        "r_A1", "r_A2", "r_A3", "r_A4", "dbh_min_a3_alive", "dbh_min_a3_dead",
+        "dbh_min_a4_alive", "dbh_min_a4_dead", "dbh_min_core_area",
+        "dbh_min_core_area_dead", "diam_min_a4_logs", "diam_min_core_area_logs",
+        "diam_min_lis", "length_transect_lis", "length_core_area_m",
+        "width_core_area_m", "core_area_ha"
+        )
+
+waldo::compare(names(plotinfo), test)
+
+# load_plotinfo
+```
+
+
 
 ```{r fctie_check_plotdetails}
 check_data_plotdetails <- function(database, forest_reserve = "all") {
@@ -236,5 +262,419 @@ tibble(
 
 
 ```
+
+```{r fctie_check_deadw}
+check_data_deadwood <- function(database, forest_reserve = "all") {
+  selection <-
+    ifelse(
+      forest_reserve == "all", "",
+      paste0("WHERE pd.ForestReserve = '", forest_reserve, "'")
+    )
+  query_deadwood <-
+    "SELECT Deadwood.IDPlots AS plot_id,
+      qPlotType.Value3 AS plottype,
+      Deadwood.ID AS lying_deadw_id,
+      Deadwood.IntactFragment AS intact_fragment,
+      Deadwood.AliveDead AS alive_dead,
+      Deadwood.DecayStage AS decay_stage
+    FROM ((Plots
+      INNER JOIN Deadwood%2$s Deadwood ON Plots.ID = Deadwood.IDPlots)
+      INNER JOIN qPlotType ON Plots.Plottype = qPlotType.ID)
+      INNER JOIN Plotdetails_%1$deSet pd ON Plots.ID = pd.IDPlots
+    %3$s;"
+
+  query_deadwood_diameters <-
+    "SELECT dwd.IDPlots As plot_id,
+      dwd.IDDeadwood%2$s AS lying_deadw_id,
+      dwd.Distance_m AS distance_m,
+      dwd.Diameter_mm AS diameter_mm
+    FROM Deadwood%2$s_Diameters dwd;"
+
+  data_deadwood <-
+    query_database(database, query_deadwood, selection = selection)
+  data_deadwood_diameters <- query_database(database, query_deadwood_diameters)
+
+  incorrect_deadwood <- data_deadwood %>%
+    left_join(
+      data_deadwood_diameters %>%
+        group_by(.data$plot_id, .data$lying_deadw_id) %>%
+        summarise(max_diameter_mm = max(.data$diameter_mm)) %>%
+        ungroup() %>%
+        filter(.data$max_diameter_mm < 100) %>%
+        mutate(
+          field_max_diameter_mm = "too low"
+        ),
+      by = c("plot_id", "lying_deadw_id")
+    ) %>%
+    mutate(
+      field_intact_fragment =
+        ifelse(is.na(.data$intact_fragment), "missing", NA),
+      field_intact_fragment =
+        ifelse(
+          !is.na(.data$intact_fragment) &
+            !.data$intact_fragment %in% c(10, 20, 30), "not in lookuplist",
+          .data$field_intact_fragment
+        ),
+      field_intact_fragment =
+        ifelse(
+          !is.na(.data$intact_fragment) & .data$intact_fragment == 30 &
+            .data$plottype %in% c("CP", "CA"),
+          "invalid for plottype",
+          .data$field_intact_fragment
+        ),
+      field_intact_fragment =
+        ifelse(
+          !is.na(.data$intact_fragment) & .data$intact_fragment == 10 &
+            !.data$plottype %in% c("CA", "BE"),
+          "invalid for plottype",
+          .data$field_intact_fragment
+        ),
+      field_alive_dead = ifelse(.data$alive_dead == 11, "tree alive", NA),
+      field_decay_stage = ifelse(is.na(.data$decay_stage), "missing", NA),
+      field_decay_stage =
+        ifelse(
+          !.data$decay_stage %in% c(10, 11, 12, 13, 14, 15, 16) &
+            !is.na(.data$decay_stage),
+          "not in lookuplist",
+          .data$field_decay_stage),
+      field_decay_stage =
+        ifelse(
+          .data$decay_stage == 16 & .data$alive_dead == 12 &
+            !is.na(.data$decay_stage) & !is.na(.data$alive_dead),
+          "tree not alive",
+          .data$field_decay_stage)
+    ) %>%
+    pivot_longer(
+      cols = c(starts_with("field_")),
+      names_to = "aberrant_field",
+      values_to = "anomaly",
+      values_drop_na = TRUE
+    ) %>%
+    mutate(
+      aberrant_field = gsub("^field_", "", .data$aberrant_field),
+      plottype = NULL
+    ) %>%
+    pivot_longer(
+      cols =
+        !c("plot_id", "lying_deadw_id", "period", "aberrant_field", "anomaly"),
+      names_to = "varname",
+      values_to = "aberrant_value"
+    ) %>%
+    filter(.data$aberrant_field == .data$varname) %>%
+    select(-"varname")
+
+  return(incorrect_deadwood)
+}
+
+```
+
+```{r check_deadw}
+check_deadwood <- check_data_deadwood(path_to_testdb)
+
+check_deadwood <- check_deadwood[check_deadwood$period == 1, ]
+
+
+waldo::compare(check_deadwood[
+        check_deadwood$lying_deadw_id == 11587 &
+          check_deadwood$aberrant_field == "max_diameter_mm", ],
+      tibble(
+        plot_id = 101,
+        lying_deadw_id = 11587,
+        period = 1,
+        aberrant_field = "max_diameter_mm",
+        anomaly = "too low",
+        aberrant_value = 10
+      ))
+    
+
+```
+
+
+```{r fctie_create_stat}
+create_statistics <-
+  function(
+    dataset, level = c("period", "forest_reserve"), variables,
+    include_year_range = FALSE, na_rm = FALSE,
+    interval_information =
+      suppressMessages(
+        read_csv2(system.file("extdata/class_data.csv", package = "forrescalc"))
+      )
+  ) {
+
+  if (has_name(dataset, "period") && length(unique(dataset$period)) > 1 &&
+      !"period" %in% c(level, variables)) {
+    warning(
+      "Are you sure you don't want to include period in level? Your dataset has measurements in different periods." #nolint: line_length_linter
+    )
+  }
+
+  assert_that(
+    all(has_name(dataset, level)),
+    msg = "Dataset should contain all columns that are mentioned as level."
+  )
+
+  for (variab in variables) {
+    if (!has_name(dataset, variab)) {
+      assert_that(is.data.frame(interval_information))
+      assert_that(
+        has_name(
+          interval_information,
+          c("var_name", "var_min", "var_max", "preferred_transformation")
+        )
+      )
+      var_info <- interval_information %>%
+        filter(.data$var_name == variab) %>%
+        distinct()
+      assert_that(
+        nrow(var_info) > 0,
+        msg = paste0(
+          "The variable '", variab, "' is not present in the given dataset ",
+          "and not declared in 'interval_information'.",
+        )
+      )
+      assert_that(
+        nrow(var_info) == 1,
+        msg = paste0(
+          "The variable '", variab, "' is declared more than once in ",
+          "'interval_information' with different parameters. ",
+          "Please add each 'var_name' only once in 'interval_information'."
+        )
+      )
+      var_min <- sym(var_info$var_min)
+      var_max <- sym(var_info$var_max)
+      dataset <- dataset %>%
+        mutate(
+          logaritmic = !is.na(var_info$preferred_transformation) &
+            var_info$preferred_transformation == "log",
+          value =
+            ifelse(
+              .data$logaritmic,
+              (log(!!var_min + 1e-10) + log(!!var_max)) / 2,
+              (!!var_min + !!var_max) / 2
+            ),
+          variance =
+            ifelse(
+              .data$logaritmic,
+              ((log(!!var_max) - log(!!var_min + 1e-10)) / (2 * 1.96)) ^ 2,
+              ((!!var_max - !!var_min) / (2 * 1.96)) ^ 2
+            )
+        ) %>%
+        nest("{variab}" := c(.data$value, .data$variance, .data$logaritmic)) %>%  # nolint: object_name_linter
+        select(-!!var_min, -!!var_max)
+    } else {
+      dataset <- dataset %>%
+        mutate(
+          logaritmic = FALSE,
+          value = !!sym(variab),
+          variance = NA
+        ) %>%
+        select(-!!sym(variab)) %>%
+        nest("{variab}" := c(.data$value, .data$variance, .data$logaritmic))  # nolint: object_name_linter
+    }
+  }
+
+  dataset <- dataset %>%
+    select(
+      all_of(level), all_of(variables),
+      "year"[include_year_range & has_name(dataset, "year")]
+    ) %>%
+    pivot_longer(cols = all_of(variables), names_to = "variable") %>%
+    unnest(cols = .data$value)
+  if (na_rm) {
+    dataset <- dataset %>%
+      filter(!is.na(.data$value)) %>%
+      right_join(
+        dataset %>%
+          select(
+            all_of(level), "variable", "logaritmic",
+            "year"[include_year_range & has_name(dataset, "year")]
+          ) %>%
+          distinct(),
+        by = c(
+          level, "variable", "logaritmic",
+          "year"[include_year_range & has_name(dataset, "year")]
+        )
+      )
+  }
+
+  statistics <- dataset %>%
+    group_by_at(vars(c(level, "variable"))) %>%
+    summarise(
+      n_obs = n(),
+      mean = mean(.data$value),
+      variance = sum(.data$variance) / .data$n_obs,
+      variance =
+        ifelse(is.na(.data$variance), var(.data$value), .data$variance),
+      lci = .data$mean - 1.96 * sqrt(.data$variance) / sqrt(n()),
+      uci = .data$mean + 1.96 * sqrt(.data$variance) / sqrt(n()),
+      logaritmic = unique(.data$logaritmic)
+    ) %>%
+    ungroup() %>%
+    mutate(
+      mean = ifelse(.data$logaritmic, exp(.data$mean), .data$mean),
+      lci = ifelse(.data$logaritmic, exp(.data$lci), .data$lci),
+      uci = ifelse(.data$logaritmic, exp(.data$uci), .data$uci)
+    )
+
+  if (include_year_range) {
+    if (has_name(dataset, "year")) {
+      if (!"year" %in% level) {
+        statistics <- dataset %>%
+          group_by_at(vars(level)) %>%
+          summarise(
+            min_year = min(.data$year),
+            max_year = max(.data$year)
+          ) %>%
+          ungroup() %>%
+          left_join(
+            statistics,
+            by = level
+          )
+      } else {
+        warning("No year range is calculated as 'year' is given as a level (so each year has separate records).") #nolint
+      }
+    } else {
+      warning("Add column 'year' to dataset if you want the year range to be calculated.") #nolint
+    }
+  }
+
+  return(statistics)
+}
+```
+
+```{r check_stat}
+data_dendro <- load_data_dendrometry(path_to_fieldmapdb)
+data_deadwood <- load_data_deadwood(path_to_fieldmapdb)
+data_shoots <- load_data_shoots(path_to_fieldmapdb)
+height_model <- load_height_models()
+plotinfo <- load_plotinfo(path_to_fieldmapdb) |>
+  filter(.data$plot_id %in% c(101, 11000))
+results_dendrometry <-
+  calculate_dendrometry(
+    data_dendro, data_deadwood, data_shoots, height_model, plotinfo
+  )
+dataset <- results_dendrometry[["dendro_by_plot"]] |>
+  right_join(plotinfo, by = c("plot_id", "plottype", "period"))
+variables_for_statistics <- dataset %>%
+  select(contains(c("tree", "vol")), -contains(c("survey", "40"))) |>
+  names()
+
+```
+
+```{r}
+stat <- create_statistics(dataset = dataset,
+        level = c("period", "forest_reserve"),
+        variables = c("number_of_trees_ha", "vol_alive_m3_ha"),
+        include_year_range = TRUE)
+
+stat_tibble <- dataset |>
+        select(
+          "period", "forest_reserve", "year", "number_of_trees_ha",
+          "vol_alive_m3_ha"
+        ) |>
+        pivot_longer(
+          cols = c("number_of_trees_ha", "vol_alive_m3_ha"),
+          names_to = "variable",
+          values_to = "mean"
+        ) |>
+        transmute(
+          .data$period, .data$forest_reserve,
+          min_year = .data$year,
+          max_year = .data$year,
+          .data$variable,
+          n_obs = 1,
+          .data$mean,
+          variance = NA_real_,
+          lci = NA_real_,
+          uci = NA_real_,
+          logaritmic = FALSE
+        ) |>
+        arrange(.data$period, .data$forest_reserve)
+
+waldo::compare(stat, stat_tibble)
+
+expect_equal(
+      create_statistics(
+        dataset = dataset,
+        level = c("period", "forest_reserve"),
+        variables = c("number_of_trees_ha", "vol_alive_m3_ha"),
+        include_year_range = TRUE
+      ),
+      dataset |>
+        select(
+          "period", "forest_reserve", "year", "number_of_trees_ha",
+          "vol_alive_m3_ha"
+        ) |>
+        pivot_longer(
+          cols = c("number_of_trees_ha", "vol_alive_m3_ha"),
+          names_to = "variable",
+          values_to = "mean"
+        ) |>
+        transmute(
+          .data$period, .data$forest_reserve,
+          min_year = .data$year,
+          max_year = .data$year,
+          .data$variable,
+          n_obs = 1,
+          .data$mean,
+          variance = NA_real_,
+          lci = NA_real_,
+          uci = NA_real_,
+          logaritmic = FALSE
+        ) |>
+        arrange(.data$period, .data$forest_reserve)
+    )
+
+
+variables_for_statistics_ <- dataset %>%
+  select(all_of(contains(c("tree", "vol")))) %>% 
+           select(-contains(c("survey", "40"))) |>
+  names()
+```
+
+Error (test6_create_statistics.R:93:5): create_statistics: check behaviour if NA
+<evalError/missingArgError/error/condition>
+Error in `paste0("The variable '", variab, "' is not present in the given dataset ", 
+    "and not declared in 'interval_information'.", )`: argument is missing, with no default
+
+```{r check_error_stat}
+
+stat <- create_statistics(
+        dataset = dataset,
+        level = c("period", "forest_reserve"),
+        variables = c("number_of_trees_ha", "vol_log_m3_ha"),
+        include_year_range = TRUE)
+
+stat_tibble <- 
+      dataset |>
+        select(
+          "period", "forest_reserve", "year", "number_of_trees_ha",
+          "vol_log_m3_ha"
+        ) |>
+        pivot_longer(
+          cols = c("number_of_trees_ha", "vol_log_m3_ha"),
+          names_to = "variable",
+          values_to = "mean"
+        ) |>
+        transmute(
+          period, forest_reserve,
+          min_year = year,
+          max_year = year,
+          variable,
+          n_obs = 1,
+          mean,
+          variance = NA_real_,
+          lci = NA_real_,
+          uci = NA_real_,
+          logaritmic = FALSE
+        ) |>
+        arrange(period, forest_reserve)
+
+
+waldo::compare(stat, stat_tibble)
+
+```
+
+
 
 
