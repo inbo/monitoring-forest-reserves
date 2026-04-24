@@ -1,5 +1,5 @@
 ---
-title: "Test aanpassing shoots"
+title: "Test aanpassing shoots - deel 1"
 subtitle: "Sevendonck - cirkelplots & kernvlakte"
 author: "Anja Leyman"
 date: "`r Sys.Date()`"
@@ -95,38 +95,16 @@ set <- "2eSET"
 
 
 
-# Aaanpassing FM-PM
+# Aanpassing FM-PM
 
 Om via R updates te kunnen doen in de databank, is het noodzakelijk dat het veld
 `CoppiceID` ook in layer shoots aanwezig is.
 
-Dit veld toevoegen in FM-PM en vervolgens onderstaande updatequery uitvoeren.
+Dit veld toevoegen in FM-PM.
 
 **Reden:** `CoppiceID` zit in layer trees en koppeling met layer trees gebeurt net 
 obv het veld `IDTrees` die we verderop willen aanpassen, dus die koppeling kunnen 
-we niet aanhouden om `CoppiceID` uit d elayer trees te halen.
-
-
-```{r sql1_update_coppiceid, eval = FALSE}
-if (set == "1eSET") {
-  # code to be executed if condition is TRUE
-  qry_update <- paste0("UPDATE Trees t INNER JOIN Shoots s ON (t.ID = s.IDTrees) AND (t.Y_m = s.YTrees) AND (t.X_m = s.XTrees) AND (t.IDPlots = s.IDPlots) SET s.CoppiceID = t.CoppiceID;") %>% noquote()
-} else {
-  # code to be executed if condition is FALSE
-    if (set == "2eSET") {
-    # code to be executed if condition is TRUE
-    qry_update <- paste0("UPDATE Trees_2eSET t INNER JOIN Shoots_2eSET s ON (t.ID = s.IDTrees_2eSET) AND (t.Y_m = s.YTrees_2eSET) AND (t.X_m = s.XTrees_2eSET) AND (t.IDPlots = s.IDPlots) SET s.CoppiceID = t.CoppiceID;") %>% noquote()
-  } else {
-    # code to be executed if condition is FALSE
-    qry_update <- paste0("UPDATE Trees_3eSET t INNER JOIN Shoots_3eSET s ON (t.ID = s.IDTrees_3eSET) AND (t.Y_m = s.YTrees_3eSET) AND (t.X_m = s.XTrees_3eSET) AND (t.IDPlots = s.IDPlots) SET s.CoppiceID = t.CoppiceID;") %>% noquote()
-  }
-}
-
-con <- odbcConnectAccess2007(path_to_fieldmap_db)
-sqlQuery(con, qry_update, stringsAsFactors = TRUE)
-odbcClose(con)
-
-```
+we niet aanhouden om `CoppiceID` uit de layer trees te halen.
 
 
 # Inladen data
@@ -285,19 +263,32 @@ unique(shoots$AliveDead); unique(shoots$AliveDeadShoots)
 
 ## Stap 1
 
-Overal velden correct (alive_dead op niveau van shoots (alive_dead_shoots)
+- CoppiceID gekopieerd naar layer shoots   
 
-Zie ook queries in access
+- AliveDeadShoots ingevuld 
 
-•	1eSET:    
-  o	shoots: 1858    
-  o	qry_shoots_trees_1eSET: 1858: alive_dead_shoots nog overall NA    
-  o	qupd_shoots_status_1eSET: ok    
+- ID van de shoots + 5000   
 
-•	2eSET:      
-  o	shoots: 1712    
-  o	qry_shoots_trees_2eSET: 1712: alive_dead_shoots nog overall NA      
-  o	qupd_shoots_status_2eSET:     
+```{r sql1_update_coppiceid, eval = FALSE}
+if (set == "1eSET") {
+  # code to be executed if condition is TRUE
+  qry_update <- paste0("UPDATE Trees t INNER JOIN Shoots s ON (t.ID = s.IDTrees) AND (t.Y_m = s.YTrees) AND (t.X_m = s.XTrees) AND (t.IDPlots = s.IDPlots) SET s.CoppiceID = t.CoppiceID;") %>% noquote()
+} else {
+  # code to be executed if condition is FALSE
+    if (set == "2eSET") {
+    # code to be executed if condition is TRUE
+    qry_update <- paste0("UPDATE Trees_2eSET t INNER JOIN Shoots_2eSET s ON (t.ID = s.IDTrees_2eSET) AND (t.Y_m = s.YTrees_2eSET) AND (t.X_m = s.XTrees_2eSET) AND (t.IDPlots = s.IDPlots) SET s.CoppiceID = t.CoppiceID;") %>% noquote()
+  } else {
+    # code to be executed if condition is FALSE
+    qry_update <- paste0("UPDATE Trees_3eSET t INNER JOIN Shoots_3eSET s ON (t.ID = s.IDTrees_3eSET) AND (t.Y_m = s.YTrees_3eSET) AND (t.X_m = s.XTrees_3eSET) AND (t.IDPlots = s.IDPlots) SET s.CoppiceID = t.CoppiceID;") %>% noquote()
+  }
+}
+
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+sqlQuery(con, qry_update, stringsAsFactors = TRUE)
+odbcClose(con)
+
+```
 
 
 ```{r sql2_update_AliveDeadShoots, EVAL = FALSE}
@@ -333,17 +324,17 @@ Daarom passen we de ID's van de dode spillen aan naar ID + 5000.
 ```{r sql3_update_unieke_id_shoots, EVAL = FALSE}
 if (set == "1eSET") {
   # code to be executed if condition is TRUE
-  qry_update <- paste0("UPDATE Shoots SET Shoots.ID = [Shoots]![ID] + 5000 WHERE (Shoots.AliveDeadShoots=12);") %>% noquote()
+  qry_update <- paste0("UPDATE Shoots SET Shoots.ID = [Shoots]![ID] + 5000 WHERE (Shoots.AliveDeadShoots=12) AND (Shoots.ID<5000);") %>% noquote()
   
 } else {
   # code to be executed if condition is FALSE
     if (set == "2eSET") {
     # code to be executed if condition is TRUE
-    qry_update <- paste0("UPDATE Shoots_2eSET SET Shoots_2eSET.ID = [Shoots_2eSET]![ID] + 5000 WHERE (Shoots_2eSET.AliveDeadShoots=12);") %>% noquote()
+    qry_update <- paste0("UPDATE Shoots_2eSET SET Shoots_2eSET.ID = [Shoots_2eSET]![ID] + 5000 WHERE (Shoots_2eSET.AliveDeadShoots=12) AND (Shoots_2eSET.ID<5000);") %>% noquote()
     
   } else {
     # code to be executed if condition is FALSE
-    qry_update <- paste0("UPDATE Shoots_3eSET SET Shoots_3eSET.ID = [Shoots_3eSET]![ID] + 5000 WHERE (Shoots_3eSET.AliveDeadShoots=12);") %>% noquote()
+    qry_update <- paste0("UPDATE Shoots_3eSET SET Shoots_3eSET.ID = [Shoots_3eSET]![ID] + 5000 WHERE (Shoots_3eSET.AliveDeadShoots=12) AND (Shoots_3eSET.ID<5000);") %>% noquote()
   }
 }
 
@@ -403,7 +394,7 @@ Die moeten we koppelen via coppice_id.
 - shoots_levend_en_dood_deel      
 - XY_levend_deel
 
-```{r twee_delen}
+```{r enkel_verder_met_hakhout_uit_twee_delen}
 trees_sql2_3 %>% filter(is.na(CoppiceID)) %>% nrow() == 0
 # OK, alle hakhoutstoven hebben een coppice_id
 stoven_levend_en_dood_deel <- trees_sql2_3 %>% 
@@ -494,7 +485,7 @@ double_species <- shoots_levend_en_dood_deel_ %>%
   left_join(qspecies %>% select(ID, name_nl = Value1), by = c("Species" = "ID")) %>% 
   relocate("name_nl", .before = "IndShtCop")
 
-write.csv2(double_species, paste0(destination_dir, "double_species_", set, ".csv"))
+write.csv2(double_species, paste0(destination_dir, "double_species_", set, "_", Sys.Date(), ".csv"))
 ```
 
 ```{r CONTR_coppice_id_xy, eval = FALSE}
@@ -514,7 +505,7 @@ xy_shift <- shoots_levend_en_dood_deel_ %>%
   left_join(qspecies %>% select(ID, name_nl = Value1), by = c("Species" = "ID")) %>% 
   relocate("name_nl", .before = "IndShtCop")
 
-write.csv2(xy_shift, paste0(destination_dir, "xy_shift_", set, ".csv"))
+write.csv2(xy_shift, paste0(destination_dir, "xy_shift_", set, "_", Sys.Date(), ".csv"))
 ```
 ### SQL-update
 
@@ -682,9 +673,6 @@ vgl_shoots %>% filter(AliveDeadShoots.x != AliveDeadShoots.y) %>% nrow()
 vgl_shoots %>% filter(AliveDead.x != AliveDead.y) %>% nrow()
 ```
 
-
-
-
 ## Stap 3
 
 Bij de dode "trees" die horen bij een levende deel hakhoutstoof
@@ -702,7 +690,7 @@ trees_levend_en_dood_deel %>% group_by(IDPlots, CoppiceID, period) %>%
 
 ```
 
-```{r to_delete_trees_dood_deel}
+```{r remark_to_delete_trees_dood_deel}
 trees_levend_en_dood_deel_ <- trees_levend_en_dood_deel %>% 
   mutate(trees_remark = ifelse(AliveDead == 12, "TO_DELETE", trees_remark))
 
@@ -711,7 +699,7 @@ trees_levend_en_dood_deel_ %>% filter(trees_remark == "TO_DELETE") %>%
   nrow() == nrow(trees_levend_en_dood_deel_)/2
 ```
 
-```{r sql5_update_trees_dood_deel, eval = FALSE}
+```{r sql5_update_remark_trees_dood_deel, eval = FALSE}
 con <- odbcConnectAccess2007(path_to_fieldmap_db)
 
 if (set == "1eSET") {
@@ -788,137 +776,10 @@ shoots_sql5 <- shoots_sql5_
 
 
 
-## Stap 4
+## Stap 4 - zie script deel2
 
 In layer trees status aanpassen naar "15 - nvt stoof", want nu kan de stoof zowel 
 levend als dood zijn
-
-Vanaf dan ook in forrescalc zorgen dat status van hakhout gehaald wordt uit de 
-shoots layer.
-
-### Controle OldID
-
-Te checken vooraleer deze dode hakhoutdelen (trees layer) weg te gooien!!
-
-
-**(1) checken of er een old_id staat in dood deel**
-
-Normaal staat de OldID steeds in het levende deel, maar als dat niet het geval 
-is, dan moeten we dat eerst kopiëren naar het levende deel.
-
-In Sevendonck komt dit niet voor, maar in de moederdb toch checken!
-
-
-```{r CONTR_old_id_2eSET, eval = FALSE}
-old_id_dood_deel <- trees_levend_en_dood_deel %>% 
-  filter(AliveDead == 12 & !is.na(OldID))
-
-nrow(old_id_dood_deel) == 0 # OK voor 1eSET, logisch want 1eSET
-nrow(old_id_dood_deel) == 0  # 27 voor 2eSET (van de 81)
-
-# het kan zijn dat deze old_id's enkel betrekking hebben op dood deel, en dat het levende
-# OOK een old_id bevat
-levend_deel <- trees_levend_en_dood_deel %>% 
-  filter(AliveDead == 11) %>% 
-  select(-X_m ,-Y_m, -Species, -IndShtCop, -contains("remark"), -n)
-
-check_old_id <- old_id_dood_deel %>% 
-  select(-X_m ,-Y_m, -Species, -IndShtCop, -contains("remark"), -n) %>% 
-  left_join(levend_deel, by = c("IDPlots", "period", "CoppiceID"))
-check_old_id %>% filter(is.na(OldID.y)) %>% nrow() == 0   # oldid.y = oldid van het levende deel
-# als dit aantal nul is, is het ok, want dan heeft elke levend deel ook nog een link met voorgaande 
-# periode
-
-# voor 't zekerste exporteren
-write.csv2(check_old_id, paste0(destination_dir, "informative_double_old_id", set, ".csv"))
-
-```
-
-
-**(2) checken of er niet verwezen wordt naar een dood deel uit vorige periode** 
-
-Meestal wordt de stoof gelinkt aan het levende deel van de periode ervoor, maar 
-blijkbaar toch niet altijd, zo heb ik bij Sevendonck drie bomen gevonden 
-die linken naar het dode deel, dat dus in onze omvorming gedelete zou worden. 
-
-```{r CONTR_koppeling_old_id_naar_1eSET, eval = FALSE}
-# ik weet dat de OldID opgeslagen wordt in het levende deel van een stoof.
-# Dat heb ik net ook gecheckt bij 1e SET Sevendonck.
-# 
-# Maar kan het zijn dat er ooit met die OldID verwezen wordt naar het dode deel van de stoof van 10 jaar geleden? (als er zowel een levend als dood deel was?)
-# Want als we die boom verwijderen, zijn we dan ook de link kwijt.
-# Wellicht wordt daar eenzelfde redenering gevolgd, en enkel naar levend deel gekeken?
-
-data_dendro <- load_data_dendrometry(path_to_fieldmap_db, extra_variables = TRUE)
-t1 <- create_unique_tree_id(data_dendro)
-t1 %>% filter(is.na(tree_id)) %>% nrow()
-
-# de to delete verwijderen en dan create_unique_tree_id
-data_dendro_zonder_to_delete <- data_dendro %>% 
-  filter(is.na(remark) | remark != "TO DELETE")
-t2 <- create_unique_tree_id(data_dendro_zonder_to_delete)
-t2 %>% filter(is.na(tree_id)) %>% nrow()  # 3
-t3 <- t2 %>% filter(is.na(tree_id)) %>% 
-  select(1:5, 9:19)
-table(t3$alive_dead)
-
-# als ik deze test nog eens doe, nadat ik script gerund heb voor 2de SET, bestaan probleem niet
-write.csv2(t3, paste0(destination_dir, "old_id_only_in_dead_part", set, ".csv"))
-```
-
-
-### SQL-update
-
-Pas nadat vorige controles in orde zijn!
-
-```{r indshtcop_15_all_coppice_trees}
-trees_ <- trees_sql5 %>% 
-  mutate(AliveDead = ifelse(IndShtCop == 12, 15, AliveDead))
-```
-
-
-```{r sql6_update_all_coppice_trees, eval = FALSE}
-if (set == "1eSET") {
-  # code to be executed if condition is TRUE
-  qry_update <- paste0("UPDATE Trees SET Trees.AliveDead = 15 WHERE (Trees.IndShtCop=12);") %>%
-           noquote()
-  
-} else {
-  # code to be executed if condition is FALSE
-    if (set == "2eSET") {
-    # code to be executed if condition is TRUE
-    qry_update <- paste0("UPDATE Trees_2eSET SET Trees_2eSET.AliveDead = 15 WHERE (Trees_2eSET.IndShtCop=12);") %>%
-           noquote()
-    
-  } else {
-    # code to be executed if condition is FALSE
-    qry_update <- paste0("UPDATE Trees_3eSET SET Trees_3eSET.AliveDead = 15 WHERE (Trees_3eSET.IndShtCop=12);") %>%
-           noquote()
-  }
-}
-
-con <- odbcConnectAccess2007(path_to_fieldmap_db)
-sqlQuery(con,qry_update)
-odbcClose(con)
-```
-
-```{r check_sql6}
-con <- odbcConnectAccess2007(path_to_fieldmap_db)
-trees_sql6 <- sqlQuery(con, query_trees, stringsAsFactors = TRUE) %>% 
-  mutate(period = set)
-odbcClose(con)
-```
-
-```{r}
-# enkel coppice
-table(trees_sql6$AliveDead)
-table(trees$AliveDead)
-
-# checken voor alle trees
-data_dendro <- load_data_dendrometry(path_to_fieldmap_db, extra_variables = TRUE)
-table(data_dendro$alive_dead, data_dendro$ind_sht_cop, data_dendro$period)
-```
-
 
 ## Stap 5 - Ifer
 
@@ -943,7 +804,7 @@ Na knitting - manueel
 
 ```{r eval = FALSE}
 # Specify the path of the file you want to copy
-source_file <- here::here(paste0("Scripts/Per_gebied/Sevendonck/", "Sevendonck_aanpassing_shoots_test_april2026.html"))
+source_file <- here::here(paste0("Scripts/Per_gebied/Sevendonck/", "Sevendonck_aanpassing_shoots_test_deel1_april2026.html"))
 
 # Specify the destination directory where you want to copy the file
 destination_dir <- "C:/03_BR_gebieden/08_Sevendonck/FMprojecten_2026/"
