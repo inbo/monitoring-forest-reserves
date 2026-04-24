@@ -88,7 +88,7 @@ path_to_fieldmap_db
 
 ```{r}
 set <- "1eSET"
-# set <- "2eSET"
+set <- "2eSET"
 # set <- "3eSET"
 
 ```
@@ -149,6 +149,7 @@ if (set == "1eSET") {
   , Trees.CoppiceID
   , Trees.Remark as trees_remark
   , Trees.CommonRemark as trees_commonremark
+  , Trees.OldID
   FROM Trees
   WHERE Trees.IndShtCop = 12
   ;"
@@ -183,6 +184,7 @@ if (set == "1eSET") {
   , Trees_2eSET.CoppiceID
   , Trees_2eSET.Remark as trees_remark
   , Trees_2eSET.CommonRemark as trees_commonremark
+  , Trees_2eSET.OldID
   FROM Trees_2eSET
   WHERE Trees_2eSET.IndShtCop = 12
   ;"
@@ -215,6 +217,7 @@ if (set == "1eSET") {
   , Trees_3eSET.CoppiceID
   , Trees_3eSET.Remark as trees_remark
   , Trees_3eSET.CommonRemark as trees_commonremark
+  , Trees_3eSET.OldID
   FROM Trees_3eSET
   WHERE Trees_3eSET.IndShtCop = 12
   ;"
@@ -238,8 +241,10 @@ if (set == "1eSET") {
 
 con <- odbcConnectAccess2007(path_to_fieldmap_db)
 
-trees <- sqlQuery(con, query_trees, stringsAsFactors = TRUE)
-shoots <- sqlQuery(con, query_shoots, stringsAsFactors = TRUE)
+trees <- sqlQuery(con, query_trees, stringsAsFactors = TRUE) %>% 
+  mutate(period = set)
+shoots <- sqlQuery(con, query_shoots, stringsAsFactors = TRUE) %>% 
+  mutate(period = set)
 
 odbcClose(con)
 
@@ -264,9 +269,11 @@ odbcClose(con)
 ```{r join}
 shoots_ <- shoots %>% 
   left_join(trees, by = c("IDPlots", "IDTrees" = "ID"
-                          , "XTrees" = "X_m", "YTrees" = "Y_m"))
+                          , "XTrees" = "X_m", "YTrees" = "Y_m"
+                          , "period"))
 
 nrow(shoots_) == nrow(shoots)
+nrow(shoots)
 # 1712 2eSET
 
 shoots <- shoots_
@@ -349,8 +356,10 @@ odbcClose(con)
 ```{r check_sql2_3}
 con <- odbcConnectAccess2007(path_to_fieldmap_db)
 
-trees_sql2_3 <- sqlQuery(con, query_trees, stringsAsFactors = TRUE)
-shoots_sql2_3 <- sqlQuery(con, query_shoots, stringsAsFactors = TRUE)
+trees_sql2_3 <- sqlQuery(con, query_trees, stringsAsFactors = TRUE) %>% 
+  mutate(period = set)
+shoots_sql2_3 <- sqlQuery(con, query_shoots, stringsAsFactors = TRUE) %>% 
+  mutate(period = set)
 
 odbcClose(con)
 ```
@@ -358,7 +367,8 @@ odbcClose(con)
 ```{r }
 shoots_sql2_3_ <- shoots_sql2_3 %>% 
   left_join(trees, by = c("IDPlots", "IDTrees" = "ID"
-                          , "XTrees" = "X_m", "YTrees" = "Y_m"))
+                          , "XTrees" = "X_m", "YTrees" = "Y_m"
+                          , "period"))
 
 ```
 
@@ -379,17 +389,25 @@ shoots_sql2_3 <- shoots_sql2_3_
 ```
 
 ## Stap 2
+
 Dode shoots aan levende hakhoutstoof (tree) toevoegen, door XY én IDtree te 
 veranderen in XY en IDtree van de levende .
 
 Dit moet enkel gebeuren bij die hakhoutstoven waar een levend en dood deel van is.
 Die moeten we koppelen via coppice_id.
 
+
+### Aanmaak helpfiles
+
+- stoven_levend_en_dood_deel    
+- shoots_levend_en_dood_deel      
+- XY_levend_deel
+
 ```{r twee_delen}
 trees_sql2_3 %>% filter(is.na(CoppiceID)) %>% nrow() == 0
 # OK, alle hakhoutstoven hebben een coppice_id
 stoven_levend_en_dood_deel <- trees_sql2_3 %>% 
-  group_by(IDPlots, CoppiceID) %>% 
+  group_by(IDPlots, CoppiceID, period) %>% 
   summarize(n = n()) %>% 
   ungroup() %>% 
   filter(n == 2)
@@ -402,11 +420,11 @@ nrow(stoven_levend_en_dood_deel) # 105 1eSET / 81 2eSET
 #   filter(CoppiceID %in% stoven_levend_en_dood_deel$CoppiceID)
 
 shoots_levend_en_dood_deel <- shoots_sql2_3 %>% 
-  inner_join(stoven_levend_en_dood_deel, by = c("IDPlots", "CoppiceID"))
+  inner_join(stoven_levend_en_dood_deel, by = c("IDPlots", "CoppiceID", "period"))
 
 # test of aantal records klopt
 shoots_enkel_levend_of_enkel_dood <- shoots_sql2_3 %>% 
-  anti_join(stoven_levend_en_dood_deel, by = c("IDPlots", "CoppiceID"))
+  anti_join(stoven_levend_en_dood_deel, by = c("IDPlots", "CoppiceID", "period"))
 
 nrow(shoots) == nrow(shoots_enkel_levend_of_enkel_dood) + nrow(shoots_levend_en_dood_deel)
 
@@ -419,7 +437,8 @@ en heeft correcte status en correcte XY.
 XY_levend_deel <- shoots_levend_en_dood_deel %>% 
   filter(AliveDeadShoots == 11) %>% 
   select(IDPlots, IDTrees_levend = IDTrees, CoppiceID
-         , XTrees_levend = XTrees, YTrees_levend = YTrees) %>% 
+         , XTrees_levend = XTrees, YTrees_levend = YTrees
+         , period) %>% 
   unique() # 105 1eSET / 81 2eSET
 
 # check: toch geen dubbele XY voor het levende deel?
@@ -433,7 +452,7 @@ XY_levend_deel %>% group_by(IDPlots, CoppiceID) %>% summarize(n = n()) %>%
 
 ```{r}
 shoots_levend_en_dood_deel_ <- shoots_levend_en_dood_deel %>% 
-  left_join(XY_levend_deel, by = c("IDPlots", "CoppiceID"))
+  left_join(XY_levend_deel, by = c("IDPlots", "CoppiceID", "period"))
 
 # overal een XY levend?
 shoots_levend_en_dood_deel_ %>% filter(is.na(XTrees_levend)) %>% nrow() == 0
@@ -451,35 +470,36 @@ shoots_levend_en_dood_deel_ %>%
 
 ```
 
-Volgende stap is terug een updatequery, zodat dit rechtstreeks in de databank 
-aangepast wordt.
+### Controle van CoppiceID
 
-Als de dode spillen van een deels levende stoof, de IDTrees en XYTrees krijgen
-van het levende deel, worden ze automatisch gekoppeld aan dit levende deel.
+Aan de dode spillen van een deels levende stoof de IDTrees en XYTrees geven
+van het levende deel, zodat ze automatisch gekoppeld aan dit levende deel.
 
 Het dode deel (op niveau van layer trees) wordt dan "leeg", bevat geen spillen 
 meer, en moet verwijderd worden (zie stap 3 en 5).
 
 **OPGEPAST**
-We baseren ons hier enkel op de CoppiceID, dus wemoeten zeker zijn dat die klopt.
+We baseren ons hier enkel op de CoppiceID, dus we moeten zeker zijn dat die klopt.
 Daarom eerst checken of species wel zelfde is én of XY niet te ver uit elkaar ligt.
 
-```{r CONTROLE_coppice_id_species, eval = FALSE}
+```{r CONTR_coppice_id_species, eval = FALSE}
 check_coppice_id_species <- shoots_levend_en_dood_deel_ %>% 
-  group_by(IDPlots, CoppiceID) %>% 
+  group_by(IDPlots, CoppiceID, period) %>% 
   summarize(n_species = n_distinct(Species)) %>% 
   ungroup() %>% 
   filter(n_species > 1)
 
 double_species <- shoots_levend_en_dood_deel_ %>% 
-  inner_join(check_coppice_id_species)
+  inner_join(check_coppice_id_species) %>% 
+  left_join(qspecies %>% select(ID, name_nl = Value1), by = c("Species" = "ID")) %>% 
+  relocate("name_nl", .before = "IndShtCop")
 
 write.csv2(double_species, paste0(destination_dir, "double_species_", set, ".csv"))
 ```
 
-```{r CONTROLE_coppice_id_xy, eval = FALSE}
+```{r CONTR_coppice_id_xy, eval = FALSE}
 check_coppice_id_xy <- shoots_levend_en_dood_deel_ %>% 
-  group_by(IDPlots, CoppiceID) %>% 
+  group_by(IDPlots, CoppiceID, period) %>% 
   summarize(x1 = min(XTrees)
             , x2 = max(XTrees)
             , y1 = min(YTrees)
@@ -490,10 +510,16 @@ check_coppice_id_xy <- shoots_levend_en_dood_deel_ %>%
   filter(abs(shift_x) > 1 | abs(shift_y) > 1)
 
 xy_shift <- shoots_levend_en_dood_deel_ %>% 
-  inner_join(check_coppice_id_xy)
+  inner_join(check_coppice_id_xy) %>% 
+  left_join(qspecies %>% select(ID, name_nl = Value1), by = c("Species" = "ID")) %>% 
+  relocate("name_nl", .before = "IndShtCop")
 
 write.csv2(xy_shift, paste0(destination_dir, "xy_shift_", set, ".csv"))
 ```
+### SQL-update
+
+Dode shoots aan levende hakhoutstoof (tree) toevoegen, door XY én IDtree te 
+veranderen in XY en IDtree van de levende .
 
 ```{r update_XY_shoots_dood_deel}
 # OK, nu verder gaan met XY én IDTrees overnemen van levend deel
@@ -602,13 +628,15 @@ odbcClose(con)
 
 ```{r check_sql4}
 con <- odbcConnectAccess2007(path_to_fieldmap_db)
-shoots_sql4 <- sqlQuery(con, query_shoots, stringsAsFactors = TRUE)
+shoots_sql4 <- sqlQuery(con, query_shoots, stringsAsFactors = TRUE) %>% 
+  mutate(period = set)
 odbcClose(con)
 
 # opnieuw koppelen aan trees, zou nu een andere koppeling moeten zijn
 shoots_sql4_ <- shoots_sql4 %>% 
   left_join(trees, by = c("IDPlots", "IDTrees" = "ID"
-                          , "XTrees" = "X_m", "YTrees" = "Y_m"))
+                          , "XTrees" = "X_m", "YTrees" = "Y_m"
+                          , "period"))
 
 nrow(shoots_sql4_) == nrow(shoots_sql4)
 
@@ -630,13 +658,13 @@ shoots_sql4 <- shoots_sql4_
 
 ```{r }
 check_unieke_id_shoots <- shoots_sql4 %>% 
-  group_by(IDPlots, IDTrees, ID) %>% 
+  group_by(IDPlots, IDTrees, ID, period) %>% 
   summarize(n = n()) %>% 
   ungroup()
 check_unieke_id_shoots %>% filter(n > 1) %>% nrow() == 0
 
 check_unieke_id_shoots2 <- shoots_sql4 %>% 
-  group_by(IDPlots, CoppiceID_shoots, ID) %>% 
+  group_by(IDPlots, CoppiceID_shoots, ID, period) %>% 
   summarize(n = n()) %>% 
   ungroup()
 check_unieke_id_shoots2 %>% filter(n > 1) %>% nrow() == 0
@@ -647,7 +675,7 @@ check_unieke_id_shoots2 %>% filter(n > 1) %>% nrow() == 0
 
 ```{r }
 vgl_shoots <- shoots_sql4 %>% 
-  left_join(shoots_sql2_3, by = c("IDPlots", "CoppiceID", "ID"))
+  left_join(shoots_sql2_3, by = c("IDPlots", "CoppiceID", "ID", "period"))
 
 # levende: gelijke XY
 vgl_shoots %>% filter(AliveDeadShoots.x != AliveDeadShoots.y) %>% nrow()
@@ -664,18 +692,17 @@ het veld `remark` op `TO_DELETE` zetten.
 
 Op basis van dit veld vervolgens aan Ifer vragen om deze allemaal weg te gooien.
 
-
 ```{r}
 trees_levend_en_dood_deel <- trees_sql2_3 %>% 
-  inner_join(stoven_levend_en_dood_deel, by = c("IDPlots", "CoppiceID"))
+  inner_join(stoven_levend_en_dood_deel, by = c("IDPlots", "CoppiceID", "period"))
 
 # check: toch zeker twee delen?
-trees_levend_en_dood_deel %>% group_by(IDPlots, CoppiceID) %>% 
+trees_levend_en_dood_deel %>% group_by(IDPlots, CoppiceID, period) %>% 
   summarize(n = n()) %>% filter(n != 2) %>% nrow() == 0
 
 ```
 
-```{r update_trees_dood_deel}
+```{r to_delete_trees_dood_deel}
 trees_levend_en_dood_deel_ <- trees_levend_en_dood_deel %>% 
   mutate(trees_remark = ifelse(AliveDead == 12, "TO_DELETE", trees_remark))
 
@@ -722,15 +749,17 @@ odbcClose(con)
 
 ```{r check_sql5}
 con <- odbcConnectAccess2007(path_to_fieldmap_db)
-trees_sql5 <- sqlQuery(con, query_trees, stringsAsFactors = TRUE)
-shoots_sql5 <- sqlQuery(con, query_shoots, stringsAsFactors = TRUE)
+trees_sql5 <- sqlQuery(con, query_trees, stringsAsFactors = TRUE) %>% 
+  mutate(period = set)
+shoots_sql5 <- sqlQuery(con, query_shoots, stringsAsFactors = TRUE) %>% 
+  mutate(period = set)
 odbcClose(con)
 ```
 
 ```{r }
 shoots_sql5_ <- shoots_sql5 %>% 
-  left_join(trees, by = c("IDPlots", "IDTrees" = "ID"
-                          , "XTrees" = "X_m", "YTrees" = "Y_m"))
+  left_join(trees_sql5, by = c("IDPlots", "IDTrees" = "ID"
+                          , "XTrees" = "X_m", "YTrees" = "Y_m", "period"))
 
 ```
 
@@ -738,6 +767,7 @@ shoots_sql5_ <- shoots_sql5 %>%
 nrow(shoots_sql5_) == nrow(shoots)
 
 max(shoots_sql5_$ID) > 5000
+range(shoots_sql5_$ID)
 
 unique(shoots_sql5_$AliveDead); unique(shoots_sql5_$AliveDeadShoots)
 shoots_sql5_ %>% filter(AliveDeadShoots != AliveDead) %>% nrow()
@@ -766,29 +796,103 @@ levend als dood zijn
 Vanaf dan ook in forrescalc zorgen dat status van hakhout gehaald wordt uit de 
 shoots layer.
 
+### Controle OldID
 
-```{r update_all_trees}
-trees_ <- trees %>% 
-  mutate(AliveDead = 15)
+Te checken vooraleer deze dode hakhoutdelen (trees layer) weg te gooien!!
+
+
+**(1) checken of er een old_id staat in dood deel**
+
+Normaal staat de OldID steeds in het levende deel, maar als dat niet het geval 
+is, dan moeten we dat eerst kopiëren naar het levende deel.
+
+In Sevendonck komt dit niet voor, maar in de moederdb toch checken!
+
+
+```{r CONTR_old_id_2eSET, eval = FALSE}
+old_id_dood_deel <- trees_levend_en_dood_deel %>% 
+  filter(AliveDead == 12 & !is.na(OldID))
+
+nrow(old_id_dood_deel) == 0 # OK voor 1eSET, logisch want 1eSET
+nrow(old_id_dood_deel) == 0  # 27 voor 2eSET (van de 81)
+
+# het kan zijn dat deze old_id's enkel betrekking hebben op dood deel, en dat het levende
+# OOK een old_id bevat
+levend_deel <- trees_levend_en_dood_deel %>% 
+  filter(AliveDead == 11) %>% 
+  select(-X_m ,-Y_m, -Species, -IndShtCop, -contains("remark"), -n)
+
+check_old_id <- old_id_dood_deel %>% 
+  select(-X_m ,-Y_m, -Species, -IndShtCop, -contains("remark"), -n) %>% 
+  left_join(levend_deel, by = c("IDPlots", "period", "CoppiceID"))
+check_old_id %>% filter(is.na(OldID.y)) %>% nrow() == 0   # oldid.y = oldid van het levende deel
+# als dit aantal nul is, is het ok, want dan heeft elke levend deel ook nog een link met voorgaande 
+# periode
+
+# voor 't zekerste exporteren
+write.csv2(check_old_id, paste0(destination_dir, "informative_double_old_id", set, ".csv"))
+
 ```
 
 
-```{r sql6_update_all_trees, eval = FALSE}
+**(2) checken of er niet verwezen wordt naar een dood deel uit vorige periode** 
+
+Meestal wordt de stoof gelinkt aan het levende deel van de periode ervoor, maar 
+blijkbaar toch niet altijd, zo heb ik bij Sevendonck drie bomen gevonden 
+die linken naar het dode deel, dat dus in onze omvorming gedelete zou worden. 
+
+```{r CONTR_koppeling_old_id_naar_1eSET, eval = FALSE}
+# ik weet dat de OldID opgeslagen wordt in het levende deel van een stoof.
+# Dat heb ik net ook gecheckt bij 1e SET Sevendonck.
+# 
+# Maar kan het zijn dat er ooit met die OldID verwezen wordt naar het dode deel van de stoof van 10 jaar geleden? (als er zowel een levend als dood deel was?)
+# Want als we die boom verwijderen, zijn we dan ook de link kwijt.
+# Wellicht wordt daar eenzelfde redenering gevolgd, en enkel naar levend deel gekeken?
+
+data_dendro <- load_data_dendrometry(path_to_fieldmap_db, extra_variables = TRUE)
+t1 <- create_unique_tree_id(data_dendro)
+t1 %>% filter(is.na(tree_id)) %>% nrow()
+
+# de to delete verwijderen en dan create_unique_tree_id
+data_dendro_zonder_to_delete <- data_dendro %>% 
+  filter(is.na(remark) | remark != "TO DELETE")
+t2 <- create_unique_tree_id(data_dendro_zonder_to_delete)
+t2 %>% filter(is.na(tree_id)) %>% nrow()  # 3
+t3 <- t2 %>% filter(is.na(tree_id)) %>% 
+  select(1:5, 9:19)
+table(t3$alive_dead)
+
+# als ik deze test nog eens doe, nadat ik script gerund heb voor 2de SET, bestaan probleem niet
+write.csv2(t3, paste0(destination_dir, "old_id_only_in_dead_part", set, ".csv"))
+```
+
+
+### SQL-update
+
+Pas nadat vorige controles in orde zijn!
+
+```{r indshtcop_15_all_coppice_trees}
+trees_ <- trees_sql5 %>% 
+  mutate(AliveDead = ifelse(IndShtCop == 12, 15, AliveDead))
+```
+
+
+```{r sql6_update_all_coppice_trees, eval = FALSE}
 if (set == "1eSET") {
   # code to be executed if condition is TRUE
-  qry_update <- paste0("UPDATE Trees SET Trees.AliveDead = 15;") %>%
+  qry_update <- paste0("UPDATE Trees SET Trees.AliveDead = 15 WHERE (Trees.IndShtCop=12);") %>%
            noquote()
   
 } else {
   # code to be executed if condition is FALSE
     if (set == "2eSET") {
     # code to be executed if condition is TRUE
-    qry_update <- paste0("UPDATE Trees_2eSET SET Trees_2eSET.AliveDead = 15;") %>%
+    qry_update <- paste0("UPDATE Trees_2eSET SET Trees_2eSET.AliveDead = 15 WHERE (Trees_2eSET.IndShtCop=12);") %>%
            noquote()
     
   } else {
     # code to be executed if condition is FALSE
-    qry_update <- paste0("UPDATE Trees_3eSET SET Trees_3eSET.AliveDead = 15;") %>%
+    qry_update <- paste0("UPDATE Trees_3eSET SET Trees_3eSET.AliveDead = 15 WHERE (Trees_3eSET.IndShtCop=12);") %>%
            noquote()
   }
 }
@@ -798,16 +902,21 @@ sqlQuery(con,qry_update)
 odbcClose(con)
 ```
 
-
 ```{r check_sql6}
 con <- odbcConnectAccess2007(path_to_fieldmap_db)
-trees_sql6 <- sqlQuery(con, query_trees, stringsAsFactors = TRUE)
+trees_sql6 <- sqlQuery(con, query_trees, stringsAsFactors = TRUE) %>% 
+  mutate(period = set)
 odbcClose(con)
 ```
 
 ```{r}
+# enkel coppice
 table(trees_sql6$AliveDead)
 table(trees$AliveDead)
+
+# checken voor alle trees
+data_dendro <- load_data_dendrometry(path_to_fieldmap_db, extra_variables = TRUE)
+table(data_dendro$alive_dead, data_dendro$ind_sht_cop, data_dendro$period)
 ```
 
 
@@ -818,6 +927,14 @@ keer weg kunnen gooien.
 
 Normaal gezien zouden daar ook geen spillen meer in mogen zitten.
 
+
+## Finale bedenkingen
+
+- ook nog master in LU-list aanpassen naar AliveDeadShoots ipv AliveDead (gaat Peter doen)
+!! in FM-PM goed alles bekijken, want in FM-DC soms (tijdelijk) wel nog OK    
+
+- trees1986: geen hakhout aanwezig    
+- trees_kluis2020: gaat op termijn verwijderd worden    
 
 
 # Copy html
