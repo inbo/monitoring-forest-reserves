@@ -550,6 +550,35 @@ keer weg kunnen gooien.
 
 Normaal gezien zouden daar ook geen spillen meer in mogen zitten.
 
+## Eenvoudigste methode Petr
+
+If you need to delete trees only once from many plots at the same time, you can 
+do it in the following way:     
+In FMDC Settings > General, set the storage type to Geodatabase, close the settings, 
+and then close Data Collector. 
+All shapefiles should then be converted to a geodatabase in your case, 
+to an Access database.
+
+After that, you can open the Access database in MS Access and delete the required 
+records using a SQL query. Then open the project again in Data Collector, 
+and you can switch back to shapefiles. 
+Only the trees that were not deleted will be restored.
+
+
+## (Methode 2 Petr)
+
+Regarding your question, there are special functions for deleting features from 
+GIS layers: DeletePoint, DeleteLine, and DeletePolygon. 
+Each function has only one parameter: ID.
+
+For example, if you want to delete tree ID 67 from the layer named Trees, you would write:
+Trees.DeletePoint(67);
+
+Then you can easily write a cycle and delete many trees at once.
+
+
+
+
 
 # Finale bedenkingen
 
