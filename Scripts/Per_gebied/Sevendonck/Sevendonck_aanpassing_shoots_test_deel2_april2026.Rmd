@@ -52,11 +52,59 @@ destination_dir <- "C:/03_BR_gebieden/08_Sevendonck/FMprojecten_2026/"
 ```
 
 
-TIJDELIJK `path_to_fieldmap_db` aanpassen naar de werkversie van Sevendonck
+TIJDELIJK `path_to_fieldmap_db` aanpassen naar de werkversie van Sevendonck.
+
+Deze is op 8/5/2026 aangemaakt door export uit de nieuwe moederdb `r paste0(path_to_databases, "MDB_BR_23_INBO2026_20260505/")`
+
+**Begeleidende mail Peter (5/5/2026)**
+
+LET OP, de nieuwe versie bevat 23 in de naam, staat voor FMversie, werken momenteel 
+nog in 22 maar 23 staat klaar voor installatie binnenkort.
+> OK, cond LU-lijsten bekeken 8/5/2026, ziet er goed uit! 
+
+
+**Aanpassingen (39)**
+Ook in de treelayers kon de 15 NVT-stoof meegenomen worden in de CondLUlists
+
+
+**SHOOTlayers (19)**
+- 5x CoppiceID toegevoegd, Number 10      
+Shoots
+Shoots_2eSet
+Shoots_3eSet
+Shoots_Kluis2020
+Shoots_1986
+
+- 2x attribute AliveDeadShoots toegevoegd     
+Shoots_Kluis2020
+Shoots_1986
+
+- 3x4 CondLUlist aangepast (decayshoots + iufroklassen) =>MASTER naar AliveDeadShoots     
+Shoots
+Shoots_Kluis2020
+Shoots_1986
+
+**TreeLayers (20)**
+- 5x4 aanpassingen in Treelayers (decay + iufroklassen) => 15 NVT-stoof     
+decay : 15 NVT-stoof (master) = 17 NVT-stoof (decay)
+iufro (3x): 15 NVT-stoof (master) = 50 NVT-stoof (qIUFRO...)
+
+Trees
+Trees_2eSet
+Trees_3eSet
+Trees_Kluis2020
+Trees_1986
+
+Met de aanpassingen in de treelayers zijn de CUlists ook consitenter geworden en 
+de flexibiliteit behouden, script die aanpast naar 15 bij toevoegen spildiameter 
+is nog altijd elegante oplossing voor opmeting nieuwe bomen/stoven
 
 ```{r Path_tmp}
-path_to_fieldmap_db <- "C:/03_BR_gebieden/08_Sevendonck/FMprojecten_2026/CTRL2_Sevendonk_inbo2026_202604210749/FieldMapData_CTRL2_Sevendonk_inbo2026.accdb"
-# versie van 21 april 2026
+# path_to_fieldmap_db <- "C:/03_BR_gebieden/08_Sevendonck/FMprojecten_2026/CTRL2_Sevendonk_inbo2026_202604210749/FieldMapData_CTRL2_Sevendonk_inbo2026.accdb"
+# # versie van 21 april 2026
+
+# 8/5/2026: vertrekken van nieuwe moederdb - export
+path_to_fieldmap_db <- "C:/03_BR_gebieden/08_Sevendonck/FMprojecten_2026/CTRL_Sevendonk_inbo2026_20260505/FieldMapData_CTRL_Sevendonk_inbo2026.accdb"
 ```
 
 
@@ -243,8 +291,15 @@ nrow(shoots)
 
 shoots <- shoots_
 
-unique(shoots$AliveDead); unique(shoots$AliveDeadShoots)
+unique(shoots$AliveDead)
+# OK, enkel 11 en 12, nog geen 15
+unique(shoots$AliveDeadShoots)
+# OK, nog NA, niet ingevuld
 ```
+> tot hier gekomen 8/5/2026
+nog geen wijzigieng gedaan in de nieuwe db!
+
+
 
 # Stap 1 tem 3: zie script deel 1
 
