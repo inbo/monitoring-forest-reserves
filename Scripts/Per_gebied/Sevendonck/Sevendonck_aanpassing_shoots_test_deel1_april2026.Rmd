@@ -52,29 +52,79 @@ destination_dir <- "C:/03_BR_gebieden/08_Sevendonck/FMprojecten_2026/"
 ```
 
 
-TIJDELIJK `path_to_fieldmap_db` aanpassen naar de werkversie van Sevendonck
+TIJDELIJK `path_to_fieldmap_db` aanpassen naar de werkversie van Sevendonck.
+
+Deze is op 8/5/2026 aangemaakt door export uit de nieuwe moederdb `r paste0(path_to_databases, "MDB_BR_23_INBO2026_20260505/")`
+
+**Begeleidende mail Peter (5/5/2026)**
+
+LET OP, de nieuwe versie bevat 23 in de naam, staat voor FMversie, werken momenteel 
+nog in 22 maar 23 staat klaar voor installatie binnenkort.
+> OK, cond LU-lijsten bekeken 8/5/2026, ziet er goed uit! 
+
+
+**Aanpassingen (39)**
+Ook in de treelayers kon de 15 NVT-stoof meegenomen worden in de CondLUlists
+
+
+**SHOOTlayers (19)**
+- 5x CoppiceID toegevoegd, Number 10      
+Shoots
+Shoots_2eSet
+Shoots_3eSet
+Shoots_Kluis2020
+Shoots_1986
+
+- 2x attribute AliveDeadShoots toegevoegd     
+Shoots_Kluis2020
+Shoots_1986
+
+- 3x4 CondLUlist aangepast (decayshoots + iufroklassen) =>MASTER naar AliveDeadShoots     
+Shoots
+Shoots_Kluis2020
+Shoots_1986
+
+**TreeLayers (20)**
+- 5x4 aanpassingen in Treelayers (decay + iufroklassen) => 15 NVT-stoof     
+decay : 15 NVT-stoof (master) = 17 NVT-stoof (decay)
+iufro (3x): 15 NVT-stoof (master) = 50 NVT-stoof (qIUFRO...)
+
+Trees
+Trees_2eSet
+Trees_3eSet
+Trees_Kluis2020
+Trees_1986
+
+Met de aanpassingen in de treelayers zijn de CUlists ook consitenter geworden en 
+de flexibiliteit behouden, script die aanpast naar 15 bij toevoegen spildiameter 
+is nog altijd elegante oplossing voor opmeting nieuwe bomen/stoven
 
 ```{r Path_tmp}
-path_to_fieldmap_db <- "C:/03_BR_gebieden/08_Sevendonck/FMprojecten_2026/CTRL2_Sevendonk_inbo2026_202604210749/FieldMapData_CTRL2_Sevendonk_inbo2026.accdb"
-# versie van 21 april 2026
+# path_to_fieldmap_db <- "C:/03_BR_gebieden/08_Sevendonck/FMprojecten_2026/CTRL2_Sevendonk_inbo2026_202604210749/FieldMapData_CTRL2_Sevendonk_inbo2026.accdb"
+# # versie van 21 april 2026
+
+# 8/5/2026: vertrekken van nieuwe moederdb - export
+path_to_fieldmap_db <- "C:/03_BR_gebieden/08_Sevendonck/FMprojecten_2026/CTRL_Sevendonk_inbo2026_20260505/FieldMapData_CTRL_Sevendonk_inbo2026.accdb"
 ```
 
 
 # Vraagstelling
 
 In Sevendonck uittesten hoe we shoots (levend én dood) samenvoegen in één tree.
-R-script gelijk opbouwen met hoe ik in access-db de queries maak.
-
-
+De update queries in het R-script opbouwen zoals hoe ik in access-db de queries 
+zou maken.
 
 In 3 stappen FM-db aanpassen en goed bijhouden hoe om dan in moederdb ook te doen     
 
 1.	stap 1: overal velden correct (alive_dead op niveau van shoots (alive_dead_shoots)      
 
-2.	Stap 2: dan ga ik automatisch de dode aan de levende toevoegen, door (1) XY én IDtree te veranderen in XY en IDtree van de levende EN door (2) bij de dode trees in een extra veld mee te geven "MAG WEG" (of levend/dood = 15 - nvt stoof)      
+2.	Stap 2: dan ga ik automatisch de dode aan de levende toevoegen, door (1) XY én 
+IDtree te veranderen in XY en IDtree van de levende EN door (2) bij de dode trees 
+in een extra veld mee te geven "MAG WEG" (of levend/dood = 15 - nvt stoof)      
 
-3.	Stap 3: dan op ifer conference vragen hoe we al die "MAG WEG" bomen (gis-entiteit) in één keer weg kunnen gooien (Leen heeft ooit van hen een makkelijke tool gekregen)
-
+3.	Stap 3: dode bomen verwijderen in tabel trees mbv update query. Wanneer het 
+FM-project opgeslagen is als Geodatabase ipv plain shapefiles, is dat zo eenvoudig 
+volgens Petr.
 
 
 ```{r results='hold', eval=TRUE}
@@ -86,9 +136,11 @@ path_to_fieldmap_db
 
 1eSET, 2eSET of 3eSET
 
+Starten met 1eSET
+
 ```{r}
 set <- "1eSET"
-set <- "2eSET"
+# set <- "2eSET"
 # set <- "3eSET"
 
 ```
@@ -100,7 +152,14 @@ set <- "2eSET"
 Om via R updates te kunnen doen in de databank, is het noodzakelijk dat het veld
 `CoppiceID` ook in layer shoots aanwezig is.
 
-Dit veld toevoegen in FM-PM.
+Dit veld werd door Peter toegevoegd voegen in FM-PM: 5x CoppiceID toegevoegd    
+
+- Shoots    
+- Shoots_2eSet    
+- Shoots_3eSet    
+- Shoots_Kluis2020    
+- Shoots_1986   
+
 
 **Reden:** `CoppiceID` zit in layer trees en koppeling met layer trees gebeurt net 
 obv het veld `IDTrees` die we verderop willen aanpassen, dus die koppeling kunnen 
@@ -226,6 +285,7 @@ shoots <- sqlQuery(con, query_shoots, stringsAsFactors = TRUE) %>%
 
 odbcClose(con)
 
+
 ```
 
 
@@ -252,20 +312,24 @@ shoots_ <- shoots %>%
 
 nrow(shoots_) == nrow(shoots)
 nrow(shoots)
+# 1858 1eSET
 # 1712 2eSET
 
 shoots <- shoots_
 
-unique(shoots$AliveDead); unique(shoots$AliveDeadShoots)
+unique(shoots$AliveDead)
+# OK, enkel 11 en 12, nog geen 15
+unique(shoots$AliveDeadShoots)
+# OK, nog NA, niet ingevuld
 ```
 
 # Omvormen databank
 
 ## Stap 1
 
-- CoppiceID gekopieerd naar layer shoots   
+- CoppiceID kopieren naar layer shoots   
 
-- AliveDeadShoots ingevuld 
+- AliveDeadShoots invullen 
 
 - ID van de shoots + 5000   
 
@@ -378,6 +442,22 @@ shoots_sql2_3_ %>% filter(is.na(CoppiceID_shoots)) %>% nrow()
 
 shoots_sql2_3 <- shoots_sql2_3_
 ```
+
+```{r}
+table(shoots_sql2_3$AliveDeadShoots)
+table(trees_sql2_3$AliveDead)
+# OK, nog geen "15" bij trees
+```
+
+```{r}
+check_status <- shoots_sql2_3 %>% 
+  left_join(trees_sql2_3) %>% 
+  filter(AliveDeadShoots != AliveDead)
+nrow(check_status) # 0 - OK
+
+```
+
+
 
 ## Stap 2
 
@@ -507,6 +587,7 @@ xy_shift <- shoots_levend_en_dood_deel_ %>%
 
 write.csv2(xy_shift, paste0(destination_dir, "xy_shift_", set, "_", Sys.Date(), ".csv"))
 ```
+
 ### SQL-update
 
 Dode shoots aan levende hakhoutstoof (tree) toevoegen, door XY én IDtree te 
