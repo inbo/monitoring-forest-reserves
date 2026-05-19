@@ -63,37 +63,45 @@ nog in 22 maar 23 staat klaar voor installatie binnenkort.
 > OK, cond LU-lijsten bekeken 8/5/2026, ziet er goed uit! 
 
 
-**Aanpassingen (39)**
+**Aanpassingen (39)**     
+
 Ook in de treelayers kon de 15 NVT-stoof meegenomen worden in de CondLUlists
 
 
-**SHOOTlayers (19)**
+**SHOOTlayers (19)**    
+
 - 5x CoppiceID toegevoegd, Number 10      
-Shoots
-Shoots_2eSet
-Shoots_3eSet
-Shoots_Kluis2020
-Shoots_1986
+      
+      Shoots
+      Shoots_2eSet
+      Shoots_3eSet
+      Shoots_Kluis2020
+      Shoots_1986
 
 - 2x attribute AliveDeadShoots toegevoegd     
-Shoots_Kluis2020
-Shoots_1986
+      
+      Shoots_Kluis2020
+      Shoots_1986
 
-- 3x4 CondLUlist aangepast (decayshoots + iufroklassen) =>MASTER naar AliveDeadShoots     
-Shoots
-Shoots_Kluis2020
-Shoots_1986
+- 3x4 CondLUlist aangepast (decayshoots + iufroklassen) => MASTER naar AliveDeadShoots     
+      
+      Shoots
+      Shoots_Kluis2020
+      Shoots_1986
 
-**TreeLayers (20)**
+**TreeLayers (20)**   
+
 - 5x4 aanpassingen in Treelayers (decay + iufroklassen) => 15 NVT-stoof     
-decay : 15 NVT-stoof (master) = 17 NVT-stoof (decay)
-iufro (3x): 15 NVT-stoof (master) = 50 NVT-stoof (qIUFRO...)
+    
+    decay : 15 NVT-stoof (master) = 17 NVT-stoof (decay)    
+    iufro (3x): 15 NVT-stoof (master) = 50 NVT-stoof (qIUFRO...)    
+    
+    Trees   
+    Trees_2eSet     
+    Trees_3eSet   
+    Trees_Kluis2020   
+    Trees_1986    
 
-Trees
-Trees_2eSet
-Trees_3eSet
-Trees_Kluis2020
-Trees_1986
 
 Met de aanpassingen in de treelayers zijn de CUlists ook consitenter geworden en 
 de flexibiliteit behouden, script die aanpast naar 15 bij toevoegen spildiameter 
@@ -136,11 +144,11 @@ path_to_fieldmap_db
 
 1eSET, 2eSET of 3eSET
 
-Starten met 1eSET
+Starten met 2eSET
 
 ```{r}
 set <- "1eSET"
-# set <- "2eSET"
+set <- "2eSET"
 # set <- "3eSET"
 
 ```
@@ -864,15 +872,16 @@ levend als dood zijn
 
 ## Stap 5 - Ifer
 
-Op ifer conference vragen hoe we al die "TO DELETE" bomen (gis-entiteit) in één 
-keer weg kunnen gooien.
+Alle "TO DELETE" bomen (gis-entiteit) verwijderen met een updatequery.
+Dat kan - volgens Petr - in access, indien project opgeslagen is als geodatabase.
 
-Normaal gezien zouden daar ook geen spillen meer in mogen zitten.
+In deze TO DELETE-bomen zouden we geen spilen meer mogen zien als we naar FM-DC gaan.
 
 
 ## Finale bedenkingen
 
-- ook nog master in LU-list aanpassen naar AliveDeadShoots ipv AliveDead (gaat Peter doen)
+- ook nog master in LU-list aanpassen naar AliveDeadShoots ipv AliveDead (OK, Peter 
+heeft dat gedaan)
 !! in FM-PM goed alles bekijken, want in FM-DC soms (tijdelijk) wel nog OK    
 
 - trees1986: geen hakhout aanwezig    

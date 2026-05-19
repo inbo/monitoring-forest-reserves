@@ -51,53 +51,9 @@ forestreserve_folder <- paste0(path_to_reserves, "08_Sevendonck")
 destination_dir <- "C:/03_BR_gebieden/08_Sevendonck/FMprojecten_2026/"
 ```
 
-
 TIJDELIJK `path_to_fieldmap_db` aanpassen naar de werkversie van Sevendonck.
 
 Deze is op 8/5/2026 aangemaakt door export uit de nieuwe moederdb `r paste0(path_to_databases, "MDB_BR_23_INBO2026_20260505/")`
-
-**Begeleidende mail Peter (5/5/2026)**
-
-LET OP, de nieuwe versie bevat 23 in de naam, staat voor FMversie, werken momenteel 
-nog in 22 maar 23 staat klaar voor installatie binnenkort.
-> OK, cond LU-lijsten bekeken 8/5/2026, ziet er goed uit! 
-
-
-**Aanpassingen (39)**
-Ook in de treelayers kon de 15 NVT-stoof meegenomen worden in de CondLUlists
-
-
-**SHOOTlayers (19)**
-- 5x CoppiceID toegevoegd, Number 10      
-Shoots
-Shoots_2eSet
-Shoots_3eSet
-Shoots_Kluis2020
-Shoots_1986
-
-- 2x attribute AliveDeadShoots toegevoegd     
-Shoots_Kluis2020
-Shoots_1986
-
-- 3x4 CondLUlist aangepast (decayshoots + iufroklassen) =>MASTER naar AliveDeadShoots     
-Shoots
-Shoots_Kluis2020
-Shoots_1986
-
-**TreeLayers (20)**
-- 5x4 aanpassingen in Treelayers (decay + iufroklassen) => 15 NVT-stoof     
-decay : 15 NVT-stoof (master) = 17 NVT-stoof (decay)
-iufro (3x): 15 NVT-stoof (master) = 50 NVT-stoof (qIUFRO...)
-
-Trees
-Trees_2eSet
-Trees_3eSet
-Trees_Kluis2020
-Trees_1986
-
-Met de aanpassingen in de treelayers zijn de CUlists ook consitenter geworden en 
-de flexibiliteit behouden, script die aanpast naar 15 bij toevoegen spildiameter 
-is nog altijd elegante oplossing voor opmeting nieuwe bomen/stoven
 
 ```{r Path_tmp}
 # path_to_fieldmap_db <- "C:/03_BR_gebieden/08_Sevendonck/FMprojecten_2026/CTRL2_Sevendonk_inbo2026_202604210749/FieldMapData_CTRL2_Sevendonk_inbo2026.accdb"
@@ -110,33 +66,21 @@ path_to_fieldmap_db <- "C:/03_BR_gebieden/08_Sevendonck/FMprojecten_2026/CTRL_Se
 
 # Vraagstelling
 
-In Sevendonck uittesten hoe we shoots (levend én dood) samenvoegen in één tree.
-R-script gelijk opbouwen met hoe ik in access-db de queries maak.
-
-
-
-In 3 stappen FM-db aanpassen en goed bijhouden hoe om dan in moederdb ook te doen     
-
-1.	stap 1: overal velden correct (alive_dead op niveau van shoots (alive_dead_shoots)      
-
-2.	Stap 2: dan ga ik automatisch de dode aan de levende toevoegen, door (1) XY én IDtree te veranderen in XY en IDtree van de levende EN door (2) bij de dode trees in een extra veld mee te geven "MAG WEG" (of levend/dood = 15 - nvt stoof)      
-
-3.	Stap 3: dan op ifer conference vragen hoe we al die "MAG WEG" bomen (gis-entiteit) in één keer weg kunnen gooien (Leen heeft ooit van hen een makkelijke tool gekregen)
-
-
+Zie script deel 1.
 
 ```{r results='hold', eval=TRUE}
 path_to_fieldmap_db
 ```
 
-
 # Kiezen welke set
 
 1eSET, 2eSET of 3eSET
 
+Starten met 2eSET
+
 ```{r}
 set <- "1eSET"
-set <- "2eSET"
+# set <- "2eSET"
 # set <- "3eSET"
 
 ```
@@ -287,6 +231,7 @@ shoots_ <- shoots %>%
 
 nrow(shoots_) == nrow(shoots)
 nrow(shoots)
+# 1858 1eSET
 # 1712 2eSET
 
 shoots <- shoots_
@@ -296,10 +241,6 @@ unique(shoots$AliveDead)
 unique(shoots$AliveDeadShoots)
 # OK, nog NA, niet ingevuld
 ```
-> tot hier gekomen 8/5/2026
-nog geen wijzigieng gedaan in de nieuwe db!
-
-
 
 # Stap 1 tem 3: zie script deel 1
 
@@ -390,7 +331,7 @@ Enkel te doen bij 2eSET en 3eSET, want 1eSET bevat geen oldID.
 set
 ```
 
-Onderstaande controle moet in orde zijn vooraleer we naar "Stap 4" gaan!
+> Onderstaande controle moet in orde zijn vooraleer we naar "Stap 4" gaan!
 
 ## Checken of er een old_id staat in dood deel
 
@@ -398,7 +339,6 @@ Normaal staat de OldID steeds in het levende deel, maar als dat niet het geval
 is, dan moeten we dat eerst kopiëren naar het levende deel.
 
 In Sevendonck komt dit niet voor, maar in de moederdb toch checken!
-
 
 ```{r CONTR_old_id_2eSET}
 old_id_dood_deel <- trees_levend_en_dood_deel %>% 
@@ -423,6 +363,7 @@ check_old_id %>% filter(is.na(OldID.y)) %>% nrow() == 0   # oldid.y = oldid van 
 write.csv2(check_old_id, paste0(destination_dir, "informative_double_old_id_", set, "_", Sys.Date(), ".csv"))
 
 ```
+
 Hebben die oude delen dan dezelfde coppice?
 
 Voor Sevendonck wel: zie onderstaande code.
@@ -529,11 +470,31 @@ t4_gekoppeld_aan_levend %>%
 ```{r}
 t4_gekoppeld_aan_levend <- t4_gekoppeld_aan_levend %>% 
   # filter(AliveDead.y == 11) %>% 
-  select(1:7, CoppiceID, ID_1eSET = ID, trees_remark.y) 
+  select(1:5, ID_2eSET = tree_measure_id, old_id, CoppiceID
+         , ID_1eSET = ID, trees_remark.y) 
 
 write.csv2(t4_gekoppeld_aan_levend
            , paste0(destination_dir, "old_id_only_in_dead_part_"
                     , set, "_", Sys.Date(), ".csv"))
+```
+
+Makkelijkste is om voor deze drie records, oldID manueel aan te passen in trees_2eSET.
+Heb ik nu gedaan voor deze drie bomen (in FM-DC).
+
+```{r}
+data_dendro_corrected_old_id <- load_data_dendrometry(path_to_fieldmap_db
+                                                      , extra_variables = TRUE)
+t4 <- create_unique_tree_id(data_dendro_corrected_old_id)
+t4 %>% filter(is.na(tree_id)) %>% nrow() # 0
+
+# de to delete verwijderen en dan create_unique_tree_id
+data_dendro_zonder_to_delete <- data_dendro_corrected_old_id %>% 
+  filter(is.na(remark) | remark != "TO DELETE")
+t5 <- create_unique_tree_id(data_dendro_zonder_to_delete)
+t5 %>% filter(is.na(tree_id)) %>% nrow()  # 0 - OK
+# t6 <- t5 %>% filter(is.na(tree_id)) %>% 
+#   select(1:5, 9:19)
+# table(t6$alive_dead)
 ```
 
 # Stap 4
@@ -546,7 +507,8 @@ shoots layer.
 
 Pas nadat vorige controles in orde zijn!
 
-Ook nog niet doen voor 1eSET, als 2eSET nog niet gerund heeft.
+> NOG NIET DOEN VOOR 1eSET, als 2eSET nog niet gerund heeft!
+DUS NU EERST 2e SET RUNNEN tem hier
 
 
 ```{r indshtcop_15_all_coppice_trees}
@@ -600,12 +562,38 @@ table(data_dendro$alive_dead, data_dendro$ind_sht_cop, data_dendro$period)
 
 # Stap 5 - Ifer
 
-Op ifer conference vragen hoe we al die "TO DELETE" bomen (gis-entiteit) in één 
-keer weg kunnen gooien.
+Alle "TO DELETE" bomen (gis-entiteit) verwijderen rechstreeks in access.
+Dat kan - volgens Petr - in access, indien project opgeslagen is als geodatabase.
 
-Normaal gezien zouden daar ook geen spillen meer in mogen zitten.
+In deze TO DELETE-bomen zouden we geen spilen meer mogen zien als we naar FM-DC gaan.
 
-## Eenvoudigste methode Petr
+## Concreet
+
+FM-DC openen en cchecken of project bewaard is als geodatabase (FMDC Settings > General)
+
+- 2eSET: Trees_2eSET openen - veld Remark - bevat "TO DELETE" - ctrl+A => 92 records: verwijderen
+- 1eSET: Trees openen - veld Remark - bevat "TO DELETE" - ctrl+A => 105 records: verwijderen
+
+
+```{r check_sql7}
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+trees_sql7 <- sqlQuery(con, query_trees, stringsAsFactors = TRUE) %>% 
+  mutate(period = set)
+odbcClose(con)
+
+trees_sql7 %>% filter(trees_remark == "TO DELETE") %>% nrow()
+
+# checken voor alle trees
+data_dendro <- load_data_dendrometry(path_to_fieldmap_db, extra_variables = TRUE)
+table(data_dendro$period, data_dendro$remark)
+unique(data_dendro$remark)
+
+# lukt het om tree_id aan te maken?
+t7 <- create_unique_tree_id(data_dendro)
+t7 %>% filter(is.na(tree_id)) %>% nrow() # 0 - OK
+```
+
+### Eenvoudigste methode Petr
 
 If you need to delete trees only once from many plots at the same time, you can 
 do it in the following way:     
@@ -619,8 +607,7 @@ records using a SQL query. Then open the project again in Data Collector,
 and you can switch back to shapefiles. 
 Only the trees that were not deleted will be restored.
 
-
-## (Methode 2 Petr)
+### (Methode 2 Petr)
 
 Regarding your question, there are special functions for deleting features from 
 GIS layers: DeletePoint, DeleteLine, and DeletePolygon. 
@@ -632,16 +619,14 @@ Trees.DeletePoint(67);
 Then you can easily write a cycle and delete many trees at once.
 
 
-
-
-
 # Finale bedenkingen
 
-- ook nog master in LU-list aanpassen naar AliveDeadShoots ipv AliveDead (gaat Peter doen)
+- ook nog master in LU-list aanpassen naar AliveDeadShoots ipv AliveDead (OK, Peter 
+heeft dat gedaan)
 !! in FM-PM goed alles bekijken, want in FM-DC soms (tijdelijk) wel nog OK    
 
 - trees1986: geen hakhout aanwezig    
-- trees_kluis2020: zal op termijn verwijderd worden    
+- trees_kluis2020: gaat op termijn verwijderd worden    
 
 
 # Copy html
