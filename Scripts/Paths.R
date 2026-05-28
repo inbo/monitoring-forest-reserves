@@ -68,7 +68,7 @@ path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_23_INBO2026_20260505/")
 # Met de aanpassingen in de treelayers zijn de CUlists ook consitenter geworden en de flexibiliteit behouden, script die aanpast naar 15 bij toevoegen spildiameter is nog altijd elegante oplossing voor opmeting nieuwe bomen/stoven
 
 
-# tijdelijk nog onderstaande moederdb gebruiken
+# tijdelijk nog onderstaande moederdb gebruiken bij gebruik van forrescalc (21/5/2026)
 path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_22_inbo2026_20260313/")
 # path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_22_inbo2026_20251014/")
 # path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_X8_inbo2020_20250311/")
