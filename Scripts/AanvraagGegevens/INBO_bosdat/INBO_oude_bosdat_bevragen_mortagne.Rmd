@@ -61,16 +61,45 @@ path_to_datarequest_gdrive <- paste0(path_to_datarequests_gdrive, "INBO_bosdat/"
 
 # Ophalen gegevens
 
-1) **Bosdat-data**
-Opgemeten in kader van de beheerplanning, eerder voor volumebepalingen, dan voor opstellen van dh-curves
-- T4-metingen: omtrekklasse + 1 à 3 hoogtes + totaal aantal bomen in deze omtrekklasse
-- T7-metingen: omtrek + hoogte - per boom
-Beide types metingen komen zowel in volopnames als proefvlakopnames voor.
+**Bosdat-data**       
+Opgemeten in kader van de beheerplanning
+
+- dendro (A3A4):     
+    - OPNAME_TABEL_T4: omtrekklasse + 1 à 3 hoogtes + totaal aantal bomen in deze omtrekklasse; enkel levende bomen (R = 9 of 18m afh. van omtrek)
+    - OPNAME_TABEL_T7: omtrek + hoogte - per boom; levend/dood (geen hoogtes bij dode bomen) (R = 9 of 18m afh. van omtrek)
+    - Beide types metingen komen zowel in volopnames als proefvlakopnames voor  
+    
+    
+- verjonging (A1A2):
+    - OPNAME_TABEL_T1: verjonging met Ht < 2 m : proefcirkel A1: aantal per hoogteklasse, enkel levend (R = 2,25)
+    - OPNAME_TABEL_T2: Verjonging met Ht >= 2 m en C(1,5) < 20cm: proefcirkel A2: aantal of bedekking%, aantal dood, bedekking% dood, (totale bedekking steeds 0) (R = 4.5)      
+    _**ik veronderstel dat "aantal" enkel de levende betreft, want soms "aantal dood" > "aantal"**_
+    
+  
+- hakhout (A2-cirkel):    
+    - OPNAME_TABEL_T6: proefcirkel A2: C(1,5) >= 20cm: omtrek & levend/dood, geen hoogtes (R = 4.5)      
+    
+    
+- staand dood hout:
+    - OPNAME_TABEL_T5: staand dood hout: aantal per omtrekklasse, geen hoogtes (R = 9 of 18m afh. van omtrek)     
+    _**ter aanvulling bij T4, opname per omtrekklasse**_      
 
 
-2) **Nieuwe metingen**
-Terreinploegen op pad gestuurd, specifiek voor opmeten van hoogtes.
-Hier wellicht geen uitgebroken toppen, of schuinstaande bomen.
+```{r check, eval = FALSE}
+t <- OPNAME_TABEL_T2_ %>% 
+  filter(AANTAL_DOOD > AANTAL)
+# 8% van alle records => "aantal" enkel de levende, want soms "aantal dood" > "aantal"
+
+t <- OPNAME_TABEL_T5_ %>% 
+  filter(HC_BOS_OPNAME_STR %in% OPNAME_TABEL_T7_$HC_BOS_OPNAME_STR)
+nrow(t)
+t <- OPNAME_TABEL_T5_ %>% 
+  filter(HC_BOS_OPNAME_STR %in% OPNAME_TABEL_T4_$HC_BOS_OPNAME_STR)
+nrow(t)
+# T5 komt enkel voor bij T4 (per omtrekklasse), anders opgenomen in T7 (op boomniveau)
+```
+
+
 
 ## Specifiek bos
 
@@ -88,9 +117,9 @@ output_path_gdrive  <- paste0(path_to_datarequest_gdrive, name_forest, "/")
 
 ```
 
-Brondata: `r db`        
+**Brondata**: `r db`        
 
-Output wordt weggeschreven naar: `r output_path_gdrive`
+**Output wordt weggeschreven naar**: `r output_path_gdrive`
 
 
 ```{r data_accdb}
@@ -112,16 +141,21 @@ OPNAME_TABEL <- sqlFetch(con, "OPNAME_TABEL")
 BOS_OPNAME <- sqlFetch(con, "BOS_OPNAME")
 
 # bosopname - metingen
-OPNAME_TABEL_T7 <- sqlFetch(con, "OPNAME_TABEL_T7")
-OPNAME_TABEL_T4 <- sqlFetch(con, "OPNAME_TABEL_T4")
+OPNAME_TABEL_T7 <- sqlFetch(con, "OPNAME_TABEL_T7") # Hooghout: proefcirkel A3 + proefcirkel A4 (elke boom dbh en hoogte)
+OPNAME_TABEL_T4 <- sqlFetch(con, "OPNAME_TABEL_T4") # Bomen met C(1,5)>=20 cm (A3A4: aantal per omtrekklasse + 3 hoogtes)
+OPNAME_TABEL_T1 <- sqlFetch(con, "OPNAME_TABEL_T1") # Verjonging met Ht < 2 m : proefcirkel A1 (aantal per hoogteklasse, enkel levend, geen bedekking (leeg)) (R = 2,25)
+OPNAME_TABEL_T2 <- sqlFetch(con, "OPNAME_TABEL_T2") # Verjonging met Ht >= 2 m en C(1,5) < 20cm: proefcirkel A2 (aantal of bedekking%, aantal dood, bedekking% dood, (totale bedekking steeds 0)) (R = 4.5)
+OPNAME_TABEL_T5 <- sqlFetch(con, "OPNAME_TABEL_T5") # Staand dood hout (aantal per omtrekklasse)
+OPNAME_TABEL_T6 <- sqlFetch(con, "OPNAME_TABEL_T6") # Hakhout: proefcirkel A2: loten met C(1,5) >= 20cm (omtrek & levend/dood)
+OPNAME_TABEL_T3 <- sqlFetch(con, "OPNAME_TABEL_T3") # Hakhout: loten met C(1,5) >= 20 cm (leeg; aantal levend en dood per omtrekklasse)
 
 # lookuplijsten
 qBOS_BMS <- sqlFetch(con, "BOS_BMS")
 qBOS_BOOMGROEP <- sqlFetch(con, "BOS_BOOMGROEP")
-qOMTREKKLASSE <- sqlFetch(con, "OMTREKKLASSE") #enkel T4
+qOMTREKKLASSE <- sqlFetch(con, "OMTREKKLASSE") # enkel T4
 qBOS_OPNAME_TYPE <- sqlFetch(con, "BOS_OPNAME_TYPE")
-# Volopname, Proefvlakopname, Dreef / Randzone
-qBOS_PROEFCIRKELTYPE <- sqlFetch(con, "BOS_PROEFCIRKELTYPE")
+
+qBOS_PROEFCIRKELTYPE <- sqlFetch(con, "BOS_PROEFCIRKELTYPE") # Volopname, Proefvlakopname, Dreef / Randzone
 qBOS_TYPE <- sqlFetch(con, "BOS_TYPE")
 
 qBOS_LEEFTIJD <- sqlFetch(con, "BOS_LEEFTIJD")
@@ -131,6 +165,11 @@ qBOS_BESTANDSTYPE <- sqlFetch(con, "BOS_BESTANDSTYPE")
 qBOS_BESTAND_LEEFTIJDSKLASSE <- sqlFetch(con, "BOS_BESTAND_LEEFTIJDSKLASSE")
 qBOS_BEDRIJFSVORM <- sqlFetch(con, "BOS_BEDRIJFSVORM")
 
+# mbt verjonging
+qOPNAME_VERJONGINGSWIJZE <- sqlFetch(con, "OPNAME_VERJONGINGSWIJZE")
+qOPNAME_VERSPREIDING <- sqlFetch(con, "OPNAME_VERSPREIDING")
+qOPNAME_HOOGTEKLASSE <- sqlFetch(con, "OPNAME_HOOGTEKLASSE")
+qOPNAME_ONTSTAAN <- sqlFetch(con, "OPNAME_ONTSTAAN")
 
 # berekende waardes - vaak leeg
 totalen <- sqlFetch(con, "BOSBESTAND_PARAMETERS_BMS")
@@ -142,30 +181,29 @@ odbcClose(con)
 
 # Tabellen
 
-- *OPNAME_TABEL_T1 tem T7*: opnames zelf (hoogtes, dbh, aantallen, ...)
+- **OPNAME_TABEL_T1 tem T7**: opnames zelf (hoogtes, dbh, aantallen, ...)
   - T4 en T7 bevatten dendro > 7 cm dbh    
-  
-- *OPNAME_TABEL*: overzicht van alle opnames (T1 tem T7) met link naar de opnames 
+  - T1 en T2 bevatten verjonging
+  - T5 bevat dood hout    
+  - T6 bevat hakhout      
+<br>
+
+- **OPNAME_TABEL**: overzicht van alle opnames (T1 tem T7) met link naar de opnames 
 in de opnametabellen via `OPNAME_TABEL_ID`; info over T1/../T7 in `TAB_NAAM`   
 
-- *BOS_OPNAME*: link tss de opname en BOSBESTAND (`BOSBESTAND_ID`) en zo 
+- **BOS_OPNAME**: link tss de opname en BOSBESTAND (`BOSBESTAND_ID`) en zo 
 verder naar perceel, bosplaats en domein
 
-- *BOSBESTAND*: bevat veld `HC_BOSBESTAND_STR` (bv. gemeentebos bertem_bosreservaat_1_a),
+- **BOSBESTAND**: bevat veld `HC_BOSBESTAND_STR` (bv. gemeentebos bertem_bosreservaat_1_a),
 maar ook link naar perceel (`BOS_BOSPERCEEL_ID`) en zo verder naar bosplaats en domein
 
-- *BOS_BOSBESTAND*: bevat alle info over het bestand zoals lftd, bestandstype, bedrijfsvorm, 
+- **BOS_BOSBESTAND**: bevat alle info over het bestand zoals lftd, bestandstype, bedrijfsvorm, 
 mengingsvorm, sluitingsgraad, bedekking avk, liggend dood hout
 
 
-```{r results = 'hide'}
-str(OPNAME_TABEL_T4)
-str(OPNAME_TABEL_T7)
+```{r algemeen, results = 'hide'}
 str(OPNAME_TABEL)
 table(OPNAME_TABEL$OMSCH, OPNAME_TABEL$TAB_NAAM)
-
-str(BOS_OPNAME)
-head(BOS_OPNAME$HC_BOS_OPNAME_STR)
 
 str(BOSBESTAND)
 head(BOSBESTAND$HC_BOSBESTAND_STR)
@@ -174,34 +212,86 @@ str(BOS_BOSPERCEEL)
 str(BOS_BOSPLAATS)
 str(BOS_BOSDOMEIN)
 
+```
+
+```{r bestand, results = 'hide'}
 # info over bosbestand
 str(BOS_BOSBESTAND)
+
+# lookup
+str(qBOS_LEEFTIJD)
+str(qBOS_MENGINGSVORM)
+str(qBOS_SLUITINGSGRAAD)
+str(qBOS_BESTANDSTYPE)
+str(qBOS_BESTAND_LEEFTIJDSKLASSE)
+str(qBOS_BEDRIJFSVORM)
+```
+
+
+```{r opname, results = 'hide'}
+# info over de opname zelf
+str(BOS_OPNAME)
+head(BOS_OPNAME$HC_BOS_OPNAME_STR)
+
+# lookup
+str(qBOS_OPNAME_TYPE)
+# unique(qBOS_OPNAME_TYPE$OMSCH)
+str(qBOS_PROEFCIRKELTYPE)
+```
+
+```{r T4T7, results = 'hide'}
+str(OPNAME_TABEL_T4)
+str(OPNAME_TABEL_T7)
 
 # lookup
 str(qBOS_BMS)
 str(qBOS_BOOMGROEP)
 str(qOMTREKKLASSE)
+```
 
-str(qBOS_OPNAME_TYPE)
-# unique(qBOS_OPNAME_TYPE$OMSCH)
+```{r T1T2, results = 'hide'}
+str(OPNAME_TABEL_T1)
+str(OPNAME_TABEL_T2)
 
-str(qBOS_PROEFCIRKELTYPE)
+# lookup
+str(qBOS_BMS)
+str(qOPNAME_VERJONGINGSWIJZE)
+str(qOPNAME_VERSPREIDING)
+str(qOPNAME_HOOGTEKLASSE)
+str(qOPNAME_ONTSTAAN) 
 ```
 
 
+```{r T5_dood, results = 'hide'}
+str(OPNAME_TABEL_T5)
+
+# lookup
+str(qBOS_BMS)
+str(qOMTREKKLASSE)
+
+```
+
+```{r T6_HH, results = 'hide'}
+str(OPNAME_TABEL_T6)
+
+# lookup
+str(qBOS_BMS)
+
+```
+
 # Relaties
 
-**bosbestand - locatie**
-BOSBESTAND (met `HC_BOSBESTAND_STR`) ---> BOS_BOSPERCEEL ---> BOS_BOSPLAATS ---> BOS_BOSDOMEIN
+**bosbestand - locatie**      
+BOSBESTAND (met `HC_BOSBESTAND_STR`) ---> BOS_BOSPERCEEL ---> BOS_BOSPLAATS ---> BOS_BOSDOMEIN      
 
 (`HC_BOSBESTAND_STR`: bv. gemeentebos bertem_bosreservaat_1_a)
 
 
-**opnames**
-OPNAME_TABEL_T7 ---> OPNAME_TABEL ---> BOS_OPNAME ---> BOSBESTAND ---> BOS_BOSBESTAND
+**opnames**     
+OPNAME_TABEL_T7 ---> OPNAME_TABEL ---> BOS_OPNAME (met info over de opname) ---> BOSBESTAND ---> BOS_BOSBESTAND       
 
-**bosbestand - info**
-BOS_BOSBESTAND (met `HC_BOSBESTAND_STR`) ---> BOSBESTAND 
+**bosbestand - info**       
+BOS_BOSBESTAND (met `HC_BOSBESTAND_STR` en info over het bosbestand) ---> BOSBESTAND      
 
 
 ## ID's omvormen
@@ -214,13 +304,17 @@ Nu toch "as.character", lijkt me goed genoeg.
 ```{r list_ID_as_char}
 # Namen van alle dataframes waarvan ik ID as character wil opslaan
 dataframe_names <- c("OPNAME_TABEL_T7", "OPNAME_TABEL_T4", "OPNAME_TABEL", 
+                     "OPNAME_TABEL_T1", "OPNAME_TABEL_T2", "OPNAME_TABEL_T5",
+                     "OPNAME_TABEL_T6",
                      "BOS_BOSBESTAND", "BOS_BOSDOMEIN", "BOS_BOSPERCEEL", "BOS_BOSPLAATS",
                      "BOS_OPNAME", "BOSBESTAND",
                      "qBOS_BMS", "qBOS_BOOMGROEP", 
                      "qBOS_OPNAME_TYPE", "qBOS_PROEFCIRKELTYPE",
                      "qOMTREKKLASSE", "qBOS_TYPE", "qBOS_LEEFTIJD", 
                      "qBOS_MENGINGSVORM", "qBOS_SLUITINGSGRAAD", "qBOS_BESTANDSTYPE", 
-                     "qBOS_BESTAND_LEEFTIJDSKLASSE", "qBOS_BEDRIJFSVORM")
+                     "qBOS_BESTAND_LEEFTIJDSKLASSE", "qBOS_BEDRIJFSVORM",
+                     "qBOS_BMS", "qOPNAME_VERJONGINGSWIJZE", "qOPNAME_VERSPREIDING",
+                     "qOPNAME_HOOGTEKLASSE", "qOPNAME_ONTSTAAN") 
 
 # Creëer een lijst van dataframes uit de namen
 list_dataframes <- mget(dataframe_names)  
@@ -250,6 +344,7 @@ for (df_naam in dataframe_names) {
 # check
 str(OPNAME_TABEL)
 str(OPNAME_TABEL_T7)
+str(OPNAME_TABEL_T1)
 ```
 
 
@@ -257,19 +352,23 @@ str(OPNAME_TABEL_T7)
 
 Welke tabellen wil ik?
 
-- **OPNAME_TABEL_T7_** en **OPNAME_TABEL_T4_**: tabellen met metingen en boomsoort 
+- **OPNAME_TABEL_T7_** en **OPNAME_TABEL_T4_**: tabellen met metingen A3A4 en boomsoort 
 en link naar de opname
+- **OPNAME_TABEL_T1_** en **OPNAME_TABEL_T2_**: tabellen met metingen A1A2 en boomsoort 
+en link naar de opname
+- **OPNAME_TABEL_T5_** : tabel met metingen dood hout en boomsoort en link naar de opname
+- **OPNAME_TABEL_T6_** : tabel met metingen hakhout en boomsoort en link naar de opname
 
 
 - **OPNAME_TABEL_**: een tabel met alle beschikbare opnames en bijhorende info 
-(T4 of T7, datum, proefvlaknr, ...); deze info moet immers niet bij elke 
-hoogtemeting toegevoegd worden
+(omschrijving van type opname, datum, proefvlaknr, opp. A1234...); deze info moet immers niet bij elke 
+individuele boommeting toegevoegd worden        
 !! hier ook info over bostype (hooghout, hakhout, middelhout), dit wordt niet 
 op bestandsniveau genoteerd
 
 
 - **BOSBESTAND_**: een tabel met alle info over het bosbestand: naam (nr), 
-bestandstype, lftd, menging, sluiting, ....
+bestandstype, lftd, menging, sluiting, ....       
 !! info over bostype wordt op proefvlakniveau bepaald (hakhout, hooghout, ...)
 
 
@@ -310,6 +409,93 @@ str(OPNAME_TABEL_T4_)
 
 ```
 
+```{r T5}
+# str(BOS_OPNAME)
+print("OPNAME_TABEL_T5_")
+
+OPNAME_TABEL_T5_ <- OPNAME_TABEL_T5 %>% 
+  left_join(qBOS_BMS %>% select(BOS_BMS_ID, BMS = OMSCH)
+            , by = c("BMS_ID" = "BOS_BMS_ID")) %>% 
+  left_join(qOMTREKKLASSE %>% select(OMTREKKLASSE_ID, OMTREKKLASSE)) %>% 
+  left_join(OPNAME_TABEL %>% rename(OPNAME = OMSCH)) %>% 
+  left_join(BOS_OPNAME %>% select(BOS_OPNAME_ID, BOSBESTAND_ID, 
+                                  PROEFVLAKNUMMER, OPNAME_IDENTIFICATIE,
+                                  DATUM_OPNAME, HC_BOS_OPNAME_STR)) %>% 
+  left_join(BOSBESTAND %>% select(BOSBESTAND_ID, HC_BOSBESTAND_STR))
+
+str(OPNAME_TABEL_T5_)
+
+```
+
+
+```{r T6}
+# str(BOS_OPNAME)
+print("OPNAME_TABEL_T6_")
+
+OPNAME_TABEL_T6_ <- OPNAME_TABEL_T6 %>% 
+  left_join(qBOS_BMS %>% select(BOS_BMS_ID, BMS = OMSCH)
+            , by = c("BMS_ID" = "BOS_BMS_ID")) %>% 
+  left_join(OPNAME_TABEL %>% rename(OPNAME = OMSCH)) %>% 
+  left_join(BOS_OPNAME %>% select(BOS_OPNAME_ID, BOSBESTAND_ID, 
+                                  PROEFVLAKNUMMER, OPNAME_IDENTIFICATIE,
+                                  DATUM_OPNAME, HC_BOS_OPNAME_STR)) %>% 
+  left_join(BOSBESTAND %>% select(BOSBESTAND_ID, HC_BOSBESTAND_STR))
+
+str(OPNAME_TABEL_T6_)
+
+```
+
+```{r T1}
+# str(BOS_OPNAME)
+print("OPNAME_TABEL_T1_")
+
+OPNAME_TABEL_T1_ <- OPNAME_TABEL_T1 %>% 
+  left_join(qBOS_BMS %>% select(BOS_BMS_ID, BMS = OMSCH)
+            , by = c("BMS_ID" = "BOS_BMS_ID")) %>% 
+  left_join(qOPNAME_HOOGTEKLASSE %>% select(OPNAME_HOOGTEKLASSE_ID, HOOGTEKLASSE = OMSCH)
+            , by = c("OPNAME_HOOGTEKLASSE_ID")) %>% 
+  left_join(qOPNAME_VERSPREIDING %>% select(OPNAME_VERSPREIDING_ID, VERSPREIDING = OMSCH)
+            , by = c("OPNAME_VERSPREIDING_ID")) %>% 
+  left_join(qOPNAME_VERJONGINGSWIJZE %>% select(OPNAME_VERJONGINGSWIJZE_ID, VERJONGINGSWIJZE = OMSCH)
+            , by = c("OPNAME_VERJONGINGSWIJZE_ID")) %>% 
+  left_join(qOPNAME_ONTSTAAN %>% select(OPNAME_ONTSTAAN_ID, ONTSTAAN = OMSCH)
+            , by = c("OPNAME_ONTSTAAN_ID")) %>% 
+  left_join(OPNAME_TABEL %>% rename(OPNAME = OMSCH)) %>% 
+  left_join(BOS_OPNAME %>% select(BOS_OPNAME_ID, BOSBESTAND_ID, 
+                                  PROEFVLAKNUMMER, OPNAME_IDENTIFICATIE,
+                                  DATUM_OPNAME, HC_BOS_OPNAME_STR)) %>% 
+  left_join(BOSBESTAND %>% select(BOSBESTAND_ID, HC_BOSBESTAND_STR))
+
+str(OPNAME_TABEL_T1_)
+
+```
+
+
+```{r T2}
+# str(BOS_OPNAME)
+print("OPNAME_TABEL_T2_")
+
+OPNAME_TABEL_T2_ <- OPNAME_TABEL_T2 %>% 
+  left_join(qBOS_BMS %>% select(BOS_BMS_ID, BMS = OMSCH)
+            , by = c("BMS_ID" = "BOS_BMS_ID")) %>% 
+  left_join(qOPNAME_HOOGTEKLASSE %>% select(OPNAME_HOOGTEKLASSE_ID, HOOGTEKLASSE = OMSCH)
+            , by = c("OPNAME_HOOGTEKLASSE_ID")) %>% 
+  left_join(qOPNAME_VERSPREIDING %>% select(OPNAME_VERSPREIDING_ID, VERSPREIDING = OMSCH)
+            , by = c("OPNAME_VERSPREIDING_ID")) %>% 
+  left_join(qOPNAME_VERJONGINGSWIJZE %>% select(OPNAME_VERJONGINGSWIJZE_ID, VERJONGINGSWIJZE = OMSCH)
+            , by = c("OPNAME_VERJONGINGSWIJZE_ID")) %>% 
+  left_join(qOPNAME_ONTSTAAN %>% select(OPNAME_ONTSTAAN_ID, ONTSTAAN = OMSCH)
+            , by = c("OPNAME_ONTSTAAN_ID")) %>% 
+  left_join(OPNAME_TABEL %>% rename(OPNAME = OMSCH)) %>% 
+  left_join(BOS_OPNAME %>% select(BOS_OPNAME_ID, BOSBESTAND_ID, 
+                                  PROEFVLAKNUMMER, OPNAME_IDENTIFICATIE,
+                                  DATUM_OPNAME, HC_BOS_OPNAME_STR)) %>% 
+  left_join(BOSBESTAND %>% select(BOSBESTAND_ID, HC_BOSBESTAND_STR))
+
+str(OPNAME_TABEL_T2_)
+
+```
+
 
 ```{r opnames}
 print("OPNAME_TABEL_")
@@ -338,10 +524,6 @@ str(OPNAME_TABEL_)
 
 
 ```
-
-
-
-Lookuplijsten toevoegen aan info over het bestand
 
 ```{r bosbestand}
 print("BOSBESTAND_")
@@ -401,6 +583,8 @@ str(OPNAME_TABEL_T4_)
 str(OPNAME_TABEL_T7_)
 
 export_names <- c("OPNAME_TABEL_T7_", "OPNAME_TABEL_T4_"
+                  , "OPNAME_TABEL_T1_", "OPNAME_TABEL_T2_"
+                  , "OPNAME_TABEL_T5_", "OPNAME_TABEL_T6_"
                   , "OPNAME_TABEL_", "BOSBESTAND_")
 
 # Creëer een lijst van dataframes uit de namen
@@ -432,6 +616,24 @@ Rechtstreeks naar gdrive
 for (i in 1:length(list_export_selection)){
 	  write.csv2(list_export_selection[[i]], 
 	             paste0(output_path_gdrive, names(list_export_selection)[i], ".csv")) 
+}
+
+# xlsx
+# write.xlsx(info_BR, paste0(path_to_datarequest_gdrive, "BR_niveau/", "site_info.xlsx"))
+
+```
+
+Eénmalig ook alles
+
+
+```{r list_export_gdrive_alles, eval = FALSE}
+name_forest_all <- "all"
+output_path_gdrive_all  <- paste0(path_to_datarequest_gdrive, name_forest_all, "/")
+
+# stats
+for (i in 1:length(list_export)){
+	  write.csv2(list_export[[i]], 
+	             paste0(output_path_gdrive_all, names(list_export)[i], ".csv")) 
 }
 
 # xlsx

@@ -1,5 +1,6 @@
 ---
 title: "Tabellen uit bosdat ophalen, joinen en exporteren"
+bron: "Bosdat verkregen tijdens project DH-curves"
 author: "Anja Leyman"
 date: "`r Sys.Date()`"
 output: 
