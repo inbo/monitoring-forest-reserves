@@ -41,27 +41,21 @@ source(here::here("scripts/Setup.R"))
 
 
 ```{r Setup2}
-forestreserve <- c("Sevendonck")   # FM-project onder folder Terrijst geplaatst
-forestreserve_short <- "Sevendonck" # om paths aan te maken naar specifieke folders
-# forestreserve_short <- "Wijnendale"
-plot_type <- "CA"
+# forestreserve <- c("Sevendonck")   # FM-project onder folder Terrijst geplaatst
+# forestreserve_short <- "Sevendonck" # om paths aan te maken naar specifieke folders
+# # forestreserve_short <- "Wijnendale"
+
+# plot_type <- "CA"
 plot_type <- "CP"
 
-forestreserve_folder <- paste0(path_to_reserves, "08_Sevendonck")
-destination_dir <- "C:/03_BR_gebieden/08_Sevendonck/FMprojecten_2026/"
+# forestreserve_folder <- paste0(path_to_reserves, "08_Sevendonck")
+# destination_dir <- "C:/03_BR_gebieden/08_Sevendonck/FMprojecten_2026/"
+destination_dir <- paste0(path_to_dataverwerking_teamdrive, "30_Datacontrole/omvorming_shoots/")
+
 ```
 
-TIJDELIJK `path_to_fieldmap_db` aanpassen naar de werkversie van Sevendonck.
-
-Deze is op 8/5/2026 aangemaakt door export uit de nieuwe moederdb `r paste0(path_to_databases, "MDB_BR_23_INBO2026_20260505/")`
-
-```{r Path_tmp}
-# path_to_fieldmap_db <- "C:/03_BR_gebieden/08_Sevendonck/FMprojecten_2026/CTRL2_Sevendonk_inbo2026_202604210749/FieldMapData_CTRL2_Sevendonk_inbo2026.accdb"
-# # versie van 21 april 2026
-
-# 8/5/2026: vertrekken van nieuwe moederdb - export
-path_to_fieldmap_db <- "C:/03_BR_gebieden/08_Sevendonck/FMprojecten_2026/CTRL_Sevendonk_inbo2026_20260505/FieldMapData_CTRL_Sevendonk_inbo2026.accdb"
-```
+<!-- TIJDELIJK `path_to_fieldmap_db` aanpassen naar de werkversie van Sevendonck. -->
+<!-- Deze is op 8/5/2026 aangemaakt door export uit de nieuwe moederdb `r paste0(path_to_databases, "MDB_BR_23_INBO2026_20260505/")` -->
 
 
 # Vraagstelling
@@ -80,7 +74,7 @@ Starten met 2eSET
 
 ```{r}
 set <- "1eSET"
-# set <- "2eSET"
+set <- "2eSET"
 # set <- "3eSET"
 
 ```
@@ -232,7 +226,7 @@ shoots_ <- shoots %>%
 nrow(shoots_) == nrow(shoots)
 nrow(shoots)
 # 1858 1eSET
-# 1712 2eSET
+# 20095 2eSET
 
 shoots <- shoots_
 
@@ -262,15 +256,22 @@ unique(shoots$AliveDeadShoots)
 
 
 ```{r }
-trees %>% filter(is.na(CoppiceID)) %>% nrow() == 0
-# OK, alle hakhoutstoven hebben een coppice_id
+trees %>% filter(is.na(CoppiceID)) %>% nrow() == 0  # 298
+# maar is geen probleem, zie chunk "enkel_verder_met_hakhout_uit_twee_delen", lijn 590 van deel 1
 stoven_levend_en_dood_deel <- trees %>% 
   group_by(IDPlots, CoppiceID, period) %>% 
   summarize(n = n()) %>% 
   ungroup() %>% 
   filter(n == 2)
-nrow(stoven_levend_en_dood_deel) # 105 1eSET / 81 2eSET
 
+stoven_levend_en_dood_deel %>% filter(is.na(CoppiceID)) %>% nrow()  # 4
+
+# omdat de trees zonder coppice niet zelfde stoof zijn (geen levend en dood deel)
+# zie chunck deel 1
+stoven_levend_en_dood_deel <- stoven_levend_en_dood_deel %>% 
+  filter(!is.na(CoppiceID))
+
+nrow(stoven_levend_en_dood_deel) # xxx 1eSET / 1030 2eSET
 ```
 
 ```{r}
@@ -285,7 +286,7 @@ shoots_enkel_levend_of_enkel_dood <- shoots %>%
   anti_join(stoven_levend_en_dood_deel, by = c("IDPlots", "CoppiceID", "period"))
 
 nrow(shoots) == nrow(shoots_enkel_levend_of_enkel_dood) + nrow(shoots_levend_en_dood_deel)
-
+shoots_levend_en_dood_deel %>% filter(is.na(CoppiceID_shoots)) %>% nrow() == 0
 ```
 Enkel verder gaan met `shoots_levend_en_dood_deel`.
 
@@ -295,7 +296,7 @@ XY_levend_deel <- shoots_levend_en_dood_deel %>%
   select(IDPlots, IDTrees_levend = IDTrees, CoppiceID
          , XTrees_levend = XTrees, YTrees_levend = YTrees
          , period) %>% 
-  unique() # 105 1eSET / 81 2eSET
+  unique() # xx 1eSET / 1030 2eSET
 
 # check: toch geen dubbele XY voor het levende deel?
 XY_levend_deel %>% group_by(IDPlots, IDTrees_levend) %>% summarize(n = n()) %>% 
@@ -335,16 +336,18 @@ set
 
 ## Checken of er een old_id staat in dood deel
 
-Normaal staat de OldID steeds in het levende deel, maar als dat niet het geval 
-is, dan moeten we dat eerst kopiëren naar het levende deel.
+Enkel voor 2de en 3de set nodig.
 
-In Sevendonck komt dit niet voor, maar in de moederdb toch checken!
+Normaal staat de **OldID** steeds in het levende deel, maar als dat niet het geval 
+is, dan moeten we dat eerst **kopiëren naar het levende deel**.
 
-```{r CONTR_old_id_2eSET}
+In Sevendonck komt dit niet voor, maar in de moederdb WEL!
+
+```{r CONTR_old_id_2eSET, eval = FALSE}
 old_id_dood_deel <- trees_levend_en_dood_deel %>% 
   filter(AliveDead == 12 & !is.na(OldID))
 
-nrow(old_id_dood_deel)  # 27 voor 2eSET (van de 81)
+nrow(old_id_dood_deel)  # 193 voor 2eSET (van de 1030)
 
 # het kan zijn dat deze old_id's enkel betrekking hebben op dood deel, en dat het levende
 # OOK een old_id bevat
@@ -355,18 +358,31 @@ levend_deel <- trees_levend_en_dood_deel %>%
 check_old_id <- old_id_dood_deel %>% 
   select(-X_m ,-Y_m, -Species, -IndShtCop, -contains("remark"), -n) %>% 
   left_join(levend_deel, by = c("IDPlots", "period", "CoppiceID"))
-check_old_id %>% filter(is.na(OldID.y)) %>% nrow() == 0   # oldid.y = oldid van het levende deel
+check_old_id %>% filter(is.na(OldID.y)) %>% nrow()   # oldid.y = oldid van het levende deel
 # als dit aantal nul is, is het ok, want dan heeft elke levend deel ook nog een link met voorgaande 
 # periode
+# modederdb: 13 records!!
+check_old_id %>% filter(OldID.y != OldID.x) %>% nrow() # 180, veel kans
+# wellicht is dood deel aan dood deel gekoppeld en levend aan levend,is OK
+
+t <- check_old_id %>% filter(is.na(OldID.y))
 
 # voor 't zekerste exporteren
-write.csv2(check_old_id, paste0(destination_dir, "informative_double_old_id_", set, "_", Sys.Date(), ".csv"))
+write.csv2(t, paste0(destination_dir, "geen_old_id_bij_levend_deel_", set, "_", Sys.Date(), ".csv")
+           , na = "")
 
 ```
 
+Reden van die 13 "geen_old_id_bij_levend_deel_"
+- plot 876 en 908: levend deel is "ingegroeide boom", dood deel "staand dood (prev dood/levend)" => eigenlijk logisch
+- plot 31000: levend deel is "prev onterecht vergeten inmeten", dood deel "staand dood (prev dood)" => eigenlijk logisch
+- ...
+
 Hebben die oude delen dan dezelfde coppice?
 
-Voor Sevendonck wel: zie onderstaande code.
+JA: zie onderstaande code.
+
+Is het dan nodig om oldID over te nemen? JA, want CoppiceID gaat op termijn niet meer in gebruik zijn.
 
 ```{r}
 query_trees_1eSET<-"
@@ -397,6 +413,7 @@ trees_1eSET_levend_deel <- trees_1eSET %>%
              by = c("IDPlots", "ID"))  # oldID van levend deel 
 
 trees_1eSET_levend_deel %>% filter(CoppiceID.x != CoppiceID.y) %>% nrow() == 0
+# is ook OK als ik koppel obv oldId van dood deel
 
 ```
 
@@ -423,11 +440,11 @@ t1 %>% filter(is.na(tree_id)) %>% nrow()
 data_dendro_zonder_to_delete <- data_dendro %>% 
   filter(is.na(remark) | remark != "TO DELETE")
 t2 <- create_unique_tree_id(data_dendro_zonder_to_delete)
-t2 %>% filter(is.na(tree_id)) %>% nrow()  # 3
+t2 %>% filter(is.na(tree_id)) %>% nrow()  # 200 3eSET, verwijzend naar 2eSET
 t3 <- t2 %>% filter(is.na(tree_id)) %>% 
   select(1:5, 9:19)
 table(t3$alive_dead)
-
+table(t3$forest_reserve)
 ```
 
 
@@ -437,6 +454,9 @@ t3 %>% select(1:7) %>% DT::datatable()
 
 > Indien dit over veel records gaat in de moederdatabank, een updatequery schrijven 
 die zorgt dat oldID in 2eSET, verwijst naar het levende deel uit de 1eSET
+
+> Indien dit over veel records gaat in de moederdatabank, een updatequery schrijven 
+die zorgt dat oldID in 3eSET, verwijst naar het levende deel uit de 2eSET
 
 Dit betreft dus **NIET de stoven bestaande uit twee delen** (daar bevat het levende deel 
 nog de goede oldID, zie hoger).
