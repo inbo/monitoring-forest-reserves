@@ -45,9 +45,6 @@ source(here::here("scripts/Setup.R"))
 # forestreserve_short <- "Sevendonck" # om paths aan te maken naar specifieke folders
 # # forestreserve_short <- "Wijnendale"
 
-# plot_type <- "CA"
-plot_type <- "CP"
-
 # forestreserve_folder <- paste0(path_to_reserves, "08_Sevendonck")
 # destination_dir <- "C:/03_BR_gebieden/08_Sevendonck/FMprojecten_2026/"
 destination_dir <- paste0(path_to_dataverwerking_teamdrive, "30_Datacontrole/omvorming_shoots/")
@@ -75,7 +72,7 @@ Starten met 2eSET
 ```{r}
 set <- "1eSET"
 set <- "2eSET"
-# set <- "3eSET"
+set <- "3eSET"
 
 ```
 
@@ -264,14 +261,14 @@ stoven_levend_en_dood_deel <- trees %>%
   ungroup() %>% 
   filter(n == 2)
 
-stoven_levend_en_dood_deel %>% filter(is.na(CoppiceID)) %>% nrow()  # 4
+stoven_levend_en_dood_deel %>% filter(is.na(CoppiceID)) %>% nrow()  # 4 / 0 
 
 # omdat de trees zonder coppice niet zelfde stoof zijn (geen levend en dood deel)
 # zie chunck deel 1
 stoven_levend_en_dood_deel <- stoven_levend_en_dood_deel %>% 
   filter(!is.na(CoppiceID))
 
-nrow(stoven_levend_en_dood_deel) # xxx 1eSET / 1030 2eSET
+nrow(stoven_levend_en_dood_deel) # xxx 1eSET / 1030 2eSET / 577 3eSET
 ```
 
 ```{r}
