@@ -29,47 +29,50 @@ path_to_reserves <- Sys.getenv("path_to_reserves") #"C:/03_BR_gebieden/"
 
 path_to_databases <- Sys.getenv("path_to_databases") #"C:/03_BR_db_monitoring/"
 
-path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_23_INBO2026_20260505/")
-# mail Peter: aanpassingen:
-#   LET OP, de nieuwe versie bevat 23 in de naam, staat voor FMversie, werken momenteel nog in 22 maar 23 staat klaar voor installatie binnenkort.
-# 
-# Aanpassingen (39)
-# Ook in de treelayers kon de 15 NVT-stoof meegenomen worden in de CondLUlists
-# 
-# 
-# SHOOTlayers (19)
-# 5x CoppiceID toegevoegd, Number 10
-# Shoots
-# Shoots_2eSet
-# Shoots_3eSet
-# Shoots_Kluis2020
-# Shoots_1986
-# 
-# 2x attribute AliveDeadShoots toegevoegd
-# Shoots_Kluis2020
-# Shoots_1986
-# 
-# 3x4 CondLUlist aangepast (decayshoots + iufroklassen) =>MASTER naar AliveDeadShoots
-# Shoots
-# Shoots_Kluis2020
-# Shoots_1986
-# 
-# TreeLayers (20)
-# 5x4 aanpassingen in Treelayers (decay + iufroklassen) => 15 NVT-stoof
-# decay : 15 NVT-stoof (master) = 17 NVT-stoof (decay)
-# iufro (3x): 15 NVT-stoof (master) = 50 NVT-stoof (qIUFRO...)
-# 
-# Trees
-# Trees_2eSet
-# Trees_3eSet
-# Trees_Kluis2020
-# Trees_1986
-# 
-# Met de aanpassingen in de treelayers zijn de CUlists ook consitenter geworden en de flexibiliteit behouden, script die aanpast naar 15 bij toevoegen spildiameter is nog altijd elegante oplossing voor opmeting nieuwe bomen/stoven
+path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_23_INBO2026_20260618/")
+# path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_23_INBO2026_20260505/")
+          # mail Peter: aanpassingen:
+          #   LET OP, de nieuwe versie bevat 23 in de naam, staat voor FMversie, werken momenteel nog in 22 maar 23 staat klaar voor installatie binnenkort.
+          # 
+          # Aanpassingen (39)
+          # Ook in de treelayers kon de 15 NVT-stoof meegenomen worden in de CondLUlists
+          # 
+          # SHOOTlayers (19)
+          # 5x CoppiceID toegevoegd, Number 10
+          # Shoots
+          # Shoots_2eSet
+          # Shoots_3eSet
+          # Shoots_Kluis2020
+          # Shoots_1986
+          # 
+          # 2x attribute AliveDeadShoots toegevoegd
+          # Shoots_Kluis2020
+          # Shoots_1986
+          # 
+          # 3x4 CondLUlist aangepast (decayshoots + iufroklassen) =>MASTER naar AliveDeadShoots
+          # Shoots
+          # Shoots_Kluis2020
+          # Shoots_1986
+          # 
+          # TreeLayers (20)
+          # 5x4 aanpassingen in Treelayers (decay + iufroklassen) => 15 NVT-stoof
+          # decay : 15 NVT-stoof (master) = 17 NVT-stoof (decay)
+          # iufro (3x): 15 NVT-stoof (master) = 50 NVT-stoof (qIUFRO...)
+          # 
+          # Trees
+          # Trees_2eSet
+          # Trees_3eSet
+          # Trees_Kluis2020
+          # Trees_1986
+          # 
+          # Met de aanpassingen in de treelayers zijn de CUlists ook consitenter geworden en de flexibiliteit behouden, script die aanpast naar 15 bij toevoegen spildiameter is nog altijd elegante oplossing voor opmeting nieuwe bomen/stoven
 
 
-# tijdelijk nog onderstaande moederdb gebruiken bij gebruik van forrescalc (21/5/2026)
-path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_22_inbo2026_20260313/")
+
+# TIJDELIJK nog onderstaande moederdb gebruiken bij gebruik van forrescalc (21/5/2026)
+              # path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_22_inbo2026_20260313/")
+
+# ARCHIEF:
 # path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_22_inbo2026_20251014/")
 # path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_X8_inbo2020_20250311/")
 # path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_X8_inbo2020_20250123/")
@@ -83,8 +86,15 @@ path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_22_inbo2026_20260313/")
 # path_to_fieldmap <- "C:/03_BR_db_monitoring/3_dB_Els_deel2_vs20231012/"
 # path_to_fieldmap <- "C:/03_BR_db_monitoring/dB_Els_deel2_vs20220714/"
 
-dbFieldmap <- "FieldMapData_MDB_BR_22_inbo2026.accdb"
+
+dbFieldmap <- "FieldMapData_MDB_BR_23_INBO2026.accdb"    # nieuwe structuur shoots
+
+# TIJDELIJK bij gebruik van aforrescalc (voor aanpassen nalv nieuwe structuur shoots)
+        # dbFieldmap <- "FieldMapData_MDB_BR_22_inbo2026.accdb"
+# ARCHIEF:
 # dbFieldmap <- "FieldMapData_MDB_BR_X8_inbo2020.accdb"
+
+
 path_to_fieldmap_db <- paste0(path_to_fieldmap, dbFieldmap)
 path_to_fieldmap_db_all <- paste0(path_to_fieldmap, dbFieldmap)
 

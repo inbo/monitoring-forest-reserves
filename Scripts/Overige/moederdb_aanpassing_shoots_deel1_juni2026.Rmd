@@ -324,7 +324,7 @@ nrow(shoots_) == nrow(shoots)
 nrow(shoots)
 # 19685 1eSET
 # 20093 2eSET
-# 10673 3eSET
+# 10666 3eSET
 
 shoots <- shoots_
 
@@ -337,7 +337,7 @@ unique(shoots$AliveDeadShoots)
 16/6/2026: bij 2eSET status toch al 15 - NVT - stoof aanwezig en ook op niveau van shoots
 een status ingevuld => welke bossen/plots?
 
-- 2eSET: maar één, per ongeluk wegens wijzigen van soort denk ik: plot 916, tree 7
+- 2eSET:  was één boom, opgelost
 - 3eSET: 790 trees !Pruikemakers en Liedekerke CP en KV: daar reeds via nieuwe methodiek gewerkt
 - 1eSET: geen problemen
 
@@ -349,15 +349,6 @@ table(trees_15$period)
 
 shoots_15 <- shoots %>% 
   filter(AliveDead == 15)
-
-# opgezocht in oudere databank: 2eSET, maar één plot/boom
-trees_15$CORRECTIE_AliveDead <- "11"
-trees_15$CORRECTIE_IUFRO_hoogte <- "onderetage"
-trees_15$CORRECTIE_IUFRO_vital <- "normaal"
-trees_15$CORRECTIE_IUFRO_dom <- "meegroeiend"
-
-trees_15 <- trees_15 %>% 
-  select(1:2, contains("CORR"), everything())
 ```
 
 ```{r status_15_3eSET, eval = FALSE}
@@ -406,6 +397,8 @@ write.csv2(plots_15, paste0(destination_dir, "alivedead15_plots_", set, "_", Sys
 - ID van de shoots + 5000   
 
 ```{r sql1_update_coppiceid, eval = FALSE}
+# 3eSET: geen probleem dat dit ook voor pruikemakers en liedekerke gebeurt (coppice-id niet in gebruik)
+
 if (set == "1eSET") {
   # code to be executed if condition is TRUE
   qry_update <- paste0("UPDATE Trees t INNER JOIN Shoots s ON (t.ID = s.IDTrees) AND (t.Y_m = s.YTrees) AND (t.X_m = s.XTrees) AND (t.IDPlots = s.IDPlots) SET s.CoppiceID = t.CoppiceID;") %>% noquote()
@@ -425,7 +418,7 @@ sqlQuery(con, qry_update, stringsAsFactors = TRUE)
 odbcClose(con)
 
 ```
-**ONDERSTAANDE NIET VOOR PRUIKEMAKERS EN LIEDEKERKE, 3eSET**
+**ONDERSTAANDE SQL-UPDATES NIET VOOR PRUIKEMAKERS EN LIEDEKERKE, 3eSET**
 daarom eerst een tabel wegschrijvan naar moederdb met lijst plots 
 
 ```{r}
@@ -456,7 +449,7 @@ if (set == "1eSET") {
     
   } else {
     
-    # code to be executed if condition is FALSE
+    # code to be executed if condition is FALSE - NIET VOOR PRUIKEMAKERS en LIEDEKERKE
     qry_update <- paste0("UPDATE Trees_3eSET t INNER JOIN Shoots_3eSET s ON (t.ID = s.IDTrees_3eSET) AND (t.Y_m = s.YTrees_3eSET) AND (t.X_m = s.XTrees_3eSET) AND (t.IDPlots = s.IDPlots) SET s.AliveDeadShoots = t.AliveDead WHERE (((EXISTS (SELECT 1 FROM plots_pruikem_liedek p WHERE      p.IDPlots = t.IDPlots)) = FALSE));") %>% noquote()
   }
 }
@@ -527,13 +520,14 @@ nrow(shoots_sql2_3_) == nrow(shoots)
 max(shoots_sql2_3_$ID) > 5000
 range(shoots_sql2_3_$ID)
 
-unique(shoots_sql2_3_$AliveDead); unique(shoots_sql2_3_$AliveDeadShoots) # enkel 11 en 12 - OK
+unique(shoots_sql2_3_$AliveDead); unique(shoots_sql2_3_$AliveDeadShoots) 
+# enkel 11 en 12 - OK; 3eSET: ook 15 bij AliveDead van trees
 # 
-shoots_sql2_3_ %>% filter(AliveDeadShoots != AliveDead) %>% nrow() # 0 / 
-        # 3eSET: 1582 van Pruikemakers_Liedek => OK, AliveDead van trees (15) NIET overgenomen
+t <- shoots_sql2_3_ %>% filter(AliveDeadShoots != AliveDead) %>% nrow() # 0 / 
+        # 3eSET: 1583 van Pruikemakers_Liedek => OK, AliveDead van trees (15) NIET overgenomen
 
-shoots_sql2_3_ %>% filter(is.na(AliveDeadShoots)) %>% nrow() # 3 2eSET / 0 1eSET / 8 3eSET
-shoots_sql2_3_ %>% filter(is.na(AliveDead)) %>% nrow() # 7 2eSET / 0 1eSET / 8 3eSET
+shoots_sql2_3_ %>% filter(is.na(AliveDeadShoots)) %>% nrow() # 3 2eSET / 0 1eSET / 0 3eSET
+shoots_sql2_3_ %>% filter(is.na(AliveDead)) %>% nrow() # 7 2eSET / 0 1eSET / 0 3eSET
 # sommige records met AliveDead = NA
 t1 <- shoots_sql2_3_ %>% filter(is.na(AliveDeadShoots))
 t2 <- shoots_sql2_3_ %>% filter(is.na(AliveDead))
@@ -554,7 +548,7 @@ Doorheen de tijd wordt opgevolgd via old_id.
 
 ```{r eval = FALSE}
 # missing coppice_id
-shoots_sql2_3_ %>% filter(is.na(CoppiceID_shoots)) %>% nrow()  #  485 2eSEt / 202 1eSET / 176 3eSET
+shoots_sql2_3_ %>% filter(is.na(CoppiceID_shoots)) %>% nrow()  #  485 2eSEt / 202 1eSET / 169 3eSET
 t3 <- shoots_sql2_3_ %>% filter(is.na(CoppiceID_shoots)) %>% 
   left_join(plotinfo %>% filter(period == 2) %>% select(plot_id, forest_reserve, data_processed)
             , by = c("IDPlots" = "plot_id"))
@@ -576,19 +570,16 @@ table(t3$forest_reserve, t3$data_processed)
   # Sevendonck A    1
   # Walenbos KV1    7
 # 3eSET (Pruikem en Liedek is OK, want daar al andere werkwijze in gebruik)
-  #                   TRUE
-  # Everzwijnbad         1
-  # Hannecart            2
-  # Liedekerke          61
-  # Liedekerke TR       16
-  # Pruikemakers        77
-  # Rodebos KV1          2
-  # Rodebos KV2          3
-  # Wijnendalebos        6
-  # Zoniën UITBR_1995   1 
+  #              FALSE TRUE
+  # Hannecart         0    2
+  # Kolmont           2    0
+  # Liedekerke        0   61
+  # Liedekerke TR     0   16
+  # Pruikemakers      0   77
+  # Rodebos KV1       0    2
+  # Rodebos KV2       0    2
 
-
-t4 <- t3 %>% filter(is.na(forest_reserve)) # 439 2eSET / 193 1eSET
+t4 <- t3 %>% filter(is.na(forest_reserve)) # 439 2eSET / 193 1eSET / 7 3eSET
 range(t4$IDPlots)
 table(t4$data_processed)
 write.csv2(t4, paste0(destination_dir, "no_CoppiceID_no_plotdetails_", set, "_", Sys.Date(), ".csv")
@@ -603,6 +594,8 @@ table(t5$data_processed)
 write.csv2(t5, paste0(destination_dir, "no_CoppiceID_info_on_forest_reserve_", set, "_", Sys.Date(), ".csv")
            , na = "")
 ```
+
+Missing coppice-id geen probleem, wannt linkt niet met andere stoof.
 
 ```{r}
 shoots_sql2_3 <- shoots_sql2_3_
@@ -620,6 +613,7 @@ check_status <- shoots_sql2_3 %>%
   left_join(trees_sql2_3) %>% 
   filter(AliveDeadShoots != AliveDead)
 nrow(check_status) # 0 - OK
+# 1583 3eSET: Pruikemakers en Liedekerke = OK
 
 ```
 
@@ -655,7 +649,7 @@ stoven_levend_en_dood_deel <- trees_sql2_3 %>%
 nrow(stoven_levend_en_dood_deel) # 804 1eSET / 1027  2eSET / 594 3eSET
 
 # enkel deze hebben een coppice_id nodig
-stoven_levend_en_dood_deel %>% filter(is.na(CoppiceID)) %>% nrow()  # 4 2eSET / 2 1eSET / 17 3eSET
+stoven_levend_en_dood_deel %>% filter(is.na(CoppiceID)) %>% nrow()  # 4 2eSET / 2 1eSET / 18 3eSET
 t6 <- stoven_levend_en_dood_deel %>% filter(is.na(CoppiceID))
 t7 <- trees_sql2_3 %>% 
   filter(IDPlots %in% t6$IDPlots)
@@ -667,23 +661,19 @@ t7 <- trees_sql2_3 %>%
 
 ```
 
-Bij 3eSET wordt hier een deel van pruikemakers en liedekerke verwijderd, want daar geen coppice_id meer
+Bij 3eSET wordt hierna een deel van pruikemakers en liedekerke verwijderd, want daar geen coppice_id meer
 Is OK, want daar willen we ook niks mee doen
 
 ```{r}
 # omdat t7 toont dat trees zonder coppice niet zelfde stoof zijn (geen levend en dood deel)
 stoven_levend_en_dood_deel <- stoven_levend_en_dood_deel %>% 
   filter(!is.na(CoppiceID))
-# 1020 2eSET / 801 1eSET
-```
+# 1020 2eSET / 801 1eSET / 576 3eSET
 
-```{r enkel_3eSET, eval = FALSE}
-# voor t gemak hier liedekerke en pruikemakres uithalen
-    # stoven_levend_en_dood_deel <- stoven_levend_en_dood_deel %>% 
-    #   filter(!IDPlots %in% plots_pruikem_liedek$IDPlots)
-# was al zo
+#3eSET: bevat geen shoots van pruikemakers en liedekerke - ok
+stoven_levend_en_dood_deel %>% filter(!IDPlots %in% plots_pruikem_liedek$IDPlots) %>% 
+  nrow() == nrow(stoven_levend_en_dood_deel)
 ```
-
 
 ```{r}
 # shoots_levend_en_dood_deel <- shoots_sql2_3 %>% 
@@ -702,12 +692,12 @@ shoots_enkel_levend_of_enkel_dood <- shoots_sql2_3 %>%
   anti_join(shoots_levend_en_dood_deel, by = c("IDPlots", "IDTrees", "period"))
 
 nrow(shoots_sql2_3) - (nrow(shoots_enkel_levend_of_enkel_dood) + nrow(shoots_levend_en_dood_deel))
-# 6 vallen ervan tussen bij 3eSET, die zitten in geen van beide
-t <- shoots_sql2_3 %>%
-  anti_join(stoven_levend_en_dood_deel, by = c("IDPlots", "CoppiceID", "period")) %>%
-  anti_join(shoots_enkel_levend_of_enkel_dood, by = c("IDPlots", "IDTrees", "period"))
-# dat zijn 6 records die andere XY hebben dan de twee dode spillen die wél zichtbaar zijn in FM-DC
-# zie "missing_alivedead_verschillende_redenen_3eSET_2026-06-17.xlsx"
+        # # OPGELOST: 6 vallen ervan tussen bij 3eSET, die zitten in geen van beide
+        # t <- shoots_sql2_3 %>%
+        #   anti_join(stoven_levend_en_dood_deel, by = c("IDPlots", "CoppiceID", "period")) %>%
+        #   anti_join(shoots_enkel_levend_of_enkel_dood, by = c("IDPlots", "IDTrees", "period"))
+        # # dat zijn 6 records die andere XY hebben dan de twee dode spillen die wél zichtbaar zijn in FM-DC
+        # # zie "missing_alivedead_verschillende_redenen_3eSET_2026-06-17.xlsx"
 
 shoots_levend_en_dood_deel %>% filter(is.na(CoppiceID_shoots)) %>% nrow() == 0
 ```
@@ -723,7 +713,7 @@ XY_levend_deel <- shoots_levend_en_dood_deel %>%
   select(IDPlots, IDTrees_levend = IDTrees, CoppiceID
          , XTrees_levend = XTrees, YTrees_levend = YTrees
          , period) %>% 
-  unique() # 801 1eSET / 1020 2eSET / 577
+  unique() # 801 1eSET / 1020 2eSET / 576
 
 ```
 
@@ -755,7 +745,7 @@ XY_dood_deel <- shoots_levend_en_dood_deel %>%
   select(IDPlots, IDTrees, CoppiceID
          , XTrees, YTrees
          , period) %>% 
-  unique() # 801 1eSET / 1020 2eSET
+  unique() # 801 1eSET / 1020 2eSET / 576 3eSET
 
 # check: toch geen dubbele XY voor het levende deel?
 XY_dood_deel %>% group_by(IDPlots, IDTrees) %>% summarize(n = n()) %>% 
@@ -983,8 +973,8 @@ shoots_sql4_ <- shoots_sql4 %>%
 nrow(shoots_sql4_) == nrow(shoots_sql4)
 
 unique(shoots_sql4_$AliveDead); unique(shoots_sql4_$AliveDeadShoots)
-shoots_sql4_ %>% filter(AliveDeadShoots != AliveDead) %>% nrow()  # 1307 2eSET / 988 1eSET
-shoots_sql4_ %>% filter(is.na(AliveDeadShoots)) %>% nrow() # 2 2eSET / 0 1eSET
+shoots_sql4_ %>% filter(AliveDeadShoots != AliveDead) %>% nrow()  # 1307 2eSET / 988 1eSET / 2354 3eSET
+shoots_sql4_ %>% filter(is.na(AliveDeadShoots)) %>% nrow() # 2 2eSET / 0 1eSET / 0 3eSET
 t10 <- shoots_sql4_ %>% filter(is.na(AliveDeadShoots)) # OK, reeds gemeld, plot 375000 2eSET
 
 # 1eSET: soort overgenomen van het levende deel
@@ -1011,7 +1001,7 @@ check_unieke_id_shoots2 <- shoots_sql4 %>%
   group_by(IDPlots, CoppiceID_shoots, ID, period) %>% 
   summarize(n = n()) %>% 
   ungroup()
-check_unieke_id_shoots2 %>% filter(n > 1) %>% nrow() == 0   # 40 2eSET / 7 1eSET
+check_unieke_id_shoots2 %>% filter(n > 1) %>% nrow() == 0   # 40 2eSET / 7 1eSET / 37 3eSET (veel pruik en liedek)
 t <- check_unieke_id_shoots2 %>% filter(n > 1)
 t %>% filter(!is.na(CoppiceID_shoots)) %>% nrow() == 0
 # allemaal NA als coppiceID => OK
@@ -1124,15 +1114,20 @@ shoots_sql5_ %>% filter(is.na(AliveDeadShoots)) %>% nrow()
 shoots_sql5_ %>% filter(CoppiceID_shoots != CoppiceID) %>% nrow()
 shoots_sql5_ %>% filter(is.na(CoppiceID_shoots)) %>% nrow()
 
-table(trees_sql5$trees_remark)
+table(trees_sql5$trees_remark)  # 3eSET: 576
 table(trees$trees_remark)
 
-(trees_sql5 %>% filter(!is.na(trees_remark)) %>% nrow()) # 1686 / 1014 / 610 - 2eSET: 1140, 1eSET: 1006
+(trees_sql5 %>% filter(!is.na(trees_remark)) %>% nrow()) # 1686 / 1014 / 610 - 2eSET: 1140, 1eSET: 1006 3eSET: 609
 (trees %>% filter(!is.na(trees_remark)) %>% nrow()) # 124 / 227 / 35
 # verschil is 1562 / 787 extra trees met een remark (deels ander remark overschreven)
 trees_levend_en_dood_deel_ %>% filter(trees_remark == "TO_DELETE") %>% 
   nrow() == trees_sql5 %>% filter(trees_remark == "TO DELETE") %>% 
-  nrow() # 1020 / 801 / 577
+  nrow() # 1020 / 801 / 576
+
+
+# extra test 3eSET Pruikem
+trees_sql5 %>% filter(trees_remark == "TO DELETE") %>% 
+  filter(IDPlots %in% plots_pruikem_liedek$IDPlots) %>% nrow() == 0
 ```
 
 
@@ -1171,10 +1166,10 @@ Na knitting - manueel
 
 ```{r eval = FALSE}
 # Specify the path of the file you want to copy
-source_file <- here::here(paste0("Scripts/Per_gebied/Sevendonck/", "Sevendonck_aanpassing_shoots_test_deel1_april2026.html"))
+source_file <- here::here(paste0("Scripts/Overige/", "moederdb_aanpassing_shoots_deel1_juni2026.html"))
 
 # Specify the destination directory where you want to copy the file
-destination_dir <- "C:/03_BR_gebieden/08_Sevendonck/FMprojecten_2026/"
+destination_dir
 
 # Copy the file to the destination directory
 file.copy(from = source_file, to = destination_dir, overwrite = TRUE)

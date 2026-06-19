@@ -71,8 +71,8 @@ Starten met 2eSET
 
 ```{r}
 set <- "1eSET"
-set <- "2eSET"
-set <- "3eSET"
+# set <- "2eSET"
+# set <- "3eSET"
 
 ```
 
@@ -228,9 +228,9 @@ nrow(shoots)
 shoots <- shoots_
 
 unique(shoots$AliveDead)
-# OK, enkel 11 en 12, nog geen 15
 unique(shoots$AliveDeadShoots)
-# OK, nog NA, niet ingevuld
+
+shoots %>% filter(is.na(AliveDeadShoots)) %>% nrow()  #2 2eSET: OK, plot 375000
 ```
 
 # Stap 1 tem 3: zie script deel 1
@@ -253,7 +253,7 @@ unique(shoots$AliveDeadShoots)
 
 
 ```{r }
-trees %>% filter(is.na(CoppiceID)) %>% nrow() == 0  # 298
+trees %>% filter(is.na(CoppiceID)) %>% nrow()  # 307 2eSET / 117 3eSET / 485 1eSET
 # maar is geen probleem, zie chunk "enkel_verder_met_hakhout_uit_twee_delen", lijn 590 van deel 1
 stoven_levend_en_dood_deel <- trees %>% 
   group_by(IDPlots, CoppiceID, period) %>% 
@@ -261,14 +261,14 @@ stoven_levend_en_dood_deel <- trees %>%
   ungroup() %>% 
   filter(n == 2)
 
-stoven_levend_en_dood_deel %>% filter(is.na(CoppiceID)) %>% nrow()  # 4 / 0 
+stoven_levend_en_dood_deel %>% filter(is.na(CoppiceID)) %>% nrow()  # 7 2eSET / 18 3eSET  / 3 1eSET
 
 # omdat de trees zonder coppice niet zelfde stoof zijn (geen levend en dood deel)
 # zie chunck deel 1
 stoven_levend_en_dood_deel <- stoven_levend_en_dood_deel %>% 
   filter(!is.na(CoppiceID))
 
-nrow(stoven_levend_en_dood_deel) # xxx 1eSET / 1030 2eSET / 577 3eSET
+nrow(stoven_levend_en_dood_deel) # 801 1eSET / 1020 2eSET / 576 3eSET
 ```
 
 ```{r}
@@ -293,7 +293,7 @@ XY_levend_deel <- shoots_levend_en_dood_deel %>%
   select(IDPlots, IDTrees_levend = IDTrees, CoppiceID
          , XTrees_levend = XTrees, YTrees_levend = YTrees
          , period) %>% 
-  unique() # xx 1eSET / 1030 2eSET
+  unique() # xx 1eSET / 1020 2eSET / 576 3eSET
 
 # check: toch geen dubbele XY voor het levende deel?
 XY_levend_deel %>% group_by(IDPlots, IDTrees_levend) %>% summarize(n = n()) %>% 
@@ -340,11 +340,11 @@ is, dan moeten we dat eerst **kopiëren naar het levende deel**.
 
 In Sevendonck komt dit niet voor, maar in de moederdb WEL!
 
-```{r CONTR_old_id_2eSET, eval = FALSE}
+```{r CONTR_old_id_2eSET_3eSET, eval = FALSE}
 old_id_dood_deel <- trees_levend_en_dood_deel %>% 
   filter(AliveDead == 12 & !is.na(OldID))
 
-nrow(old_id_dood_deel)  # 193 voor 2eSET (van de 1030)
+nrow(old_id_dood_deel)  # 193 voor 2eSET (van de 1020) / 184 3eSET
 
 # het kan zijn dat deze old_id's enkel betrekking hebben op dood deel, en dat het levende
 # OOK een old_id bevat
@@ -358,8 +358,8 @@ check_old_id <- old_id_dood_deel %>%
 check_old_id %>% filter(is.na(OldID.y)) %>% nrow()   # oldid.y = oldid van het levende deel
 # als dit aantal nul is, is het ok, want dan heeft elke levend deel ook nog een link met voorgaande 
 # periode
-# modederdb: 13 records!!
-check_old_id %>% filter(OldID.y != OldID.x) %>% nrow() # 180, veel kans
+# modederdb: 2eSET: initieel 13, nu nog 0 - OK
+check_old_id %>% filter(OldID.y != OldID.x) %>% nrow() # 183 2eSET / 176 3eSET, veel kans
 # wellicht is dood deel aan dood deel gekoppeld en levend aan levend,is OK
 
 t <- check_old_id %>% filter(is.na(OldID.y))
@@ -370,18 +370,18 @@ write.csv2(t, paste0(destination_dir, "geen_old_id_bij_levend_deel_", set, "_", 
 
 ```
 
-Reden van die 13 "geen_old_id_bij_levend_deel_"
-- plot 876 en 908: levend deel is "ingegroeide boom", dood deel "staand dood (prev dood/levend)" => eigenlijk logisch
-- plot 31000: levend deel is "prev onterecht vergeten inmeten", dood deel "staand dood (prev dood)" => eigenlijk logisch
-- ...
+<!-- Reden van die 13 "geen_old_id_bij_levend_deel_" -->
+<!-- - plot 876 en 908: levend deel is "ingegroeide boom", dood deel "staand dood (prev dood/levend)" => eigenlijk logisch -->
+<!-- - plot 31000: levend deel is "prev onterecht vergeten inmeten", dood deel "staand dood (prev dood)" => eigenlijk logisch -->
+<!-- - ... -->
 
-Hebben die oude delen dan dezelfde coppice?
+<!-- Hebben die oude delen dan dezelfde coppice? -->
 
-JA: zie onderstaande code.
+<!-- JA: zie onderstaande code. -->
 
-Is het dan nodig om oldID over te nemen? JA, want CoppiceID gaat op termijn niet meer in gebruik zijn.
+<!-- Is het dan nodig om oldID over te nemen? JA, want CoppiceID gaat op termijn niet meer in gebruik zijn. -->
 
-```{r}
+```{r eval = FALSE}
 query_trees_1eSET<-"
   SELECT
   Trees.IDPlots
@@ -415,13 +415,49 @@ trees_1eSET_levend_deel %>% filter(CoppiceID.x != CoppiceID.y) %>% nrow() == 0
 ```
 
 
+```{r eval = FALSE}
+query_trees_2eSET<-"
+  SELECT
+  t.IDPlots
+  , t.ID
+  , t.X_m
+  , t.Y_m
+  , t.AliveDead
+  , t.Species
+  , t.IndShtCop
+  , t.CoppiceID
+  , t.Remark as trees_remark
+  , t.CommonRemark as trees_commonremark
+  , t.OldID
+  FROM Trees_2eSET t
+  WHERE t.IndShtCop = 12
+  ;"
+
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+trees_2eSET <- sqlQuery(con, query_trees_2eSET, stringsAsFactors = TRUE) %>% 
+  mutate(period = "2eSET")
+odbcClose(con)
+
+names(check_old_id)
+trees_2eSET_levend_deel <- trees_2eSET %>% 
+  inner_join(check_old_id %>% select(IDPlots, ID = OldID.y, CoppiceID), 
+             by = c("IDPlots", "ID"))  # oldID van levend deel 
+
+trees_2eSET_levend_deel %>% filter(CoppiceID.x != CoppiceID.y) %>% nrow() == 0
+# is ook OK als ik koppel obv oldId van dood deel
+
+```
+
+
 ## Checken of er niet verwezen wordt naar een dood deel uit vorige periode
 
 Meestal wordt de stoof gelinkt aan het levende deel van de periode ervoor, maar 
 blijkbaar toch niet altijd, zo heb ik bij Sevendonck drie bomen gevonden 
 die linken naar het dode deel, dat dus in onze omvorming gedelete zou worden. 
 
-```{r CONTR_koppeling_old_id_naar_1eSET}
+In de moederdb betreft het 53 bomen 2eSET en 3eSET samen
+
+```{r CONTR_koppeling_old_id_naar_1eSET_2eSET}
 # ik weet dat de OldID opgeslagen wordt in het levende deel van een stoof.
 # Dat heb ik net ook gecheckt bij 1e SET Sevendonck.
 # 
@@ -431,60 +467,101 @@ die linken naar het dode deel, dat dus in onze omvorming gedelete zou worden.
 
 data_dendro <- load_data_dendrometry(path_to_fieldmap_db, extra_variables = TRUE)
 t1 <- create_unique_tree_id(data_dendro)
-t1 %>% filter(is.na(tree_id)) %>% nrow()
+t1 %>% filter(is.na(tree_id)) %>% nrow() == 0
 
 # de to delete verwijderen en dan create_unique_tree_id
 data_dendro_zonder_to_delete <- data_dendro %>% 
   filter(is.na(remark) | remark != "TO DELETE")
 t2 <- create_unique_tree_id(data_dendro_zonder_to_delete)
-t2 %>% filter(is.na(tree_id)) %>% nrow()  # 200 3eSET, verwijzend naar 2eSET
+t2 %>% filter(is.na(tree_id)) %>% nrow()  # 23
+# 28 3eSET, verwijzend naar 2eSET
+# 25 2eSET, verwijzend naar 1eSET
+
 t3 <- t2 %>% filter(is.na(tree_id)) %>% 
-  select(1:5, 9:19)
+  select(coppice_id, 1:5, 9:19, remark)
 table(t3$alive_dead)
 table(t3$forest_reserve)
+table(t3$period)
+# nu enkel nog 3eSET - ook opgelost
 ```
+
 
 
 ```{r}
-t3 %>% select(1:7) %>% DT::datatable()
+t3 %>% select(alive_dead, 1:7, remark) %>% DT::datatable()
 ```
-
-> Indien dit over veel records gaat in de moederdatabank, een updatequery schrijven 
-die zorgt dat oldID in 2eSET, verwijst naar het levende deel uit de 1eSET
-
-> Indien dit over veel records gaat in de moederdatabank, een updatequery schrijven 
-die zorgt dat oldID in 3eSET, verwijst naar het levende deel uit de 2eSET
 
 Dit betreft dus **NIET de stoven bestaande uit twee delen** (daar bevat het levende deel 
 nog de goede oldID, zie hoger).
 Het betreft stoven die **nu enkel nog een dood deel** bevatten, maar de vorige keer 
 wél nog uit twee delen bestonden. En daarvan zouden we nu het dode deel verwijderen.
 
-```{r results = 'hide'}
+```{r contr_2eSET, eval = FALSE, results = 'hide'}
 names(t3)
 names(trees_1eSET)
 
 t4 <- t3 %>% 
-  left_join(trees_1eSET, by = c("plot_id" = "IDPlots", "old_id" = "ID"))
+  filter(period == 2) %>% 
+  left_join(trees_1eSET %>% rename(remark = trees_remark), by = c("plot_id" = "IDPlots", "old_id" = "ID"))
 
 
 t4_gekoppeld_aan_levend <- t4 %>% # t4 bevat CoppiceID
   left_join(trees_1eSET, by = c("plot_id" = "IDPlots", "CoppiceID"))
-# OK, data worden verdubbeld: er is effectief een levend deel met dezelfde 
+# OK, data worden verdubbeld (van 25 records naar 50 voor 2eSET): er is effectief een levend deel met dezelfde 
 # coppice_id dat NIET gedelete moet worden
 names(t4_gekoppeld_aan_levend)
 
+# file aanmaken zodat makkelijk aan te passen in access, trees_2eSET
+t4_beknopt <- t4_gekoppeld_aan_levend %>% 
+  select(forest_reserve, plot_id, tree_measure_id, alive_dead, coppice_id, old_id, remark.x
+         , ID_1eSET = ID, AliveDead.y, trees_remark)
+# ? allemaal stoven die zelf gaan gedelete worden?
+# nochtans ook levende erbij
+
+write.csv2(t4_beknopt, paste0(destination_dir, "old_id_aan_te_passen_", set, "_", Sys.Date(), ".csv")
+           , na = "")
+
 ```
+
+
+```{r contr_3eSET, eval = FALSE, results = 'hide'}
+names(t3)
+names(trees_2eSET)
+
+t4 <- t3 %>% 
+  filter(period == 3) %>% 
+  left_join(trees_2eSET %>% rename(remark = trees_remark), by = c("plot_id" = "IDPlots", "old_id" = "ID"))
+
+
+t4_gekoppeld_aan_levend <- t4 %>% # t4 bevat CoppiceID
+  left_join(trees_2eSET, by = c("plot_id" = "IDPlots", "CoppiceID"))
+# OK, data worden verdubbeld (van 23 records naar 46 voor 3eSET): er is effectief een levend deel met dezelfde 
+# coppice_id dat NIET gedelete moet worden
+names(t4_gekoppeld_aan_levend)
+
+# file aanmaken zodat makkelijk aan te passen in access, trees_2eSET
+t4_beknopt <- t4_gekoppeld_aan_levend %>% 
+  select(forest_reserve, plot_id, tree_measure_id, alive_dead, coppice_id, old_id, remark.x
+         , ID_1eSET = ID, AliveDead.y, trees_remark)
+# ? allemaal stoven die zelf gaan gedelete worden?
+# nochtans ook levende erbij
+
+write.csv2(t4_beknopt, paste0(destination_dir, "old_id_aan_te_passen_", set, "_", Sys.Date(), ".csv")
+           , na = "")
+
+```
+
+In access manueel de old_id's aangepast naar levend deel obv file "old_id_aan_te_passen_2eSET.xlsx".
 
 ```{r}
 t4_gekoppeld_aan_levend %>% 
   # filter(AliveDead.y == 11) %>% 
-  select(1:7, CoppiceID, ID_1eSET = ID, trees_remark.y) %>% 
+  select(1:7, CoppiceID, ID_1eSET = ID, remark.y) %>% 
   DT::datatable()
 ```
 
 
-```{r}
+```{r eval = FALSE}
 t4_gekoppeld_aan_levend <- t4_gekoppeld_aan_levend %>% 
   # filter(AliveDead.y == 11) %>% 
   select(1:5, ID_2eSET = tree_measure_id, old_id, CoppiceID
@@ -495,24 +572,6 @@ write.csv2(t4_gekoppeld_aan_levend
                     , set, "_", Sys.Date(), ".csv"))
 ```
 
-Makkelijkste is om voor deze drie records, oldID manueel aan te passen in trees_2eSET.
-Heb ik nu gedaan voor deze drie bomen (in FM-DC).
-
-```{r}
-data_dendro_corrected_old_id <- load_data_dendrometry(path_to_fieldmap_db
-                                                      , extra_variables = TRUE)
-t4 <- create_unique_tree_id(data_dendro_corrected_old_id)
-t4 %>% filter(is.na(tree_id)) %>% nrow() # 0
-
-# de to delete verwijderen en dan create_unique_tree_id
-data_dendro_zonder_to_delete <- data_dendro_corrected_old_id %>% 
-  filter(is.na(remark) | remark != "TO DELETE")
-t5 <- create_unique_tree_id(data_dendro_zonder_to_delete)
-t5 %>% filter(is.na(tree_id)) %>% nrow()  # 0 - OK
-# t6 <- t5 %>% filter(is.na(tree_id)) %>% 
-#   select(1:5, 9:19)
-# table(t6$alive_dead)
-```
 
 # Stap 4
 
@@ -524,8 +583,9 @@ shoots layer.
 
 Pas nadat vorige controles in orde zijn!
 
-> NOG NIET DOEN VOOR 1eSET, als 2eSET nog niet gerund heeft!
-DUS NU EERST 2e SET RUNNEN tem hier
+<!-- > NOG NIET DOEN VOOR 1eSET, als 2eSET nog niet gerund heeft! -->
+<!-- > idem 2eSET, als 3eSET niet gerund heeft -->
+<!-- > 19/6/2026: allemaal OK -->
 
 
 ```{r indshtcop_15_all_coppice_trees}
@@ -586,11 +646,11 @@ In deze TO DELETE-bomen zouden we geen spilen meer mogen zien als we naar FM-DC 
 
 ## Concreet
 
-FM-DC openen en cchecken of project bewaard is als geodatabase (FMDC Settings > General)
+FM-DC openen encchecken of project bewaard is als geodatabase (FMDC Settings > General)
 
 - 2eSET: Trees_2eSET openen - veld Remark - bevat "TO DELETE" - ctrl+A => 92 records: verwijderen
 - 1eSET: Trees openen - veld Remark - bevat "TO DELETE" - ctrl+A => 105 records: verwijderen
-
+- 3eSET: Trees_3eSET openen - veld Remark - bevat "TO DELETE" - ctrl+A => xxx records: verwijderen
 
 ```{r check_sql7}
 con <- odbcConnectAccess2007(path_to_fieldmap_db)
@@ -652,10 +712,10 @@ Na knitting - manueel
 
 ```{r eval = FALSE}
 # Specify the path of the file you want to copy
-source_file <- here::here(paste0("Scripts/Per_gebied/Sevendonck/", "Sevendonck_aanpassing_shoots_test_deel2_april2026.html"))
+source_file <- here::here(paste0("Scripts/Overige/", "moederdb_aanpassing_shoots_deel2_juni2026.html"))
 
 # Specify the destination directory where you want to copy the file
-destination_dir <- "C:/03_BR_gebieden/08_Sevendonck/FMprojecten_2026/"
+destination_dir
 
 # Copy the file to the destination directory
 file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
