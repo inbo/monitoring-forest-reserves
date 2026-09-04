@@ -538,10 +538,10 @@ write.table(qry_standing_per_site %>% select(-n_plots)
 # idem als txt, maar voor gemak ook naar xls
 
 write_csv2(qry_lying_per_site %>% select(-n_plots)
-            , paste0(path_to_datarequest_teamdrive, "csv/INBO_LYING_QUERY.csv"))
+            , paste0(path_to_datarequest_teamdrive, "csv/INBO_LYING_QUERY", Sys.Date(), ".csv"))
 
 write_csv2(qry_standing_per_site %>% select(-n_plots)
-            , paste0(path_to_datarequest_teamdrive, "csv/INBO_STANDING_QUERY.csv"))
+            , paste0(path_to_datarequest_teamdrive, "csv/INBO_STANDING_QUERY", Sys.Date(), ".csv"))
 ```
 
 <br>
@@ -552,13 +552,13 @@ Checken of de geëxporteerde files goed in R ingelezen worden
 
 ```{r check_read, eval = FALSE, results='hide'}
 #
-qry_lying_check <- read.table(paste0(path_to_datarequest_teamdrive, "INBO_LYING_QUERY.txt")
+qry_lying_check <- read.table(paste0(path_to_datarequest_teamdrive, "INBO_LYING_QUERY_2026-09-04.txt")
                            , sep = "\t", dec = ".")
 head(qry_lying_check)
 names(qry_lying_check)
 
 #
-qry_standing_check <- read.table(paste0(path_to_datarequest_teamdrive, "INBO_STANDING_QUERY.txt")
+qry_standing_check <- read.table(paste0(path_to_datarequest_teamdrive, "INBO_STANDING_QUERY_2026-09-04.txt")
                            , sep = "\t", dec = ".")
 head(qry_standing_check)
 names(qry_standing_check)
