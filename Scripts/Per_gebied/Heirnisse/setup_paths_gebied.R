@@ -8,12 +8,14 @@ forestreserve_short <- forestreserve
 # forestreserve_short <- "Wijnendale"
 # plot_type <- "CA"
 # plot_type <- "CP"
-forestreserve_folder <- paste0(path_to_reserves, "2_Heirnisse_DEELS")
+forestreserve_folder <- paste0(path_to_reserves, "04_Heirnisse")
 # jaar_analyse <- "2021"
 
 
 ###########
 path_to_datarequest <- paste0(forestreserve_folder, "/verwerking_2025_1e2e3eSET/output_forrescalc/") # c-schijf
+# path_to_datarequest <- "G:/Gedeelde drives/Team_Boseco_BR/PRJ_BR_Gegevensverwerking/20_Per_gebied/2025_Heirnisse/03_output_R_plotlevel/"
+
 path_to_teamdrive_gebied <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverwerking/20_Per_gebied/2025_", forestreserve_short, "/")
 
 # plots_to_exclude <- c(701, 707, 709, 727, 728, 738, 739, 740, 759, 760)
