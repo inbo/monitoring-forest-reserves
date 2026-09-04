@@ -9,7 +9,7 @@ path_to_git_forresdat="C:/03_BR/2_Forresdat/"
 
 path_to_metadata="G:/Gedeelde drives/Team_Boseco_BR/PRJ_BR_AanvraagGegevens/00_METADATA-ALL_PLOTS/_metadata/"
 
-path_to_forresheights="C:/03_BR/2_Forresheights/data/"   # csv, gitrepo
+path_to_forresheights="C:/03_BR/2_Forresheights/data/"
 
 path_to_teamdrive="G:/Gedeelde drives/Team_Boseco_BR/"
 

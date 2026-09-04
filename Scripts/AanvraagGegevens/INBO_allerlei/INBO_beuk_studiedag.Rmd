@@ -1,0 +1,156 @@
+---
+title: "Studienamiddag 'Toekomst van de beuk'"
+subtitle: "Groei en mortaliteit van beuk in bosreservaten"
+author: "Anja Leyman"
+date: "12/03/2025"  
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: TRUE
+      smooth_scroll: TRUE
+---
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 7,
+  fig.height = 3,
+  fig.align = TRUE)
+
+library(here)
+library(writexl)
+library(scales)
+library(sf)
+
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+```
+
+
+```{r Setup2}
+path_to_datarequest_cschijf <- paste0(path_to_datarequests, "INBO_beuk_groei_mortaliteit/")
+path_to_datarequest_teamdrive <- paste0(path_to_datarequests_gdrive, "INBO_beuk_groei_mortaliteit/")
+path_to_html_teamdrive <- path_to_datarequest_teamdrive
+
+```
+
+```{r}
+path_to_datarequests_gdrive # algemeen
+path_to_datarequest_cschijf
+path_to_datarequest_teamdrive # specifiek deze datavraag
+
+path_to_treelevel_csv
+path_to_treelevel_gdrive
+```
+
+
+
+# Vraagstelling
+
+Zie ook C:\03_BR\1_DataVerwerkingBR\_tmp_beuk
+
+In kader van een studiedag rond beuk op 26/5/2025, door Arno T. en Kris VDK data over groei 
+en mortaliteit van beuk gevraagd.
+
+Dat houdt in een "wijde" tabel met een unieke tree-id over de verschillende surveys heen met: 
+
+- jaartal van elke survey
+- dbh_mm
+- volume 
+
+Door het toevoegen jaartal per survey, is ook duidelijk of er al dan niet een opname gebeurd is.
+Om zo duidelijk onderscheid te hebben tussen omgevallen bomen of geen opname meer.
+
+<!-- Gecheckt of 1986 enkel bomen bevat die in 2000 nog rechtstonden, volgens Kris niet - gecheckt met Peter en blijkbaar toch alle bomen van 1986 in db -->
+
+
+# Import data
+
+Trees_wide aangemaakt met behulp van forrescalc (zie "Main_UpdateForresdat_03_treeniveau.html" in teamdrive "Team_Boseco_BR\PRJ_BR_Gegevensverwerking\25_Overkoepelend")
+
+```{r}
+plotinfo <- read.csv2(paste0(path_to_plotlevel_csv, "plotinfo.csv")) %>% 
+  select(-1)
+
+trees_wide <- read.csv2(paste0(path_to_treelevel_csv, "trees_wide.csv")) %>% 
+  select(-1)
+
+names(trees_wide)
+
+```
+
+
+```{r results='hide'}
+beuk_wide <- trees_wide %>% 
+  filter(species == 7)
+
+unique(beuk_wide$forest_reserve)
+```
+
+```{r overview}
+# aantal surveys, aantal bomen
+
+summ_beuk <- beuk_wide %>% group_by(forest_reserve, plottype, n_surveys) %>% 
+  summarise(n_beuk = n()) %>% ungroup %>% 
+  arrange(desc(n_surveys), desc(n_beuk)) 
+
+summ_beuk %>% 
+  DT::datatable()
+
+write.csv2(summ_beuk, paste0(path_to_datarequest_cschijf, "n_surveys_n_beuk_per_BR.csv"))
+write.csv2(summ_beuk, paste0(path_to_datarequest_teamdrive, "n_surveys_n_beuk_per_BR.csv"))
+
+```
+
+
+
+```{r}
+names(beuk_wide)
+nrow(beuk_wide) # 11277
+
+beuk_wide <- beuk_wide %>% 
+  select(-contains("vol"))
+```
+
+
+
+# Wegschrijven output
+
+Data worden weggeschreven naar `r path_to_datarequest_teamdrive`.
+
+```{r WegschrijvenOutput_csv, eval = FALSE}
+write_csv2(beuk_wide, paste0(path_to_datarequest_cschijf, "beuk_wide.csv"))
+
+write_csv2(beuk_wide, paste0(path_to_datarequest_teamdrive, "beuk_wide.csv"))
+
+```
+
+
+# Copy html to teamdrive
+
+Na knitting - manueel
+
+```{r eval = FALSE}
+# Specify the path of the file you want to copy
+source_file <- here::here(paste0("Scripts/AanvraagGegevens/INBO_allerlei/INBO_beuk_mortaliteit.html"))
+
+# Specify the destination directory where you want to copy the file
+destination_dir <- path_to_html_teamdrive
+
+# Copy the file to the destination directory
+file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
+# ? file.copy
+```
