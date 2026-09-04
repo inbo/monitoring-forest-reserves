@@ -57,6 +57,11 @@ path_to_html_teamdrive <- path_to_datarequest_teamdrive
 <!-- maar in db van 5/12/2024 zijn de 4 sites van Zoniën duidelijk afgelijnd,  -->
 <!-- dus moeten we toch van deze db vertrekken (MDB_BR_X8_inbo2020_20241205) -->
 
+```{r TMP_db}
+path_to_fieldmap_db <- "C:/03_BR_db_monitoring/MDB_BR_22_inbo2026_20260313/FieldMapData_MDB_BR_22_inbo2026.accdb"
+```
+
+
 ```{r brondata}
 print(paste0("Brondata: ", path_to_fieldmap_db))
 print(paste0("Brondata strata: ", path_to_strata_db))
@@ -1709,7 +1714,7 @@ data_vegetation0 <-
 
 data_vegetation <- data_vegetation0 %>% 
   inner_join(list_plots) # `by = join_by(plot_id, plottype, period)
-nrow(data_vegetation) #5731/6084/6462
+nrow(data_vegetation) #5731/6084/6462/6298
 
 
 # verschil processed TRUE/FALSE: -----
@@ -1721,7 +1726,7 @@ data_vegetation2 <- load_data_vegetation(
     processed = FALSE
   ) %>% 
   inner_join(list_plots)
-nrow(data_vegetation2) # 5759/6490
+nrow(data_vegetation2) # 5759/6490/6326
 
 t <-  data_vegetation2 %>% 
   anti_join(data_vegetation, by = c("plot_id", "plottype", "period"))
