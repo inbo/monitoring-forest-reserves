@@ -553,7 +553,7 @@ write.csv2(t4_beknopt, paste0(destination_dir, "old_id_aan_te_passen_", set, "_"
 
 In access manueel de old_id's aangepast naar levend deel obv file "old_id_aan_te_passen_2eSET.xlsx".
 
-```{r}
+```{r eval = FALSE}
 t4_gekoppeld_aan_levend %>% 
   # filter(AliveDead.y == 11) %>% 
   select(1:7, CoppiceID, ID_1eSET = ID, remark.y) %>% 
@@ -648,9 +648,12 @@ In deze TO DELETE-bomen zouden we geen spilen meer mogen zien als we naar FM-DC 
 
 FM-DC openen encchecken of project bewaard is als geodatabase (FMDC Settings > General)
 
-- 2eSET: Trees_2eSET openen - veld Remark - bevat "TO DELETE" - ctrl+A => 92 records: verwijderen
-- 1eSET: Trees openen - veld Remark - bevat "TO DELETE" - ctrl+A => 105 records: verwijderen
-- 3eSET: Trees_3eSET openen - veld Remark - bevat "TO DELETE" - ctrl+A => xxx records: verwijderen
+- 1eSET: Trees openen - veld Remark - bevat "TO DELETE" - ctrl+A => 801 records: verwijderen      
+- 2eSET: Trees_2eSET openen - veld Remark - bevat "TO DELETE" - ctrl+A => 1020 records: verwijderen       
+- 3eSET: Trees_3eSET openen - veld Remark - bevat "TO DELETE" - ctrl+A => 576 records: verwijderen  
+
+19/6/2026: gebeurd!
+
 
 ```{r check_sql7}
 con <- odbcConnectAccess2007(path_to_fieldmap_db)
@@ -662,8 +665,9 @@ trees_sql7 %>% filter(trees_remark == "TO DELETE") %>% nrow()
 
 # checken voor alle trees
 data_dendro <- load_data_dendrometry(path_to_fieldmap_db, extra_variables = TRUE)
-table(data_dendro$period, data_dendro$remark)
+# table(data_dendro$period, data_dendro$remark)
 unique(data_dendro$remark)
+data_dendro %>% filter(str_detect(remark, "TO DELETE")) %>% nrow() == 0
 
 # lukt het om tree_id aan te maken?
 t7 <- create_unique_tree_id(data_dendro)
