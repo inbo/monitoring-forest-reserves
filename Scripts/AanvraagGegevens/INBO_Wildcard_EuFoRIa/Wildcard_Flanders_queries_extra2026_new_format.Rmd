@@ -84,14 +84,13 @@ path_to_datarequest_teamdrive
 design <- read.table(paste0(path_to_datarequest_teamdrive, "UPLOAD_INBO_DESIGN_2026-05-07.txt")
                            , sep = "\t", dec = ".")
 
-plots_ <- read.table(paste0(path_to_datarequest_teamdrive, "UPLOAD_INBO_PLOTS_2026-05-07.txt")
+plots <- read.table(paste0(path_to_datarequest_teamdrive, "UPLOAD_INBO_PLOTS_2026-05-07.txt")
                            , sep = "\t", dec = ".")
-names(plots_)
-# only A4-circle + CA (no A3)
-plots <-  plots_ %>% filter(circle_no == 1 | circle_no == "\\N")
-plots_LPI <- plots_ %>% filter(circle_no == "\\N")
-plots_A3 <-  plots_ %>% filter(circle_no == 2)
-plots_A4 <-  plots_ %>% filter(circle_no == 1)
+names(plots)
+
+plots_LPI <- plots %>% filter(circle_no == "\\N")
+plots_A3 <-  plots %>% filter(circle_no == 2)
+plots_A4 <-  plots %>% filter(circle_no == 1)
 
 # standing <- read.table(paste0(path_to_datarequest_teamdrive, "INBO_Standing.txt")
 #                            , sep = " ", dec = ".")
@@ -133,6 +132,10 @@ measured in 1986 and 2000 have a treshold of 30 cm DBH (instead of 5 cm)
 <br>
 
 # QUERIES
+
+7/9/2026: Overall summary per site, inventory type, **circle_no (A3 vs A4)** and inventory year.
+standing and lying apart
+
 
 **QUERIES_metadata**	
 
@@ -202,6 +205,15 @@ lying <- trees |>
 nrow(trees) == nrow(standing) + nrow(lying)
 ```
 
+```{r}
+# blijkbaar soms bij lying en LPI circle_no  = 1
+lying_ <- lying |> 
+  mutate(circle_no = ifelse(inventory_type == "LPI", "\\N", circle_no))
+
+lying <- lying_
+```
+
+
 ## Standing table
 
 - STEM_DENSITY (both living and dead)
@@ -219,14 +231,14 @@ We have to account for concentric circles and the difference between living or d
 
 ```{r results='hide'}
 # density en volume per hectare per site, maar eerst per plot
-nrow(plots_LPI) + nrow(plots_A3) + nrow(plots_A4) == nrow(plots_)
+nrow(plots_LPI) + nrow(plots_A3) + nrow(plots_A4) == nrow(plots)
 ```
 
 ```{r Fext_ha_LPI_SPI, results='hide'}
 # onderscheid A3 en AA4 circle en LPI ---------
 
 all <- standing %>% 
-  inner_join(plots_, by = c("composed_site_id", "inventory_id", "inventory_type"
+  inner_join(plots, by = c("composed_site_id", "inventory_id", "inventory_type"
                                , "plot_id", "circle_no", "inventory_year"))
 nrow(all) == nrow(standing)
 
@@ -276,11 +288,12 @@ qry_standing_per_plot <- standing_all %>%
   mutate(stemnr_ha = Fext_ha  # !! STEMnr niet stamtal!! - ok
          , basal_area_ha = Fext_ha*pi*dbh^2/4000000) %>% 
   dplyr::group_by(composed_site_id, inventory_id, inventory_type, plot_id
-                  , inventory_year) %>% 
+                  , circle_no, inventory_year) %>% 
   dplyr::summarize(
     STEM_DENSITY = sum(stemnr_ha)
     , BASAL_AREA = sum(basal_area_ha)) %>% 
   ungroup()
+# per A3, A4 circle of LPI => 3 queries per reservaat
     
 head(qry_standing_per_plot)
 # vgl met forresdat-data: lijkt ok
@@ -294,12 +307,12 @@ Add plots with no trees (only one SPI-plot).
 ```{r results='hide', eval = FALSE}
 # !! ook nulwaardes meenemen - HIER NIET NODIG (30/3/2026: coolhem en terrijst 3de decade)
 names(plots)
-names(qry_standing_per_plot) # 181
+names(qry_standing_per_plot) # 181/331
 
-qry_standing_per_plot0 <- plots %>% #  opgepast: enkel SPI-plots, geen LPI
+qry_standing_per_plot0 <- plots %>% #  
   anti_join(qry_standing_per_plot)  %>% 
   select(composed_site_id, inventory_id, inventory_type, plot_id
-         , inventory_year) %>% 
+         , circle_no, inventory_year) %>% 
   mutate(STEM_DENSITY = 0
          , BASAL_AREA = 0)
 # !! 0 want hier enkel de aanvulling!!!
@@ -311,13 +324,13 @@ qry_standing_per_plot <- rbind(qry_standing_per_plot, qry_standing_per_plot0)
 nrow(qry_standing_per_plot) == nrow(plots)
 ```
 
-Calculate mean per site and inventory year
+Calculate mean per site, inventory type, circle_no and inventory year
 
 ```{r results='hide'}
 # density en volume per hectare per site (niet per plot!
 qry_standing_per_site <- qry_standing_per_plot %>% 
   dplyr::group_by(composed_site_id, inventory_id, inventory_type, 
-                  , inventory_year) %>% 
+                  , circle_no, inventory_year) %>% 
   dplyr::summarize(
     n_plots = n()
     , STEM_DENSITY = round(mean(STEM_DENSITY, na.rm = TRUE), 0)
@@ -329,11 +342,12 @@ head(qry_standing_per_site)
 
 ### Diameters
 
-Overall summary of diameters per site and inventory year
+Overall summary of diameters per site, inventory type, circle_no (A3 vs A4) and inventory year.
 
 ```{r}
 qry_standing_diam <- standing %>% 
-  group_by(composed_site_id, inventory_id, inventory_type, inventory_year) %>% 
+  group_by(composed_site_id, inventory_id, inventory_type
+           , circle_no, inventory_year) %>% 
   summarize(MAX_DBH = max(dbh)
             , MIN_DBH = min(dbh)
             , MEAN_DBH = mean(dbh)) %>% 
@@ -350,7 +364,8 @@ names(qry_standing_diam)
 
 qry_standing_per_site <- qry_standing_per_site %>% 
   left_join(qry_standing_diam, by = c("composed_site_id", "inventory_id"
-                                      , "inventory_type", "inventory_year")) 
+                                      , "inventory_type", "inventory_year"
+                                      , "circle_no")) 
 
 # snelle check
 qry_standing_per_site %>% filter(str_detect(composed_site_id, "Bos Terrijst") & inventory_type ==  "SPI")
@@ -390,12 +405,11 @@ STEM_DENSITY and VOLUME_HA for plots with deadwood
 # density en volume per hectare per site (niet per plot!)
 qry_lying_per_plot <- lying %>% 
   left_join(plots, by = c("composed_site_id", "inventory_id", "inventory_type"
-                               , "plot_id", "inventory_year")) %>% 
+                               , "plot_id", "circle_no", "inventory_year")) %>% 
   mutate(stemnr_ha = 10000/sampled_area
          , volume_ha = 10000*volume/sampled_area) %>% 
   dplyr::group_by(composed_site_id, inventory_id, inventory_type
-                  , inventory_year, sampled_area
-                  , plot_id) %>% 
+                  , inventory_year, circle_no, plot_id) %>% 
   dplyr::summarize(
     STEM_DENSITY = sum(stemnr_ha)
     , VOLUME_LYING = sum(volume_ha)) %>% 
@@ -408,17 +422,16 @@ Add plots without deadwood (dat zijn enkel SPI plots)
 
 ```{r results='hide'}
 # !! ook nulwaardes meenemen
-names(plots) # enkel SPI maar dat is OK, want in LPI altijd dood hout
+names(plots) 
 names(qry_lying_per_plot)
 
 qry_lying_per_plot0 <- plots %>% 
   anti_join(qry_lying_per_plot) %>% 
   select(composed_site_id, inventory_id, inventory_type
-                  , inventory_year, sampled_area
+                  , inventory_year, circle_no
                   , plot_id) %>% 
   mutate(STEM_DENSITY = 0
          , VOLUME_LYING = 0)
-
 
 nrow(qry_lying_per_plot) + nrow(qry_lying_per_plot0) == nrow(plots)
 
@@ -427,13 +440,13 @@ qry_lying_per_plot <- rbind(qry_lying_per_plot, qry_lying_per_plot0)
 nrow(qry_lying_per_plot) == nrow(plots)
 ```
 
-Calculate mean per site and inventory year
+Calculate mean per site, inventory type, circle_no and inventory year
 
 ```{r results='hide'}
 # density en volume per hectare per site (niet per plot!
 qry_lying_per_site <- qry_lying_per_plot %>% 
   dplyr::group_by(composed_site_id, inventory_id, inventory_type
-                  , inventory_year) %>% 
+                  , circle_no, inventory_year) %>% 
   dplyr::summarize(
     n_plots = n()
     , STEM_DENSITY = round(mean(STEM_DENSITY, na.rm = TRUE), 0)
@@ -452,7 +465,7 @@ Overall summary of diameters per site and inventory year
 ```{r results='hide'}
 qry_lying_diam <- lying %>% 
   dplyr::group_by(composed_site_id, inventory_id, inventory_type
-                  , inventory_year) %>% 
+                  , circle_no, inventory_year) %>% 
   dplyr::summarize(
     MAX_D1 = max(diameter_1, na.rm = TRUE)
     , MIN_D1 = min(diameter_1, na.rm = TRUE)
@@ -481,7 +494,7 @@ names(qry_lying_diam)
 
 qry_lying_per_site <- qry_lying_per_site %>% 
   left_join(qry_lying_diam, by = c("composed_site_id", "inventory_id", "inventory_type"
-                               , "inventory_year")) %>% 
+                               , "circle_no", "inventory_year")) %>% 
   # wegfilteren van deze waar geen opname van liggend dood hout was (Zonien 1eSET)
   filter(STEM_DENSITY != 0)  
 
