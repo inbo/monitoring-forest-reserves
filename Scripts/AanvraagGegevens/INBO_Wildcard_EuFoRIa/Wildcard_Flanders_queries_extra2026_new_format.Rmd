@@ -88,7 +88,7 @@ plots_ <- read.table(paste0(path_to_datarequest_teamdrive, "UPLOAD_INBO_PLOTS_20
                            , sep = "\t", dec = ".")
 names(plots_)
 # only A4-circle + CA (no A3)
-plots <-  plots_ %>% filter(circle_no == 1 | is.na(circle_no))
+plots <-  plots_ %>% filter(circle_no == 1 | circle_no == "\\N")
 plots_LPI <- plots_ %>% filter(circle_no == "\\N")
 plots_A3 <-  plots_ %>% filter(circle_no == 2)
 plots_A4 <-  plots_ %>% filter(circle_no == 1)
@@ -304,11 +304,11 @@ qry_standing_per_plot0 <- plots %>% #  opgepast: enkel SPI-plots, geen LPI
          , BASAL_AREA = 0)
 # !! 0 want hier enkel de aanvulling!!!
 
-nrow(qry_standing_per_plot) + nrow(qry_standing_per_plot0) == nrow(plots) + 5  # 5 LPI plots niet in "plots"
+nrow(qry_standing_per_plot) + nrow(qry_standing_per_plot0) == nrow(plots)
 
 # combine
 qry_standing_per_plot <- rbind(qry_standing_per_plot, qry_standing_per_plot0)
-nrow(qry_standing_per_plot) == nrow(plots) + 5   # 5 LPI plots niet in "plots"
+nrow(qry_standing_per_plot) == nrow(plots)
 ```
 
 Calculate mean per site and inventory year
@@ -390,7 +390,7 @@ STEM_DENSITY and VOLUME_HA for plots with deadwood
 # density en volume per hectare per site (niet per plot!)
 qry_lying_per_plot <- lying %>% 
   left_join(plots, by = c("composed_site_id", "inventory_id", "inventory_type"
-                               , "plot_id", "circle_no", "inventory_year")) %>% 
+                               , "plot_id", "inventory_year")) %>% 
   mutate(stemnr_ha = 10000/sampled_area
          , volume_ha = 10000*volume/sampled_area) %>% 
   dplyr::group_by(composed_site_id, inventory_id, inventory_type
@@ -420,11 +420,11 @@ qry_lying_per_plot0 <- plots %>%
          , VOLUME_LYING = 0)
 
 
-nrow(qry_lying_per_plot) + nrow(qry_lying_per_plot0) == nrow(plots) + 5  # 5 LPI plots
+nrow(qry_lying_per_plot) + nrow(qry_lying_per_plot0) == nrow(plots)
 
 # combine
 qry_lying_per_plot <- rbind(qry_lying_per_plot, qry_lying_per_plot0)
-nrow(qry_lying_per_plot) == nrow(plots) + 5
+nrow(qry_lying_per_plot) == nrow(plots)
 ```
 
 Calculate mean per site and inventory year
@@ -552,13 +552,13 @@ Checken of de geëxporteerde files goed in R ingelezen worden
 
 ```{r check_read, eval = FALSE, results='hide'}
 #
-qry_lying_check <- read.table(paste0(path_to_datarequest_teamdrive, "INBO_LYING_QUERY_2026-09-04.txt")
+qry_lying_check <- read.table(paste0(path_to_datarequest_teamdrive, "INBO_LYING_QUERY_2026-09-07.txt")
                            , sep = "\t", dec = ".")
 head(qry_lying_check)
 names(qry_lying_check)
 
 #
-qry_standing_check <- read.table(paste0(path_to_datarequest_teamdrive, "INBO_STANDING_QUERY_2026-09-04.txt")
+qry_standing_check <- read.table(paste0(path_to_datarequest_teamdrive, "INBO_STANDING_QUERY_2026-09-07.txt")
                            , sep = "\t", dec = ".")
 head(qry_standing_check)
 names(qry_standing_check)
