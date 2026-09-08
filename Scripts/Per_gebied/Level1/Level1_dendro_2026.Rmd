@@ -1,0 +1,780 @@
+---
+title: "Dataverwerking - dendro"
+subtitle: "Level 1 - cirkelplots"
+author: "Anja Leyman"
+date: "8/9/2026"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: TRUE
+      smooth_scroll: TRUE
+---
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 7,
+  fig.height = 3,
+  fig.align = TRUE)
+
+library(here)
+library(writexl)
+library(scales)
+
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+
+```
+
+```{r Setup2, include = FALSE}
+forest_reserve_short <- "Level1"
+source(here::here("scripts/Per_gebied/", forest_reserve_short, "/setup_paths_gebied.R"))
+source(here::here(paste0("Scripts/Per_gebied/", forestreserve_short, "/functies.R")))
+```
+
+
+# Vraagstelling
+
+**Bosreservaat `r forestreserve`**
+
+<br>
+
+```{r results='hold', eval=TRUE}
+path_to_fieldmap_db
+path_to_forresdat_data
+path_to_analysis_set_db
+path_to_plotlevel_csv
+path_to_treelevel_csv
+path_to_output_gdrive
+path_to_meetgegevens
+
+```
+
+
+# Load lookuplijsten
+
+```{r load_lkp}
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+
+qSpecies <- sqlFetch(con, "qTreeSpecies")
+# qalivedead <- sqlFetch(con, "qAliveDead")
+qAliveDead <- sqlFetch(con, "qStatusTree")
+qIndShootCop <- sqlFetch(con, "qCoppice_Individual")
+qIntactSnag <- sqlFetch(con, "qIntactTree")
+qDecaystage <- sqlFetch(con, "qDecayStage")
+
+odbcClose(con)
+
+qSpecies <- qSpecies %>% 
+  select(ID, name_nl = Value1, name_sc = Value2)
+qDecaystage <- qDecaystage %>% 
+  select(ID, decaystage_txt = Value1)
+```
+
+# Load plotinfo
+
+Plotinfo samenstellen, zijnde plottype, naam forest_reserve en info over survey en 
+data al dan niet processed.
+
+Level1: geen plotdetails ingevuld =>  op andere manier saenstellen
+
+```{r plotinfo_vb}
+path_to_fieldmap_db_ALL <- "C:/03_BR_db_monitoring/MDB_BR_22_inbo2026_20260313/FieldMapData_MDB_BR_22_inbo2026.accdb"
+
+plotinfo_vb <- load_plotinfo(database = path_to_fieldmap_db_ALL, processed = FALSE) %>% 
+  filter(forest_reserve == "Bos Terrijst")
+names(plotinfo_vb)
+```
+
+# Load dendro data
+
+Aangepaste functies, want structuur is anders dan forrescalc verwacht.
+
+```{r load_data, results='hide'}
+conn <- odbcConnectAccess2007(path_to_fieldmap_db)
+
+trees2025 <- load_data_dendrometry_L1(con = conn, jaar = 2025)
+trees2009 <- load_data_dendrometry_L1(con = conn, jaar = 2009) |> 
+  mutate(decaystage = NA)
+data_dendro <- rbind(trees2025, trees2009) |> 
+  mutate(forest_reserve = "Level1"
+         , plottype = "CP")
+
+shoots2025 <- load_data_shoots_L1(con = conn, jaar = 2025)
+shoots2009 <- load_data_shoots_L1(con = conn, jaar = 2009)
+data_shoots <- rbind(shoots2025, shoots2009)|> 
+  mutate(forest_reserve = "Level1")
+
+deadw2025 <- load_data_deadwood_L1(con = conn, jaar = 2025)
+deadw2009 <- load_data_deadwood_L1(con = conn, jaar = 2009) 
+data_deadwood <- rbind(deadw2025, deadw2009) |> 
+  mutate(forest_reserve = "Level1"
+         , plottype = "CP")
+
+odbcClose(conn)
+
+```
+
+? verderop data_dendro_calc ontbrekende dbh terwijl er wel een dbh in FM staat
+Wegens missing ind_sht_cop
+
+```{r}
+data_dendro |> filter(plot_id == 713 & tree_measure_id == 27 & period == 2)
+data_dendro |> filter(plot_id == 311 & tree_measure_id == 32 & period == 2)
+
+data_dendro <- data_dendro |> 
+  mutate(ind_sht_cop = ifelse(is.na(ind_sht_cop), 10, ind_sht_cop))
+
+```
+
+
+
+```{r}
+data_shoots |> filter(is.na(dbh_mm)) |> nrow() 
+t <- data_shoots |> filter(is.na(dbh_mm)) 
+# volgens mij wegens slechte link of per ongeluk aangemaakt => verwijderen
+# periode 2 gecheck en OK om te verwijderen
+# periode 1 wellicht ook
+
+data_shoots <- data_shoots |> 
+  filter(!is.na(dbh_mm))
+
+data_dendro |> filter(is.na(dbh_mm))
+
+data_dendro <- data_dendro |> 
+  filter(!is.na(dbh_mm))
+
+```
+
+
+```{r}
+data_stems <- compose_stem_data_L1(data_dendro, data_shoots) |> 
+  mutate(fperiod = as.factor(period))
+
+data_stems |> filter(is.na(calc_height_fm)) |> nrow()  # 1 , wegens missing dbh
+data_stems |> filter(is.na(calc_height_fm)) |> select(plot_id, period, tree_measure_id, dbh_mm, height_m, calc_height_fm)
+
+data_stems |> filter(is.na(dbh_mm)) |> nrow() 
+
+```
+
+
+# Volume liggend dood hout (FAS)
+
+FAS = Full Area Sampling
+
+In DC bijsnijden.
+
+Is dat gebeurd? 
+
+Blijkbaar wel voor periode 1, nog niet voor periode 2, zie hierna.
+
+calc_length = lengte uit FM
+total_length = obv layer "diameters"
+
+```{r}
+# snelle check of dit in orde is 
+
+check_length_DW <- data_deadwood %>% 
+  mutate(diff_length = total_length_m - calc_length_m) %>% 
+  group_by(plottype, period, diff_length) %>% 
+  summarize(n = n()
+            , min_idplot = min(plot_id)
+            , max_idplot = max(plot_id)) %>% 
+  ungroup()
+
+data_deadwood %>% filter(is.na(calc_volume_m3)) %>% nrow() == 0
+```
+# Calculate dendro data
+
+## Height_model
+
+Hoogtemodel nodig, met volgende variabelen
+
+```{r height_model_vb}
+load("height_model.RData")
+
+height_model_vb <- height_model
+rm(height_model)
+
+names(height_model_vb)
+# !! niet op plotniveau 
+```
+
+
+```{r}
+height_model2009orig <- read_xlsx(paste0(path_to_datarequest, "HeightParams_Level1_2009.xlsx"))
+names(height_model2009orig)
+colnames(height_model2009orig) <- c("plot_id", "species", "model"
+                                    , "source", "P1", "P2", "R", "Syx", "n")
+height_model2009 <- height_model2009orig |> 
+  filter(plot_id != "<ALL>" & species != "<ALL>") |> 
+  mutate(plot_id = as.integer(plot_id)
+         , species = as.integer(species)
+         , period = 1) |> 
+  select(-R, -Syx, -n)
+
+  
+height_model2025orig <- read_xlsx(paste0(path_to_datarequest, "HeightParams_Level1_2025.xlsx"))
+colnames(height_model2025orig) <- c("plot_id", "species", "model"
+                                    , "source", "P1", "P2", "R", "Syx", "n")
+height_model2025 <- height_model2025orig |> 
+  filter(plot_id != "<ALL>" & species != "<ALL>") |> 
+  mutate(plot_id = as.integer(plot_id)
+         , species = as.integer(species)
+         , period = 2) |> 
+  select(-R, -Syx, -n)
+
+  
+height_model <- rbind(height_model2009, height_model2025) |> 
+  mutate(forest_reserve = "Level1") 
+
+```
+
+## Extra variabelen
+
+Alive_dead code aanpassen
+
+crown_volume_reduction en branch_length_reduction
+
+```{r extra_vars}
+# alive dead nieuwe code
+data_dendro_ <- data_dendro |> 
+  rename(alive_dead_old = alive_dead) |> 
+  mutate(alive_dead = ifelse(alive_dead_old == 1, 11
+                             , ifelse(alive_dead_old == 2, 12, 9999))) |> 
+  select(-alive_dead_old)
+  
+table(data_dendro_$alive_dead)
+table(data_dendro$alive_dead)
+
+data_dendro <- data_dendro_
+
+# 
+data_stems_ <- data_stems |> 
+  rename(alive_dead_old = alive_dead) |> 
+  mutate(alive_dead = ifelse(alive_dead_old == 1, 11
+                             , ifelse(alive_dead_old == 2, 12, 9999))) |> 
+  select(-alive_dead_old) |> 
+  mutate(crown_volume_reduction = NA, branch_length_reduction = NA)
+  
+table(data_stems_$alive_dead)
+table(data_stems$alive_dead)
+
+data_stems <- data_stems_
+```
+
+## Tarieven
+
+Level1 gebruikt soortenlijst van VBI
+
+
+```{r load_tarieven}
+# cfr forrescalc
+tariffs1 <- read_csv2(
+          system.file("extdata/tariffs1entry.csv", package = "forrescalc")
+        ) |> 
+  select(-source)
+
+tariffs1crown <- read_csv2(
+          system.file("extdata/tariffs1entry_crown.csv", package = "forrescalc")
+        ) |> 
+  select(-source)
+
+tariffs2 <- read_csv2(
+          system.file("extdata/tariffs2entries.csv", package = "forrescalc")
+        ) |> 
+  select(-source)
+
+conv_perim <- read_csv2(
+          system.file("extdata/convert_perimeter.csv", package = "forrescalc")
+        )
+
+# andere soortenlijst
+
+con <- odbcConnectAccess2007(dbExterneData)
+
+tariefgroep_bms <- sqlFetch(con, "tblTariefgroepBoomsoort_Level1")
+tarieven_1ingang <- sqlFetch(con, "tblTarieven_1ing")
+tarieven_1ingang_kroon <- sqlFetch(con, "tblTarieven_1ingKroon")
+tarieven_2ingang <- sqlFetch(con, "tblTarieven_2ing")
+coef_omzet_omtrek <- sqlFetch(con, "tblCoefOmzetOmtrek_Level1")
+
+odbcClose(con)
+
+tarieven_1ingang <- tariefgroep_bms |> 
+  left_join(tarieven_1ingang, by = c("TariefID" = "groepID")) |> 
+  select(-Value2, -Active, -Tarief)
+tarieven_1ingang_kroon <- tariefgroep_bms |> 
+  left_join(tarieven_1ingang_kroon, by = c("TariefID" = "groepID")) |> 
+  select(-Value2, -Active, -Tarief)
+tarieven_2ingang <- tariefgroep_bms |> 
+  left_join(tarieven_2ingang, by = c("TariefID" = "groepID")) |> 
+  select(-Value2, -Active, -Tarief)
+
+names(tarieven_1ingang); names(tariffs1)
+colnames(tarieven_1ingang) <- colnames(tariffs1)
+
+names(tarieven_1ingang_kroon); names(tariffs1crown)
+colnames(tarieven_1ingang_kroon) <- colnames(tariffs1crown)
+
+names(tarieven_2ingang); names(tariffs2)
+colnames(tarieven_2ingang) <- colnames(tariffs2)
+
+names(coef_omzet_omtrek); names(conv_perim)
+coef_omzet_omtrek <- coef_omzet_omtrek |> 
+  select(-NameNl)
+colnames(coef_omzet_omtrek) <- colnames(conv_perim)
+```
+
+Opgepast: 8 records intact_snag = 20 (snags) maar geen hoogte ingevuld => behandelen als intacte bomen
+
+```{r}
+data_stems |> filter(is.na(height_m) & intact_snag == 20) |> nrow()
+
+data_stems <- data_stems |> 
+  mutate(intact_snag = ifelse(is.na(height_m), 10, intact_snag))
+```
+
+```{r eval = FALSE}
+# functie calc_stem_volume uitproberen
+data_stems_test <- calc_stem_volume(data_stems |> rename(calc_height_m = calc_height_fm))
+data_stems_test |> filter(is.na(vol_bole_m3)) |> nrow() == 0
+
+```
+## Berekeningen
+
+```{r calc_stems_tree}
+data_stems_calc <- calc_variables_stem_level_L1(data_stems, height_model)
+data_stems_calc |> filter(is.na(vol_bole_m3)) |> nrow() == 0
+
+data_dendro_calc <- calc_variables_tree_level_L1(data_dendro, data_stems_calc)
+summary(data_dendro_calc)
+
+data_dendro_calc |> filter(is.na(vol_bole_alive_m3_ha)) |> nrow()
+
+```
+
+```{r plotinfo}
+names(plotinfo_vb)
+
+plotinfo <- data_dendro |> 
+  group_by(forest_reserve, plot_id, period
+           , year_dendro = year
+           , r_A4) |> 
+  summarize(n = n()) |> 
+  ungroup() |> 
+  mutate(plottype = "CP"
+         , r_A3 = 18
+         , dbh_min_a3_alive = 70
+         , dbh_min_a3_dead = 70
+         , dbh_min_a4_alive = 70
+         , dbh_min_a4_dead = 70
+         , length_transect_lis = 45
+         , survey_trees = TRUE
+         , data_processed = TRUE
+         , survey_deadw = TRUE
+         , survey_lis = ifelse(period == 2, TRUE, FALSE)
+         , survey_number = period
+         )
+```
+
+
+
+```{r}
+# dendro <- calculate_dendrometry(data_dendro, data_deadwood, data_shoots, height_model, plotinfo)
+# waar survey_trees = TRUE, wordt een '0' toegekend, als er geen andere metingen zijn
+# DUS: als ik wegfilter obv data_processed, worden data NIET ingeladen,
+# MAAR omdat survey_trees = TRUE, wordt er in functie "calc_dendro_plot()" een '0' 
+# toegekend aan die non-processed plots ( 400, ...°)
+# DAAROM: hoger in chunck 'load_data' het argument processed = FALSE zetten
+# zdd dat deze toch meegenomen worden, en géén "0" toegekend krijgen.
+# OPGEPAST: er bij statistische verwerking wél voor zorgen dat deze plots niet meegenomen worden
+# ev. mbv lijstje "plots_to_exclude" obv processed = TRUE
+
+
+by_plot <- calc_dendro_plot(data_dendro_calc, data_deadwood, plotinfo)
+by_plot_species <-
+  calc_dendro_plot_species(data_dendro_calc, data_deadwood, plotinfo)
+by_decay_plot <-
+  calc_deadw_decay_plot(plotinfo, data_deadwood, data_dendro_calc)
+by_decay_plot_species <-
+  calc_deadw_decay_plot_species(plotinfo, data_deadwood, data_dendro_calc)
+by_diam_plot <- calc_diam_plot(data_stems_calc, data_deadwood, plotinfo)
+by_diam_plot_species <-
+  calc_diam_plot_species(data_stems_calc, data_deadwood, plotinfo)
+
+```
+
+
+# Implementatie "vol_log_above30cm_m3_ha"
+
+2025:
+- Correctie `vol_log_m3_ha` logs in plotdata nalv LIS : < 30 cm = NA   
+- Nieuw veld `vol_log_above30cm_m3_ha` 
+
+- LIS wordt gebruikt bij diameters < 30 cm    
+- Volopname (FAS) blijft in gebruik bij diameters >= 30 cm    
+
+Forrescalc verwerkt momenteel (2/12/2025) enkel FAS.
+
+```{r}
+plotinfo %>% filter(survey_lis) %>% distinct(period, plottype)
+# LIS enkel periode 2
+```
+
+```{r}
+test_DW1 <- data_deadwood %>% 
+  group_by(period, plottype) %>% 
+  summarize(min_diam = min(max_diam_mm)) %>% 
+  ungroup()
+
+test_DW1
+# OK: CP's & CA periode 3 pas vanaf 30 cm opgemeten
+```
+
+We zien dat er in periode 2 effectief pas opgemeten wordt vanaf 30 cm.
+
+```{r eval = FALSE}
+test_DW2 <- by_diam_plot %>% 
+  group_by(period, plottype, dbh_class_5cm) %>% 
+  summarize(n = n()
+            , logs = sum(vol_log_m3_ha, na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  filter(plottype == "CP" & period == 2)
+view(test_DW2)
+```
+
+Forrescalc gaat er nog vanuit dat er opgemeten wordt vanaf 10 cm, waardoor de 
+volumes (`vol_log_m3_ha`) per diameterklasse foutief op nul gezet worden.
+Dat moet NA zijn.
+Idem voor de diameterklasse 5-10 cm.
+
+Van belang bij:
+
+- dendro_by_diam_plot
+- dendro_by_diam_plot_species
+
+Maar ook bij de andere resultaten is het belangrijk om aan te geven dat `vol_log_m3_ha` 
+én `vol_deadw_m3_ha` voor het liggende dood hout enkel de fractie > 30 cm omvat:
+
+- dendro_by_plot
+- dendro_by_species
+
+Onderstaande tabellen bevatten enkel `vol_log_m3_ha` 
+(naast vol_dead_standing; niet gesommeerd tot `vol_deadw_m3_ha`): 
+
+- deadw_by_decay_plot     
+- deadw_by_decay_plot_species     
+
+Er moeten dus 8 dataframes aangepast worden voor CP's periode 3.      
+
+Daarbij gaan we       
+
+1) bij dataframes zonder info over diameterklasse: een extra veld aanmaken `vol_log_above30cm_m3_ha` en
+`vol_log_m3_ha` op NA zetten indien LIS     
+2) bij dataframes mét info over diameterklasse: `vol_log_m3_ha` op NA zetten in 
+diameterklasse 5-10 cm én op NA bij alle diameterklasses < 30 cm indien LIS 
+(NA's bij 5-10cm: opgenomen in [issue 172](https://github.com/inbo/forrescalc/issues/172))    
+3) veld `vol_deadw_m3_ha` overal verwijderen, want is verwarrend (onduidelijk welk 
+volume logs wordt gebruikt)     
+
+> bijkomend (moet nog in forrescalc geïmplementeerd worden): records waar decaystage = NA én alle 
+volumes = 0, wegfilteren
+Nu (2/12/22025) opgenomen in correctie 1
+
+Zie [issue 168](https://github.com/inbo/forrescalc/issues/168)
+  
+  <!-- if ("decaystage" %in% colnames(tabel)) { -->
+  <!--   tabel <- tabel %>%  -->
+  <!--     filter(!((is.na(decaystage) | decaystage == 16) & vol_dead_standing_m3_ha == 0 & -->
+  <!--                vol_log_m3_ha == 0)) -->
+  <!--   } -->
+
+!! Komt enkel voor bij periode 3, reden is dat daar veel levende bomen zonder afbraakstadium 
+staan (zou afbraak = 16 - NVT moeten zijn) 
+=> zowel decay = NA (periode 3) als decay = 16 (periode 1 en 2) wegfilteren.      
+
+Nu (2/12/22025) opgenomen in onderstaande functie `correctie_1`
+
+```{r corr1}
+# Correctie 1: 
+# 1) dataframes zonder info over diameterklasse: een extra veld aanmaken `vol_log_above30cm_m3_ha` 
+# en `vol_log_m3_ha` op NA zetten
+
+corr_1 <- list(dendro_by_plot = by_plot
+               , dendro_by_plot_species = by_plot_species
+               , deadw_by_decay_plot = by_decay_plot
+               , deadw_by_decay_plot_species = by_decay_plot_species)
+
+# info <- plotinfo
+# tab <- deadw_by_decay_plot_species
+
+correctie_1 <- function(tab, info = plotinfo) {
+  
+  tabel <- tab
+  
+  if ("decaystage" %in% colnames(tabel)) {
+    tabel <- tabel %>% 
+      filter(!((is.na(decaystage) | decaystage == 16) & vol_dead_standing_m3_ha == 0 &
+                 vol_log_m3_ha == 0))
+    }
+  
+  tabel <- tabel %>% 
+    left_join(info %>% select(plot_id, period, survey_lis)
+              , by = c("plot_id", "period")) %>% 
+    mutate(vol_log_above30cm_m3_ha = ifelse(survey_lis, vol_log_m3_ha, NA)
+           , vol_log_m3_ha = ifelse(survey_lis, NA, vol_log_m3_ha)
+           ) %>% 
+    select(-survey_lis)
+  
+  if ("vol_deadw_m3_ha" %in% colnames(tabel)) {
+    tabel <- tabel %>% 
+      select(-vol_deadw_m3_ha)
+  }
+  
+    tabel <- tabel %>%
+    relocate(vol_log_above30cm_m3_ha, .after = vol_log_m3_ha)
+
+  tabel
+  }
+
+# test voor één tabel
+# test <- correctie_1(dendro_by_plot, plotinfo)
+# test <- correctie_1(tab = deadw_by_decay_plot_species, info = plotinfo)
+
+
+# voor alle tabellen mbv "map"
+# tbls <- map(tbl_namen, ~ inlezen_functie(.x))
+tbls <- map(corr_1, \(x) correctie_1(x, plotinfo))
+
+for (tablename in names(tbls)) {
+     assign(tablename, tbls[[tablename]])
+}
+```
+
+
+```{r corr2}
+# Corr 2
+# 2) dataframes mét info over diameterklasse: `vol_log_m3_ha` op NA zetten in de
+# diameterklasses < 30 cm vindien LIS_survet én overal voor diameterklasse < 10 cm
+
+corr_2 <- list(dendro_by_diam_plot = by_diam_plot
+            , dendro_by_diam_plot_species = by_diam_plot_species)
+
+unique(by_diam_plot$dbh_class_5cm)
+diam_klasses_under_30cm <- c("5 - 10 cm", "10 - 15 cm", "15 - 20 cm", "20 - 25 cm", "25 - 30 cm")
+diam_klasses_under_10cm <- c("5 - 10 cm")
+
+# dendro_by_diam_plot_ <- dendro_by_diam_plot %>% 
+#   mutate(vol_log_m3_ha= ifelse(plottype == "CP" & period == 3 &
+#                                  dbh_class_5cm %in% diam_klasses_under_30cm
+#                                , NA, vol_log_m3_ha)
+#          )
+
+correctie_2 <- function(tab, info = plotinfo) {
+  
+  tabel <- tab %>% 
+    left_join(info %>% select(plot_id, period, survey_lis)
+              , by = c("plot_id", "period")) %>% 
+    mutate(vol_log_m3_ha= ifelse(dbh_class_5cm %in% diam_klasses_under_10cm
+                               , NA, vol_log_m3_ha)
+           , vol_log_m3_ha= ifelse(survey_lis & dbh_class_5cm %in% diam_klasses_under_30cm
+                               , NA, vol_log_m3_ha)
+         ) %>% 
+    select(-survey_lis)
+  
+  tabel
+  }
+
+# test voor één tabel
+# test <- correctie_2(tab = dendro_by_diam_plot, info = plotinfo)
+
+# voor alle tabellen mbv "map"
+# tbls <- map(tbl_namen, ~ inlezen_functie(.x))
+tbls <- map(corr_2, \(x) correctie_2(x, plotinfo))
+
+for (tablename in names(tbls)) {
+     assign(tablename, tbls[[tablename]])
+}
+```
+
+# Berekening plotdata LIS 
+
+NIET DOEN, geen zin, geeft geen info over individuele plots. 
+
+
+# Datacontrole
+
+## Ontbrekende dbh 
+
+Werden reeds verwijderd hoger. 
+
+
+
+## NA's in data_dendro_calc
+
+want bij optellen wordt dat 0 in de calc functies
+
+```{r results='hide'}
+names(data_dendro_calc)
+```
+
+```{r}
+col <- c("basal_area_alive_m2_ha","basal_area_dead_m2_ha", 
+         "vol_alive_m3_ha", "vol_dead_standing_m3_ha", 
+         "vol_bole_alive_m3_ha","vol_bole_dead_m3_ha", 
+         "number_of_trees_alive_ha", "number_of_trees_dead_ha")
+
+data_dendro_calc %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+
+# t <- data_dendro_calc %>% 
+#   filter(plot_id == 875 & period == 3 & alive_dead == 12) %>% 
+#   select(plot_id, tree_measure_id, species, period, 
+#          basal_area_alive_m2_ha, basal_area_dead_m2_ha, everything())
+
+# Verklaring: dbh_mm op niveau van trees genoteerd, maar wel als hakhout aangeduid
+# gevolg: dbh_mm = NA => geen BA en V berekend
+
+```
+
+## Snags zonder hoogte
+
+Te checken op niveau van de stems
+
+```{r missing_height}
+missing_height <- data_stems_calc %>% 
+  filter(intact_snag == 20 & is.na(height_m)) 
+
+nrow(missing_height) == 0
+```
+
+# Extra processing
+
+## Alles samenvoegen
+
+Lijst `dendro` opnieuw aanmaken
+
+```{r}
+dendro <- list(
+  # gecorrigeerde standaard forrescalc files nalv vol_logs_above30cm & LIS
+  dendro_by_plot = by_plot
+ , dendro_by_plot_species = by_plot_species
+ , deadw_by_decay_plot = by_decay_plot
+ , deadw_by_decay_plot_species = by_decay_plot_species
+ , dendro_by_diam_plot = by_diam_plot
+ , dendro_by_diam_plot_species = by_diam_plot_species)
+
+
+```
+
+
+## Plotinfo toevoegen
+
+Plotinfo (`plot_id`, `forest_reserve`, `period` en `survey_number`) toevoegen aan de resultaten
+
+```{r join_plottype_surveynr_BR}
+dendro_plotinfo <- lapply(dendro, function(x) left_join(x, plotinfo %>% select(plot_id, forest_reserve, period, survey_number), by = c("plot_id", "period")))
+# lapply: same function over all elements of the list
+```
+
+
+## Eventueel afronden
+
+```{r afronden, eval=FALSE}
+dendro_plotinfo_round <- dendro_plotinfo %>% 
+  lapply(., function(x) forestmangr::round_df(x, 2))
+```
+
+
+```{r CreateSeparateDataframesDendro2}
+for (tablename in names(dendro_plotinfo)) {
+     assign(tablename, dendro_plotinfo[[tablename]])
+} 
+
+```
+
+
+# Export
+
+Resultaten worden opgeslagen op c-schijf en in teamdrive:
+
+```{r}
+path_to_plotdata_pc
+path_to_plotdata_teamdrive 
+
+```
+
+Enkele verduidelijkingen:
+
+* "number_of_tree_species" = aantal soorten obv de levende bomen
+
+* "stems_per_tree" = meerstammigheid (stem_number_ha / number_of_trees_ha): heeft hier geen zin, maar dient als insteek voor berekeningen per soort
+
+* "vol_bole_alive_m3_ha" en "vol_bole_dead_m3_ha": volume zonder crown, 
+versus "vol_alive_m3_ha" en "vol_dead_standing_m3_ha"
+
+* "vol_log_m3_ha": liggend dood hout (NA als er geen deadwood survey gebeurd is)
+
+* "vol_deadw_m3_ha": wordt hier niet meer berekend (staand en liggend dood hout samen)
+want onduidelijk welke fracties geteld worden (LIS of FAS of beide)
+
+
+```{r save, eval=FALSE}
+save_results_xlsx(
+    results = list(plotinfo = plotinfo),
+    output_dir = path_to_plotdata_pc
+  )
+
+save_results_xlsx(
+    results = dendro_plotinfo,
+    output_dir = path_to_plotdata_pc
+  )
+
+```
+
+
+```{r save_teamdrive, eval=FALSE}
+save_results_xlsx(
+    results = list(plotinfo = plotinfo),
+    output_dir = path_to_plotdata_teamdrive 
+  )
+
+save_results_xlsx(
+    results = dendro_plotinfo,
+    output_dir = path_to_plotdata_teamdrive 
+  )
+
+```
+
+
+
+# Copy html to teamdrive
+
+Na knitting - manueel
+
+```{r eval = FALSE}
+# Specify the path of the file you want to copy
+source_file <- here::here(paste0("Scripts/Per_gebied/", forestreserve_short, "/", forestreserve_short, "_dendro_2026.html"))
+
+
+# Specify the destination directory where you want to copy the file
+destination_dir <- path_to_plotdata_teamdrive
+
+# Copy the file to the destination directory
+file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
+# ? file.copy
+```
