@@ -1,0 +1,997 @@
+---
+title: "Statistics per strict forest reserve (derived from circular plots)"
+subtitle: "Testen allerlei"
+author: "Anja Leyman"
+date: "11/3/2026"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: FALSE
+      smooth_scroll: FALSE
+---
+
+# Setup
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+
+```
+
+Initieel in kader van zenodo, gaandeweg ruimere tests
+
+```{r Path}
+# deze worden ook in "Setup.R" gedefinieerd (aanroepen van "Paths.R")
+# hier ev. extra "paths" toevoegen indien nodig 
+
+path_to_datarequest <- "C:/03_BR/1_DataVerwerkingBR/Open_data_zenodo/"
+
+path_to_datarequest_gdrive <- paste0(path_to_output_gdrive, "ZENODO_open_data/")
+```
+
+
+# Vraagstelling
+
+Dit script heeft als doel een dataset te creëren voor publicatie op zenodo, 
+met globale statistieken per bosreservaat.
+
+Op teamoverleg besproken:   
+
+- plot-level resultaten vegetatie en dendrometrie als aparte datasets publiceren
+- belangrijkste statistieken, niet tot op niveau diameterklasse, 
+maar ev. wel tot op soortniveau of afbraakklasse bij liggend dood hout
+- species (latijnse naam) en decaystage mee opnemen (niet via LU-lists)
+
+Beslist om ons te beperken tot de strikte bosreservaten, dus zonder De heide, 
+Ename en communal deel van Kluisbos. 
+
+Best vertrekken van de plot-level data die aangemaakt zijn voor zenodo, zie 
+`r path_to_datarequest_gdrive`. 
+
+
+# Inladen data
+
+We vertrekken van het datapackage waar alle tabellen in zitten,  ook de 
+lookuplijsten en strata.
+
+```{r}
+datapackage <- read_forresdat(git_ref_type = "branch", git_reference = "develop")
+```
+
+
+```{r }
+# plotinfo <- read_vc(file = "plotinfo", root = path_to_forresdat_data) %>% 
+#   filter(plottype == "CP" & forest_reserve != "De heide")
+# colnames(plotinfo)
+# 
+# list_CP <- plotinfo$plot_id  
+# n_distinct(plotinfo$plot_id) == 947
+# length(list_CP) == 2101
+```
+
+
+
+<!-- # Inladen lookuplijsten -->
+
+<!-- ```{r load_LU_lists, eval = FALSE} -->
+<!-- con <- odbcConnectAccess2007(path_to_fieldmap_db) -->
+
+<!--   qSpecies <- sqlFetch(con, "qspecies", stringsAsFactors = FALSE) -->
+<!--   qDecaystage <- sqlFetch(con, "qdecaystage", stringsAsFactors = FALSE) -->
+<!--   qHeightClass <- sqlFetch(con, "qHeightClass_regeneration", stringsAsFactors = FALSE) -->
+<!--   qHerbSpecies <- sqlFetch(con, "qHerbSpecies240810", stringsAsFactors = FALSE) -->
+<!--   qBrowseIndex <- sqlFetch(con, "qBrowsIndex", stringsAsFactors = FALSE) -->
+
+<!-- odbcClose(con) -->
+<!-- ``` -->
+
+<!-- ```{r eval = FALSE} -->
+<!-- qSpecies <- qSpecies %>%  -->
+<!--   select(1:3) %>%  -->
+<!--   rename(name_nl = Value1,  -->
+<!--          name_sc = Value2) -->
+
+<!-- qHerbSpecies <- qHerbSpecies %>%  -->
+<!--   select(1:3) %>%  -->
+<!--   rename(name_nl = Value1,  -->
+<!--          name_sc = Value2) -->
+
+
+
+<!-- ``` -->
+
+<!-- # Inladen datapackage -->
+
+<!-- ```{r} -->
+<!-- datapackage <- read_forresdat(git_ref_type = "branch", git_reference = "develop") -->
+<!-- ``` -->
+
+
+# Statistics
+
+Zie functions_overall_statistics.R 
+
+<!-- ## Algemeen -->
+
+<!-- Functie `create_statistics()` zou normaliter moeten toelaten om een year-range toe te voegen. -->
+<!-- Lukt niet (issue aangemaakt). -->
+<!-- Daarom mee opgenomen in de functies. -->
+
+Selectie van de strikte reservaten pas op einde, statistics/functies op alle reservaten samen.
+Dan hebben we de keuze welke we weergeven.
+
+Dus niet in de functies opgenomen.
+Wel in elke functie ename en kluisbos opgesplitst, naargelang hun beheer en al dan niet
+open.
+Statistieken die daar geen rekening mee houden, zijn weinig zeggend.
+
+
+## Berekenen dendro (met logs en carbon)
+
+```{r stepwise_dendro, eval = FALSE}
+stat_dendro <- statistics_dendro(datapackage) 
+# ok
+
+stat_dendro_spec <- statistics_dendro_species(datapackage)
+# ok
+
+stat_dim <- statistics_dendro_diam(datapackage)
+# ok
+stat_dim %>% 
+  filter(forest_reserve == "Zoniën UITBR_1995" 
+         & period == 1 
+         & str_detect(variable, "log")) %>% nrow() == 0
+# bij logs geen diameterklasse genoteerd
+
+
+stat_dim_spec <- statistics_dendro_diam_species(datapackage)
+# 42819 wordt 24146 zonder 0-en
+# pas erna wordt afgerond
+# ok
+# geen lis-volumes per diameterklasse, enkel log
+# wordt enkel NA als geen opname gebeurd is
+# bv JAnsh periode 3
+# 20-25 zou NA moeten zijn
+t <- stat_dim_spec %>% filter(str_detect(forest_reserve, "Jansh")) %>% 
+  filter(str_detect(variable, "basal"))
+t <- stat_dim_spec %>% filter(str_detect(forest_reserve, "Kluisbos_m")) %>% 
+  filter(str_detect(variable, "log"))
+
+stat_carbon <- statistics_carbon(datapackage)
+t <- stat_carbon %>% filter(str_detect(forest_reserve, "Kluisbos_m")) %>% 
+  filter(str_detect(variable, "log"))
+t <- stat_carbon %>% filter(str_detect(forest_reserve, "UITBR")) %>% 
+  filter(str_detect(variable, "log"))
+# ok
+
+
+stat_deadw_decay <- statistics_deadw_decay(datapackage)
+# ok
+stat_deadw_decay %>% filter(str_detect(forest_reserve, "Jansh")) %>% 
+  filter(str_detect(variable, "log"))
+
+stat_deadw_decay %>% filter(str_detect(forest_reserve, "Jansh")) %>% 
+  filter(str_detect(variable, "lis"))
+
+#' Forest_reserves without decaystage of deadwood (Kersselaerspleyn, period 1), 
+#' or without full survey of deadwood (Kluisbos_managed, period 2: LIS) 
+#' were removed from the dataset.
+#' 
+#' is dat????
+t <- stat_deadw_decay %>% 
+  filter(forest_reserve == "Zoniën UITBR_1995" 
+                                 & period == 1)
+t <- stat_deadw_decay %>% 
+  filter(forest_reserve == "Kluisbos_managed")
+# 18 plots met logs - ok
+
+
+stat_deadw_decay_spec <- statistics_deadw_decay_species(datapackage)
+t <- stat_deadw_decay_spec %>% filter(str_detect(forest_reserve, "Jansh") &
+                                        name_nl == "Beuk") %>% 
+  filter(str_detect(variable, "lis"))
+t <- stat_deadw_decay_spec %>% filter(str_detect(forest_reserve, "Kluisbos") &
+                                        name_nl == "Beuk") %>% 
+  filter(str_detect(variable, "log"))
+# !! klopt niet: toch maar 18 plots waar logs opgemeten zijn
+t <- resultaat %>% 
+  filter(forest_reserve == "Kluisbos_managed")
+# 18 plots met logs ?
+# NEE? nu niks
+
+t2 <- dataset_0 %>% 
+  filter(forest_reserve == "Kluisbos_managed" & species == 7)
+
+
+```
+
+```{r eval = FALSE}
+# waarom maar 65 plots in kluisbos_sfr als ik deadwood stat bereken?
+
+# omvormen van plots met niks deadwood naar nullen ipv NA's (na right_join)
+dataset1 %>% filter(vol_dead_standing_m3_ha == 0) %>% nrow() # 2376
+dataset2 %>% filter(vol_dead_standing_m3_ha == 0) %>% nrow() # 2505
+
+dataset1 %>% filter(is.na(vol_dead_standing_m3_ha)) %>% nrow() # 129
+dataset2 %>% filter(is.na(vol_dead_standing_m3_ha)) %>% nrow() # 0
+
+2376+129==2505
+
+# KLUISBOS CHECK
+### 1
+stat_dendro %>% filter(str_detect(forest_reserve, "Kluisbos")) %>% 
+  filter(str_detect(variable, "log"))
+# kluisbos: 67 plots in BR en 18 in managed: OK (cfr plotinfo)
+stat_dendro %>% filter(str_detect(forest_reserve, "Kluisbos")) %>% 
+  filter(str_detect(variable, "lis"))
+# kluisbos: 67 plots in BR en 61 (18+43) in managed: OK (cfr plotinfo)
+
+### 3
+stat_deadw_decay %>% filter(str_detect(forest_reserve, "Kluisbos")) %>% 
+  filter(str_detect(variable, "log"))
+# SFR: 65 plots versus 67 waar logs opgemeten zijn? 
+stat_deadw_decay %>% filter(str_detect(forest_reserve, "Kluisbos")) %>% 
+  filter(str_detect(variable, "lis"))
+# ? 29 lis terwijl volgens plotinfo 43 
+
+
+
+### 
+resultaat %>% filter(str_detect(forest_reserve, "Kluisbos") & name_nl == "Beuk") %>% 
+  filter(str_detect(variable, "log"))
+# SFR: 65 plots versus 67 waar logs opgemeten zijn? 
+resultaat %>% filter(str_detect(forest_reserve, "Kluisbos") & name_nl == "Beuk") %>% 
+  filter(str_detect(variable, "lis"))
+# ? 29 lis terwijl volgens plotinfo 43 
+
+plotinfo %>% filter(str_detect(forest_reserve, "Kluisbos")) %>% 
+  group_by(forest_reserve, survey_deadw, survey_lis) %>% 
+  summarise(n_plots = n()) %>% 
+  ungroup()
+
+t <- dataset_0 %>% filter(str_detect(forest_reserve, "Kluisbos") &
+                            !is.na(vol_log_m3_ha))
+n_distinct(t$plot_id)
+67+18 == 85
+
+
+t <- dataset_0 %>% filter(str_detect(forest_reserve, "Kluisbos")) %>% 
+  left_join(plotinfo %>% select(forest_reserve, plot_id, period,
+                                survey_deadw))
+n_distinct(t$plot_id)
+67+18 == 85
+```
+
+
+
+```{r eval = FALSE}
+# check add_zeros bij fctie _species
+
+t <- dataset_0 %>% 
+  filter(forest_reserve == "Jansheideberg")
+
+t <- dataset_0 %>% 
+  filter(forest_reserve == "Zoniën KERN_1983")
+
+# zijn er soorten die nergens in JHB voorkomen en toch vermeld worden? 
+t2 <- t %>% group_by(period, species) %>% 
+  summarise(nr_trees_alive = sum(number_of_trees_ha)
+            , BA_dead = sum(basal_area_dead_m2_ha)
+            , logs = sum(vol_log_m3_ha)
+            , lis = sum(vol_lis_m3_ha)) %>% 
+  ungroup()
+# nee, enkel soorten die ergens in de drie periodes voorkomen
+
+# WEL OPPASSEN MET LIS
+# waar niks gemeten is, zijn ALLE variabelen op 0 gezet, als er iets gemeten is, zijn NA's behouden
+# => CORRECTIE NODIG
+# "defaults to na" is enkel nuttig dat iets NA moet zijn als er niks is, maar hier moet afhankelijk van survey_lis de waardes 0 of NA zijn. 
+
+
+
+# EN MET KLUISBOS MANAGED
+t <- dataset_0 %>% 
+  filter(str_detect(forest_reserve, "Kluisbos")) %>% 
+  # filter(str_detect(forest_reserve, "Jansh")) %>% 
+  # filter(str_detect(forest_reserve, "Zoni")) %>% 
+  left_join(plotinfo %>% select(plot_id, period
+                                , survey_lis, survey_deadw, diam_min_a4_logs)) %>% 
+  select(forest_reserve,
+         plot_id, period, survey_lis, survey_deadw, diam_min_a4_logs
+         # , vol_lis_m3_ha, vol_lis_10_30cm_m3_ha
+         , dbh_class_5cm, vol_log_m3_ha
+         # , vol_log_above30cm_m3_ha
+         ) 
+
+t2 <- t %>% group_by(period, species) %>% 
+  summarise(nr_trees_alive = sum(number_of_trees_ha)
+            , BA_dead = sum(basal_area_dead_m2_ha)
+            , logs = sum(vol_log_m3_ha)
+            , lis = sum(vol_lis_m3_ha)) %>% 
+  ungroup()
+
+t6 <- plotinfo %>% filter(str_detect(forest_reserve, "Kluisbos_communal"))
+# hier wel sommige plots wel en niet opgemeten met lis => 
+# dan wel belangrijk dat NA of 0 correct geplaatst wordt
+
+t3 <- stat_dendro_spec %>% 
+  filter(str_detect(forest_reserve, "Kluisbos") & variable == "vol_log_m3_ha")
+#
+plotinfo %>% filter(str_detect(forest_reserve, "Kluisbos_m") & survey_deadw == TRUE)
+```
+
+
+
+```{r eval = FALSE}
+t3 <- resultaat %>% 
+  filter(forest_reserve == "Jansheideberg" & name_nl == "Amerikaanse eik")
+# klopt: 0.36 is gemiddelde van 32 nullen en één volume van 11
+
+t3 <- resultaat %>% 
+  filter(forest_reserve == "Zoniën KERN_1983")
+
+& name_nl == "Amerikaanse eik")
+# klopt: 0.36 is gemiddelde van 32 nullen en één volume van 11
+```
+
+
+```{r eval = FALSE}
+t3 <- resultaat %>% 
+  filter(forest_reserve == "Jansheideberg" & variable == "vol_lis_m3_ha")
+# klopt: 0.36 is gemiddelde van 32 nullen en één volume van 11
+
+
+t <- dataset_0 %>% 
+  filter(forest_reserve == "Jansheideberg" & period == 2)
+# soorten die helemaal niet voorkomen in een bepaalde plot krijgen overal 0, zelfs
+# al is daar geen opname gebeurd
+
+# is dat een probleem, want als iets altijd o of NA is dan toch weg,
+# dus geen lis-volume in periode 2
+
+# nu zonder wegfilteren van 0 en NA in resultaat (in functie)
+t4 <- resultaat %>% 
+  filter(forest_reserve == "Jansheideberg" & variable == "vol_lis_m3_ha")
+# inderdaad 50 resultaten meer die niks zeggen
+# allemaal 0 of NA heeft ge
+
+t5 <- resultaat %>% 
+  filter(is.na(mean) & !variable == "stems_per_tree")
+table(t5$variable)
+# vol_lis en log_above_30cmµ
+
+t6 <- resultaat %>% 
+  filter(mean == 0 & !variable == "stems_per_tree") %>% 
+  filter(str_detect(forest_reserve, "Zoni"))
+table(t6$variable)
+```
+
+
+```{r check_yr_range, eval = FALSE}
+  # plotinfo <- read_resource(datapackage, "plotinfo")
+  # dataset <- read_resource(datapackage, "dendro_by_plot") %>% 
+  #   left_join(plotinfo) %>% 
+  #   select(-contains("eg"), -contains("min40cm")) %>% 
+  #   filter(plot_id %in% list_plots$plot_id)
+  #   
+  # variables_for_statistics <- dataset %>% 
+  #   select(contains(c("_ha", "tree")), -contains(c("survey", "40", "core"))) %>% 
+  #   names()
+  # 
+  # variables_for_statistics <- c("basal_area_alive_m2_ha", "number_of_tree_species"
+  #                               , "stem_number_ha", "vol_log_m3_ha")
+  #                               , "vol_lis_m3_ha")
+  # 
+  #   variables_for_statistics <- c("basal_area_alive_m2_ha", "number_of_tree_species"
+  #                               , "stem_number_ha")
+  # 
+  # resultaat <- create_statistics(
+  #   dataset = dataset,
+  #   level = c("period", "forest_reserve"),
+  #   variables = variables_for_statistics,
+  #   # variables = "basal_area_alive_m2_ha",
+  #   include_year_range = TRUE,   
+  #   # year_range: nu nog bug in package, op termijn wel interessant
+  #   na_rm = TRUE # stems_per_tree soms NA
+  #   ) %>% 
+  #   round_df(., 2) %>% 
+  #   # rename(strata = forest_reserve) %>% 
+  #   mutate(strata = NA,
+  #          stratum_name = NA,
+  #          strata2 = NA,
+  #          stratum_name2 = NA) %>% 
+  #   # get_year_range() %>% 
+  #   select(-contains(c("log")))
+```
+
+
+
+```{r overkoepelend_dendro, message=FALSE, warning=FALSE, eval = FALSE}
+dendro_stat <- statistics_dendrometry()
+
+# is een list
+for (tablename in names(dendro_stat)) {
+  assign(tablename, dendro_stat[[tablename]])
+}
+
+# OF (< VBI code)
+list2env(dendro_stat, envir = .GlobalEnv)
+```
+
+```{r eval = FALSE}
+names(dendro_stat)
+
+```
+
+## Berekenen regeneration
+
+```{r stepwise_reg, eval = FALSE}
+reg_by_reserve <- statistics_reg(datapackage)
+  
+
+reg_by_height <- statistics_reg_height(datapackage)
+  
+
+reg_by_height_species <- statistics_reg_height_species(datapackage)
+```
+
+```{r checks_reg1, eval = FALSE}
+# 
+resultaat <- reg_by_reserve
+t <- resultaat %>% filter(str_detect(forest_reserve, "Jansh"))
+
+t <- resultaat %>% filter(str_detect(forest_reserve, "Ename"))
+t <- resultaat %>% filter(str_detect(forest_reserve, "Kluisb"))
+
+# 
+# resources(datapackage)
+```
+
+```{r eval = FALSE}
+# year_reg niet zelfde als year_dendro!!!
+t <- dataset %>% 
+  left_join(plotinfo %>% select(forest_reserve, plot_id, period
+                                  , year_dendro)) %>% 
+  mutate(diff_yr = year - year_dendro) %>% 
+  filter(diff_yr != 0) %>% 
+  select(diff_yr, year, year_dendro, forest_reserve, everything())
+```
+```{r eval = FALSE}
+t <- dataset_0 %>% 
+  filter(str_detect(forest_reserve, "Ever"))
+
+# dataset_0t = zonder inner_join met heightclasses_BR
+t <- dataset_0t %>% anti_join(dataset_0) 
+# 1444
+t %>% filter(is.na(height_class)) %>% nrow() == nrow(t)
+dataset_0t %>% select(plot_id, period) %>% unique() %>% nrow() == 1971
+dataset_0 %>% select(plot_id, period) %>% unique() %>% nrow() == 1971
+dataset %>% select(plot_id, period) %>% unique() %>% nrow() == 1971
+# => 3 plots toegevoegd
+a3 <- dataset_0t %>% select(plot_id, period) %>% unique() %>% 
+  anti_join(dataset %>% select(plot_id, period) %>% unique())
+# volgens mij zijn dat plots waar geen opname gebeurd is => niet behouden
+# MAAR die zitten in dataset_0 én dataset_0t
+# zijn dat de enige plots zonder year? JA
+# zitten NIET in dataset_reg, wat correct is 
+
+# 112, 946, 957: geen opname gebeurd, survey_reg = FALSE
+# maar wegens add_zeros ... => grouping_vars = c("forest_reserve", "period")
+
+a <- dataset_0t %>% filter(plot_id == 811)
+a2 <- dataset_0 %>% filter(plot_id == 811)
+
+```
+
+```{r checks_reg2, eval = FALSE}
+reg_by_height <- statistics_reg_height(datapackage)
+# 
+resultaat <- reg_by_height
+t <- resultaat %>% filter(str_detect(forest_reserve, "Jansh"))
+
+t <- resultaat %>% filter(str_detect(forest_reserve, "Ename"))
+t <- resultaat %>% filter(str_detect(forest_reserve, "Kluisb"))
+t <- resultaat %>% filter(period == 1)
+# 
+# resources(datapackage)
+
+t <- dataset %>% filter(is.na(number_of_tree_species))
+
+```
+
+
+```{r checks_reg3, eval = FALSE}
+reg_by_height_spec <- statistics_reg_height_species(datapackage)
+# 
+resultaat <- reg_by_height_spec
+t <- resultaat %>% filter(str_detect(forest_reserve, "Jansh"))
+
+t <- resultaat %>% filter(str_detect(forest_reserve, "Pruik"))
+# OK, 2 records midenr dan p2 en 3
+t <- resultaat %>% filter(str_detect(forest_reserve, "Kluisb"))
+t <- resultaat %>% filter(period == 1)
+# 
+# resources(datapackage)
+
+t <- dataset %>% filter(is.na(approx_nr_regeneration_ha))
+
+resources(datapackage)
+
+nrow(dataset_0)
+# 155381
+nrow(dataset_0t)
+# 123843
+a3 <- dataset_0 %>% select(plot_id, period, height_class, species) %>% unique() %>%
+  anti_join(dataset_0t %>% select(plot_id, period, height_class, species) %>% unique())
+a3 <- dataset_0 %>% 
+  anti_join(dataset_0t)
+a3 %>% filter(!is.na(species) & !is.na(height_class))
+# één van beide is NA: soort of species
+
+# !! zitten daar nog alle plots in die géén soort en géén 
+# zijn er nullen toegeveogd voor elke combinatie? JA
+dataset_0 %>% filter(!is.na(species) & !is.na(height_class)) %>% select(plot_id, period, height_class, species) %>% unique() %>% nrow()
+#123843
+
+dataset_0t %>% filter(!is.na(species) & !is.na(height_class)) %>% select(plot_id, period, height_class, species) %>% unique() %>% nrow()
+# 123843
+
+nrow(heightclasses_BR)*nrow(species_BR)*sum(n_plots_reg$n_max_plots)
+a <- heightclasses_BR %>% 
+  left_join(species_BR) %>% 
+  left_join(n_plots_reg)
+sum(a$n_max_plots)
+# 123843
+```
+
+
+```{r check_reg4, eval = FALSE}
+reg_by_height_species <- statistics_reg_height_species(datapackage)
+
+resultaat <- reg_by_height_species
+t <- resultaat %>% filter(str_detect(forest_reserve, "Jansh"))
+
+t <- resultaat %>% filter(str_detect(forest_reserve, "Pruik"))
+# OK, 2 records midenr dan p2 en 3
+t <- resultaat %>% filter(str_detect(forest_reserve, "Kluisb"))
+t <- resultaat %>% filter(period == 1)
+# 
+
+```
+
+
+```{r overkoepelend_reg, message=FALSE, warning=FALSE, eval = FALSE}
+reg_stat <- statistics_regeneration(datapackage)
+
+# is een list
+for (tablename in names(reg_stat)) {
+  assign(tablename, reg_stat[[tablename]])
+} 
+
+```
+
+```{r}
+names(reg_stat)
+
+```
+
+
+## Berekenen vegetation
+
+In monitoringrapporten werd als volgt gerapporteerd:   
+
+De resultaten van de inventarisatie van de kruidlaag in 64 proefvlakken van 16 m x 16 m op
+de rasterpunten buiten de kernvlakte, worden weergegeven in tabel 4.7. De tabel geeft de
+frequentie en de karakteristieke bedekking weer van de waargenomen soorten, in dalende
+volgorde van frequentie. De karakteristieke bedekking is de gemiddelde bedekking van een
+soort, in de proefvlakken waarin die soort werd waargenomen. Lege proefvlakken worden
+dus niet in rekening gebracht bij deze berekening.
+
+Bijschrift: Aantal waarnemingen (#) en karakteristieke bedekking (%) van
+vaatplantensoorten in de kruidlaag van 64 proefvlakken op de rasterpunten
+buiten de kernvlakte, ...
+Bron : herblayer_by_plot
+
+Daarnaast een kaartje met per plot:  
+Bijschrift: Aantal soorten en totale bedekking van de kruidlaag in de cirkelplots
+Bron : veg_by_plot
+
+```{r stepwise_veg}
+dataset %>% filter(plot_id < 5000) %>% nrow()
+
+
+veg_by_reserve <- statistics_veg(datapackage)
+# ok
+
+
+herbs_by_reserve <- statistics_herbs(datapackage)
+
+
+```
+
+
+```{r checks_veg1}
+# 
+resultaat <- veg_by_reserve
+resultaat <- herbs_by_reserve
+t <- resultaat %>% filter(str_detect(forest_reserve, "Jansh"))
+
+t <- resultaat %>% filter(str_detect(forest_reserve, "Ename"))
+t <- resultaat %>% filter(str_detect(forest_reserve, "Kluisb"))
+t <- resultaat %>% filter(str_detect(forest_reserve, "Ever"))
+t <- resultaat %>% filter(str_detect(forest_reserve, "Pruik"))
+# 
+# resources(datapackage)
+
+a <- resultaat %>% filter(is.na(mean) & variable == "soildisturbance_game_cover_mid")
+
+a2 <- dataset %>% filter(str_detect(forest_reserve, "Heirn") & period == 1)
+# Heirnisse geen shrub cover genoteerd, nergens
+```
+
+
+```{r overkoepelend_veg, message=FALSE, warning=FALSE}
+veg_stat <- statistics_vegetation()
+
+# is een list
+for (tablename in names(veg_stat)) {
+  assign(tablename, veg_stat[[tablename]])
+} 
+
+```
+
+
+
+```{r}
+names(veg_stat)
+
+```
+
+
+# Correcties over alle dataframes heen
+
+Mbv een list
+
+## Aanpassen naam veld "strata en stratum_name"
+
+Zijn zo aangemaakt, om makkelijk in de resultatendb op te slaan
+
+In dit geval kloppen de namen niet.
+
+Naar zenodo: beter "level".
+Zie functie `create_statistics()`: 
+`level` = grouping variables that determine on which level the values
+should be calculated (e.g. forest_reserve, year and species), given as a
+string or a vector of strings. Defaults to forest_reserve & period.
+
+level1_name, level1
+level2_name,
+
+In florabank maken ze gebruik van "Kenmerk" (bv. diam class) en "Omschrijving" (bv. 5-10 cm)
+In Engels wordt dat    
+- feature/attribute/trait(eigenschap) en
+- characterization/description
+
+
+```{r list_all}
+list_all <- list(
+      stat_dendro = stat_dendro
+      , stat_dendro_by_species = stat_dendro_by_species
+      , stat_dendro_by_diam = stat_dendro_by_diam
+      , stat_dendro_by_diam_species = stat_dendro_by_diam_species
+      , stat_logs_by_decay = stat_logs_by_decay
+      , stat_logs_by_decay_species = stat_logs_by_decay_species
+      , stat_carbon = stat_carbon
+      , stat_reg = stat_reg
+      , stat_reg_by_height = stat_reg_by_height
+      , stat_reg_by_height_species = stat_reg_by_height_species
+      , stat_veg = stat_veg
+      , stat_herbs = stat_herbs
+              )
+
+# functie
+list_all_ <- list_all %>%
+      lapply(., function(x) {
+        data.frame(x) %>%
+          rename(level1 = strata
+                  , level2 = strata2
+                  , description1 = stratum_name
+                  , description2 = stratum_name2)
+        })
+
+list_all <- list_all_
+```
+
+
+## Enkel strict reserves
+
+Verwijderen van "De heide", "Ename" en deel van Kluisbos uit de dataset, want geen 
+onbeheerd bos (geen strikt forest reserve).
+
+
+## Mbv lapply
+
+```{r}
+# test
+
+list_test <- list(
+      stat_dendro_by_reserve = stat_dendro
+      , stat_dendro_by_species = stat_dendro_by_species
+      , stat_dendro_by_diam_species = stat_dendro_by_diam_species)
+
+list_test_ <- list_test %>%
+      lapply(., function(x) {
+        data.frame(x) %>%
+          rename(level1 = strata
+                  , level2 = strata2
+                  , description1 = stratum_name
+                  , description2 = stratum_name2) %>% 
+          filter(forest_reserve != "De heide")
+        })
+
+```
+
+
+
+# Shapefiles - NEE
+
+Enkel de bosreservaten met cirkelplots.
+
+Shapefile dateert van 2012 en bevat volgende reservaten (nog) niet:
+
+- ename
+- kluisbos
+- Zwaenepoel
+
+```{r}
+list_BR <- plotinfo %>% distinct(forest_reserve)
+```
+
+```{r}
+path_to_shp <- "G:/Gedeelde drives/Team_Boseco/00_projecten/PRJ_BR_Bosreservaten/gebieden/0_overkoepelend/"
+
+shp <- "bosreservaten_IntensieveMonitoring.shp"
+
+path_to_shp2 <- "G:/Gedeelde drives/Team_Boseco/00_projecten/PRJ_BR_AanvraagGegevens/00_METADATA-ALL_PLOTS/GIS-lagen bosreservaten/alle cirkelplots/"
+
+shp2 <- "Bosreservaten_allecirkels.shp"
+
+```
+
+De shapefile `bosreservaten_IntensieveMonitoring.shp` bevat 17 BR-en
+
+Bevat ook deze met enkel een KV => wegfilteren:
+- Hannecartbos
+- Rodebos
+- Walenbos
+- Harras
+
+Anderzijds zijn de volgende reservaten er bij gekomen:
+- Zwaenepoel
+- Kluisbos
+- Ename
+
+Shapefile `Bosreservaten_allecirkels.shp` is correcter/vollediger:
+
+Everzwijnbad (Meerdaalwoud)
+Withoefse Heide
+Wijnendalebos
+Heirnisse
+Jansheideberg (Hallerbos)
+Ter Rijst
+Pruikemakers (Meerdaalwoud)
+Liedekerkebos
+Sevendonck - eiken-berken
+Sevendonck - elzenbroek
+Muizenbos
+Bos t'Ename
+De Heide (Meerdaalwoud)
+Kluisbos
+Kolmontbos
+Kersselaerspleyn (ZoniÔö£┬¢nwoud)
+Harras (ZoniÔö£┬¢nwoud)
+
+
+
+# Strata op niveau van BR - BETER
+
+Tabellen `info_forest_reserve_level_EUFORIA`en `info_forest_reserve_level_management` combineren.
+
+```{r}
+list_BR <- plotinfo %>% distinct(forest_reserve) %>% 
+  filter(forest_reserve != "De heide")
+```
+
+```{r}
+con <- odbcConnectAccess2007(path_to_strata_db)
+ strata_tables <- sqlTables(con) %>% filter(!str_detect(TABLE_NAME, "MSys"))
+ info_EUFORIA <- sqlFetch(con, "info_forest_reserve_level_EUFORIA", stringsAsFactors = FALSE)
+ info_management <- sqlFetch(con, "info_forest_reserve_level_management", stringsAsFactors = FALSE)
+odbcClose(con)
+
+
+names(info_EUFORIA)
+names(info_management)
+
+```
+
+```{r diff_ok, eval = FALSE}
+info_BR <- info_EUFORIA %>% 
+  filter(plottype == "CP")
+
+info_BR2 <- info_management %>% 
+  filter(plottype == "CP")
+
+info_BR %>% anti_join(list_BR)
+info_BR2 %>% anti_join(list_BR)
+list_BR %>% anti_join(info_BR2)
+list_BR %>% anti_join(info_BR) # De heide zit niet mee in data voor euforia, omdat het een managed site is ...
+```
+
+
+```{r info_samenvoegen}
+info_BR <- list_BR %>% 
+  left_join(info_management %>% filter(plottype == "CP")) %>% 
+  left_join(info_EUFORIA %>% filter(plottype == "CP")) %>% 
+  mutate(reserve_area_ha = ifelse(forest_reserve == "De heide",
+                                  31.2, reserve_area_ha)) %>% 
+  rename(forest_typ_1 = For_typ_1
+         , forest_typ_2 = For_typ_2) %>% 
+  select(-contains(c("Id", "plottype", "reserve_name_euforia"
+                     , "_ann_")))  # 
+  
+names(info_BR) 
+
+```
+Eventueel ook aantal cirkelplots toevoegen?
+NEE, want zitten in n_obs.
+
+
+
+
+
+# Export 
+
+## Zenodo: enkel strikte reservaten
+
+Statistieken op bosreservaatsniveau als echte open data publiceren op zenodo 
+(onafhankelijk van het CP-niveau)
+
+Reeds als list samengevoegd in de overkoepelende functies, en ook al afgerond
+(op 2 cijfers na de komma)
+
+
+```{r strikte_reservaten}
+strict_reserve_plots <- get_strict_forest_reserve_plots(datapackage)
+n_distinct(strict_forest_plots$plot_id) == 813
+# 813
+nrow(strict_reserve_plots)
+
+list_plots <- strict_reserve_plots
+
+```
+
+
+```{r strikte_reservaten2}
+# nog aan te passen!!
+
+
+  if (strict_reserve) {
+    list_plots <- get_strict_forest_reserve_plots(datapackage)
+  } else {
+    list_plots <- plotinfo %>% 
+      select(forest_reserve, plot_id) %>% unique()
+  }
+```
+
+
+
+
+```{r list_round_NIET_NODIG, eval = FALSE}
+list_dendro <- list(
+      stat_dendro = by_reserve
+      , stat_dendro_by_species = by_species
+      , stat_dendro_by_diam = by_diam
+      , stat_dendro_by_diam_species = by_diam_species
+      , stat_logs_by_decay = by_decay
+      , stat_logs_by_decay_species = by_decay_species
+      , stat_carbon = carbon_by_reserve
+      )
+
+list_reg <- list(
+      stat_reg = reg_by_reserve
+      , stat_reg_by_height = reg_by_height
+      , stat_reg_by_height_species = reg_by_height_species
+      )
+
+list_veg <- list(
+      stat_veg = veg_by_reserve
+      , stat_herbs = herbs_by_reserve
+              ) # geen afronding nodig
+
+# ----
+list_dendro <- list_dendro %>% 
+  lapply(., function(x) mutate_at(x, vars(matches("_ha|_tree")), round, 2))
+
+list_reg <- list_reg %>% 
+  lapply(., function(x) mutate_at(x, vars(matches("_ha|_tree")), round, 0))
+
+#uitgebreider kan ook
+    # list_dendro_ <- list_dendro %>% 
+    #   lapply(., function(x) {
+    #     data.frame(x) %>% 
+    #       mutate_at(vars(matches("_ha|_tree")), round, 2)})
+
+```
+
+
+```{r list_all_export, eval = FALSE}
+path_to_datarequest
+
+# stats
+for (i in 1:length(list_all)){
+	  write.csv2(list_all[[i]], paste0(path_to_datarequest, "BR_niveau/statistics_per_reserve/", names(list_all)[i], ".csv")) 
+}
+```
+
+```{r list_export_OLD, eval = FALSE}
+path_to_datarequest
+
+# stats
+for (i in 1:length(dendro_stat)){
+	  # selectie <- list_dendro[[i]]
+	  # naam <- paste0(names(list_dendro)[i], ".csv")
+	  write.csv2(dendro_stat[[i]], paste0(path_to_datarequest, "BR_niveau/", names(dendro_stat)[i], ".csv")) 
+}
+
+for (i in 1:length(reg_stat)){
+	  # selectie <- list_dendro[[i]]
+	  # naam <- paste0(names(list_dendro)[i], ".csv")
+	  write.csv2(reg_stat[[i]], paste0(path_to_datarequest, "BR_niveau/", names(reg_stat)[i], ".csv")) 
+}
+
+for (i in 1:length(veg_stat)){
+	  # selectie <- list_dendro[[i]]
+	  # naam <- paste0(names(list_dendro)[i], ".csv")
+	  write.csv2(veg_stat[[i]], paste0(path_to_datarequest, "BR_niveau/", names(veg_stat)[i], ".csv")) 
+}
+
+# info_BR
+write.xlsx(info_BR, paste0(path_to_datarequest, "BR_niveau/", "site_info.xlsx"))
+
+```
+
+Ook rechtstreeks naar gdrive
+
+```{r list_export_gdrive, eval = FALSE}
+path_to_datarequest_gdrive
+
+# stats
+for (i in 1:length(list_all)){
+	  write.csv2(list_all[[i]], paste0(path_to_datarequest_gdrive, "BR_niveau/statistics_per_reserve/", names(list_all)[i], ".csv")) 
+}
+
+# info_BR
+write.xlsx(info_BR, paste0(path_to_datarequest_gdrive, "BR_niveau/", "site_info.xlsx"))
+
+```
+

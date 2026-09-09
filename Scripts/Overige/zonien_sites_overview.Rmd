@@ -1,0 +1,65 @@
+---
+title: "Zonien - overzicht sites"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: TRUE
+      smooth_scroll: TRUE
+---
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 7,
+  fig.height = 3,
+  fig.align = TRUE)
+
+library(here)
+library(writexl)
+library(scales)
+
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+
+```
+
+
+```{r}
+datapackage <- read_forresdat(git_ref_type = "branch", git_reference = "develop")
+
+plotinfo <- get_plotinfo_cp_for_stat(datapackage)
+ 
+dendro_by_plot <- read_resource(datapackage, "dendro_by_plot") %>% 
+    inner_join(plotinfo %>% select(forest_reserve, plot_id, period)) %>% # only cp
+    select(-contains(c("40cm")))
+
+plotinfo <- read_resource(datapackage, "plotinfo") 
+
+
+zonien <- plotinfo %>% 
+  filter(str_detect(forest_reserve, "Zoni")) %>% 
+  select(forest_reserve, plottype) %>% 
+  unique()
+
+write_xlsx(zonien, file.path(here::here(), "zonien.xlsx"))
+write.csv2(zonien, file.path(here::here(), "zonien_.csv"))
+
+test <- read.csv2(file.path(here::here(), "zonien_.csv"))
+# correct ingelezen
+
+```

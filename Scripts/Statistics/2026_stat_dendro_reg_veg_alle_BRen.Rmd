@@ -1,0 +1,356 @@
+---
+title: "Statistieken per bosreservaat"
+subtitle: "Dendrometrie, verjonging en vegetatie"
+author: "Anja Leyman"
+date: "18/3/2026"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: FALSE
+      smooth_scroll: FALSE
+---
+
+# Setup
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+
+library(frictionless)
+library(jsonlite)
+
+# run <- "test_AL"
+```
+
+
+```{r Setup2}
+# hier extra "paths" 
+path_to_datarequest <- paste0(path_to_dataverwerking, "Output/_statistics/")
+path_to_datarequest_teamdrive <- path_to_statistics_gdrive
+
+path_to_datarequest
+path_to_datarequest_teamdrive
+
+path_to_html_teamdrive <- path_to_datarequest_teamdrive
+```
+
+
+# Vraagstelling
+
+Statistieken op niveau van bosreservaat, obv de cirkelplots.
+
+Alle basis variabelen van de monitoring:    
+- dendro    
+- dendro_per_species    
+- dendro_by_diam    
+- ....    
+- decaystage dood hout    
+- reg   
+- reg_per_height      
+- reg_per_height_species    
+- veg     
+
+
+Statistieken worden weggeschreven naar de c-schijf en naar teamdrive:
+
+- C:\03_BR\1_DataVerwerkingBR\Output\_statistics
+- G:\Gedeelde drives\Team_Boseco_BR\PRJ_BR_AanvraagGegevens\00_METADATA-ALL_PLOTS\_statistics
+
+Om gemiddeldes per BR te verkrijgen, beperken we ons tot de CP's. 
+(KV's worden best afzonderlijk verwerkt)
+
+We maken gebruik van de functies die alles integreren:
+zie `functions_overall_statistics.R`.
+
+Elke functie bevat volgende onderdelen:   
+
+- inlezen data     
+- filteren op CP’s & afgewerkt & opsplitsen Ename en Kluisbos
+- toevoegen nulwaardes waar nodig    
+
+Deze statistieken zijn vervolgens de insteek voor     
+- zenodo      
+- bookdown-rapporten      
+- …       
+
+
+# Inladen data
+
+Functie `read_forresdat()` haalt het datapackage als geheel binnen,
+mét de optie om de branch te specifiëren.
+
+Daar zitten ook alle lookuplijsten en strata in.
+
+<!-- Op termijn - als data op zenodo staat - kan ook `frictionlesss::read_package()`  -->
+<!-- gebruikt worden (https://docs.ropensci.org/frictionless/) -->
+
+<!-- ``` -->
+<!-- package <- read_package("https://zenodo.org/records/10053702/files/datapackage.json") -->
+<!-- ``` -->
+
+<!-- Met behulp van het package [frictionless](https://docs.ropensci.org/frictionless/) kan je  -->
+<!-- vervolgens het datapackage (forresdat) makkelijk bevragen. -->
+
+Hierna een overzicht van alle tabellen in het datapackage:
+
+```{r read_datapackage}
+datapackage <- read_forresdat(git_ref_type = "branch", git_reference = "develop")
+
+# overzicht van wat er in forresdat (het datapackage) zit 
+frictionless::resources(datapackage)
+
+```
+
+Volgende versie wordt gebruikt:
+
+```{r }
+# versie forresdat
+attr(datapackage, "forresdat")
+```
+
+
+```{r read_resources, eval = FALSE}
+# mochten we aparte tabellen willen, niet nodig bij gebruik van functies
+
+# qiufroheight <- read_resource(datapackage, "qiufroheight")
+# qalive_dead <- read_resource(datapackage, "qalive_dead")
+
+# mbv purr::map
+tablenames_input <- c("qiufroheight", "qalive_dead", "qdecaystage"
+                      , "qspecies", "qind_shoot_cop"
+                      , "plotinfo", "strata_remaining"
+                      , "plots_excluded_from_network"
+                      , "dendro_by_plot"
+                      , "reg_by_plot")
+
+tables <- map(tablenames_input, function(x) read_resource(datapackage, x))
+#The input was not named
+names(tables) <- tablenames_input
+
+# Create separate dataframes
+for (tablename in names(tables)) {
+     assign(tablename, tables[[tablename]])
+} 
+
+names(tables)
+
+# lkp-tables beetje omvormen, enkel relevante kolommen overhouden
+# daartoe tabellen in een list stoppen
+lkp_tables <- list(qiufroheight = qiufroheight, qalive_dead = qalive_dead
+                   , qdecaystage = qdecaystage, qspecies = qspecies
+                   , qind_shoot_cop = qind_shoot_cop)
+
+tables <- map(lkp_tables, function(x) x %>% dplyr::select(-Value3, -OrderField, -Active))
+
+# Create separate dataframes
+for (tablename in names(tables)) {
+     assign(tablename, tables[[tablename]])
+} 
+
+qspecies <- qspecies %>% select(ID, name_nl = Value1, name_sc = Value2)
+```
+
+
+```{r eval = FALSE}
+# extra bevragingen
+datapackage$resources[[2]]$path   # path/naam van het tweede dataframe
+
+# The column names and types are derived from the resource schema
+purrr::map_chr(datapackage$resources[[2]]$schema$fields, "name")
+purrr::map_chr(datapackage$resources[[2]]$schema$fields, "type")
+purrr::map_chr(datapackage$resources[[2]]$schema$fields, "description")
+
+datapackage$resources[[3]]$path 
+purrr::map_chr(datapackage$resources[[3]]$schema$fields, "extra_info")
+# lukt wellicht niet omdat extra_info ook vaak leeg is
+info_3 <- cbind(purrr::map_chr(datapackage$resources[[3]]$schema$fields, "name")
+                , purrr::map_chr(datapackage$resources[[3]]$schema$fields, "type")
+                , purrr::map_chr(datapackage$resources[[3]]$schema$fields, "description"))
+
+datapackage$resources[[4]]$path 
+purrr::map_chr(datapackage$resources[[4]]$schema$fields, "name")
+purrr::map_chr(datapackage$resources[[4]]$schema$fields, "type")
+
+# Read data from the resource "dendor_by_plot" with column selection
+read_resource(datapackage, "dendro_by_plot", col_select = c("plot_id", "year"))
+```
+
+
+# Splitsen van Kluisbos en Enamebos
+
+In elke functie voor berekening van de statistieken wordt gestart met de functie
+`get_plotinfo_cp_for_stat()`.
+
+Die selecteert enkel de "processed" cirkelplots en splitst Ename en Kluisbos op
+in twee delen, mbv de functies `split_Ename()` en `split_Kluisbos()`:
+
+- Ename_open & Ename_forest
+- Kluisbos_SFR & Kluisbos_managed
+
+DH-curves zijn weliswaar aangemaakt voor volledig Kluisbos (beheerd + onbeheerd samen).
+
+
+# Statistieken
+
+## Dendro (met logs en carbon)
+
+```{r stepwise_dendro, eval = FALSE}
+stat_dendro <- statistics_dendro(datapackage) 
+stat_dendro_spec <- statistics_dendro_species(datapackage)
+stat_dim <- statistics_dendro_diam(datapackage)
+stat_dim_spec <- statistics_dendro_diam_species(datapackage)
+stat_carbon <- statistics_carbon(datapackage)
+stat_deadw_decay <- statistics_deadw_decay(datapackage)
+stat_deadw_decay_spec <- statistics_deadw_decay_species(datapackage)
+```
+
+```{r dendro_all}
+list_dendro_stat <- statistics_dendrometry(datapackage)
+```
+
+```{r}
+names(list_dendro_stat)
+```
+
+```{r eval = FALSE}
+# dataframes uit een lijst toevoegen aan environment
+list2env(list_dendro_stat, envir = .GlobalEnv)
+```
+
+```{r export_dendro, eval = FALSE}
+# save_results_xlsx(list_dendro_stat, path_to_datarequest) # lukt niet, te zwaar
+save_results_csv(list_dendro_stat, path_to_datarequest)
+
+save_results_csv(list_dendro_stat, path_to_datarequest_teamdrive)
+```
+
+
+## Verjonging
+
+```{r stepwise_reg, eval = FALSE}
+reg_by_reserve <- statistics_reg(datapackage)
+reg_by_height <- statistics_reg_height(datapackage)
+reg_by_height_species <- statistics_reg_height_species(datapackage)
+```
+
+
+```{r reg_all}
+list_reg_stat <- statistics_regeneration(datapackage)
+```
+
+```{r}
+names(list_reg_stat)
+```
+
+```{r eval = FALSE}
+# dataframes uit een lijst toevoegen aan environment
+list2env(list_reg_stat, envir = .GlobalEnv)
+```
+
+```{r export_reg, eval = FALSE}
+# save_results_xlsx(list_dendro_stat, path_to_datarequest) # lukt niet, te zwaar
+save_results_csv(list_reg_stat, path_to_datarequest)
+
+save_results_csv(list_reg_stat, path_to_datarequest_teamdrive)
+```
+
+
+
+
+## Vegetatie
+
+In monitoringrapporten werd als volgt gerapporteerd:   
+
+De resultaten van de inventarisatie van de kruidlaag in 64 proefvlakken van 
+16 m x 16 m op de rasterpunten buiten de kernvlakte, worden weergegeven in 
+tabel 4.7. De tabel geeft de frequentie en de karakteristieke bedekking weer 
+van de waargenomen soorten, in dalende volgorde van frequentie. 
+De karakteristieke bedekking is de gemiddelde bedekking van een
+soort, in de proefvlakken waarin die soort werd waargenomen. 
+Lege proefvlakken worden dus niet in rekening gebracht bij deze berekening.
+
+Bijschrift: Aantal waarnemingen (#) en karakteristieke bedekking (%) van
+vaatplantensoorten in de kruidlaag van 64 proefvlakken op de rasterpunten
+buiten de kernvlakte, ...
+Bron : herblayer_by_plot
+
+Daarnaast een kaartje met per plot:  
+Bijschrift: Aantal soorten en totale bedekking van de kruidlaag in de cirkelplots
+Bron : veg_by_plot
+
+
+```{r stepwise_veg}
+veg_by_reserve <- statistics_veg(datapackage)
+herbs_by_reserve <- statistics_herbs(datapackage)
+
+```
+
+```{r veg_all}
+list_veg_stat <- statistics_vegetation(datapackage)
+```
+
+```{r}
+names(list_veg_stat)
+```
+
+```{r eval = FALSE}
+# dataframes uit een lijst toevoegen aan environment
+list2env(list_veg_stat, envir = .GlobalEnv)
+```
+
+```{r export_veg, eval = FALSE}
+# save_results_xlsx(list_dendro_stat, path_to_datarequest) # lukt niet, te zwaar
+save_results_csv(list_veg_stat, path_to_datarequest)
+
+save_results_csv(list_veg_stat, path_to_datarequest_teamdrive)
+```
+
+
+# Export
+
+```{r export_resultatendb_NIET_MEER, eval = FALSE}
+My.ResultsToDatabase(results = resultaat, 
+                     dbHandle = dbResults, 
+                     tblName = "tblResultaten", 
+                     scriptName = "dendro_per_BR.Rmd", 
+                     description = "dendro per ha per bosreservaat (enkel bosplots)",
+                     request_from = "Team bosecologie",
+                     run_by = run)
+```
+
+
+
+# Copy html to teamdrive
+
+Na knitting - manueel
+
+```{r eval = FALSE}
+# Specify the path of the file you want to copy
+source_file <- here::here(paste0("Scripts/Statistics/2026_dendro_reg_veg_alle_BRen.html"))
+
+# Specify the destination directory where you want to copy the file
+destination_dir <- path_to_html_teamdrive
+
+# Copy the file to the destination directory
+file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
+# ? file.copy
+```

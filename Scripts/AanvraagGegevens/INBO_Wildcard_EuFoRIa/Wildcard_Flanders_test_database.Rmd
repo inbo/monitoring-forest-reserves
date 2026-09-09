@@ -1,0 +1,650 @@
+---
+title: "Wildcard - Flemish forest reserve network"
+subtitle: "Queries"
+author: "Anja Leyman"
+date: "25/02/2025"  
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: TRUE
+      smooth_scroll: TRUE
+---
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 7,
+  fig.height = 3,
+  fig.align = TRUE)
+
+library(here)
+library(writexl)
+library(scales)
+library(sf)
+# install.packages("rjson")
+library(rjson)
+
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+```
+
+
+```{r Setup2}
+# path_to_project <- "C:/03_BR/3_AanvraagGegevens/INBO_DigitaalVlaanderen"
+path_to_project_teamdrive <- paste0(path_to_output_gdrive, "EUFORIA_WILDCARD_2024/")
+
+# path_to_datarequest <- paste0(path_to_project, "/output/")
+path_to_datarequest_teamdrive <- paste0(path_to_project_teamdrive, "output_R/")
+path_to_test_database <- paste0(path_to_datarequest_teamdrive, "test_database/")
+path_to_html_teamdrive <- path_to_datarequest_teamdrive
+# path_to_html <- path_to_datarequest
+
+path_to_datacontrol <- paste0(path_to_project_teamdrive, "datacontrole/")
+
+```
+
+<!-- De eerste analyse gebeurde op de fieldmapdb van 13/6/2024,  -->
+<!-- maar in db van 5/12/2024 zijn de 4 sites van Zoniën duidelijk afgelijnd,  -->
+<!-- dus moeten we toch van de meest recente db vertrekken (MDB_BR_X8_inbo2020_20241205) -->
+
+```{r TEMP_db}
+# path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_X8_inbo2020_20240613/")
+path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_X8_inbo2020_20241205/")
+
+dbFieldmap <- "FieldMapData_MDB_BR_X8_inbo2020.accdb"
+path_to_fieldmap_db <- paste0(path_to_fieldmap, dbFieldmap)
+```
+
+
+# Main request
+
+These scripts create the data as requested by Yannick De Win as part of the 
+[Wildcard project](https://drive.google.com/drive/folders/0AHzOhlj-qFSnUk9PVA).
+
+Data is collected over the whole of Europe. 
+
+The script below generates all info and data according to the guidelines stipulated in this document: [DTF_Tree-Data-Template_final.xlsx](https://docs.google.com/spreadsheets/d/1jV4II-uSDDKaNNWqeBIXi6IQ_BSK_LFr?rtpof=true&usp=drive_fs)
+
+The managed plots in the mainly non-managed forest reserves (EUFORIA-sites) are removed prior to analysis.
+
+# Specific request
+
+This script checks the problem stipulated by Jan Z. (see below)
+The test-files are saved in the folder "PRJ_BR_AanvraagGegevens\EUFORIA_WILDCARD_2024\test_database"
+
+
+- Jan Zaleszak:
+Your data went again into the database version 2.0.
+Attached are the calculated basic statistics (casic queries and plausibility tests).
+
+I most plausibility test look very well actually, just the "missing in census test" shows quite some trees which were measured in one census and then did not appear anymore. 
+(Let me know if you have issues reading the plausibility test JSON outputs)
+
+- Kris VdK:
+I would think the most logical explanation in that case is that the tree was windthrown and thus disappeared from the layer of 'standing trees'. As lying deadwood requires different measurements, they are stored in another 'layer' in our database, and links between the original standing tree and the lying dead tree are not always made (or not possible).
+Anja or Yannick, please feel free to add to this.
+
+- Privetivy Tomas: 
+I think it is because there are a lot of trees with not consistent ID in second inventory. While the rest of trees have consistent IDs. After the first inventory many trees are not tracked, "disappear" and in the second inventory new IDs appear.
+
+
+
+# Directories
+
+- path_to_fieldmap_db is "`r path_to_fieldmap_db`"      
+- path_to_project_teamdrive is "`r path_to_project_teamdrive`"      
+- path_to_datarequest_teamdrive is "`r path_to_datarequest_teamdrive`"      
+- path_to_test_database is "`r path_to_test_database`"
+
+```{r results='hide', eval=TRUE}
+path_to_fieldmap_db
+# path_to_datarequest
+path_to_project_teamdrive
+path_to_datarequest_teamdrive
+path_to_test_database
+
+```
+Inladen van de aangeleverde data
+
+```{r load_data, results='hide'}
+#
+design <- read.table(paste0(path_to_datarequest_teamdrive, "INBO_Design.txt")
+                           , sep = " ", dec = ".")
+
+plots_ <- read.table(paste0(path_to_datarequest_teamdrive, "INBO_Plots.txt")
+                           , sep = " ", dec = ".")
+# only A4-circle + CA (no A3)
+plots <-  plots_ %>% filter(CIRCLE_NO == 1 | is.na(CIRCLE_NO))
+plots_LPI <- plots_ %>% filter(is.na(CIRCLE_NO))
+plots_A3 <-  plots_ %>% filter(CIRCLE_NO == 2)
+plots_A4 <-  plots_ %>% filter(CIRCLE_NO == 1)
+
+standing <- read.table(paste0(path_to_datarequest_teamdrive, "INBO_Standing.txt")
+                           , sep = " ", dec = ".")
+
+standing_lpi <- standing %>% 
+  filter(!is.na(LPI_ID))
+standing_spi <- standing %>% 
+  filter(!is.na(SPI_ID))
+
+lying <- read.table(paste0(path_to_datarequest_teamdrive, "INBO_Lying.txt")
+                    , sep = " ", dec = ".")
+```
+
+<br>
+
+Inladen van de test
+
+```{r eval = FALSE}
+basic_query_file_INBO <- read_csv(paste0(path_to_test_database, "basic_query_file_INBO.csv"))
+
+json_lpi <- paste0(path_to_test_database, "integrity_test_results_INBO_Standing_lpi_id.json")
+integrity_test_standing_lpi <- fromJSON(file=json_lpi)
+view(integrity_test_standing_lpi)
+
+missing_in_census <- as.data.frame(integrity_test_standing_lpi[1])
+
+missing in census test
+
+
+integrity_test_standing_spi
+
+
+
+
+integrity_test_results_INBO_Standing.txt_spi_id.json
+
+```
+```{r fctie_python, eval = FALSE}
+#python coce
+
+def check_missing_in_census(df, base_columns):
+    # Ensure 'inventory_year' exists before proceeding
+    if 'inventory_year' not in df.columns:
+        print("Warning: 'inventory_year' column is missing from DataFrame.")
+        return None
+
+    # Remove 'inventory_year' and 'tree_id' from base_columns safely
+    base_columns = [col for col in base_columns if col not in {'inventory_year', 'tree_id'}]
+
+    # Step 1: Calculate the number of distinct census years per unique plot
+    plot_census_count = df.groupby(base_columns)['inventory_year'].nunique().reset_index()
+    plot_census_count.rename(columns={'inventory_year': 'total_census_years'}, inplace=True)
+
+    # Step 2: Merge this information back into df
+    df = df.merge(plot_census_count, on=base_columns, how='left')
+
+    # Step 3: Calculate how many distinct census years each tree_id appears in per unique plot
+    tree_census_count = df.groupby(base_columns + ['tree_id'])['inventory_year'].nunique().reset_index()
+    tree_census_count.rename(columns={'inventory_year': 'tree_census_years'}, inplace=True)
+
+    # Step 4: Merge tree-level census count into df
+    df = df.merge(tree_census_count, on=base_columns + ['tree_id'], how='left')
+
+    # Step 5: Identify missing census records, handling NaN values
+    df['tree_census_years'].fillna(0, inplace=True)
+    df['total_census_years'].fillna(0, inplace=True)
+   
+    census_gap = df['tree_census_years'] < df['total_census_years']
+
+    # Store results
+    missing_in_census_integrity_issues = df[census_gap][base_columns + ['tree_id', 'inventory_year']]
+
+    print(missing_in_census_integrity_issues)
+    return {"missing_in_census": missing_in_census_integrity_issues}
+```
+
+```{r fctie_R}
+names(standing)
+# Here's the R equivalent of your Python function `check_missing_in_census`:
+# base_columns <- c('INVENTORY_YEAR', 'SITE_ID', 'SITE_NAME', 'WILDCARD_sub_ID'
+#                   , 'LPI_ID',  'TREE_ID', 'STEM_ID'
+#                   , 'CONSISTENT_ID')
+base_columns <- c('INVENTORY_YEAR', 'SITE_ID', 'SITE_NAME', 'WILDCARD_sub_ID'
+                  , 'LPI_ID', 'SPI_ID', 'TREE_ID')
+# df <- standing_lpi
+
+check_missing_in_census <- function(df, base_columns) {
+  # Ensure 'inventory_year' exists
+  if (!'INVENTORY_YEAR' %in% names(df)) {
+    warning("'INVENTORY_YEAR' column is missing from the data frame.")
+    return(NULL)
+  }
+  
+  # Safely remove 'inventory_year' and 'tree_id' from base_columns
+  base_columns <- setdiff(base_columns, c('INVENTORY_YEAR', 'TREE_ID'))
+  
+  # Step 1: Calculate number of distinct census years per unique plot
+  plot_census_count <- df |>
+    dplyr::group_by(across(all_of(base_columns))) |>
+    dplyr::summarise(total_census_years = n_distinct(INVENTORY_YEAR), .groups = 'drop')
+  
+  # Step 2: Merge into df
+  df <- dplyr::left_join(df, plot_census_count, by = base_columns)
+  
+  # Step 3: Count how many distinct census years each tree_id appears in per unique plot
+  tree_census_count <- df |>
+    dplyr::group_by(across(all_of(c(base_columns, 'TREE_ID')))) |>
+    dplyr::summarise(tree_census_years = n_distinct(INVENTORY_YEAR), .groups = 'drop')
+  
+  # Step 4: Merge into df
+  df <- dplyr::left_join(df, tree_census_count, by = c(base_columns, 'TREE_ID'))
+  summary(df)
+  # Step 5: Fill NAs and find missing records
+  df$tree_census_years[is.na(df$tree_census_years)] <- 0
+  df$total_census_years[is.na(df$total_census_years)] <- 0
+  
+  census_gap <- df$tree_census_years < df$total_census_years
+  
+  # Store results
+  missing_in_census_integrity_issues <- df[census_gap, c(base_columns
+                                                         , 'TREE_ID', 'INVENTORY_YEAR'
+                                                         , 'STEM_ID', 'CONSISTENT_ID')]
+  # (c)A: waar census_gap = TRUE, dat zijn bomen die niet in alle opnames terugkomen
+  return(missing_in_census_integrity_issues)
+}
+
+
+
+# Notes:
+# 
+# * This version uses `dplyr` for grouped operations and joins.
+# * `across(all_of(...))` allows dynamic column selection in grouping.
+# * It assumes `df` is a `data.frame` or `tibble`.
+# 
+# Let me know if you want a version without using `dplyr`, or need help testing it.
+
+
+
+
+```
+
+
+```{r}
+# base_columns
+missing_in_census_lpi <- check_missing_in_census(df = standing_lpi, base_columns)
+
+missing_in_census_spi <- check_missing_in_census(df = standing_spi, base_columns)
+
+```
+
+
+Logisch dat er veel niet in alle opnames terugkomen: alle ingroei en alle bomen die tussentijds omgevallen zijn
+
+? Zijn er bosreservaten die er uitschieten? 
+!! Procentueel => eigen functie maken: TRUE and FALSE census gap bijhouden
+
+
+```{r fctie_R_TRUE_FALSE}
+df <- standing_spi
+
+
+check_missing_in_census_AL <- function(df, base_columns) {
+  # Ensure 'inventory_year' exists
+  if (!'INVENTORY_YEAR' %in% names(df)) {
+    warning("'INVENTORY_YEAR' column is missing from the data frame.")
+    return(NULL)
+  }
+  
+  # Safely remove 'inventory_year' and 'tree_id' from base_columns
+  base_columns <- setdiff(base_columns, c('INVENTORY_YEAR', 'TREE_ID'))
+  
+  # Step 1: Calculate number of distinct census years per unique plot
+  plot_census_count <- df |>
+    dplyr::group_by(across(all_of(base_columns))) |>
+    dplyr::summarise(total_census_years = n_distinct(INVENTORY_YEAR), .groups = 'drop')
+  
+  # Step 2: Merge into df
+  df <- dplyr::left_join(df, plot_census_count, by = base_columns)
+  
+  # Step 3: Count how many distinct census years each tree_id appears in per unique plot
+  tree_census_count <- df |>
+    dplyr::group_by(across(all_of(c(base_columns, 'TREE_ID')))) |>
+    dplyr::summarise(tree_census_years = n_distinct(INVENTORY_YEAR), .groups = 'drop')
+  
+  # Step 4: Merge into df
+  df <- dplyr::left_join(df, tree_census_count, by = c(base_columns, 'TREE_ID'))
+  summary(df)
+  
+  # Step 5: Fill NAs and find missing records
+  df$tree_census_years[is.na(df$tree_census_years)] <- 0
+  df$total_census_years[is.na(df$total_census_years)] <- 0
+  
+  df <- df %>% 
+    mutate(census_gap = tree_census_years < total_census_years)
+  
+  # Store results
+  missing_in_census_integrity_issues <- df[c(base_columns, 'TREE_ID', 'INVENTORY_YEAR', 'census_gap'
+                                             , 'DBH_mm', 'STEM_ID', 'CONSISTENT_ID')]
+  # (c)A: waar census_gap = TRUE, dat zijn bomen die niet in alle opnames terugkomen
+  return(missing_in_census_integrity_issues)
+}
+```
+
+
+```{r}
+# base_columns
+missing_in_census_lpi_AL <- check_missing_in_census_AL(df = standing_lpi, base_columns)
+
+missing_in_census_spi_AL <- check_missing_in_census_AL(df = standing_spi, base_columns)
+
+# procentueel missing
+# LPI
+overview_lpi_site <- missing_in_census_lpi_AL %>% 
+  group_by(SITE_ID, SITE_NAME, WILDCARD_sub_ID) %>% 
+  summarize(n_trees = n()
+            , n_trees_gap = sum(census_gap)
+            , n_surveys = n_distinct(INVENTORY_YEAR)) %>% 
+  ungroup() %>% 
+  mutate(perc_trees_gap = 100* n_trees_gap/n_trees)
+
+overview_lpi_plot <- missing_in_census_lpi_AL %>% 
+  group_by(SITE_ID, SITE_NAME, WILDCARD_sub_ID, LPI_ID) %>% 
+  summarize(n_trees = n()
+            , n_trees_gap = sum(census_gap)
+            , n_surveys = n_distinct(INVENTORY_YEAR)) %>% 
+  ungroup() %>% 
+  mutate(perc_trees_gap = 100* n_trees_gap/n_trees)
+
+
+# SPI
+overview_spi_site <- missing_in_census_spi_AL %>% 
+  group_by(SITE_ID, SITE_NAME, WILDCARD_sub_ID) %>% 
+  summarize(n_trees = n()
+            , n_trees_gap = sum(census_gap)
+            , n_surveys = n_distinct(INVENTORY_YEAR)) %>% 
+  ungroup() %>% 
+  mutate(perc_trees_gap = 100* n_trees_gap/n_trees)
+
+overview_spi_plot <- missing_in_census_spi_AL %>% 
+  group_by(SITE_ID, SITE_NAME, WILDCARD_sub_ID, LPI_ID) %>% 
+  summarize(n_trees = n()
+            , n_trees_gap = sum(census_gap)
+            , n_surveys = n_distinct(INVENTORY_YEAR)) %>% 
+  ungroup() %>% 
+  mutate(perc_trees_gap = 100* n_trees_gap/n_trees)
+
+```
+
+
+```{r no_coppice}
+# base_columns
+missing_in_census_lpi_AL <- check_missing_in_census_AL(df = standing_lpi, base_columns)
+
+missing_in_census_spi_AL <- check_missing_in_census_AL(df = standing_spi, base_columns)
+
+# procentueel missing - GEEN HAKHOUT
+
+overview_lpi_site_indiv <- missing_in_census_lpi_AL %>% 
+  filter(is.na(STEM_ID)) %>% 
+  group_by(SITE_ID, SITE_NAME, WILDCARD_sub_ID) %>% 
+  summarize(n_trees = n()
+            , n_trees_gap = sum(census_gap)
+            , n_surveys = n_distinct(INVENTORY_YEAR)) %>% 
+  ungroup() %>% 
+  mutate(perc_trees_gap = 100* n_trees_gap/n_trees)
+
+
+overview_lpi_plot_indiv <- missing_in_census_lpi_AL %>% 
+  filter(is.na(STEM_ID)) %>% 
+  group_by(SITE_ID, SITE_NAME, WILDCARD_sub_ID, LPI_ID) %>% 
+  summarize(n_trees = n()
+            , n_trees_gap = sum(census_gap)
+            , n_surveys = n_distinct(INVENTORY_YEAR)) %>% 
+  ungroup() %>% 
+  mutate(perc_trees_gap = 100* n_trees_gap/n_trees)
+
+# SPI
+overview_spi_site_indiv <- missing_in_census_spi_AL %>% 
+  filter(is.na(STEM_ID)) %>% 
+  group_by(SITE_ID, SITE_NAME, WILDCARD_sub_ID) %>% 
+  summarize(n_trees = n()
+            , n_trees_gap = sum(census_gap)
+            , n_surveys = n_distinct(INVENTORY_YEAR)) %>% 
+  ungroup() %>% 
+  mutate(perc_trees_gap = 100* n_trees_gap/n_trees)
+
+```
+
+```{r consistent_id}
+# base_columns
+missing_in_census_lpi_AL <- check_missing_in_census_AL(df = standing_lpi, base_columns)
+
+missing_in_census_spi_AL <- check_missing_in_census_AL(df = standing_spi, base_columns)
+
+# procentueel missing - consistent_id = Y of na (eerste census)
+# LPI
+overview_lpi_site_consist <- missing_in_census_lpi_AL %>% 
+  filter(is.na(CONSISTENT_ID) | CONSISTENT_ID == "Y") %>% 
+  group_by(SITE_ID, SITE_NAME, WILDCARD_sub_ID) %>% 
+  summarize(n_trees = n()
+            , n_trees_gap = sum(census_gap)
+            , n_surveys = n_distinct(INVENTORY_YEAR)) %>% 
+  ungroup() %>% 
+  mutate(perc_trees_gap = 100* n_trees_gap/n_trees)
+
+
+overview_lpi_plot_consist <- missing_in_census_lpi_AL %>% 
+  filter(is.na(CONSISTENT_ID) | CONSISTENT_ID == "Y") %>% 
+  group_by(SITE_ID, SITE_NAME, WILDCARD_sub_ID, LPI_ID) %>% 
+  summarize(n_trees = n()
+            , n_trees_gap = sum(census_gap)
+            , n_surveys = n_distinct(INVENTORY_YEAR)) %>% 
+  ungroup() %>% 
+  mutate(perc_trees_gap = 100* n_trees_gap/n_trees)
+
+# SPI
+overview_spi_site_consist <- missing_in_census_spi_AL %>% 
+  filter(is.na(CONSISTENT_ID) | CONSISTENT_ID == "Y") %>% 
+  group_by(SITE_ID, SITE_NAME, WILDCARD_sub_ID) %>% 
+  summarize(n_trees = n()
+            , n_trees_gap = sum(census_gap)
+            , n_surveys = n_distinct(INVENTORY_YEAR)) %>% 
+  ungroup() %>% 
+  mutate(perc_trees_gap = 100* n_trees_gap/n_trees)
+
+
+```
+
+# Veel ongekoppelde bomen
+
+## LPI
+
+Rodebos en Hannecart veel bomen, ook als we non-consistent-id in rekening brengen
+
+Analyse op enkel hakhout (stem_id = NA) is eigenlijk beter
+Ook daar vooral Rodebos (plot 43000) en Hannecart (31000) en OldCore Zoniënwoud:
+alledrie 3 periodes
+Iets minder Walenbos (plot 53000: 2 periodes)
+
+Logisch dat met drie censuses er meer bomen zijn die geen drie keer voorkomen,
+maar lijkt toch uitz. veel (> 70%)
+
+Sowieso overal ingroei en omgevallen bomen.
+Maar waarom die reservaten meer? 
+
+
+### Plot 11000, oldcore
+
+wijziging in treshold tss periode 1 en 2 (cte tussen 2 en 3) 
+=> consistent-id zou "N" moeten zijn?
+
+```{r}
+oldcore <- standing_lpi %>% 
+  filter(LPI_ID == 11000 & is.na(STEM_ID))  # we laten hakhout weg
+
+table(oldcore$CONSISTENT_ID, oldcore$INVENTORY_YEAR)
+  #   2000 2010 2020
+  # N    0   17   17
+  # Y    0 3281 3046
+```
+
+
+
+
+CONSISTENT_ID_STANDING/LYING: aanpassen voor plot_id 11000 (oude kernvlakte Kerss):
+survey 1 (1986) niet meegenomen => survey 2 (2000) moet ook nog NA zijn 
+=> "CONSISTENT_ID_STANDING": "NA" voor 2000 (1e keer gemeten)
+=> "CONSISTENT_ID_LYING": "NA" voor 2000 (geen lying gemeten) en 2010 (1e keer lying gemeten)
+
+CONSISTENT_ID_STANDING: aanpassen voor CP's "Zoniën KERN_1983": in survey 1 niet opgemeten, 
+pas vanaf survey 2 opgemeten
+
+
+### Plot 31000, Hannecart en Plot 43000, Rodebos
+wijziging in opp. tss periode 1 en 2
+=> zou consistent_id = N moeten zijn
+
+
+```{r}
+Hann_Rode <- standing_lpi %>%
+  filter(LPI_ID == 43000 | LPI_ID == 31000
+         , is.na(STEM_ID))
+ # we laten hakhout weg
+
+table(Hann_Rode$CONSISTENT_ID, Hann_Rode$INVENTORY_YEAR)
+  #   2001 2011 2021
+  # N    0    6   13
+  # Y    0  643  567
+
+
+```
+
+
+
+### Plot 53000 Walenbos
+
+2 periodes, wel zelfde opp., oligotroof? Veel ingroei? 
+```{r}
+walenbos <- standing_lpi %>% 
+  filter(LPI_ID == 53000 & is.na(STEM_ID))
+
+t <- walenbos %>% 
+  group_by(LPI_ID, INVENTORY_YEAR) %>% 
+  summarize(ingroei = sum(DBH_mm < 60), 
+            n_trees = n()) %>% 
+  ungroup()
+
+table(walenbos$CONSISTENT_ID, walenbos$INVENTORY_YEAR)
+  #  2001 2011
+  # Y    0  193
+```
+
+
+## SPI
+
+### 100%
+sommige zelfs 100%?
+NEE? dat is met mijn code
+
+- Zonienwoud 2nd ext, Harras: resp. 2 censuses, maar maar één opname!!
+n_trees_gap is > 1, maar daar is geen heropname??
+
+!! 2019 en 2020 heeft mogelijks gezorgd voor fout aanmaken van individuele tree-id??
+nee, nu wel OK precies
+
+(aantal surveys klopt wel per plot)
+
+
+### Harras & 2nd Extensions - CP's --> OK
+Zijn nog maar één keer opgemeten => zou 0% moeten zijn
+(KV wel al twee keer, maar daar maar 7% bomen "missed in census" => OK)
+
+```{r}
+haras <- missing_in_census_spi_AL %>%
+  filter(WILDCARD_sub_ID == "Haras")
+unique(haras$census_gap) == FALSE
+
+# géén census gaps
+
+extension2010 <- missing_in_census_spi_AL %>%
+  filter(WILDCARD_sub_ID == "2ndExtension")
+unique(extension2010$census_gap) == FALSE
+```
+
+
+
+### Wijnendale, Everzwijnbad en Heirnisse CPs
+Resp. 4, 4 en 3 censuses: ! berekend obv aantal inv years per site, en daar zit een 
+extra jaar bij, maar op plotniveau heeft dat geen negatieve invloed
+
+```{r}
+Wijnend <- missing_in_census_spi_AL %>%
+  filter(SITE_NAME == "Wijnendalebos")
+```
+
+
+
+
+### 1st extension zonien
+The r_A3 of the small plots in site Zonienwoud - 1st extension (SPI_ID 2001-2065) 
+changed between 1st and 2nd survey from 9m to 12m.
+CONSISTENT_ID_STANDING on plot_level therefore is "N" for the second survey, 
+and "P" for the third survey.
+
+**OPGEPAST - kleine FOUT in code ...._plot_data_rmd**
+! oldcore: enkel 2010 en 2020, bij 2de periode consistent-id op N gezet, maar is niet correct
+Zou correct zijn als eerste peridoe 2000 was, maar we hebben eerste periode 2000 
+uiteindelijk niet meegenomen, en dus is 2010 de eerste periode en 2020 de tweede
+
+Bij 1stextension wel OK, daar zijn de drei surveyss meegenomen: 2000, 2010, 2020: 
+N voor 2010 (want wijziging rA3) en Y voor 2020
+
+Aangepast op 21/5/2025
+
+
+```{r}
+extension1995 <- missing_in_census_spi_AL %>%
+  filter(between(SPI_ID, 2001, 2065))
+
+# bevat ook deels oldcore_spi: overal consistent = N
+
+```
+
+
+
+<br>
+
+# Wegschrijven output
+
+```{r WegschrijvenOutput_csv, eval = FALSE}
+# idem als txt, maar voor gemak ook naar xls
+
+write_csv2(qry_lying_per_site %>% select(-n_plots)
+            , paste0(path_to_datarequest_teamdrive, "csv/INBO_LYING_QUERY.csv"))
+
+write_csv2(qry_standing_per_site %>% select(-n_plots)
+            , paste0(path_to_datarequest_teamdrive, "csv/INBO_STANDING_QUERY.csv"))
+```
+
+<br>
+
+
+# Copy html to teamdrive
+
+Na knitting - manueel
+
+```{r eval = FALSE}
+# Specify the path of the file you want to copy
+source_file <- here::here(paste0("Scripts/AanvraagGegevens/INBO_Wildcard_EuFoRIa/Wildcard_Flanders_test_database.html"))
+
+# Specify the destination directory where you want to copy the file
+destination_dir <- path_to_html_teamdrive
+
+# Copy the file to the destination directory
+file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
+# ? file.copy
+```

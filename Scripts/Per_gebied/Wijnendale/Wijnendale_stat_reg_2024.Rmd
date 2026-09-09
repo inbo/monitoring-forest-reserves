@@ -40,13 +40,11 @@ source(here::here("scripts/Setup.R"))
 forestreserve <- "Wijnendalebos"
 forestreserve_short <- forestreserve
 forestreserve_short <- "Wijnendale"
-# plot_type <- "CA"
-plot_type <- "CP"
 
-forestreserve_folder <- paste0(path_to_reserves, "4b_Wijnendale")
+forestreserve_folder <- paste0(path_to_reserves, "0_Wijnendale")
 
 path_to_datarequest <- paste0(forestreserve_folder, "/verwerking_2024_1e2e3eSET/output_forrescalc/")
-path_to_datarequest_teamdrive <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverwerking/per_gebied/2024_", forestreserve_short, "/04_statistieken_BR/")
+path_to_datarequest_teamdrive <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverwerking/20_Per_gebied/2024_", forestreserve_short, "/04_statistieken_BR/")
 path_to_html_teamdrive <- path_to_datarequest_teamdrive
 
 # plots_to_exclude <- c(701, 707, 709, 727, 728, 738, 739, 740, 759, 760)
@@ -107,6 +105,21 @@ Nodig voor:
 
 We werken verder met de data aangemaakt specifiek voor `r forestreserve`.
 
+Vier plots zijn "not processed": 400, 424, 426 en 482 en worden bijgevolg ook niet meegenomen
+in de verdere dataverwerking.
+
+(zie file "plots_excluded_from_monitoring_network.xlsx" onder metadata)
+
+```{r }
+plots_to_exclude <- read_xlsx(paste0(path_to_output_gdrive
+                                     , "00_METADATA-ALL_PLOTS/plots_excluded_from_monitoring_network.xlsx")) %>% 
+  filter(forest_reserve == forestreserve)
+
+plots_to_exclude  %>% 
+  select(plot_id, info)
+
+```
+
 ## Lookuplijsten
 
 ```{r }
@@ -143,7 +156,7 @@ plotinfo <- read_excel(paste0(path_to_datarequest, "plotinfo.xlsx")) %>%
 
 # Enkel bosplots
 
-Zie Wijnendale_stat_dendr => "plots to exclude"
+Zie Wijnendale_stat_dendro => "plots to exclude"
 
 **OPGEPAST**: er werden een aantal plots NIET heropgemeten in 2012 & 2022
 => om vergelijking volledig correct te maken, deze niet meer meenemen bij de verwerking
