@@ -36,6 +36,7 @@ load_data_dendrometry_L1 <-
           AS plotarea_ha,
         Trees.ID AS tree_measure_id,
         Trees.OldID AS old_id,
+        Trees.TreeLabel AS label_level1,
         Trees.Species AS species,
         Trees.DBH_mm AS dbh_mm,
         Trees.Height_m AS height_m,
@@ -58,6 +59,7 @@ load_data_dendrometry_L1 <-
           AS plotarea_ha,
         Trees.ID AS tree_measure_id,
         Trees.OldID AS old_id,
+        Trees.TreeLabel AS label_level1,
         Trees.Species AS species,
         Trees.DBH_mm AS dbh_mm,
         Trees.Height_m AS height_m,
@@ -578,5 +580,75 @@ give_diamclass_5cm <- function(diameterdata) {
         c(paste(seq(5, 240, 5), "-", seq(10, 245, 5), "cm"), "245 cm +")
     )
   return(diameterclass)
+}
+
+
+# create_unique_tree_id -------
+
+create_unique_tree_id_L1 <- function(data_dendro) {
+
+    data_dendro <- data_dendro %>%
+      mutate(
+        suffix = "",
+        old_id_updated = .data$old_id,
+        tree_measure_id_updated = .data$tree_measure_id
+      )
+  
+  status_tree <- data_dendro %>%
+    mutate(
+      tree_id =
+        ifelse(
+          is.na(.data$old_id_updated),
+          paste(.data$period, .data$plot_id, .data$tree_measure_id_updated,
+                .data$suffix, sep = "_"),
+          NA
+        ),
+      tree_id = gsub("^(.*)_$", "\\1", .data$tree_id)
+    )
+  lookup_tree_id <- function(dataset) {
+    if (any(is.na(dataset$tree_id))) {
+      n_na_dataset <- sum(is.na(dataset$tree_id))
+      dataset <- dataset %>%
+        left_join(
+          dataset %>%
+            transmute(
+              .data$plot_id, tree_measure_id_updated = .data$tree_measure_id,
+              .data$tree_id, old_id_updated = .data$old_id,
+              period = .data$period + 1
+            ) %>%
+            filter(!is.na(.data$tree_id)) %>%
+            distinct(),
+          by = c("plot_id", "old_id_updated" = "tree_measure_id_updated",
+                 "period"),
+          suffix = c("", "_oldid")
+        ) %>%
+        mutate(
+          tree_id =
+            ifelse(
+              is.na(.data$tree_id) & !is.na(.data$tree_id_oldid),
+              ifelse(
+                .data$suffix == "", .data$tree_id_oldid,
+                paste(.data$tree_id_oldid, .data$suffix, sep = "_")
+              ),
+              .data$tree_id
+            )
+        ) %>%
+        select(-"tree_id_oldid", -"old_id_updated_oldid")
+      if (sum(is.na(dataset$tree_id)) < n_na_dataset) {
+        dataset <- lookup_tree_id(dataset)
+      }
+    }
+    return(dataset)
+  }
+  status_tree <- lookup_tree_id(status_tree) %>%
+    select(-"suffix", -"old_id_updated", -"tree_measure_id_updated")
+  
+  if (any(is.na(status_tree$tree_id))) {
+    warning(
+      "Some records did not get a tree_id (NA) because the old_id was unknown in the previous period" #nolint: line_length_linter
+    )
+  }
+  
+  return(status_tree)
 }
 

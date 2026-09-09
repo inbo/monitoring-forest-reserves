@@ -104,6 +104,8 @@ names(plotinfo_vb)
 Aangepaste functies, want structuur is anders dan forrescalc verwacht.
 
 ```{r load_data, results='hide'}
+# path_to_fieldmap_db <- "C:/03_BR_gebieden/09_Level1/FMprojecten_2025/LEVEL1_inbo2025_DHcurves/FieldMapData_LEVEL1_inbo2025.accdb"
+
 conn <- odbcConnectAccess2007(path_to_fieldmap_db)
 
 trees2025 <- load_data_dendrometry_L1(con = conn, jaar = 2025)
@@ -180,7 +182,7 @@ In DC bijsnijden.
 
 Is dat gebeurd? 
 
-Blijkbaar wel voor periode 1, nog niet voor periode 2, zie hierna.
+Blijkbaar wel voor periode 1, en nu ook voor periode 2, zie hierna.
 
 calc_length = lengte uit FM
 total_length = obv layer "diameters"
@@ -355,7 +357,7 @@ data_stems_test <- calc_stem_volume(data_stems |> rename(calc_height_m = calc_he
 data_stems_test |> filter(is.na(vol_bole_m3)) |> nrow() == 0
 
 ```
-## Berekeningen
+## Berekeningen tree niveau
 
 ```{r calc_stems_tree}
 data_stems_calc <- calc_variables_stem_level_L1(data_stems, height_model)
@@ -367,6 +369,12 @@ summary(data_dendro_calc)
 data_dendro_calc |> filter(is.na(vol_bole_alive_m3_ha)) |> nrow()
 
 ```
+```{r save_treeniveau, eval = FALSE}
+write.csv2(data_dendro_calc, paste0(path_to_plotdata_pc, "data_dendro_calc.csv"))
+```
+
+
+## Berekeningen plot niveau
 
 ```{r plotinfo}
 names(plotinfo_vb)
@@ -394,7 +402,7 @@ plotinfo <- data_dendro |>
 
 
 
-```{r}
+```{r calc_plotniveau}
 # dendro <- calculate_dendrometry(data_dendro, data_deadwood, data_shoots, height_model, plotinfo)
 # waar survey_trees = TRUE, wordt een '0' toegekend, als er geen andere metingen zijn
 # DUS: als ik wegfilter obv data_processed, worden data NIET ingeladen,
