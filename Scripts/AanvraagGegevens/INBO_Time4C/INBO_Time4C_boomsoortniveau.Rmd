@@ -1,0 +1,132 @@
+---
+title: "Time 4C"
+subtitle: "Volumes staand en liggend dood hout 7 BR-plots"
+author: "Anja Leyman"
+date: "12/03/2025"  
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: TRUE
+      smooth_scroll: TRUE
+---
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 7,
+  fig.height = 3,
+  fig.align = TRUE)
+
+library(here)
+library(writexl)
+library(scales)
+library(sf)
+
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+```
+
+
+```{r Setup2}
+folder <- "INBO_Time4C/"
+scriptnaam <- "INBO_Time4C_boomsoortniveau"
+
+path_to_datarequest_cschijf <- paste0(path_to_datarequests, folder)
+path_to_datarequest_teamdrive <- paste0(path_to_datarequests_gdrive, folder)
+path_to_html_teamdrive <- path_to_datarequest_teamdrive
+
+path_to_html_cschijf <- here::here(paste0("Scripts/AanvraagGegevens/", folder, scriptnaam, ".html"))
+
+```
+
+```{r}
+path_to_datarequests_gdrive # algemeen
+path_to_datarequest_cschijf
+path_to_datarequest_teamdrive # specifiek deze datavraag
+
+path_to_treelevel_csv
+path_to_treelevel_gdrive
+```
+
+
+
+# Vraagstelling
+
+
+
+
+
+
+
+# Data inladen
+
+
+```{r load_plots}
+plots <- read_excel(paste0(path_to_datarequest_cschijf, "Time4C_oudebossen.xlsx"))
+
+plots_BR <- plots |> 
+  filter(source == "BR")
+
+```
+
+
+```{r load_plotinfo_BR}
+# uit forresdat
+plotinfo <- read_forresdat_table(
+  tablename = "plotinfo"
+  , git_ref_type = "branch", git_reference = "develop"
+  , join_plotinfo = FALSE
+  , plottype = "CP")  # NIET ENKEL CP's!
+
+# ! enkel de processed data - dd 11/9/2024: nu ook Wijnendale en Everzwijnbad 3de decade erbij
+names(plotinfo)
+```
+
+
+# Volopname liggend dood hout in BR?
+
+```{r}
+FAS_BR <- plots_BR |> 
+  left_join(plotinfo) |> 
+  group_by(plot_id, code) |> 
+  summarize(max_year = max(year_dendro)) |> 
+  ungroup() |> 
+  left_join(plotinfo |> select(plot_id, year_dendro, survey_lis
+         , survey_deadw, diam_min_a4_logs)
+         , by = c("plot_id", "max_year" = "year_dendro")) 
+
+FAS_BR |> filter(diam_min_a4_logs == 100) |> nrow() == 2
+# maar 2 plots met een volopname 
+```
+Er zijn maar 2 plots met een volopname vanaf 10 cm => liggend dood hout kunnen we niet berekenen.
+
+
+# Copy html to teamdrive
+
+Na knitting - manueel
+
+```{r eval = FALSE}
+# Specify the path of the file you want to copy
+source_file <- path_to_html_cschijf
+
+# Specify the destination directory where you want to copy the file
+destination_dir <- path_to_html_teamdrive
+
+# Copy the file to the destination directory
+file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
+# ? file.copy
+```
+

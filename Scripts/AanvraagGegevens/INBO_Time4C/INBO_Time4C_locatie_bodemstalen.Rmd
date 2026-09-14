@@ -1,5 +1,5 @@
 ---
-title: "Selectie plots C4Time"
+title: "Selectie plots Time4C"
 author: "Anja Leyman"
 date: "`r Sys.Date()`"
 output:
@@ -42,8 +42,8 @@ source(here::here("scripts/Setup.R"))
 path_to_datarequests
 path_to_datarequests_gdrive
 
-path_to_datarequest <- paste0(path_to_datarequests, "INBO_C4Time/")
-path_to_datarequest_gdrive <- paste0(path_to_datarequests_gdrive, "INBO_C4Time/")
+path_to_datarequest <- paste0(path_to_datarequests, "INBO_Time4C/")
+path_to_datarequest_gdrive <- paste0(path_to_datarequests_gdrive, "INBO_Time4C/")
 
 ```
 
