@@ -1,0 +1,257 @@
+---
+title: "Data aanvraag INBO, Pieter Van Gansbeke, zaailingen"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: FALSE
+      smooth_scroll: FALSE
+---
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+# source(here::here("scripts/Paths.R")) # wordt aangeroepen in Setup.R
+```
+
+
+# Vraagstelling
+
+Pieter Van Gansbeke
+
+Vraag van Franse onderzoekers die kijken naar het mycorrhiza status van zaailingen 
+van esdoorn en beuk overal in Europa. Ze zijn op zoek naar zoveel mogelijk locaties 
+van plots waar zaailingen van die soorten staan. Dan doen ze een selectie op basis 
+van klimaat en bodemtype doorheen heel Europa.
+
+Als dat mogelijk is, Anja, zou ik graag voor alle plots in bosreservaat en ANB-plots 
+in bosinventaris volgende gegevens krijgen:
+
+- coördinaten   
+- datum laatste opname    
+- aanwezigheid beukenzaailing in laatste opname (0/1 of eventueel bedekking)    
+- aanwezigheid esdoornzaailing in laatste opname (0/1 of eventueel bedekking)   
+- aanwezigheid salomonszegel in laatste opname (0/1 of eventueel bedekking)   
+
+
+```{r Path}
+# deze worden ook in "Setup.R" gedefinieerd (aanroepen van "Paths.R")
+# hier ev. extra "paths" toevoegen indien nodig 
+
+# resultaten
+path_to_datarequest <- "C:/03_BR/3_AanvraagGegevens/INBO_zaailingen/"
+
+```
+
+# Volgende info gevraagd
+
+- zaailingen in laatste opname 
+- coördinaat per proefvlak 
+
+
+```{r overview_analyse_data}
+con <- odbcConnectAccess2007(path_to_analysis_set_db)
+      dbtablesAnalysed <- sqlTables(con) %>% 
+                filter(str_detect(TABLE_NAME, "MSys", negate = TRUE ))
+                # wegfilteren van records waar TABLE_NAME "MSys" bevat
+odbcClose(con)
+
+```
+
+
+```{r load_data}
+plotinfo <- read_forresdat_table(
+  tablename = "plotinfo"
+  , git_ref_type = "branch", git_reference = "develop"
+  , join_plotinfo = FALSE
+  , plottype = "CP") 
+
+herblayer_by_plot <- read_forresdat_table(tablename = "herblayer_by_plot"
+                                           , join_plotinfo = TRUE
+                                           , plottype = "CP"
+                                           , git_ref_type = "branch"
+                                           , git_reference = "develop")
+# names(herblayer_by_plot)
+
+
+# ?read_forresdat_table
+
+```
+
+
+```{r load_lookuplists, results='hide'}
+qcover_herbs <- read_forresdat_table(tablename = "qcover_herbs"
+                                           , join_plotinfo = FALSE
+                                           , git_ref_type = "branch"
+                                           , git_reference = "develop")
+
+qherb_species <- read_forresdat_table(tablename = "qherb_species240810"
+                                           , join_plotinfo = FALSE
+                                           , git_ref_type = "branch"
+                                           , git_reference = "develop")
+```
+
+
+```{r load_xy}
+# uit strata-db
+
+con <- odbcConnectAccess2007(path_to_strata_db)
+ strata_tables <- sqlTables(con) %>% filter(!str_detect(TABLE_NAME, "MSys"))
+ coord_ <- sqlFetch(con, "strata_location", stringsAsFactors = FALSE)
+odbcClose(con)
+
+coord <- coord_ %>% 
+  select(plot_id, XY_co, XLambert72, YLambert72
+         , Provincie, Gemeente, Deelgemeen)
+```
+
+
+# Selectie data
+
+## Kruidlaag
+
+```{r results='hide'}
+veg <- herblayer_by_plot %>% 
+  left_join(qherb_species %>% select(ID, name_sc = Value2, name_nl = Value1)
+            , by = c("species" = "ID")) %>% 
+  select(forest_reserve, plot_id, period
+         , date_vegetation, year
+         , species_id = species
+         , contains(c("name"))
+         , coverage_class_average_perc
+         , plottype)
+# filter(str_detect(Value2, "Fraxinus excelsior"))
+
+colnames(veg)
+
+```
+
+## Soorten
+
+Soorten: beuk, esdoorn, salomonszegel
+
+```{r}
+# genus Acer
+acer <- veg %>% 
+  filter(str_detect(name_sc, "Acer"))
+
+table(acer$name_nl)
+# Esdoorn (Gewone)   Noorse esdoorn      Spaanse aak 
+#             3117              215              149 
+# => enkel Gewone esdoorn is OK
+
+salomon <- veg %>% 
+  filter(str_detect(name_sc, "Polygonatum"))
+
+table(salomon$name_nl)
+# Gewone salomonszegel    
+#                   888                    
+```
+
+```{r }
+geselecteerde_soorten <- c("Beuk", "Gewone salomonszegel", "Esdoorn (Gewone)")
+# names(veg)
+
+veg_spec <- veg %>% 
+  filter(name_nl %in% geselecteerde_soorten) 
+```
+
+
+## Meest recente data
+
+Laatste 10 jaar? 
+Heb ik dan alle reservaten?
+
+Lijst aanmaken per plot van meest recente opname
+
+```{r}
+recent_survey <- plotinfo %>% 
+  filter(survey_veg == TRUE) %>% 
+  group_by(forest_reserve, plot_id) %>% 
+  summarize(most_recent_period = max(period)
+            , most_recent_survey = max(survey_number)) %>% 
+  ungroup()
+```
+
+```{r}
+veg_spec_recent <- veg_spec %>% 
+  inner_join(recent_survey, by = c("forest_reserve", "plot_id", "period" = "most_recent_period")) %>% 
+  select(-most_recent_survey)
+
+veg_spec_recent %>% filter(name_nl == "Beuk") %>% 
+  group_by(plot_id) %>% summarize(n = n()) %>% filter(n > 1) %>% 
+  nrow() == 0
+
+
+table(veg_spec_recent$name_nl)
+# Beuk     Esdoorn (Gewone) Gewone salomonszegel 
+# 598                  693                  135 
+```
+
+```{r}
+table(veg_spec_recent$period)
+range(veg_spec_recent$year)
+```
+## Coördinaten
+
+Coördinaten worden uit strata-db gehaald 
+
+```{r}
+veg_spec_recent_coord <- veg_spec_recent %>% 
+  left_join(coord)
+```
+
+## Lookuplist
+
+```{r qcoverherbs}
+# names(qcover_herbs)
+
+qcover_herbs <- qcover_herbs %>% 
+  select(ID, coverage_class = Value1, average_percentage = Value2)
+```
+
+# Wegschrijven output
+
+De resultaten worden weggeschreven naar csv.
+
+```{r WegschrijvenOutput, eval = FALSE}
+write_excel_csv2(veg_spec_recent_coord, paste0(path_to_datarequest, "/BR_zaailingen.csv"))
+write_excel_csv2(qcover_herbs, paste0(path_to_datarequest, "/BR_qCoverHerbs.csv"))
+```
+
+
+
+# Copy html
+
+Na knitting - manueel
+
+```{r eval = FALSE}
+# Specify the path of the file you want to copy
+source_file <- "C:/03_BR/1_DataVerwerkingBR/Scripts/AanvraagGegevens/INBO_allerlei/INBO_zaailingen.html"
+# Specify the destination directory where you want to copy the file
+destination_dir <- path_to_datarequest
+
+# Copy the file to the destination directory
+file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
+
+```

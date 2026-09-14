@@ -1,0 +1,666 @@
+---
+title: "Dataverwerking - dendro op stam- en boomniveau"
+subtitle: "Level 1 - cirkelplots"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: yes
+      smooth_scroll: yes
+---
+
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 7,
+  fig.height = 3,
+  fig.align = TRUE)
+
+library(here)
+library(writexl)
+library(scales)
+
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+
+```
+
+```{r Setup2, include = FALSE}
+forest_reserve_short <- "Level1"
+source(here::here("scripts/Per_gebied/", forest_reserve_short, "/setup_paths_gebied.R"))
+source(here::here(paste0("Scripts/Per_gebied/", forestreserve_short, "/functies.R")))
+```
+
+
+# Vraagstelling
+
+**Bosreservaat `r forestreserve`**
+
+<br>
+
+```{r results='hold', eval=TRUE}
+path_to_fieldmap_db
+path_to_forresdat_data
+path_to_analysis_set_db
+path_to_plotlevel_csv
+path_to_treelevel_csv
+path_to_output_gdrive
+path_to_meetgegevens
+
+```
+
+
+# Vraagstelling
+
+Een "wijde" tabel aanmaken met een unieke tree-id over de verschillende surveys heen met:
+
+- jaartal van elke survey
+- dbh_mm
+- volume 
+
+
+# Load plotinfo
+
+```{r}
+plotinfo <- read_xlsx(paste0(path_to_plotdata_pc, "plotinfo.xlsx")) |> 
+  select(-1)
+```
+
+# Load dendro data
+
+Aangemaakt in script "Level1_dendro.Rmd"
+
+```{r}
+data_dendro_calc <- read.csv2(paste0(path_to_plotdata_pc, "data_dendro_calc.csv")) |> 
+  select(-X)
+```
+
+
+# Create unique tree-id
+
+`Data_dendro_calc` bevat een unieke `tree_id` per boom (die constant blijft doorheen de tijd),
+verschillend van de `tree_measure_id` uit fieldmap, die wel varieert doorheen de tijd.
+
+Deze `tree_id` wordt in het package aangemaakt obv old_id.
+
+**OPGEPAST**
+Bij hakhout kan/kon dit soms tot gemiste linken leiden. 
+(zie ook "TreeMortalityData_DetailHakhout.Rmd")
+
+Hakhoutstoven worden opgesplitst in een levend en dood deel, 
+en elk deel wordt dan als een afzonderlijke boom beschouwd 
+(een boom kan immers niet én levend én dood tegelijk zijn)
+
+OldID wordt standaard toegekend aan het levende deel van de hakhoutstoof.
+Het dode deel wordt gelinkt via CoppiceID.
+Indien er enkel een dood deel is (en geen levend deel), dan wordt daar OldID aan toegekend.
+
+Dat wil zeggen dat er zich enkel een probleem stelt wanneer er in één van de 
+twee periodes zowel een levend als een dood deel voorkomt.
+In de andere gevallen is de koppeling die gebeurt via OldID correct.
+
+**OPLOSSING**
+Daarom wordt in code hierna voor hakhout dat in één van de 
+twee periodes uit zowel een levend als een dood deel bestaat, de tree_id bepaald obv coppice_id.
+
+Voor de 11 verwerkte CP's + KV Muizenbos is die koppeling gecheckt en OK bevonden.
+
+Dit houdt in dat tree_id niet meer uniek is per periode.
+Dat geeft dan weer problemen wanneer we er een "wijde" tabel van willen maken.
+
+Daarom wordt er een _a of _b toegevoegd, afh. of het om levend of dood deel van een hakhoutstoof gaat.
+Indien we toch één ID per hakhout willen, ongeacht levend/dood, dan kunnen we makkelijk de _a en _b verwijderen (= `tree_id_non_unique`).
+
+
+## Op boomniveau - obv old-id
+
+Met behulp van `create_unique_tree_id()` voor 4 decades. 
+
+<!-- `create_unique_tree_id()` oneindige loop wanner old_id niet in vorige periode gevonden wordt: issue # 119: opgelost -->
+
+
+```{r mbv_oldid_obv_package, results = 'hide'}
+tree_id <- create_unique_tree_id(data_dendro = data_dendro_calc)
+# Deze tabel wordt NIET bewaard in forresdat (daar enkel geaggregeerde resultaten op plotniveau)
+
+# check
+tree_id %>% filter(is.na(tree_id)) %>% nrow() == 0
+tree_id_missing <- tree_id %>% filter(is.na(tree_id))
+table(tree_id_missing$forest_reserve, tree_id_missing$period)
+
+
+```
+
+Rol `label_level1`? 
+Verschil met `old_id`?
+
+
+Old_id enkel in periode 2 uiteraard.
+Maar toch sommige bomen mét old_id en géén label.
+Omgekeerd ook soms met een label en geen old_id, dat zijn normaal gezien de nieuwe bomen in nieuwe plots.
+Of nieuw aangeduide bomen.
+
+Niet elke boom in een plot krijgt een label!
+Dus daarom ook soms old_id, terwijl er geen label is.
+
+Maar als er een label is, moet dat hetzelfde zijn doorheen de tijd.
+
+
+```{r}
+t <- data_dendro_calc |> 
+  filter((!is.na(old_id) | !is.na(label_level1)) & period == 2)  # 2392
+
+t |> filter(is.na(old_id) & period == 2) |> nrow()  # 183
+t |> filter(is.na(label_level1) & period == 2) |> nrow() # 762
+t |> filter(!is.na(old_id) & !is.na(label_level1)) |> nrow()  # 1447
+
+t2 <- data_dendro_calc |> 
+  filter(!is.na(old_id) & !is.na(label_level1))
+# 1447
+
+t3 <- data_dendro_calc |> 
+  filter(!is.na(old_id) & is.na(label_level1))
+
+t4 <- data_dendro_calc |> 
+  filter(is.na(old_id) & !is.na(label_level1))
+```
+
+
+```{r}
+# selectie om wijde tabel aan te maken
+tree_id_long <- tree_id %>%
+  select(plot_id, tree_id, period, tree_measure_id
+         , label_level1
+         , species, alive_dead
+         , dbh_mm, vol_tot_m3)
+```
+
+## Op boomniveau - obv coppice-id
+
+Niet, want geen coppice-id genoteerd
+Ev. wel extra info obv het label
+
+# Op boomniveau: wijde tabel met één record per boom doorheen de tijd
+
+Om één record per boom te verkrijgen met info uit beide periodes, dient functie "make_table_wide" gebruikt te worden.
+Dit werkt enkel bij een unieke tree_id.
+
+Indien nodig: tijdelijk verwijderen van deze met een dubbele tree-id.
+
+Hier OK.
+
+```{r tree_id_wide_check}
+check_dubbele_tree_id <- tree_id %>% 
+  group_by(tree_id, period) %>% 
+  summarize(aantal_per_periode = n()) %>% 
+  ungroup() %>% 
+  filter(aantal_per_periode > 1) 
+
+nrow(check_dubbele_tree_id) == 0
+
+tree_id %>% filter(tree_id %in% check_dubbele_tree_id$tree_id)
+
+```
+```{r dubbele_ids_verwijderen, eval = FALSE}
+# # TIJDELIJK
+# tree_id_ <- tree_id %>% 
+#   anti_join(check_dubbele_tree_id %>%  select(plot_id, tree_id, period))  # tijdelijk de dubbele tree_id's verwijderen
+# # bevat geen beuk ...
+# 
+# nrow(tree_id_) == nrow(tree_id) - 2*nrow(check_dubbele_tree_id)
+# 
+# tree_id <- tree_id_
+```
+
+
+```{r tree_id_long}
+# selectie om wijde tabel aan te maken
+tree_id_long <- tree_id %>%
+  select(plot_id, period, tree_id, label_level1,
+         species, ind_sht_cop,
+         dbh_mm, vol_tot_m3, alive_dead) %>% 
+  arrange(period) %>% 
+  left_join(plotinfo %>% select(plot_id, period, survey_number)) %>% 
+  select(-period)
+
+# ? survey_number => joinen met plotinfo
+```
+
+!!Opgepast: soms daalt dbh doorheen de tijd: dat is het geval bij dode bomen.
+
+
+```{r tree_id_wide_zonder_dubbele_ids, results='hide'}
+tree_id_wide <- make_table_wide(table_long = tree_id_long
+                                , column_to_repeat = "survey_number"
+                                , columns_for_comparison = 
+                                  c("alive_dead", "dbh_mm", "vol_tot_m3", "label_level1"))
+
+names(tree_id_wide)
+
+nrow(tree_id_wide) == n_distinct(tree_id_long$tree_id)
+nrow(tree_id_wide); n_distinct(tree_id_long$tree_id)
+
+tree_id_wide |> filter(label_level1_1 != label_level1_2) |> nrow() == 0
+tree_id_wide |> filter(is.na(label_level1_1) & !is.na(label_level1_2)) |> nrow() == 0
+
+t1 <- tree_id_wide |> filter(is.na(label_level1_1) & !is.na(label_level1_2)) 
+t2 <- tree_id_wide |> filter(!is.na(label_level1_1) & is.na(label_level1_2)) 
+
+
+```
+**Jaartal survey's toevoegen**    
+Dit jaartal moet uit `plotinfo` gehaald worden, want als boom er niet meer staat (omgevallen), 
+is er in de tabel met bomen ook geen `year_dendro` meer voor die boom en dat jaartal, 
+terwijl er wél een opname was.
+We nemen voor `survey_Y1` het jaar van de eerste survey voor dat gebied, dus NIET het jaartal van 
+de eerste decade/periode van monitoringnetwerk.
+Dat is het meest logische (idem als shapefile Marc, zie `strata_location`), maar houdt wel in dat
+`survey_Y1` kan varieren van 1986 (old core zoniën) tot 2020 (Kluisbos).
+
+<!-- ! ev. NA bij jaartallen '0' van maken? cfr shapefile Marc? NEE -->
+<!-- ? wat met NA's van bomen die er niet meer zijn => moet een getal zijn, anders een probleem -->
+<!-- beste om dat toch NA te laten!!! -->
+<!-- En andere jaartallen ook NA, anders wordt er mogelijks mee gerekend ... -->
+
+```{r year_survey, results='hide'}
+names(plotinfo)
+
+# aantal surveys
+n_surveys <- plotinfo %>% 
+  group_by(forest_reserve, plot_id, plottype) %>% 
+  summarize(n_surveys = n()
+            , min_yr = min(year_dendro)
+            , max_yr = max(year_dendro)) %>% 
+  ungroup()
+
+# jaartallen surveys
+plotinfo_long <- plotinfo %>% 
+  select(forest_reserve, plot_id, plottype
+         , survey_number, year_dendro, survey_trees
+         , data_processed)
+
+plotinfo_wide <- make_table_wide(table_long = plotinfo_long
+                                , column_to_repeat = "survey_number"
+                                , columns_for_comparison = 
+                                   c("year_dendro")) %>% 
+  rename(survey_Y1 = "1", survey_Y2 = "2", survey_Y3 = "3", survey_Y4 = "4")
+names(plotinfo_wide)
+# survey_Y1 = jaar van eerste survey voor dat gebied, is meest logische (idem als shapefile Marc, zie strata_location)
+```
+
+```{r combine}
+tree_survey_wide <- tree_id_wide %>% 
+  left_join(plotinfo_wide) %>% 
+  left_join(n_surveys)
+head(tree_survey_wide)
+
+names(tree_survey_wide)
+```
+
+```{r}
+tree_survey_wide_ <- tree_survey_wide %>% 
+  select(forest_reserve, plot_id, plottype
+         , tree_id, species, ind_sht_cop
+         , n_surveys
+         , contains(c("survey_Y", "alive_dead", "dbh", "vol")))
+
+tree_id_wide <- tree_survey_wide_
+
+```
+
+# Op boomniveau: lange tabel met unieke record per boom doorheen de tijd
+
+Op vraag van Arno ook de "lange" tabel waar `tree_survey_wide` op gebaseerd is, 
+exporteren als `trees_unique_id_long`.
+
+Dit is een tabel waar de dubbele/foute tree-id's uit gehaald zijn, zodat men zelf 
+een "wijde" tabel kan aanmaken afhankelijk van de onderzoeksvraag.
+
+Volgende velden worden opgenomen:
+
+- forest_reserve, plot_id, plottype
+- tree_id
+- species, ind_sht_cop
+- survey_nr
+- decade
+- year_dendro
+
+Belangrijk hierbij is te beseffen dat sommige bomen in een bepaalde periode niet 
+opgemeten zijn, omdat ze omgevallen zijn.
+Voor een volledig beeld moet men deze tabel dus combineren met tabel `plotinfo`. 
+
+```{r results='hide'}
+names(tree_id_long)
+
+tree_id_long <- tree_id %>%
+  left_join(plotinfo %>% select(forest_reserve, plot_id, period, survey_number, year_dendro)) %>% 
+  select(forest_reserve, plot_id, plottype
+         , tree_id
+         , decade = period, survey_number, year_dendro
+         , species, ind_sht_cop, alive_dead
+         , dbh_mm, vol_tot_m3) %>% 
+  arrange(decade)
+
+# check: max. 4 surveys?
+tree_id_long %>% 
+  group_by(tree_id) %>% 
+  summarize(n = n()) %>% 
+  ungroup() %>% 
+  filter(n > 4) %>% nrow() == 0
+
+summary(tree_id_long)
+  
+```
+
+# Vergelijking met oude data
+
+```{r eval = FALSE}
+trees_long_old <- read.csv2(file = paste0(path_to_treelevel_csv, "trees_unique_id_long.csv"))
+
+nrow(trees_long_old); nrow(tree_id_less_var)
+summary(trees_long_old)
+summary(tree_id_long)
+
+
+check <- trees_long_old %>% 
+  anti_join(tree_id_long, by = c("decade", "plot_id", "tree_id"))
+# Coolhem en terrijst extra verwerkt - ok
+
+check2 <- tree_id_long %>% 
+  anti_join(trees_long_old, by = c("decade", "plot_id", "tree_id"))
+# Coolhem en terrijst extra verwerkt - ok
+table(check$decade, check$forest_reserve)
+
+
+#--------
+trees_wide_old <- read.csv2(file = paste0(path_to_treelevel_csv, "trees_wide.csv"))
+
+nrow(trees_wide_old); nrow(tree_survey_wide)
+
+summary(trees_wide_old)
+summary(tree_survey_wide)
+check <- trees_wide_old  %>% 
+  anti_join(tree_survey_wide, by = c("plot_id", "tree_id"))
+# Coolhem en terrijst extra verwerkt - ok
+check2 <- tree_survey_wide  %>% 
+  anti_join(trees_wide_old, by = c("plot_id", "tree_id"))
+# Coolhem en terrijst extra verwerkt - ok
+```
+
+
+# Export tree level data
+
+- Met unieke en non-unieke (voor hakhout) tree-id én berekende variabelen    
+- Enkel processed data   
+- Niet alle variabelen geëxporteerd, enkel deze relevant voor de meeste gebruikers    
+- Zonder de bomen met dubbele tree-id's (TIJDELIJK) => belangrijk om dit voor gebruik goed te checken 
+
+**Volgende plots zijn niet helemaal correct (wegens één of meerdere dubbele tree-id's): **    
+
+- niet correcte unieke tree-id in `trees_calc`     
+- ontbrekende bomen in wijde tabel in `trees_wide` en `trees_unique_id_long`
+
+
+```{r}
+check_dubbele_tree_id %>% distinct(plot_id) %>% as_tibble
+```
+
+
+**Enkele verduidelijkingen:**
+
+- plotarea_ha = de oppervlakte van resp. A3 of A4, afh. van status en diameter van de boom
+(of LxB voor kernvlaktes of volledig BR voor andere plottypes) dus NIET de volledige cirkel
+
+
+```{r trees_less_variables, results='hide'}
+names(tree_id)
+
+tree_id_less_var <- tree_id %>% 
+  select(-old_id, -r_A1, -r_A2, -r_A3, -r_A4, -contains(c("dbh_min", "core_area_")), -subcirclearea_ha)
+
+tree_id_less_var <- tree_id_less_var %>% 
+  select(forest_reserve, plot_id, plottype, 
+         period, 
+         tree_measure_id, tree_id, tree_id_non_unique, coppice_id, 
+         x_local, y_local, 
+         species, 
+         dbh_mm, height_m, calc_height_m, 
+         alive_dead, ind_sht_cop, intact_snag, 
+         iufro_hght, iufro_vital, iufro_socia, 
+         decaystage, crown_volume_reduction, branch_length_reduction, 
+         remark, common_remark, 
+         year, date_dendro, 
+         subcircle, plotarea_ha, totalplotarea_ha, 
+         dbh_class_5cm, 
+         nr_of_stems, 
+         basal_area_m2, 
+         vol_bole_m3, vol_crown_m3, vol_tot_m3, 
+         basal_area_alive_m2_ha, basal_area_dead_m2_ha, 
+         vol_alive_m3_ha, vol_dead_standing_m3_ha, 
+         vol_bole_alive_m3_ha, vol_bole_dead_m3_ha, 
+         number_of_trees_alive_ha, number_of_trees_dead_ha
+         )
+
+```
+
+
+```{r save_trees_access_csv, eval = FALSE}
+# volgende functies heb ik zelf geschreven, zitten niet in het package!!!
+save_results_csv (
+    results = list(trees_calc = tree_id_less_var),
+    output_dir = path_to_treelevel_csv
+    )
+
+# afgerond voor export naar access
+tree_id_round <- tree_id_less_var %>% 
+  mutate_at(c("calc_height_m"), round, 2) %>% 
+  mutate_at(vars(matches("_ha|_m3|_m2")), round, 4)
+
+# save_results_access (
+#   results = list(trees_calc = data_dendro_calc_round),
+#   database = path_to_analysis_set_db,
+#   remove_tables = TRUE
+#   )
+
+# Functie "save_results_access" (< package) geeft problemen met dates => hierna manueel
+
+con <- odbcConnectAccess2007(path_to_analysis_set_db)
+
+dbtables <- sqlTables(con)
+if ("trees_calc" %in% dbtables$TABLE_NAME) {
+        sqlDrop(con, "trees_calc")
+      }
+sqlSave(con, dat = tree_id_round, tablename = "trees_calc", varTypes = c(date_dendro="datetime"), fast = FALSE)
+
+odbcClose(con)
+```
+
+
+```{r save_trees_wide_access_csv, eval = FALSE}
+# volgende functies heb ik zelf geschreven, zitten niet in het package!!!
+save_results_csv (
+    results = list(trees_wide = tree_id_wide),
+    output_dir = path_to_treelevel_csv
+    )
+
+# afgerond voor export naar access
+tree_id_wide_round <- tree_id_wide %>% 
+  # mutate_at(c("calc_height_m"), round, 2) %>% 
+  mutate_at(vars(matches("_ha|_m3|_m2")), round, 4)
+
+save_results_access (
+  results = list(trees_wide = tree_id_wide_round),
+  database = path_to_analysis_set_db,
+  remove_tables = TRUE
+  )
+
+```
+
+
+```{r save_trees_unique_id_long_access_csv, eval = FALSE}
+# volgende functies heb ik zelf geschreven, zitten niet in het package!!!
+save_results_csv (
+    results = list(trees_unique_id_long = tree_id_long),
+    output_dir = path_to_treelevel_csv
+    )
+
+# afgerond voor export naar access
+tree_id_long_round <- tree_id_long %>% 
+  # mutate_at(c("calc_height_m"), round, 2) %>% 
+  mutate_at(vars(matches("_ha|_m3|_m2")), round, 4)
+
+save_results_access (
+  results = list(trees_unique_id_long = tree_id_long_round),
+  database = path_to_analysis_set_db,
+  remove_tables = TRUE
+  )
+
+```
+
+
+Direct naar gdrive exporteren (csv): 
+naar **/PRJ_BOSECO_ALGEMEEN/PRJ_BR_AanvraagGegevens/!METADATA-ALL_PLOTS/_tree-level-data/**
+
+```{r save_trees_gdrive, eval = FALSE}
+save_results_csv(
+    results = list(trees_calc = tree_id_less_var),
+    output_dir = path_to_treelevel_gdrive
+    )
+
+save_results_csv(
+    results = list(trees_wide = tree_id_wide),
+    output_dir = path_to_treelevel_gdrive
+    )
+
+save_results_csv(
+    results = list(trees_unique_id_long = tree_id_long),
+    output_dir = path_to_treelevel_gdrive
+    )
+
+```
+
+
+# Export stem level data
+
+Met unieke en non-unieke (voor hakhout) tree-id (uniek op boomniveau, niet op spilniveau) én berekende variabelen.
+
+**!! OPGEPAST !!**
+Unieke en non-unieke (voor hakhout) tree-id overgenomen van trees berekend op boomniveau.
+
+<!--  na 16/2/2022: voor hakhout met meer dan twee delen: tree-id obv coppice-id (zie hoger) -->
+
+Niet alle variabelen mee exporteren, enkel deze relevant voor de meeste gebruikers
+
+
+Volgende plots zijn (NOG) niet helemaal correct (wegens één of meerdere dubbele tree-id's):   
+
+- niet correcte unieke tree-id in `stems_calc`     
+- ontbrekende bomen in wijde tabel in `stems_wide`
+
+```{r}
+check_dubbele_tree_id %>% distinct(plot_id) %>% as.tibble
+```
+
+```{r stems_less_variables}
+stem_id_less_var <- stem_id %>% 
+  select(-old_id, -r_A1, -r_A2, -r_A3, -r_A4, -contains(c("dbh_min", "core_area_")), -subcirclearea_ha)
+## stemnumber_alive werd weggefilterd
+
+stem_id_less_var <- stem_id_less_var %>% 
+  select(forest_reserve, plot_id, plottype, 
+         period, 
+         tree_measure_id, shoot_measure_id, 
+         tree_id, tree_id_non_unique, coppice_id, 
+         x_local, y_local, 
+         species, 
+         dbh_mm, height_m, calc_height_m, 
+         alive_dead, ind_sht_cop, intact_snag, 
+         iufro_hght, iufro_vital, iufro_socia, 
+         decaystage, crown_volume_reduction, branch_length_reduction, 
+         remark, common_remark, 
+         year, date_dendro, 
+         subcircle, plotarea_ha, totalplotarea_ha, 
+         dbh_class_5cm, 
+         basal_area_m2, 
+         vol_bole_m3, vol_crown_m3, vol_tot_m3, 
+         basal_area_alive_m2_ha, basal_area_dead_m2_ha, 
+         vol_alive_m3_ha, vol_dead_standing_m3_ha, 
+         vol_bole_alive_m3_ha, vol_bole_dead_m3_ha, 
+         stem_number_dead_ha, stem_number_alive_ha
+         )
+
+```
+
+
+```{r save_stems_access_csv, eval = FALSE}
+# volgende functies heb ik zelf geschreven, zitten niet in het package!!!
+save_results_csv (
+    results = list(stems_calc = stem_id_less_var),
+    output_dir = path_to_treelevel_csv
+    )
+
+# afgerond voor export naar access
+stem_id_round <- stem_id_less_var %>% 
+  # mutate_at(c("calc_height_m"), round, 2) %>% 
+  mutate_at(vars(matches("_ha|_m3|_m2")), round, 4)
+
+# save_results_access (
+#   results = list(trees_calc = data_dendro_calc_round),
+#   database = path_to_analysis_set_db,
+#   remove_tables = TRUE
+#   )
+
+# Functie "save_results_access" (< package) geeft problemen met dates => hierna manueel
+
+con <- odbcConnectAccess2007(path_to_analysis_set_db)
+
+dbtables <- sqlTables(con)
+if ("stems_calc" %in% dbtables$TABLE_NAME) {
+        sqlDrop(con, "stems_calc")
+      }
+# sqlSave(con, dat = stem_id_round, tablename = "stems_calc", varTypes = c(date_dendro="datetime"))
+sqlSave(con, dat = stem_id_round, tablename = "stems_calc", varTypes = c(date_dendro="datetime"), fast = FALSE)
+
+odbcClose(con)
+```
+
+Direct naar gdrive exporteren (csv): 
+naar **/PRJ_BOSECO_ALGEMEEN/PRJ_BR_AanvraagGegevens/!METADATA-ALL_PLOTS/_tree-level-data/**
+
+```{r save_stems_gdrive, eval = FALSE}
+save_results_csv(
+    results = list(stems_calc = stem_id_less_var),
+    output_dir = path_to_treelevel_gdrive
+    )
+
+```
+
+
+
+# Copy html to teamdrive
+
+Na knitting - manueel
+
+```{r eval = FALSE}
+# Specify the path of the file you want to copy
+source_file <- here::here(paste0("Scripts/OpbouwDatabank/Main_UpdateForresdat_03_treeniveau.html"))
+
+# Specify the destination directory where you want to copy the file
+destination_dir <- path_to_html_teamdrive
+
+# Copy the file to the destination directory
+file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
+# ? file.copy
+```
+

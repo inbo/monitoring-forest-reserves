@@ -1,0 +1,270 @@
+---
+title: "Bosreservatennieuwsbrief"
+subtitle: "Voorjaarsflora in leembossen"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: TRUE
+      smooth_scroll: TRUE
+---
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 7,
+  fig.height = 3,
+  fig.align = TRUE)
+
+library(here)
+library(writexl)
+library(scales)
+library(sf)
+
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+```
+
+
+```{r Setup2}
+path_to_project_teamdrive <- "G:/Gedeelde drives/Team_Boseco_BR/PRJ_BR_communicatie&nieuwsbrief/BosreservatenNieuws/Bosreservatennieuws 19/Voorjaarsflora leembossen 3 inventarisaties"  
+
+path_to_datarequest_teamdrive <- paste0(path_to_project_teamdrive, "/fieldmapdata/")
+path_to_html_teamdrive <- path_to_datarequest_teamdrive
+
+```
+
+ 
+# Vraagstelling
+
+Export vegetatiegegevens van 4 bossen op leembodem: 
+- Bos Ter Rijst
+- Jansheideberg
+- Everzwijnbad
+- Zoniënwoud
+
+Enkel cirkelplots, drie inventarisaties
+
+Dataverwerking door stagestudenten in kader van nieuuwsbrief.
+
+Tijdelijk db aanpassen 
+```{r}
+# tijdelijk nieuwste moederdb (met andere indeling hakhout, hier geen probleem)
+path_to_fieldmap_db <- "C:/03_BR_db_monitoring/MDB_BR_22_inbo2026_20251014/FieldMapData_MDB_BR_22_inbo2026.accdb"
+
+path_to_fieldmap_db
+```
+
+
+Voorafgaand de 50 plots (periode 3) uit Bos Terrijst in FM-databank aangepast (in access):
+ - dataprocessed = T
+ - survey_veg = T
+ 
+
+```{r results='hold', eval=TRUE}
+path_to_fieldmap_db
+path_to_datarequest_teamdrive
+
+```
+
+Naamgeving reservaten?
+
+```{r}
+forest_reserves <- load_plotinfo(database = path_to_fieldmap_db) %>% 
+  distinct(forest_reserve) 
+```
+
+
+# Geselecteerde bosreservaten
+
+Volgende bosreservaten werden weerhouden
+
+```{r}
+list_reserves <- c("Bos Terrijst",
+                   "Everzwijnbad",
+                   "Jansheideberg",
+                   "Zoniën UITBR_1995")
+
+```
+
+Zoniënwoud is enkel "Zoniën UITBR_1995" (voorheen Kersselaerspleyn), 
+want "Zoniën UITBR_2010" (voorheen Zwaenepoel) is nog maar één keer opgemeten in 2020
+en "Zoniën HARRAS_1995" enkel in 2009 en 2019. 
+"Zoniën KERN_1983" is enkel kernvlakte (info over CP's werd bij 1eSET gehaald uit 
+de kernvlakte, virtueel "uitgesneden" ).
+
+# Inladen data
+
+<!-- Bos terrijst zit nog niet in de moederdatabank, dus apart op te vragen -->
+
+<!-- ```{r} -->
+<!-- path_to_fieldmap_db <- "C:/03_BR_gebieden/4b_Terrijst/FMprojecten_2025/CTRL_BosTR_Coolhem_inbo2026_202509251405/FieldMapData_CTRL_BosTR_Coolhem_inbo2026.accdb" -->
+
+<!-- ``` -->
+
+
+```{r load_plotinfo, results='hide'}
+plotinfo <- load_plotinfo(database = path_to_fieldmap_db, processed = TRUE) %>% 
+  filter(plottype %in% c("CP")) %>%   
+  filter(survey_veg == TRUE) %>% 
+  filter(forest_reserve %in% list_reserves)
+
+names(plotinfo)
+table(plotinfo$period, plotinfo$forest_reserve)
+
+```
+
+```{r}
+# één plot in Everzwijnbad  niet opgemeten in periode 1?
+
+everzwijn <- plotinfo %>% filter(forest_reserve == "Everzwijnbad")
+
+plots_p3 <- everzwijn %>% filter(period == 3)
+plots_p1 <- everzwijn %>% filter(period == 1)
+
+t <- plots_p3 %>% 
+  anti_join(plots_p1, by = c("plot_id"))
+```
+
+Plot 112 (Everwijnbad) niet opgemeten in periode 1 => verwijderen.
+
+```{r load_strata_db}
+con <- odbcConnectAccess2007(path_to_strata_db)
+  info_survey <- sqlFetch(con, "info_survey", stringsAsFactors = FALSE)
+  info_XY <- sqlFetch(con, "strata_location", stringsAsFactors = FALSE)
+  # info_beheer <- sqlFetch(con, "strata_remaining", stringsAsFactors = FALSE)
+  # dominant_tree <- sqlFetch(con, "dominant_tree", stringsAsFactors = FALSE)
+  # strata_soil <- sqlFetch(con, "strata_soil", stringsAsFactors = FALSE) %>% 
+  #   select(Unieknr, plot_id, SiteName, SubArea, forest_reserve_fieldmap)
+  strata_hist <- sqlFetch(con, "strata_history", stringsAsFactors = FALSE)
+odbcClose(con)
+
+```
+
+
+```{r load_veg, results='hide'}
+# jaartal van vegetatie-opname
+data_vegetation_ <-
+  load_data_vegetation(
+    database = path_to_fieldmap_db,
+    processed = TRUE
+  )
+
+```
+
+
+```{r}
+data_vegetation <- data_vegetation_ %>% 
+  mutate(year_veg = as.numeric(format(date_vegetation,'%Y'))) %>% 
+  filter(forest_reserve %in% list_reserves & plottype == "CP") 
+
+data_vegetation %>% filter(is.na(plotarea_ha)) %>% nrow() == 0
+data_vegetation %>% filter(is.na(year_veg)) %>% nrow() == 0
+# names(data_vegetation)
+
+data_vegetation <- data_vegetation %>% 
+  select(forest_reserve, plot_id, plottype, plotarea_ha
+         , period, year_veg, date_vegetation
+         , contains(c("_id", "_interval", "_mid"))
+         , -subplot_id, -contains(c("soil", "water"))
+  )
+```
+
+```{r load_lkp_veg}
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+  qtotalCover<- sqlFetch(con, "qtotalCover", stringsAsFactors = FALSE)
+  qHerbSpecies<- sqlFetch(con, "qHerbSpecies240810", stringsAsFactors = FALSE)
+  qCoverHerbs <- sqlFetch(con, "qCoverHerbs", stringsAsFactors = FALSE)
+  qBrowseIndex <- sqlFetch(con, "qBrowsIndex", stringsAsFactors = FALSE)
+odbcClose(con)
+
+# 
+qHerbSpecies <- qHerbSpecies %>% select(ID, name_sc = Value2)
+qCoverHerbs <- qCoverHerbs %>% select(ID, cover = Value1)
+qBrowseIndex <- qBrowseIndex %>% select(ID, browsing = Value1)
+```
+
+```{r load_herblayer, results='hide'}
+data_herblayer_ <-
+  load_data_herblayer(
+    database = path_to_fieldmap_db,
+    processed = TRUE
+  )
+
+data_herblayer <- data_herblayer_ %>% 
+  filter(forest_reserve %in% list_reserves & plottype == "CP") %>% 
+  left_join(qHerbSpecies, by=c("species" = "ID")) %>% 
+  left_join(qCoverHerbs, by = c("coverage_id" = "ID")) %>% 
+  left_join(qBrowseIndex, by = c("browse_index_id" = "ID"))
+
+nrow(data_herblayer)
+
+table(data_herblayer$period,data_herblayer$forest_reserve)
+
+```
+
+```{r}
+names(data_herblayer)
+
+data_herblayer <- data_herblayer %>% 
+  select(forest_reserve, plot_id, plottype, plotarea_ha
+         , period, year, date_vegetation
+         , species_id = species, name_sc
+         , coverage_id, cover, coverage_class_average_perc
+         , browse_index_id, browsing)
+
+```
+
+
+# Export
+
+Resultaten worden opgeslagen in teamdrive:
+
+```{r}
+path_to_datarequest_teamdrive
+
+```
+
+
+```{r save_teamdrive, eval=FALSE}
+save_results_xlsx(
+    results = list(data_vegetation = data_vegetation
+                   , data_herblayer = data_herblayer),
+    output_dir = path_to_datarequest_teamdrive
+  )
+
+```
+
+
+# Copy html to teamdrive
+
+Na knitting - manueel
+
+```{r eval = FALSE}
+# Specify the path of the file you want to copy
+source_file <- "C:/03_BR/1_DataVerwerkingBR/Scripts/AanvraagGegevens/INBO_allerlei/INBO_nieuwsbrief19_voorjaarsflora.html"
+# Specify the destination directory where you want to copy the file
+destination_dir <- path_to_datarequest_teamdrive
+
+# Copy the file to the destination directory
+file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
+
+```
+
+
+
+

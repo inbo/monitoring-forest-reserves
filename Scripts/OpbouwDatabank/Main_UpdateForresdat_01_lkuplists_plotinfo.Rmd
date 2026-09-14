@@ -1,5 +1,5 @@
 ---
-title: "Update forresdat - lookuplists en plotinfo"
+title: "Update forresdat 1 - lookuplists en plotinfo"
 author: "Anja Leyman"
 date: "`r Sys.Date()`"
 output: 
@@ -36,17 +36,25 @@ source(here::here("scripts/Setup.R"))
 ```
 
 
+```{r Setup2}
+path_to_html_teamdrive <- paste0(path_to_dataverwerking_teamdrive, "25_Overkoepelend")
+```
+
+
+
 > juiste forrescalc kiezen:   
-- om weg te schrijven naar forresdat => met juiste release: dan `install.packages("forrescalc")`  
-- laatste correcties van forrescalc => juiste branch selecteren in forrescalc en opnieuw builden
-(bv. branch 'bugfix' met corr van read_forresdat waarbij we de develop branch kunnen selecteren ipv main)
+(1)  om weg te schrijven naar "main" branch van forresdat => met juiste release van het package: dan `install.packages("forrescalc")`  
+OF
+(2) om weg te schrijven naar "develop" branch van forresdat, dat kan met laatste correcties van forrescalc 
+=> juiste branch selecteren in forrescalc en opnieuw builden 
 
-**Update 18/12/2024: enkel naar csv lokaal en op gdrive, niet naar forresdat**
+> (10/3/25: branch 'bugfix' met corr van read_forresdat waarbij we de develop branch kunnen selecteren ipv main)
 
+> (15/12/2025: branch "bugfix_AL2025" => wegschrijven naar branch develop van forresdat)
 
-```{r juiste_forrescalc, eval = FALSE}
+```{r forrescalc_to_write_to_forresdat_NOG_NIET, eval = FALSE}
 # !!! eerst zeker 'install.packages("forrescalc")
-# zodat data goede release krijgt!
+# zodat forresdat-data goede release krijgt!
 # zie mail 7/10/24 van Els L.
 # soms een andere branch nodig als Els nog iets moet fixen, maar als ik naar forresdat 
 # wil wegschrijven, moet ik officiële versie van forrescalc gebruiken
@@ -56,11 +64,10 @@ install.packages("forrescalc")
 ```
 
 
-
 # Vraagstelling
 DOEL van dit script is een update van forresdat gegevens naar 
 
-- forresdat-folder (nadien nog te pushen naar github)
+- forresdat-folder (nadien nog te pushen naar github - develop branch!!!!!)
 - BR_analysedb.accdb op de c-schijf
 - output-folders op de c-schijf "_plot-level-data" en "_tree-level-data"
 - teamdrive-folders "_plot-level-data" en "_tree-level-data"
@@ -69,7 +76,7 @@ Zoniënwoud blijkt op meerdere vlakken uitzonderingen te bevatten.
 Deze uitzonderingen worden na het inladen van de data gecorrigeerd. 
 
 We exporteren enkel info over processed plots, dus verwerkte data!    
-Als we info willen over nog niet verwrekte data, moeten we mbv `load_plotinfo()` 
+Als we info willen over nog niet verwerkte data, moeten we mbv `load_plotinfo()` 
 de databank rechtsreeks aanspreken.
 
 <!-- - path_to_forresdat_data is "`r path_to_forresdat_data`"        -->
@@ -117,13 +124,25 @@ en Zwaenepoel werden vervangen door
     - Zoniën HARRAS_1995: bevat KV en CP (voorheen "Harras" voor KV en "Zwaenepoel" voor CP's)    
     - Zoniën UITBR_2010: bevat enkel CP's (voorheen "Zwaenepoel", maar zonder deze die nu in "HARRAS_1995" liggen)
 
+- 10/3/2025: update van de reeds verwerkte data, vooral vanuit vraag naar trees wide beuk
+(trees_wide_beuk: tabel met ook Wijnendale, Everzwijnbad en Jansheideberg)
+
+- 4/6/2025: foutje plot 414 tresholds
+
+- 17/11/2025: foutje in forrescalc => werken met branch "bugfix_AL2025" (nog niet door 
+Els gemerged in haar branch "bugfix")
+
+- 15/12/2025: meest recente bosreservaten apart verwerkt mét implementatie LIS
+
+- jan 2026: volledige databank verwerkt mét implementatie LIS
+- mrt 2026: idem, met toevoeging van Terrijst en Coolhem
 
 # Update lookuplijsten - INDIEN GEWIJZIGD
 
 Enkel indien de q-tabellen gewijzigd zijn.
 Enkel de gewijzigde tabellen vermelden.
 
-Forresdat opnieuw opgevuld op 24/9/2024
+Forresdat opnieuw opgevuld op 15/12/2024
 
 ## Rechtstreeks van fieldmap-db naar forresdat - ok
 
@@ -148,10 +167,13 @@ from_access_to_forresdat(
              "qtotalCover", "qBrowsIndex", "qCoverHerbs", 
              "qPlotType", 
              "qIntactSnag", "qIndShootCop", "qVdagnVfm",
-             "qCrownVolRedu","qBranchLenghtReduction"),
+             "qCrownVolRedu","qBranchLenghtReduction",
+             "qLIangle"),
   repo_path = path_to_git_forresdat,
   metadata_path = paste0(path_to_metadata, "_metadata_lookuplists.xlsx"),
-  strict = TRUE
+  push = FALSE,
+  strict = TRUE,
+  branch = "develop"
 )
 # !!!! argument "strict": keep default TRUE to update data without structural changes,
 #    change to FALSE only if tables are structurally changed
@@ -172,17 +194,13 @@ Enkele makkelijke functies uit forrescalc:
 ?remove_table_forresdat
 ```
 
+Lookuplijsten pushen naar develop branch in forresdat: 
 
 
-## Vanuit forresdat naar analysedb
+## Vanuit forresdat naar analysedb - ok
 
 Functie `from_forresdat_to_access()` is gebaseerd op de functies `read_forresdat()` en `read_forresdat_table()`. 
-Deze kunnen enkel data binnenhalen van de main branch, niet de develop branch.
-Dus tijdelijk met `save_results_access()` werken.
-
-Op termijn zou dat in orde moeten geraken (gevraagd via mail 26/9/24 aan Els): optie om ook uit develop branch 
-data binnen te kunnen halen.
-
+Deze kunnen ook data binnenhalen van de develop branch.
 
 ```{r eval = FALSE}
 # ?from_forresdat_to_access
@@ -199,13 +217,18 @@ from_forresdat_to_access(tables = c("qalive_dead", "qbranch_lenght_reduction",
                                     "qiufroheight_shoots", "qiufrosocialstatus", 
                                     "qiufrosocialstatus_shoots", "qiufrovitality", 
                                     "qiufrovitality_shoots", "qnumber_regeneration_classes", 
-                                    "qplot_type", "qspecies" , "qvdagn_vfm"),
-                         database = path_to_analysis_set_db,
-                         remove_tables = TRUE,
-                         join_plotinfo = FALSE)
+                                    "qplot_type", "qspecies" , "qvdagn_vfm", "ql_iangle"),
+                         , database = path_to_analysis_set_db
+                         , remove_tables = TRUE
+                         , join_plotinfo = FALSE
+                         , git_ref_type = "branch"
+                         , git_reference = "develop"
+                         )
 
-read_forresdat_table(tablename = "qalive_dead", join_plotinfo = FALSE)
-read_forresdat_table(tablename = "qcommonremark", join_plotinfo = FALSE)
+read_forresdat_table(tablename = "qalive_dead", join_plotinfo = FALSE
+                     , git_ref_type = "branch", git_reference = "develop")
+read_forresdat_table(tablename = "qcommonremark", join_plotinfo = FALSE
+                     , git_ref_type = "branch", git_reference = "develop")
 
 library(frictionless)
 datapackage <- frictionless::read_package(file.path(path_to_forresdat_data, "datapackage.json"))
@@ -213,14 +236,12 @@ resources(datapackage)
 ```
  
  
-## List met lkp-lists naar analysedb - ok 
- 
 Indien functie `from_forresdat_to_access` niet werkt, functie `save_results_access`
 gebruiken.
  
 Daarvoor is een list nodig van de weg te schrijven tabellen.
  
-```{r list_lkp}
+```{r list_lkp, eval = FALSE}
 # inladen
 con <- odbcConnectAccess2007(path_to_fieldmap_db)
 
@@ -251,6 +272,8 @@ con <- odbcConnectAccess2007(path_to_fieldmap_db)
   qiufrosocialstatus <- sqlFetch(con, "qiufrosocialstatus", stringsAsFactors = FALSE)
   qiufrosocialstatus_shoots <- sqlFetch(con, "qiufrosocialstatus_shoots", stringsAsFactors = FALSE)
   
+  qLIangle <- sqlFetch(con, "qLIangle", stringsAsFactors = FALSE)
+  
 odbcClose(con)
 
 # in lijst stoppen
@@ -268,7 +291,8 @@ list_lkp <- list(qIndShootCop = qIndShootCop, qAliveDead = qAliveDead, qSpecies 
                  qCoverHerbs = qCoverHerbs, qBrowsIndex = qBrowsIndex, 
                  qHeightClass_regeneration = qHeightClass_regeneration, 
                  qnumber_regeneration_classes = qnumber_regeneration_classes,
-                 qcommonremark = qcommonremark
+                 qcommonremark = qcommonremark,
+                 qLIangle = qLIangle
                  )
 
 # Blijkbaar Value3 als logical geëxporteerd verderop
@@ -330,17 +354,37 @@ Wegschrijven naar git, access en opslaan als csv
 vergeten zijn op `processed` te zetten)
 
 ```{r plotinfo_load_all}
-plotinfo <- load_plotinfo(database = path_to_fieldmap_db, processed = FALSE) %>% 
+plotinfo_0 <- load_plotinfo(database = path_to_fieldmap_db, processed = FALSE) %>% 
   filter(plottype != "OTHER")
-names(plotinfo)
-
-plotinfo <- plotinfo %>% 
-  filter(survey_trees == TRUE & !is.na(survey_trees))
+names(plotinfo_0)
 ```
+
+```{r}
+plotinfo <- plotinfo_0
+
+nrow(plotinfo) # 2629 / 2628 / 2721
+
+plotinfo %>% 
+  filter(survey_trees == FALSE & data_processed == TRUE) %>% nrow() == 0
+t <- plotinfo %>% 
+  filter(survey_trees == TRUE & data_processed == FALSE) %>% nrow()
+nrow(t)  # 0
+
+
+plotinfo_ <- plotinfo %>% 
+  filter(survey_trees == TRUE & !is.na(survey_trees))
+nrow(plotinfo_) # 2081
+
+plotinfo <- plotinfo_
+```
+
 
 ```{r check_processed}
 table(plotinfo$forest_reserve, plotinfo$data_processed)
 # table(plotinfo$forest_reserve, plotinfo$data_processed)
+# Zoniën UITBR_1995: altijd één plot niet-processed = 1999 CA (Rogister+)
+# wijnendale: 4 plots
+# 10/3/2025: Coolhem en Bos Terrijst: periode 3 zit er al in, maar nog niet verwerkt, klopt
 
 plotinfo %>% filter(data_processed==FALSE)
 ```
@@ -359,8 +403,7 @@ check_survey_trees_summ %>%
 
 Wijnendalebos: 4 plots uit periode 1 die niet verder meegenomen werden in de verwerking - ok
 Kersselaerspleyn: plot 1999: Rgister+: OK, niet mee te nemen
-Withoefse heide: 3eSET (dd 13/7/2022), verwerking is uitgesteld naar 2025
-Ook nog Heirnisse en Jansheideberg (datacontrole reeds gedaan, maar dataverwerking nog niet)
+TR Liedekerke 3de decade (plot 131000: nog geen forest_reesrve ingevuld)
 
 ```{r}
 plotinfo %>% filter(is.na(forest_reserve)) %>% nrow() == 0
@@ -378,14 +421,42 @@ We gaan verder met enkel de processed plots!!!!
 ```{r processed_only}
 plotinfo <- plotinfo %>% filter(data_processed == TRUE)
 plotinfo %>% filter(is.na(forest_reserve)) %>% nrow() == 0
+nrow(plotinfo) # 2023 / 2075
 ```
 
+```{r tmp_check_lis_survey, eval = FALSE}
+# check waar survey_lis niet correct ingevuld staat 
+# functie load_plotinfo() zet een NA om naar FALSE
+plotinfo %>% filter(survey_lis == TRUE) %>% 
+  group_by(forest_reserve, plottype, period) %>% 
+  summarise(n = n()) %>% 
+  ungroup()
+
+
+t <- plotinfo %>% 
+  group_by(forest_reserve, plottype, period, survey_lis) %>% 
+  summarise(n_lis = sum(survey_lis)
+            , n_niet_lis = sum(!survey_lis)) %>% 
+  ungroup()
+
+
+plotinfo %>% filter(is.na(survey_lis)) %>% 
+  group_by(forest_reserve, plottype, period) %>% 
+  summarise(n = n()) %>% 
+  ungroup()
+
+# gevraagd aan Peter (mail 16/12/2025):
+# plotdetails_2eSET: Lineintersect staat op "ja" bij volgende plots:
+#     Kluisbos, CPs
+#     Zoniën KERN_1983
+#     Zoniën UITBR_1995
+```
 
 ## Year_dendro
 
 Year_dendro = jaar van groeiseizoen
 Grens ligt op 1/5.
-Soms dendro effectief in twee verschillende groeiseizoenen opgemeten - OK
+Soms dendro effectief in twee verschillende groeiseizoenen opgemeten, maar dat is OK
 
 ```{r check, eval = FALSE}
 names(plotinfo)
@@ -404,7 +475,7 @@ t_ <- t %>%
 
 ```
 
-# Correctie Kersselaerspleyn
+# Correctie plotinfo Kersselaerspleyn
 
 ## Survey_deadw - CP's 1eSET
 
@@ -425,13 +496,66 @@ plotinfo_ <- plotinfo %>%
   dplyr::mutate(survey_deadw = ifelse(forest_reserve == "Zoniën UITBR_1995" & plottype == "CP" 
                     & period == 1 & survey_trees
                     , TRUE
-                    , survey_deadw))
+                    , survey_deadw)
+                # extra tov laatste update (nog niet gerund (27/2/2026))
+                , diam_min_a4_logs = ifelse(forest_reserve == "Zoniën UITBR_1995" & plottype == "CP" 
+                    & period == 1 & survey_trees
+                    , 100
+                    , diam_min_a4_logs))
 
 plotinfo_ %>% dplyr::filter(forest_reserve == "Zoniën UITBR_1995" & plottype == "CP" 
                      & period == 1 & survey_trees) %>% head()
 
 plotinfo <- plotinfo_
 
+```
+
+
+# Vergelijking met oude data
+
+25/3/2026 vergeleken met data op git (17/12/2025)
+
+```{r eval = FALSE, results='hide'}
+# 
+plotinfo_git <- read_forresdat_table(tablename = "plotinfo"
+                                           , join_plotinfo = FALSE
+                                           , plottype = "all"
+                                           , git_ref_type = "branch"
+                                           , git_reference = "develop")
+
+# vgl
+plotinfo_git <- plotinfo_git %>% 
+  select(plot_id, year_dendro, everything()) 
+# %>% 
+#   select(names(dendro_by_plot))    # vol_log_min40cm van naam veranderd!
+nrow(plotinfo) == nrow(plotinfo_git)
+names(plotinfo) == names(plotinfo_git)
+waldo::compare(plotinfo, plotinfo_git)
+
+plotinfo %>% select(-year_dendro) %>% arrange(plot_id, period) == plotinfo_git %>% select(-year_dendro) %>% arrange(plot_id, period)
+# OK denk ik andere ordening van variabelen (3/2025)
+# 12/2025: andere namen,  niet OK dus
+plotinfo == plotinfo_git
+
+head(plotinfo %>% arrange(desc(plot_id), period)); head(plotinfo_git %>% arrange(desc(plot_id), period))
+# lijkt OK
+
+t <- plotinfo %>% 
+  anti_join(plotinfo_git)
+
+head(plotinfo %>% arrange(desc(plot_id), period) %>% filter(plot_id == 830)); 
+head(plotinfo_git %>% arrange(desc(plot_id), period) %>% filter(plot_id == 830))
+
+plotinfo %>% filter(forest_reserve == "Zoniën UITBR_1995" & plottype == "CP" 
+                    & period == 1); plotinfo_git %>% filter(forest_reserve == "Zoniën UITBR_1995" & plottype == "CP" 
+                    & period == 1)
+
+
+w <- waldo::compare(plotinfo %>% filter(forest_reserve == "Zoniën UITBR_1995" & plottype == "CP" 
+                    & period == 1), plotinfo_git %>% filter(forest_reserve == "Zoniën UITBR_1995" & plottype == "CP" 
+                    & period == 1))
+# afronding is anders 
+# of enkele kleine aanpassingen wegens kleine correcties?
 ```
 
 
@@ -442,12 +566,18 @@ save_results_forresdat(
   results = list(plotinfo = plotinfo)
   , repo_path = path_to_git_forresdat
   , metadata_path = paste0(path_to_metadata, "_metadata_plotinfo.xlsx")
+  # , strict = TRUE
   , strict = TRUE
-  # , strict = FALSE
+  , push = FALSE
+  , branch = "develop"
   )
+
+# ?save_results_forresdat
 
 ```
 
+Na wegschrijven naar forresdat, moet "forresdat.Rproj" geopend worden en 
+commits gepusht naar github.
 
 ```{r plotinfo_save_access_csv, eval=FALSE}
 save_results_access(
@@ -467,7 +597,26 @@ save_results_csv(
     results = list(plotinfo = plotinfo),
     output_dir = path_to_plotlevel_gdrive
   )
+
+odbcCloseAll()
 ```
 
 **Na update van forresdat, project "forresdat" openen en alles naar de cloud pushen**
 **Eventueel ook access op gdrive plaatsen**
+
+
+# Copy html to teamdrive
+
+Na knitting - manueel
+
+```{r eval = FALSE}
+# Specify the path of the file you want to copy
+source_file <- here::here(paste0("Scripts/OpbouwDatabank/Main_UpdateForresdat_01_lkuplists_plotinfo.html"))
+
+# Specify the destination directory where you want to copy the file
+destination_dir <- path_to_html_teamdrive
+
+# Copy the file to the destination directory
+file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
+# ? file.copy
+```
