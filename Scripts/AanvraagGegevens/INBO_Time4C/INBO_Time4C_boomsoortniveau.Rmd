@@ -65,9 +65,20 @@ path_to_treelevel_gdrive
 
 # Vraagstelling
 
+Mail van 27/6/2026
 
+Een hele tijd geleden (11/12/2024?) heb je volume en koolstofvoorraden aangeleverd voor 7 plots van BR en 1 plot van VBI (plots: zie bijlage). Toen lag de focus op koolstof.
+Cf. [map op teamdrive](https://drive.google.com/drive/folders/1oTRD5HyxzYgxE-O5AmVviafA9o1ZAUac).
 
-
+Nu ben ik bezig met een overzichtsartikel over Time4C voor Bosrevue, waarin we ook bodemverzuring en stikstof bespreken (in het kader van het PAS-project 'Bos als stikstofbuffer'). Ik was in het artikel aan het uitleggen dat we geen stikstofstocks berekend hadden voor de boom/struikbiomassa, omdat we geen betrouwbare stikstofgehaltes hebben. Toen vond ik een databank met stikstofgehalten in hout van boreale en gematigde boomsoorten van het noordelijke halfrond (samengesteld in januari 2025). Dat zijn natuurlijk nog steeds geen 'betrouwbare' (als in: relevant voor onze bomen) waarden, maar op zich niet veel slechter dan 50% koolstof en 1 densiteitwaarde per boomsoort uit de literatuur en 21% ondergrondse biomassa... dus... ik vond dat ik ook de stikstofstocks benaderend moet berekenen voor de houtbiomassa.
+Nu zijn die stikstofgehaltes opgesplitst in n_stamhout, n_takken, n_wortels. Telkens per boomsoort.
+Voor dood hout is de afbraakklasse relevant, omdat het stikstofgehalte toeneemt met de afbraak. Voor dood hout vond ik ook cijfers per boomsoort (en dus ook per afbraakklasse).
+ 
+Mijn vraag is dus: kan je me voor de 8 Time4C-plots uit BR/VBI bezorgen:
+- het stamvolume, kroonvolume, (wortelvolume) per boomsoort
+- doodhoutvolume per afbraakklasse en boomsoort
+Hm. Of in plaats van de volumes, de biomassa's?
+Als dat te veel tijd vraagt en voor BR/VBI niet berekend wordt, mag je zeker ook de plotgegevens (diameter, hoogte, boomsoort, ...) sturen en probeer ik het zelf te berekenen!
 
 
 
@@ -93,6 +104,10 @@ plotinfo <- read_forresdat_table(
 
 # ! enkel de processed data - dd 11/9/2024: nu ook Wijnendale en Everzwijnbad 3de decade erbij
 names(plotinfo)
+
+# plotinfo <- read_forresdat_table("plotinfo", plottype = "CP", join_plotinfo = FALSE)
+# qheight_class_regeneration <- read_forresdat_table("qheight_class_regeneration", join_plotinfo = FALSE)
+
 ```
 
 
