@@ -392,6 +392,11 @@ stems_calc <- calc_variables_stem_level(data_stems, height_model)
 
 colnames(stems_calc)
 unique(stems_calc$forest_reserve)
+
+# OF
+
+stems_db_old <- read_csv2(paste0(path_to_treelevel_csv, "stems_calc.csv"))
+
 ```
 
 
@@ -464,9 +469,9 @@ zijn van diameter en boomhoogte, vertrekken we van *stems_calc* (spilniveau).
 ```{r trees_standing, results='hide'}
 names(stems_calc)
 trees_standing0 <- stems_calc %>%
-  dplyr::select(-contains(c("basal", "reduction", "remark", "local", 
-                            "iufro", "number", "class", "dead_", "_alive")), 
-                          -plottype)
+  dplyr::select(-contains(c("_dead_", "_alive_"))) 
+                # verwijderen van de berekeningen per hectare, hier is dat immers dubbel en niet nodig
+                # verder wordt alles per hectare berekend
 
 ```
 
@@ -722,12 +727,12 @@ trees_standing4 <- trees_standing3 %>%
   dplyr::select(-b0, -b1, -b2, -b3, -b4, -b5)
 
 check <- trees_standing4 %>%
-  select(1:4, alive_dead, intact_snag, species, contains(c("height", "c0", "c1")))
-check %>% filter(c10_ < c130) %>% nrow()
-t <- check %>% filter(c10_ < c130)
+  select(1:4, alive_dead, intact_snag, species, contains(c("height", "htot", "c0", "c1")))
+check %>% filter(c10_ < c130) %>% nrow() # 66518
+t <- check %>% filter((c130 - c10_ > 1) & htot <= 13) # 13
 # ?? kan c10_ veel kleiner zijn dan C130 bij zware bomen?
 # JA, c10_ is eigenlijk c10%: omtrek op 10% van de hoogte van de boom
-# als boom > 13 m , dan zal c10 kleiner zijn dan c130
+# als calc_height_m = htot > 13 m, dan zal c10 kleiner zijn dan c130
 
 # c0 ----------
       # EqnC0Biom as e on (p.eq_cir=e.id) set
@@ -739,6 +744,15 @@ trees_standing4 <- trees_standing4 %>%
   left_join(EqnC0Biom, by = c("eq_cir"= "id")) %>% 
   mutate(c0 = (b0 + b1 / c10_ + b2 / c10_^2) * c10_) %>% 
   dplyr::select(-b0, -b1, -b2)
+
+# bij de smalste boompjes (< 24 cm omtrek) geeft deze vergelijking een onderschatting
+t <- trees_standing4 %>%
+  select(1:4, alive_dead, intact_snag, species, contains(c("height", "htot", "c0", "c1"))) %>% 
+  filter((c130 - c0 > 0)) |> 
+  mutate(diff_c = c130 - c0)
+
+trees_standing4 <- trees_standing4 |> 
+  mutate(c0 = ifelse(c0 < c130, c130, c0))
 ```
 
 
@@ -903,10 +917,10 @@ Voor de (dode) snags wordt enkel naar het stamvolume gekeken, cfr Latte.
 
 Anderzijds hebben we ook bij de snags nood aan het totale bovengrondse volume omdat 
 we daar het ondergrondse volume van moeten afleiden.
-We gebruiken hiervoor het veld `VolumeInclTwigs_m3`.
+We gebruiken hiervoor het veld `tmp_VolumeInclTwigs_m3`.
 
 Daarvan wordt het veld `vol_tot_standing_agb_m3` afgeleid, dat voor intacte bomen gelijk is aan 
-`VolumeInclTwigs_m3`, maar voor snags gelijk is aan `vol_bole_m3 + vol_stump_m3`.
+`tmp_VolumeInclTwigs_m3`, maar voor snags gelijk is aan `vol_bole_m3 + vol_stump_m3`.
 (`vol_bole_m3` voor snags in `tbl0Boom` is berekend als een cilinder (dbh x hoogte), 
 maar vervangen door het stamvolume van een intacte boom als dat volume lager ligt. 
 Dit om overschattingen te voorkomen)
@@ -919,22 +933,22 @@ Dit om overschattingen te voorkomen)
 <!-- corresponding entire tree from Vallet’s volume (Eq. 2). -->
 
 
-```{r VolumeInclTwigs_m3, results = 'hide'}
+```{r tmp_VolumeInclTwigs_m3, results = 'hide'}
 # vtotaer= varb * vef
 names(trees_standing6)
 
 trees_standing6 <- trees_standing6 %>% 
-  mutate(VolumeInclTwigs_m3 = VEF * (vol_bole_m3 + vol_stump_m3)
+  mutate(tmp_VolumeInclTwigs_m3 = VEF * (vol_bole_m3 + vol_stump_m3)
          , vol_tot_standing_agb_m3 = ifelse(is.na(intact_snag) | intact_snag == 11    # intact
-                                 , VolumeInclTwigs_m3
+                                 , tmp_VolumeInclTwigs_m3
                                  , vol_bole_m3 + vol_stump_m3))
 
-trees_standing6 %>% filter(is.na(VolumeInclTwigs_m3)) %>% nrow() == 0
-range(trees_standing6$VolumeInclTwigs_m3)
+trees_standing6 %>% filter(is.na(tmp_VolumeInclTwigs_m3)) %>% nrow() == 0
+range(trees_standing6$tmp_VolumeInclTwigs_m3)
 range(trees_standing6$vol_bole_m3)
 
 check <- trees_standing6 %>% 
-  mutate(test = VolumeInclTwigs_m3/(vol_bole_m3 + vol_stump_m3)) %>% 
+  mutate(test = tmp_VolumeInclTwigs_m3/(vol_bole_m3 + vol_stump_m3)) %>% 
   select(test, contains("vol"), everything()) %>% 
   dplyr::group_by(period) %>% 
   dplyr::summarize(test = mean(test, na.rm = T))
@@ -991,15 +1005,16 @@ bovengrondse biomassa van een staande, intacte boom x soort-specifieke R-factor
 # agbtot = (vtotaer+vol_souche) * e.mean_wd
 
 names(trees_standing6)
-trees_standing6 %>% filter(is.na(decaystage) & alive_dead != 11) %>% nrow()  #118 (of 0.8% van de dode)
+trees_standing6 %>% filter(is.na(decaystage) & alive_dead != 11) %>% nrow()  #113 (of 0.8% van de dode)
 t <- trees_standing6 %>% filter(is.na(decaystage) & alive_dead != 11)
 table(t$period)
 # 1  2  3 
-# 91  4 23 
+# 91  4 18 
+table(trees_standing6$alive_dead)
 
 # => rekening houden met ontbrekende decaystage
 # onderscheid maken levend en dood
-trees_standing6 %>% filter(alive_dead != 11) %>% nrow()
+trees_standing6 %>% filter(alive_dead != 11) %>% nrow()  # 14282
 trees_standing6_ <- trees_standing6 %>% 
   mutate(R = R_FRL
          , WD = WD_FRL
@@ -1012,8 +1027,8 @@ trees_standing6_ <- trees_standing6 %>%
            is.na(decaystage) & alive_dead == 12 ~ 0.75
            )
          , biomass_standing_agb_t = vol_tot_standing_agb_m3 * WD * decomposition
-         # ook bij dode bomen wordt ondergrondse biomassa afgeleid van VolumeInclTwigs_m3
-         , biomass_standing_bgb_t = VolumeInclTwigs_m3 * WD * R * decomposition
+         # ook bij dode bomen wordt ondergrondse biomassa afgeleid van tmp_VolumeInclTwigs_m3
+         , biomass_standing_bgb_t = tmp_VolumeInclTwigs_m3 * WD * R * decomposition
          , total_biomass_standing_t = biomass_standing_agb_t + biomass_standing_bgb_t)
 
 trees_standing6_ %>% filter(is.na(decomposition)) %>% nrow() == 0
@@ -1038,27 +1053,186 @@ trees_standing6 <- trees_standing6 %>%
 
 ```
 
+### Ondergronds volume
 
-## Omzetting biomassa staande bomen naar plotniveau
+Nodig voor NHV.
+
+Tijdelijk gebruik maken van de R-factor om van bovengrondse biomassa naar ondegrondse biomassa te gaan.
+Is niet helemaal correct, maar nog geen alternatief gevonden.
+
+**Copilot:**
+Voor volume (m³) is er géén standaard equivalent die rechtstreeks zegt:
+“ondergronds volume = x × bovengronds volume”
+
+Waarom?     
+- Wortels hebben sterk variabele vorm en vertakking
+- Holtes, porositeit en onregelmatige geometrie
+- Volume is minder ecologisch relevant dan biomassa → minder onderzocht
+
+Alternatief: met behulp van worteldichtheid 
+ondergronds volume = ondergrondse biomassa / dichtheid wortelhout
+
+👉 Let op:
+
+- wortelhout dichtheid ≠ stamhout dichtheid
+- vaak 5–20% lager
+- soms gelijk aangenomen bij gebrek aan data
+
+(c) Anja: in het laatste geval (bij gelijke dichtheid van wortelhout vs stamhout) komt
+dat neer op het gebruik van de R voor biomassa.
+
+```{r}
+names(trees_standing6)
+trees_standing7 <- trees_standing6 %>% 
+  mutate(vol_tot_standing_bgb_m3 = tmp_VolumeInclTwigs_m3*R*decomposition)
+        # op deze manier wordt rekening gehouden met een decompositiefactor
+
+# (zelfde als vol_tot_standing_bgb_m3 = BiomassBelowGr_t/WD)
+
+```
+
+### Volume top
+
+Volume top kan afgeleid worden met behulp van goniometrische formules, ervan uitgaande 
+dat een boom een kegel is.
+
+Als twee rechthoekige driehoeken een gelijke scherpe hoek hebben, dan zijn de verhoudingen 
+van overeenkomstige zijden hetzelfde:     
+
+R1/H1 = r2/h2 => h2 = r2*H1/R1
+
+Volume top = 0 voor dode snags
+
+```{r }
+trees_standing7 %>% filter(is.na(intact_snag)) %>% nrow()
+trees_standing7_ <- trees_standing7 %>% 
+  mutate(R1 = dbh_mm/(2*10)
+         , H1 = htot - 1.3
+         , r2 = 7/2
+         , h2 = r2*H1/R1
+         , check = (round(H1/R1,3) == round(h2/r2, 3))
+         , vol_top_m3 = ifelse(alive_dead == 11 | intact_snag == 11 | is.na(intact_snag)
+                               # inhoud kegel = 1/3 x oppervlakte grondvlak x hoogte = 1/3 x π r2 x h
+                               , pi * (r2/100)^2 * h2 / 3
+                               , ifelse(intact_snag == 10 & alive_dead == 12
+                                 , 0, 9999)
+                               )
+         )
+
+trees_standing7_ %>% filter(is.na(vol_top_m3)) %>% nrow() == 0
+trees_standing7_ %>% filter(vol_top_m3 == 9999) %>% nrow() == 0
+mean(trees_standing7_$vol_top_m3); median(trees_standing7_$vol_top_m3)
+trees_standing7 <- trees_standing7_
+```
+
+```{r eval = FALSE}
+t <- trees_standing7 %>% select(period, NameNl, alive_dead, intact_snag
+                                , dbh_mm, height_m, htot
+                                , R1, H1, r2, h2, check
+                                , vol_bole_m3, vol_top_m3) %>% 
+  mutate(verh_h = h2/H1)
+
+g <- ggplot(t, aes(x = dbh_mm, y = verh_h)) + geom_point ()
+g
+
+g <- ggplot(t, aes(x = htot, y = h2)) + geom_point ()
+g
+
+```
+
+```{r}
+trees_standing7 <- trees_standing7 %>% 
+  select(-R1, -H1, -r2, -h2, -check)
+```
+
+### Volgorde attributen
+
+```{r stems_all_parts}
+names(trees_standing7)
+
+trees_standing8 <- trees_standing7 %>% 
+  select(plot_id, plottype, period, year, date_dendro
+         , totalplotarea_ha, plotarea_ha
+         , tree_measure_id, old_id, shoot_measure_id
+         , x_local, y_local
+         , species
+         , dbh_mm, height_m, calc_height_m
+         , alive_dead, intact_snag, ind_sht_cop, 
+         , decaystage, dbh_class_5cm
+         , crown_volume_reduction, branch_length_reduction
+         , contains(c("iufro", "remark", "subcircle"))
+         , basal_area_m2
+         , vol_bole_m3, vol_large_branches_m3 = vol_crown_m3
+         # , vol_tot_m3
+         , vol_stump_m3, vol_top_m3
+         , VEF
+         , vol_tot_standing_agb_m3
+         , R
+         , vol_tot_standing_bgb_m3
+         , WD, FC, decomposition
+         , biomass_standing_agb_t, biomass_standing_bgb_t, 
+         , total_biomass_standing_t
+         , carbon_standing_agb_t, carbon_standing_bgb_t
+         , total_carbon_standing_t
+         )
+
+# tbl_boom_notNA %>% filter(IntactTreeCode %in% c(20, 30)) %>% select(vol_crown_m3) %>% unique()
+# # OK, enkel 0
+```
+
+```{r check_geen_kroon, eval = FALSE}
+t <- trees_standing8 %>% 
+  filter((intact_snag == 10 | ind_sht_cop == 12) & 
+          alive_dead == 12 & vol_large_branches_m3 != 0)
+# dood hakhout heeft nog een kroonvolume, bij VBI wordt dat op 0 gezet
+# maar elders bij BR gebeurt dat niet, dus hier beter ook niet doen.
+# Op termijn ev. bij VBI terug kroon dood hakhout invoeren?
+# Om hoeveel gaat het?
+
+100*sum(t$vol_large_branches_m3)/(sum(trees_standing8$vol_large_branches_m3) + sum(trees_standing8$vol_bole_m3))
+# 0.02 %  tov totaal volume, eventueel wel hoger in 
+100*sum(t$vol_large_branches_m3)/(sum(trees_standing8[trees_standing8$alive_dead == 12, ]$vol_large_branches_m3) + sum(trees_standing8[trees_standing8$alive_dead == 12, ]$vol_bole_m3))
+# 0.67% van het dode houtvolume
+
+    # trees_standing8_ <- trees_standing8 %>% 
+    #   mutate(vol_crown_m3 = ifelse(ind_sht_cop == 20 & alive_dead == 2
+    #                                         , 0, vol_crown_m3)
+    #          , vol_tot_m3 = vol_bole_m3 + vol_crown_m3)
+    # 
+    # trees_standing8_ %>% filter((intact_snag %in% c(20, 30) | ind_sht_cop == 20) & 
+    #            alive_dead == 2 & vol_crown_m3 != 0) %>% nrow() == 0
+    # 
+    # trees_standing8_ %>% filter((intact_snag %in% c(20, 30) | ind_sht_cop == 20) & 
+    #            alive_dead == 2 & (vol_stump_m3 + vol_bole_m3 != vol_tot_standing_agb_m3)) %>% nrow() == 0
+    # 
+    # trees_standing8 <- trees_standing8_
+```
+
+# Omzetting naar plotniveau
 
 Vertrekkende van *stems_calc*
 
-
-### Onderscheid levende en dode biomassa
+Onderscheid levende en dode volumes/biomassa per hectare
 
 ```{r plotniveau, results='hide'}
-colnames(trees_standing6)
+colnames(trees_standing8)
 
-analyseSet_plot0 <- trees_standing6 %>%
-  dplyr::group_by(forest_reserve, plot_id, period) %>%   
+plot_level0 <- trees_standing8 %>%
+  dplyr::group_by(plot_id, period) %>%   
   dplyr::summarise(    
             # vol_bole_m3_ha_all = sum(vol_bole_m3*Fext_Ha, na.rm = TRUE),
             vol_bole_m3_ha_alive = 
               sum(vol_bole_m3*(alive_dead == 11)/plotarea_ha, na.rm = TRUE),
+            vol_large_branches_m3_ha_alive = 
+              sum(vol_large_branches_m3*(alive_dead == 11)/plotarea_ha, na.rm = TRUE),
             vol_stump_m3_ha_alive = 
               sum(vol_stump_m3*(alive_dead == 11)/plotarea_ha, na.rm = TRUE),
+            vol_top_m3_ha_alive = 
+              sum(vol_top_m3*(alive_dead == 11)/plotarea_ha, na.rm = TRUE),
             vol_tot_standing_agb_m3_ha_alive = 
               sum(vol_tot_standing_agb_m3*(alive_dead == 11)/plotarea_ha, na.rm = TRUE),
+            vol_tot_standing_bgb_m3_ha_alive = 
+              sum(vol_tot_standing_bgb_m3*(alive_dead == 11)/plotarea_ha, na.rm = TRUE),
 
             biomass_standing_agb_t_ha_alive = 
               sum(biomass_standing_agb_t*(alive_dead == 11)/plotarea_ha, na.rm = TRUE),
@@ -1077,10 +1251,16 @@ analyseSet_plot0 <- trees_standing6 %>%
             # DEAD
             vol_bole_m3_ha_dead = 
               sum(vol_bole_m3*(alive_dead == 12)/plotarea_ha, na.rm = TRUE),
+            vol_large_branches_m3_ha_dead = 
+              sum(vol_large_branches_m3*(alive_dead == 12)/plotarea_ha, na.rm = TRUE),
             vol_stump_m3_ha_dead = 
               sum(vol_stump_m3*(alive_dead == 12)/plotarea_ha, na.rm = TRUE),
+            vol_top_m3_ha_dead = 
+              sum(vol_top_m3*(alive_dead == 12)/plotarea_ha, na.rm = TRUE),
             vol_tot_standing_agb_m3_ha_dead = 
               sum(vol_tot_standing_agb_m3*(alive_dead == 12)/plotarea_ha, na.rm = TRUE),
+            vol_tot_standing_bgb_m3_ha_dead = 
+              sum(vol_tot_standing_bgb_m3*(alive_dead == 12)/plotarea_ha, na.rm = TRUE),
 
             biomass_standing_agb_t_ha_dead = 
               sum(biomass_standing_agb_t*(alive_dead == 12)/plotarea_ha, na.rm = TRUE),
@@ -1101,7 +1281,7 @@ analyseSet_plot0 <- trees_standing6 %>%
 ```
 
 
-### Toevoegen van plots zonder biomass
+## Toevoegen van plots zonder biomass
 
 Aan de lijst van plots mét bomen moeten de plots zonder bomen (volume = 0) toegevoegd  worden, 
 die behoren tot productief bos (geen open ruimtes).
@@ -1114,13 +1294,13 @@ Op dit moment is dat enkel plot 475, periode 1.
 
 ```{r bosplots_zonder_volume, results='hide'}
 names(plotinfo)
-names(analyseSet_plot0)
+names(plot_level0)
 
-zero_volume <- analyseSet_plot0 %>% 
-  # full_join met alle plots, want analyseSet_plot0 bevat enkel staande bomen 
-  full_join(plotinfo %>% select(forest_reserve, plot_id, period
+zero_volume <- plot_level0 %>% 
+  # full_join met alle plots, want plot_level0 bevat enkel staande bomen 
+  full_join(plotinfo %>% select(plot_id, period
                                 , survey_trees, year_dendro, data_processed)
-            , by = c("forest_reserve", "plot_id", "period")) %>% 
+            , by = c("plot_id", "period")) %>% 
   filter(is.na(biomass_standing_agb_t_ha_alive) & survey_trees == TRUE & data_processed == TRUE) 
   # als is.na(biomass_standing_agb_t_ha_alive), dan ook is.na(biomass_standing_agb_t_ha_dead)
   # dus hier geen staande bomen (dood of levend)
@@ -1145,26 +1325,122 @@ zero_volume_bosplots
 
 ```{r add_zero_volume_bosplots, results='hide'}
 # enkel plot 475, periode 1, zonder reg
-colnames(analyseSet_plot0);colnames(zero_volume_bosplots)
+colnames(plot_level0);colnames(zero_volume_bosplots)
 
 # meerdere kolommmen allemaal 0 toekennen
-colnames(analyseSet_plot0)
+colnames(plot_level0)
 
-biomass_columns <- colnames(analyseSet_plot0[4:21])
+biomass_columns <- colnames(plot_level0[3:26])
 zero_volume_bosplots[biomass_columns] <- 0
 
-names(zero_volume_bosplots); names(analyseSet_plot0)
+names(zero_volume_bosplots); names(plot_level0)
 
 # combine
-analyseSet_plot1 <- rbind(analyseSet_plot0
+plot_level1 <- rbind(plot_level0, zero_volume_bosplots %>% 
+                            select(-survey_trees, -year_dendro, -data_processed))
+# 2009
+
+```
+
+# Omzetting naar plot-species-niveau
+
+Vertrekkende van *stems_calc*, cfr plot_level0
+
+Onderscheid levende en dode volumes/biomassa per hectare
+
+```{r plotniveau, results='hide'}
+colnames(trees_standing8)
+
+plot_species_level0 <- trees_standing8 %>%
+  dplyr::group_by(plot_id, period, species) %>%   
+  dplyr::summarise(    
+            # vol_bole_m3_ha_all = sum(vol_bole_m3*Fext_Ha, na.rm = TRUE),
+            vol_bole_m3_ha_alive = 
+              sum(vol_bole_m3*(alive_dead == 11)/plotarea_ha, na.rm = TRUE),
+            vol_large_branches_m3_ha_alive = 
+              sum(vol_large_branches_m3*(alive_dead == 11)/plotarea_ha, na.rm = TRUE),
+            vol_stump_m3_ha_alive = 
+              sum(vol_stump_m3*(alive_dead == 11)/plotarea_ha, na.rm = TRUE),
+            vol_top_m3_ha_alive = 
+              sum(vol_top_m3*(alive_dead == 11)/plotarea_ha, na.rm = TRUE),
+            vol_tot_standing_agb_m3_ha_alive = 
+              sum(vol_tot_standing_agb_m3*(alive_dead == 11)/plotarea_ha, na.rm = TRUE),
+            vol_tot_standing_bgb_m3_ha_alive = 
+              sum(vol_tot_standing_bgb_m3*(alive_dead == 11)/plotarea_ha, na.rm = TRUE),
+
+            biomass_standing_agb_t_ha_alive = 
+              sum(biomass_standing_agb_t*(alive_dead == 11)/plotarea_ha, na.rm = TRUE),
+            biomass_standing_bgb_t_ha_alive = 
+              sum(biomass_standing_bgb_t*(alive_dead == 11)/plotarea_ha, na.rm = TRUE),
+            biomass_standing_t_ha_alive = 
+              sum(total_biomass_standing_t*(alive_dead == 11)/plotarea_ha, na.rm = TRUE),
+            
+            carbon_standing_agb_t_ha_alive = 
+              sum(carbon_standing_agb_t*(alive_dead == 11)/plotarea_ha, na.rm = TRUE),
+            carbon_standing_bgb_t_ha_alive = 
+              sum(carbon_standing_bgb_t*(alive_dead == 11)/plotarea_ha, na.rm = TRUE),
+            carbon_standing_t_ha_alive = 
+              sum(total_carbon_standing_t*(alive_dead == 11)/plotarea_ha, na.rm = TRUE),
+            
+            # DEAD
+            vol_bole_m3_ha_dead = 
+              sum(vol_bole_m3*(alive_dead == 12)/plotarea_ha, na.rm = TRUE),
+            vol_large_branches_m3_ha_dead = 
+              sum(vol_large_branches_m3*(alive_dead == 12)/plotarea_ha, na.rm = TRUE),
+            vol_stump_m3_ha_dead = 
+              sum(vol_stump_m3*(alive_dead == 12)/plotarea_ha, na.rm = TRUE),
+            vol_top_m3_ha_dead = 
+              sum(vol_top_m3*(alive_dead == 12)/plotarea_ha, na.rm = TRUE),
+            vol_tot_standing_agb_m3_ha_dead = 
+              sum(vol_tot_standing_agb_m3*(alive_dead == 12)/plotarea_ha, na.rm = TRUE),
+            vol_tot_standing_bgb_m3_ha_dead = 
+              sum(vol_tot_standing_bgb_m3*(alive_dead == 12)/plotarea_ha, na.rm = TRUE),
+
+            biomass_standing_agb_t_ha_dead = 
+              sum(biomass_standing_agb_t*(alive_dead == 12)/plotarea_ha, na.rm = TRUE),
+            biomass_standing_bgb_t_ha_dead = 
+              sum(biomass_standing_bgb_t*(alive_dead == 12)/plotarea_ha, na.rm = TRUE),
+            biomass_standing_t_ha_dead = 
+              sum(total_biomass_standing_t*(alive_dead == 12)/plotarea_ha, na.rm = TRUE),
+            
+            carbon_standing_agb_t_ha_dead = 
+              sum(carbon_standing_agb_t*(alive_dead == 12)/plotarea_ha, na.rm = TRUE),
+            carbon_standing_bgb_t_ha_dead = 
+              sum(carbon_standing_bgb_t*(alive_dead == 12)/plotarea_ha, na.rm = TRUE),
+            carbon_standing_t_ha_dead = 
+              sum(total_carbon_standing_t*(alive_dead == 12)/plotarea_ha, na.rm = TRUE)
+            ) %>%
+  dplyr::ungroup() 
+
+```
+
+
+## Toevoegen van plots zonder biomass
+
+Aan de lijst van plots mét bomen moeten de plots zonder bomen (volume = 0) toegevoegd worden, 
+die behoren tot productief bos (geen open ruimtes).
+Dit zijn kapvlaktes of bestanden met enkel verjonging (bomen met diameter < 5 cm).
+
+Deze plots leiden we af van `plotinfo`.
+Op dit moment is dat enkel plot 475, periode 1.
+
+<br>
+
+```{r results='hide'}
+names(plotinfo)
+names(plot_species_level0)
+names(zero_volume_bosplots)
+zero_volume_bosplots$species <- NA
+
+# combine
+plot_species_level1 <- rbind(plot_species_level0
                           , zero_volume_bosplots %>% 
                             select(-survey_trees, -year_dendro, -data_processed))
 # 2009
 
 ```
 
-
-## Liggend dood hout
+# Liggend dood hout
 
 Voor **coarse woody debris (liggend dood hout)**:    
 volume x soort-specifieke wood density (ton/m³) x factor deadwood decomposition     
@@ -1209,6 +1485,7 @@ logs1 <- deadw_by_decay_plot_species %>%
 
 logs1 %>% filter(is.na(WD_FRL)) %>% nrow() == 0
 ```
+
 ```{r biomassa_logs1}
 t <- logs1 %>% 
   filter(is.na(vol_log_m3_ha))
@@ -1281,8 +1558,48 @@ logs_per_plot1 <- logs2 %>%
 
 t3 <- logs_per_plot1 %>% 
   filter(is.na(vol_log_m3_ha))
-
+t3 <- logs_per_plot1 %>% 
+  filter(is.na(vol_log_m3_ha) & is.na(vol_lis_m3_ha)) %>% 
+  left_join(plotinfo)
+t3 %>% select(forest_reserve, period, plottype) %>% unique()
 ```
+
+
+
+
+### Plot-species-niveau
+
+Sommeren per plot en species (want nu nog per decaystage apart).    
+
+Oppassen met NA's: sommeren van "niks" geeft waarde '0' => na.rm = FALSE . 
+
+```{r logs_plot_species}
+names(logs2)
+logs_per_plot_species1 <- logs2 %>% 
+  dplyr::group_by(plot_id, period, species) %>%   
+  dplyr::summarise(
+    vol_log_m3_ha = sum(vol_log_m3_ha, na.rm = FALSE)
+    , vol_log_above30cm_m3_ha = sum(vol_log_above30cm_m3_ha, na.rm = FALSE)
+    , vol_lis_m3_ha = sum(vol_lis_m3_ha, na.rm = FALSE)
+    , vol_lis_10_30cm_m3_ha = sum(vol_lis_10_30cm_m3_ha, na.rm = FALSE)
+    , vol_log_above40cm_m3_ha = sum(vol_log_above40cm_m3_ha, na.rm = FALSE)
+    , biomass_lying_t_ha_dead = sum(biomass_lying_deadw_t_ha, na.rm = FALSE)
+    , biomass_lying_above40cm_t_ha_dead = sum(biomass_lying_deadw_above40cm_t_ha, na.rm = FALSE)
+  ) %>% 
+  ungroup() %>% 
+  mutate(carbon_lying_t_ha_dead = biomass_lying_t_ha_dead * FC_value,
+         carbon_lying_above40cm_t_ha_dead = biomass_lying_above40cm_t_ha_dead * FC_value) %>% 
+  left_join(plotinfo %>% select(plot_id, period, survey_deadw, survey_lis))
+
+t3 <- logs_per_plot_species1 %>% 
+  filter(is.na(vol_log_m3_ha))
+t3 <- logs_per_plot_species1 %>% 
+  filter(is.na(vol_log_m3_ha) & is.na(vol_lis_m3_ha)) %>% 
+  left_join(plotinfo)
+t3 %>% select(forest_reserve, period, plottype) %>% unique()
+# kersselaerspleyn
+```
+
 
 
 ### Correctie extra plots  
@@ -1315,16 +1632,19 @@ t <- deadw_by_decay_plot_species %>%
            plottype == "CP" & period == 1)
 # bevat géén plots van "Zoniën KERN_1983", want CP's NIET opgemeten in periode 1 
 # (in toenmalig monitoringrapport werd een uitsnit uit de KV gebruikt)
+# overal NA bij vol_logs
 
 # load_deadw_Kerss_CP
 logs_Kerss_2000 <- read.xlsx(paste0(path_to_meetgegevens, "logs_CPs_Kerss_2000/CP_Kerss_logs_2000.xlsx")
                              ,sheetName = "logs_per_plot") %>% 
   select(plot_id, period, VOLUME_LOG_m3_ha)
+# bevat ook nullen
 names(logs_Kerss_2000)
 
 logs_per_spec_Kerss_2000 <- read.xlsx(paste0(path_to_meetgegevens, "logs_CPs_Kerss_2000/CP_Kerss_logs_2000.xlsx")
                              ,sheetName = "logs_per_plot_species") %>% 
   select(plot_id, species, period, VOLUME_LOG_m3_ha)
+# geen nullen
 
 check <- logs_Kerss_2000 %>% 
   left_join(plotinfo)
@@ -1338,8 +1658,17 @@ dendro_by_plot <- read_forresdat_table(
   , git_ref_type = "branch", git_reference = "develop"
   , join_plotinfo = TRUE
   , plottype = "all") # CP & CA
+
+
+dendro_by_plot_species <- read_forresdat_table(
+  tablename = "dendro_by_plot_species"
+  , git_ref_type = "branch", git_reference = "develop"
+  , join_plotinfo = TRUE
+  , plottype = "all") # CP & CA
+
 ```
 
+#### Plotniveau
 
 ```{r corr_logs_extra, results='hide'}
 names(dendro_by_plot); names(logs_per_plot1)
@@ -1362,7 +1691,7 @@ logs_per_plot_extra <- dendro_by_plot %>%
             , by = c("plot_id", "period"))
 
 names(logs_per_plot_extra)
-
+logs_per_plot_extra %>% select(forest_reserve, period) %>% unique()
 # 160 extra records/plots waar deadwood = 0 of NA (LIS) of uit monitoringrapport
 # en bijgevolg niet opgenomen in deadw_by_decay_plot_species
 
@@ -1392,7 +1721,8 @@ logs_per_plot_extra_ <- logs_per_plot_extra %>%
          , carbon_lying_t_ha_dead = biomass_lying_t_ha_dead * FC_value
          , carbon_lying_above40cm_t_ha_dead = biomass_lying_above40cm_t_ha_dead * FC_value
          ) %>% 
-  select(plot_id, period
+  select(forest_reserve
+         , plot_id, period
          , vol_log_m3_ha
          , vol_log_above30cm_m3_ha
          , vol_lis_m3_ha
@@ -1403,10 +1733,16 @@ logs_per_plot_extra_ <- logs_per_plot_extra %>%
          , survey_deadw, survey_lis
   )
         
-names(logs_per_plot1)  ==  names(logs_per_plot_extra_)
+names(logs_per_plot1)  ==  names(logs_per_plot_extra_ %>% select(-forest_reserve))
 # names(logs_per_plot1)  ;  names(logs_per_plot_extra_)
 
-logs_per_plot_extra <- logs_per_plot_extra_
+# enkel bij Zonien effectieve waardes verschillend van 0 of NA
+logs_per_plot_extra_ %>% filter(!is.na(vol_log_m3_ha) & vol_log_m3_ha > 0) %>% select(forest_reserve, period) %>% unique()
+# rest zijn 0-waardes of NA's die ook moeten toegevoegd worden aan carbon_by_plot
+# 
+
+logs_per_plot_extra <- logs_per_plot_extra_  %>% 
+  select(-forest_reserve)
 ```
 
 ```{r results='hide'}
@@ -1421,7 +1757,11 @@ summary(logs_per_plot1)
 
 ```{r results='hide'}
 t <- logs_per_plot2 %>% 
-  anti_join(logs_per_plot1, by = c("plot_id", "period"))
+  anti_join(logs_per_plot1 
+            # %>% 
+            #   filter(!is.na(biomass_lying_t_ha_dead) |
+            #            !is.na(biomass_lying_above40cm_t_ha_dead))
+            , by = c("plot_id", "period"))
 range(t$vol_log_m3_ha)
 # NA NA
 range(t$vol_log_m3_ha, na.rm = T)
@@ -1430,29 +1770,133 @@ range(t$vol_log_m3_ha, na.rm = T)
 # ok, goed aangevuld
 ```
 
-```{r}
-names(logs_per_plot2)
-names(analyseSet_plot1)
+#### Plot-soortniveau
 
-nrow(logs_per_plot2); nrow(analyseSet_plot1); nrow(dendro_by_plot)
+```{r corr_logs_extra_per_species, results='hide'}
+names(dendro_by_plot_species); names(logs_per_plot_species1)
+
+logs_per_plot_species_extra <- dendro_by_plot_species %>% 
+  # filter(!is.na(vol_log_m3_ha)) %>% 
+  select(forest_reserve, plot_id, period
+         , species
+         , survey_lis, survey_deadw
+         , vol_log_m3_ha, vol_log_above30cm_m3_ha
+         , vol_lis_m3_ha, vol_lis_10_30cm_m3_ha
+         , vol_log_above40cm_m3_ha) %>% # waarde uit dendro_by_plot
+  unique() %>% 
+  # testje: maar één record per plot => op plotniveau
+  # group_by(plot_id, period) %>%
+  # summarize(n = n()) %>%
+  # ungroup()
+  anti_join(logs_per_plot_species1 %>% 
+              filter(!is.na(biomass_lying_t_ha_dead) | 
+                       !is.na(biomass_lying_above40cm_t_ha_dead))
+            , by = c("plot_id", "period", "species"))
+
+names(logs_per_plot_species_extra)
+logs_per_plot_species_extra %>% select(forest_reserve, period) %>% unique()
+
+# 4399 extra records/plots waar deadwood = 0 of NA (LIS) of uit monitoringrapport
+# en bijgevolg niet opgenomen in deadw_by_decay_plot_species
+
+```
+
+We gebruiken een     
+- gemiddelde decomposition van 0.75       
+- WD van 0.52, zoals bij VBI voor ander loofhout (meeste bomen zijn LH in Zoniën)       
+
+
+```{r results = 'hide'}
+# nullen aanvullen + waarde van CP's zoniën overnemen
+logs_per_plot_species_extra_ <- logs_per_plot_species_extra %>% 
+  mutate(WD = 0.52
+         , decomposition = 0.75
+         , biomass_lying_t_ha_dead = 
+              ifelse(!is.na(vol_log_m3_ha)
+                     , vol_log_m3_ha * WD * decomposition
+                     , ifelse(!is.na(vol_log_above30cm_m3_ha) & survey_lis
+                              , (vol_lis_10_30cm_m3_ha + vol_log_above30cm_m3_ha) * WD * decomposition
+                              , vol_lis_m3_ha * WD * decomposition)
+                    ) 
+         , biomass_lying_above40cm_t_ha_dead = 
+              ifelse(!is.na(vol_log_above40cm_m3_ha)
+                     , vol_log_above40cm_m3_ha * WD * decomposition
+                     , NA)
+         , carbon_lying_t_ha_dead = biomass_lying_t_ha_dead * FC_value
+         , carbon_lying_above40cm_t_ha_dead = biomass_lying_above40cm_t_ha_dead * FC_value
+         ) %>% 
+  select(forest_reserve, plot_id, period
+         , species
+         , vol_log_m3_ha
+         , vol_log_above30cm_m3_ha
+         , vol_lis_m3_ha
+         , vol_lis_10_30cm_m3_ha
+         , vol_log_above40cm_m3_ha
+         , biomass_lying_t_ha_dead, biomass_lying_above40cm_t_ha_dead
+         , carbon_lying_t_ha_dead, carbon_lying_above40cm_t_ha_dead
+         , survey_deadw, survey_lis
+  )
+        
+names(logs_per_plot_species1)  ==  names(logs_per_plot_species_extra_ %>% select(-forest_reserve))
+# names(logs_per_plot1)  ;  names(logs_per_plot_extra_)
+
+
+# enkel bij Zonien effectieve waardes verschillend van 0 of NA
+logs_per_plot_species_extra_ %>% filter(!is.na(vol_log_m3_ha) & vol_log_m3_ha > 0) %>% select(forest_reserve, period) %>% unique()
+# rest zijn 0-waardes of NA's die ook moeten toegevoegd worden aan carbon_by_plot
+# 
+
+logs_per_plot_species_extra <- logs_per_plot_species_extra_  %>% 
+  select(-forest_reserve)
+
+```
+
+```{r results='hide'}
+logs_per_plot_species2 <- rbind(logs_per_plot_species1 %>% 
+                          filter(!is.na(biomass_lying_t_ha_dead) |
+                                   !is.na(biomass_lying_above40cm_t_ha_dead))
+                        , logs_per_plot_species_extra)
+summary(logs_per_plot_species2)
+summary(logs_per_plot_species1)
+```
+
+
+```{r results='hide'}
+t <- logs_per_plot_species2 %>% 
+  anti_join(logs_per_plot_species1, by = c("plot_id", "period", "species"))
+range(t$vol_log_m3_ha)
+# NA NA
+range(t$vol_log_m3_ha, na.rm = T)
+# [1]  0.0 77.8
+
+# ok, goed aangevuld
+```
+
+# Combineren staand en liggend
+
+```{r biomass_all_plot, results='hide'}
+names(logs_per_plot2)
+names(plot_level1)
+
+nrow(logs_per_plot2); nrow(plot_level1); nrow(dendro_by_plot)
 
 # waarom niet zelfde aantallen?
-# 13 plots open ruimte die reeds weggefilters is bij analyseSet_plot1
+# 13 plots open ruimte die reeds weggefilterd zijn bij plot_level1
 
 # t <- logs_per_plot2 %>% 
-#   anti_join(analyseSet_plot1, by = c("plot_id", "period"))
+#   anti_join(plot_level1, by = c("plot_id", "period"))
 # # => dubbels
 # t <- logs_per_plot2 %>% 
 #   group_by(plot_id, period) %>% 
 #   summarise(n = n()) %>% 
 #   ungroup()
 
-```
+nrow(plot_level1) == nrow(logs_per_plot2) - 13
+# anders worden NA's toegevoegd 
+# ! checken of dat echt NA's zijn, of eerder nullen?
 
-```{r biomass_all, results='hide'}
-names(analyseSet_plot1)
-names(logs_per_plot2)
-analyseSet_plot2 <- analyseSet_plot1 %>% 
+
+plot_level2 <- plot_level1 %>% 
   left_join(logs_per_plot2, by = c("plot_id", "period")) %>% 
   mutate(vol_agb_m3_ha_dead = ifelse(!is.na(vol_log_m3_ha)
                      , vol_tot_standing_agb_m3_ha_dead + vol_log_m3_ha
@@ -1465,20 +1909,77 @@ analyseSet_plot2 <- analyseSet_plot1 %>%
          , biomass_agb_t_ha_dead = biomass_standing_t_ha_dead + biomass_lying_t_ha_dead
          , carbon_agb_t_ha_dead = carbon_standing_t_ha_dead + carbon_lying_t_ha_dead)
 
-names(analyseSet_plot2)
+names(plot_level2)
+nrow(plot_level2) == nrow(plot_level1)
 ```
+> beter geen som maken van LIS en FAS om tot totaal volume t ekomen
+iedereen dat zelf laten doen, duidelijker
 
+
+```{r biomass_all_plot_species, results='hide'}
+names(logs_per_plot_species2)
+names(plot_species_level1)
+
+nrow(logs_per_plot_species2); nrow(plot_species_level1); nrow(dendro_by_plot_species)
+
+# waarom niet zelfde aantallen?
+# 13 plots (869 records) open ruimte die reeds weggefilterd zijn bij plot_level1
+# ook soorten waarvan wel liggend dood hout voorkomt, maar geen staand
+# bv. plot 101 en soort 57: vol_bole = 0; plot 109, soort 14, enkel LIS
+# deze moeten wel toegevoegd worden
+# deze zitten ook in dendro_by_plot_species
+
+t <- logs_per_plot_species2 %>%
+  anti_join(plot_species_level1, by = c("plot_id", "period", "species"))
+# => dubbels
+t <- logs_per_plot_species2 %>%
+  group_by(plot_id, period, species) %>%
+  summarise(n = n()) %>%
+  ungroup()
+
+nrow(plot_species_level1) == nrow(logs_per_plot_species2) - 13
+# anders worden NA's toegevoegd 
+# ! checken of dat echt NA's zijn, of eerder nullen?
+
+
+plot_species_level2 <- plot_species_level1 %>% 
+  full_join(logs_per_plot_species2, by = c("plot_id", "period", "species")) %>% 
+  mutate(vol_agb_m3_ha_dead = ifelse(!is.na(vol_log_m3_ha)
+                     , vol_tot_standing_agb_m3_ha_dead + vol_log_m3_ha
+                     , ifelse(!is.na(vol_log_above30cm_m3_ha) & survey_lis
+                              , vol_tot_standing_agb_m3_ha_dead + 
+                                vol_log_above30cm_m3_ha + 
+                                vol_lis_10_30cm_m3_ha
+                              , vol_tot_standing_agb_m3_ha_dead + vol_lis_m3_ha)
+                     )
+         , biomass_agb_t_ha_dead = biomass_standing_t_ha_dead + biomass_lying_t_ha_dead
+         , carbon_agb_t_ha_dead = carbon_standing_t_ha_dead + carbon_lying_t_ha_dead)
+
+names(plot_species_level_species2)
+nrow(plot_species_level_species2) == nrow(plot_species_level_species1)
+```
 
 
 # Finale analyseset
 
+Op plotniveau en op plot-soortniveau.
+
 ```{r}
-carbon_by_plot <- analyseSet_plot2 %>% 
-  select(-survey_deadw, -survey_lis, -forest_reserve) %>% 
+carbon_by_plot <- plot_level2 %>% 
+  select(-survey_deadw, -survey_lis) %>% 
   left_join(plotinfo %>% select(plottype, plot_id, year = year_dendro, period)) %>% 
   select(plottype, plot_id, year, period, everything())
 
 names(carbon_by_plot)
+```
+
+```{r}
+carbon_by_plot_species <- plot_species_level2 %>% 
+  select(-survey_deadw, -survey_lis) %>% 
+  left_join(plotinfo %>% select(plottype, plot_id, year = year_dendro, period)) %>% 
+  select(plottype, plot_id, year, period, everything())
+
+names(carbon_by_plot_species)
 ```
 
 
@@ -1506,28 +2007,6 @@ head(carbon_by_plot_git %>% arrange(plot_id, period) %>% filter(plot_id == 91000
 
 ```
 
-
-## Aanmaak list
-
-```{r new_list_carbon}
-# opnieuw list van maken om te exporteren en plotinfo aan te koppelen
-carbon <- list(
-      carbon_by_plot = carbon_by_plot
-    )
-```
-
-
-# Plotinfo toevoegen (aan csv-files)
-
-```{r join_plottype_surveynr_BR}
-carbon_plotinfo <- lapply(carbon
-                          , function(x) left_join(x, 
-                                                  plotinfo %>% 
-                                                    select(plot_id, forest_reserve,
-                                                           period, survey_number)
-                                                  , by = c("plot_id", "period")))
-# lapply: same function over all elements of the list
-```
 
 # Overview bosreservaten
 
@@ -1559,14 +2038,88 @@ Immers correctie nodig voor
 - `vol_log_m3_ha`, `biomass_lying_t_ha_dead`, `carbon_lying_t_ha_dead` corrigeren: NA voor LIS-plots     
 - Extra velden toevoegen `vol_log_above_30cm_m3_ha`, `biomass_lying_above_30cm_t_ha_dead`, `carbon_lying_above_30cm_t_ha_dead`       
 
+# Export stem-level-data
 
-# Export plot-level-data
+Wegschrijven trees_standing8 als `stems_all_parts`.
 
 **!!!! ENKEL PLOTS EXPORTEREN WAARVAN DATA PROCESSED ZIJN!!**
 Is standaard parameter bij inladen dendro-data 
 
+```{r new_list_stems}
+# opnieuw list van maken om te exporteren en plotinfo aan te koppelen
+stems <- list(
+      stems_all_parts = trees_standing8
+    )
+```
 
-```{r save_carbon_git, eval = FALSE}
+```{r join_plottype_surveynr_BR_stems}
+stems_plotinfo <- lapply(stems
+                          , function(x) left_join(x, 
+                                                  plotinfo %>% 
+                                                    select(plot_id, forest_reserve,
+                                                           period, survey_number)
+                                                  , by = c("plot_id", "period")))
+# lapply: same function over all elements of the list
+```
+
+
+```{r save_stems_access_csv, eval = FALSE}
+# hier wel plotinfo (plottype, BR, surveynr mee wegschrijven)
+
+# volgende functie heb ik zelf geschreven, zit niet in het package!
+save_results_csv (
+    results = stems_plotinfo,
+    output_dir = path_to_treelevel_csv
+    )
+
+# afgerond voor export naar access
+stems_round <- stems_plotinfo %>% 
+  lapply(., function(x) round_df(x, 2))   # forestmangr
+
+save_results_access (
+  results = stems_round,
+  database = path_to_analysis_set_db,
+  remove_tables = TRUE
+  )
+```
+
+Direct naar gdrive exporteren (csv): 
+naar **/PRJ_BOSECO_ALGEMEEN/PRJ_BR_AanvraagGegevens/00_METADATA-ALL_PLOTS/_plot-level-data/**
+
+```{r save_stems_gdrive, eval = FALSE}
+save_results_csv(
+    results = stems_plotinfo,
+    output_dir = path_to_treelevel_gdrive
+    )
+
+```
+
+# Export plot-level-data
+
+carbon_by_plot en carbon_by_plot_species
+
+**!!!! ENKEL PLOTS EXPORTEREN WAARVAN DATA PROCESSED ZIJN!!**
+Is standaard parameter bij inladen dendro-data 
+
+```{r new_list_carbon_plot}
+# opnieuw list van maken om te exporteren en plotinfo aan te koppelen
+carbon <- list(
+      carbon_by_plot = carbon_by_plot
+      , carbon_by_plot_species = carbon_by_plot_species
+    )
+```
+
+```{r join_plottype_surveynr_BR_plot}
+carbon_plotinfo <- lapply(carbon
+                          , function(x) left_join(x, 
+                                                  plotinfo %>% 
+                                                    select(plot_id, forest_reserve,
+                                                           period, survey_number)
+                                                  , by = c("plot_id", "period")))
+# lapply: same function over all elements of the list
+```
+
+```{r save_carbon_plot_git, eval = FALSE}
 # geen plotinfo naar git
 save_results_forresdat(
   results = carbon,
@@ -1580,7 +2133,7 @@ save_results_forresdat(
 ```
 
 
-```{r save_carbon_access_csv, eval = FALSE}
+```{r save_carbon_plot_access_csv, eval = FALSE}
 # hier wel plotinfo (plottype, BR, surveynr mee wegschrijven)
 
 # volgende functie heb ik zelf geschreven, zit niet in het package!
@@ -1603,15 +2156,13 @@ save_results_access (
 Direct naar gdrive exporteren (csv): 
 naar **/PRJ_BOSECO_ALGEMEEN/PRJ_BR_AanvraagGegevens/00_METADATA-ALL_PLOTS/_plot-level-data/**
 
-```{r save_dendro_gdrive, eval = FALSE}
+```{r save_carbon_plot_gdrive, eval = FALSE}
 save_results_csv(
     results = carbon_plotinfo,
     output_dir = path_to_plotlevel_gdrive
     )
 
 ```
-
-
 **Na update van forresdat, project "forresdat" openen en alles naar de cloud pushen**
 **Eventueel ook access op gdrive plaatsen**
 
@@ -1622,7 +2173,7 @@ Na knitting - manueel
 
 ```{r eval = FALSE}
 # Specify the path of the file you want to copy
-source_file <- here::here(paste0("Scripts/OpbouwDatabank/Main_UpdateForresdat_06_carbon_stock_dead_alive.html"))
+source_file <- here::here(paste0("Scripts/OpbouwDatabank/Main_UpdateForresdat_06_volume_tree_parts_carbon_stock.html"))
 
 # Specify the destination directory where you want to copy the file
 destination_dir <- path_to_html_teamdrive
