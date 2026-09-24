@@ -29,7 +29,7 @@ path_to_reserves <- Sys.getenv("path_to_reserves") #"C:/03_BR_gebieden/"
 
 path_to_databases <- Sys.getenv("path_to_databases") #"C:/03_BR_db_monitoring/"
 
-path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_23_INBO2026_20260618/")
+path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_23_INBO2026_20260619/")
 # path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_23_INBO2026_20260505/")
           # mail Peter: aanpassingen:
           #   LET OP, de nieuwe versie bevat 23 in de naam, staat voor FMversie, werken momenteel nog in 22 maar 23 staat klaar voor installatie binnenkort.
