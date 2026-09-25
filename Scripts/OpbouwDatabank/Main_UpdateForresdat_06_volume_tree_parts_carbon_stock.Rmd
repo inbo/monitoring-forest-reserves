@@ -1081,7 +1081,7 @@ ondergronds volume = ondergrondse biomassa / dichtheid wortelhout
 (c) Anja: in het laatste geval (bij gelijke dichtheid van wortelhout vs stamhout) komt
 dat neer op het gebruik van de R voor biomassa.
 
-```{r}
+```{r results = 'hide'}
 names(trees_standing6)
 trees_standing7 <- trees_standing6 %>% 
   mutate(vol_tot_standing_bgb_m3 = tmp_VolumeInclTwigs_m3*R*decomposition)
@@ -1147,7 +1147,7 @@ trees_standing7 <- trees_standing7 %>%
 
 ### Volgorde attributen
 
-```{r stems_all_parts}
+```{r stems_all_parts, results = 'hide'}
 names(trees_standing7)
 
 trees_standing8 <- trees_standing7 %>% 
@@ -1178,6 +1178,9 @@ trees_standing8 <- trees_standing7 %>%
 
 # tbl_boom_notNA %>% filter(IntactTreeCode %in% c(20, 30)) %>% select(vol_crown_m3) %>% unique()
 # # OK, enkel 0
+```
+```{r}
+names(trees_standing8)
 ```
 
 ```{r check_geen_kroon, eval = FALSE}
@@ -1534,7 +1537,7 @@ logs1 <- deadw_by_decay_plot_species %>%
 logs1 %>% filter(is.na(WD_FRL)) %>% nrow() == 0
 ```
 
-```{r biomassa_logs1}
+```{r biomassa_logs1, results='hide'}
 t <- logs1 %>% 
   filter(is.na(vol_log_m3_ha))
 
@@ -1591,7 +1594,7 @@ Sommeren per plot (want nu nog per decaystage en soort apart).
 
 Oppassen met NA's: sommeren van "niks" geeft waarde '0' => na.rm = FALSE . 
 
-```{r logs_plot}
+```{r logs_plot, results='hide'}
 names(logs2)
 logs_per_plot1 <- logs2 %>% 
   dplyr::group_by(plot_id, period) %>%   
@@ -1626,7 +1629,7 @@ Sommeren per plot en species (want nu nog per decaystage apart).
 
 Oppassen met NA's: sommeren van "niks" geeft waarde '0' => na.rm = FALSE . 
 
-```{r logs_plot_species}
+```{r logs_plot_species, results='hide'}
 names(logs2)
 logs_per_plot_species1 <- logs2 %>% 
   dplyr::group_by(plot_id, period, species) %>%   
@@ -2016,7 +2019,7 @@ nrow(plot_species_level2) == nrow(plot_species_level1)
 
 Op plotniveau en op plot-soortniveau.
 
-```{r}
+```{r results='hide'}
 carbon_by_plot <- plot_level2 %>% 
   select(-survey_deadw, -survey_lis) %>% 
   left_join(plotinfo %>% select(plottype, plot_id, year = year_dendro, period)) %>% 
