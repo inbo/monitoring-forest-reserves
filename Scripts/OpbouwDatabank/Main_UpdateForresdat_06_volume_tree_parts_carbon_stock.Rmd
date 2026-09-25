@@ -1208,7 +1208,7 @@ t <- trees_standing8 %>%
     # trees_standing8 <- trees_standing8_
 ```
 
-# Omzetting naar plotniveau
+## Omzetting naar plotniveau
 
 Vertrekkende van *stems_calc*
 
@@ -1281,7 +1281,7 @@ plot_level0 <- trees_standing8 %>%
 ```
 
 
-## Toevoegen van plots zonder biomass
+### Toevoegen van plots zonder biomass
 
 Aan de lijst van plots mét bomen moeten de plots zonder bomen (volume = 0) toegevoegd  worden, 
 die behoren tot productief bos (geen open ruimtes).
@@ -1342,13 +1342,13 @@ plot_level1 <- rbind(plot_level0, zero_volume_bosplots %>%
 
 ```
 
-# Omzetting naar plot-species-niveau
+## Omzetting naar plot-species-niveau
 
 Vertrekkende van *stems_calc*, cfr plot_level0
 
 Onderscheid levende en dode volumes/biomassa per hectare
 
-```{r plotniveau, results='hide'}
+```{r plot_speciesniveau, results='hide'}
 colnames(trees_standing8)
 
 plot_species_level0 <- trees_standing8 %>%
@@ -1415,7 +1415,7 @@ plot_species_level0 <- trees_standing8 %>%
 ```
 
 
-## Toevoegen van plots zonder biomass
+### Toevoegen van plots zonder biomass
 
 Aan de lijst van plots mét bomen moeten de plots zonder bomen (volume = 0) toegevoegd worden, 
 die behoren tot productief bos (geen open ruimtes).
@@ -1440,7 +1440,7 @@ plot_species_level1 <- rbind(plot_species_level0
 
 ```
 
-# Liggend dood hout
+## Liggend dood hout
 
 Voor **coarse woody debris (liggend dood hout)**:    
 volume x soort-specifieke wood density (ton/m³) x factor deadwood decomposition     
@@ -1451,14 +1451,62 @@ volume x soort-specifieke wood density (ton/m³) x factor deadwood decomposition
 
 Het liggende dood hout wordt vanaf 2022 deels opgemeten mbv LIS en deels obv volopname.
 
-Voor de huidige analyse gaan we nog even verder met de volopnames 
-(!! voor Wijnendale, Everzwijnbad, Heirnisse en Jansheideberg pas
-vanaf 30 cm opgemeten in 3de decade).
+Met **data afkomstig van LIS** moeten we voorzichtig omgaan, we kunnen niet de data op soort en afbraakniveau zomaar summarizen tot plotniveau, zoals we doen met de logs 
+uit FAS. 
+Anderzijds hebben we wel info van soort en afbraak nodig om biomassa te kunnen berekenen,
+dus we kunnen ook niet verder met `vol_log_m3_ha` uit `dendro_by_plot(_species)`.
+We zouden de plot-waardes en plot-species-waardes direct van de ruwe data 
+moeten afleiden en niet - zoals we voor FAS kunnen doen - verder werkend op de 
+geclusterde volumes in de tabel "deadw_by_decay_plot_species".
+De volumes moeten op elk niveau apart berekend worden, tgv aard van de formule.
 
-> KV Zoniën KERN_1983 - periode 2 & 3 pas vanaf 40 cm opgemeten (2010 en 2020)
-Daar is vol_log_m3_ha = NA (enkel `vol_log_above40cm_m3_ha` beschikbaar)
-Dat zouden we moeten doortrekken voor de LIS-opnames: Wijnendale, Everzwijnbad, 
-Heirnisse en Jansheideberg periode 3
+Sowieso zal een inschatting van biomassa obv een combinatie van LIS en FAS een héél ruwe
+schatting zijn, die nooit op plotniveau mag gebruikt worden.
+
+Bij de **VBI** worden de intersects gegroepeerd per NH/LH en afbraak, en dan wordt 
+de formule DeVries toegepast.  
+Dan een WD voor  NH/LH en een decomposition obv decaystage op dat volume.
+Vervolgens sommeren per plot.
+
+```
+Li<-45
+logsVBI2_3_ <- LIMVBI2_3 %>% 
+  dplyr::group_by(IDPlots, Periode, LH_NH, decaystage) %>%
+  dplyr::summarise(v3_VolumeLogs=pi^2/8/Li*sum((Diameter_cm^2)/cos(Angle_degrees*pi/180),na.rm=TRUE)) %>% 
+  ungroup()
+  
+logsVBI2_3 <- logsVBI2_3_ %>% 
+  mutate(
+    WD = case_when(
+  LH_NH == 1 ~ 0.52,
+  LH_NH == 2 ~ 0.42,
+  LH_NH %in% c(NA, 3) ~ 0.47
+  )
+  , decomposition = case_when(
+  decaystage %in% c(10,20) ~ 1,
+  decaystage == 30 ~ 0.75,
+  decaystage == 40 ~ 0.5
+  )
+  , BiomassLying_t_ha = v3_VolumeLogs * WD * decomposition) 
+  
+logs_per_plot_VBI2_3 <- logsVBI2_3 %>% 
+  dplyr::group_by(IDPlots, Periode) %>%   
+  dplyr::summarise(
+    vol_logs_m3_ha = sum(v3_VolumeLogs, na.rm = TRUE)
+    , BiomassLying_t_ha_dead = sum(BiomassLying_t_ha, na.rm = TRUE)
+  ) %>% 
+  ungroup() %>% 
+  mutate(CarbonLying_t_ha_dead = BiomassLying_t_ha_dead * FC_value)
+```
+  
+
+**Voor de huidige analyse gaan we enkel verder met de volopnames**
+
+We berekenen naast `biomass_lying_deadw_t_ha` (wanneer dat NA is) 
+
+- `biomass_lying_deadw_above30cm_t_ha`: LIS ingevoerd Wijnendale, Everzwijnbad, Heirnisse en Jansheideberg => FAS pas vanaf 30 cm in 3de decade, enkel `vol_log_above30cm_m3_ha` beschikbaar         
+- `biomass_lying_deadw_above30cm_t_ha`: KV Zoniën KERN_1983 - periode 2 & 3 pas vanaf 40 cm opgemeten (2010 en 2020) => vol_log_m3_ha = NA, enkel `vol_log_above40cm_m3_ha` beschikbaar
+
 
 ### Biomassa obv decay en species
 
@@ -1508,10 +1556,15 @@ logs2 <- logs1 %>%
          , biomass_lying_deadw_t_ha = 
               ifelse(!is.na(vol_log_m3_ha)
                      , vol_log_m3_ha * WD * decomposition
-                     , ifelse(!is.na(vol_log_above30cm_m3_ha) & survey_lis
-                              , (vol_lis_10_30cm_m3_ha + vol_log_above30cm_m3_ha) * WD * decomposition
-                              , vol_lis_m3_ha * WD * decomposition)
+                     , NA
+                     # , ifelse(!is.na(vol_log_above30cm_m3_ha) & survey_lis
+                     #          , (vol_lis_10_30cm_m3_ha + vol_log_above30cm_m3_ha) * WD * decomposition
+                     #          , vol_lis_m3_ha * WD * decomposition)
                     ) 
+         , biomass_lying_deadw_above30cm_t_ha = 
+              ifelse(!is.na(vol_log_above30cm_m3_ha)
+                     , vol_log_above30cm_m3_ha * WD * decomposition
+                     , NA)
          , biomass_lying_deadw_above40cm_t_ha = 
               ifelse(!is.na(vol_log_above40cm_m3_ha)
                      , vol_log_above40cm_m3_ha * WD * decomposition
@@ -1545,27 +1598,27 @@ logs_per_plot1 <- logs2 %>%
   dplyr::summarise(
     vol_log_m3_ha = sum(vol_log_m3_ha, na.rm = FALSE)
     , vol_log_above30cm_m3_ha = sum(vol_log_above30cm_m3_ha, na.rm = FALSE)
-    , vol_lis_m3_ha = sum(vol_lis_m3_ha, na.rm = FALSE)
-    , vol_lis_10_30cm_m3_ha = sum(vol_lis_10_30cm_m3_ha, na.rm = FALSE)
+    # OPGEPAST: niet correct om vol_lis te berekenen via summarize
+    # , vol_lis_m3_ha = sum(vol_lis_m3_ha, na.rm = FALSE)
+    # , vol_lis_10_30cm_m3_ha = sum(vol_lis_10_30cm_m3_ha, na.rm = FALSE)
     , vol_log_above40cm_m3_ha = sum(vol_log_above40cm_m3_ha, na.rm = FALSE)
     , biomass_lying_t_ha_dead = sum(biomass_lying_deadw_t_ha, na.rm = FALSE)
+    , biomass_lying_above30cm_t_ha_dead = sum(biomass_lying_deadw_above30cm_t_ha, na.rm = FALSE)
     , biomass_lying_above40cm_t_ha_dead = sum(biomass_lying_deadw_above40cm_t_ha, na.rm = FALSE)
   ) %>% 
   ungroup() %>% 
-  mutate(carbon_lying_t_ha_dead = biomass_lying_t_ha_dead * FC_value,
-         carbon_lying_above40cm_t_ha_dead = biomass_lying_above40cm_t_ha_dead * FC_value) %>% 
+  mutate(carbon_lying_t_ha_dead = biomass_lying_t_ha_dead * FC_value
+         , carbon_lying_above30cm_t_ha_dead = biomass_lying_above30cm_t_ha_dead * FC_value
+         , carbon_lying_above40cm_t_ha_dead = biomass_lying_above40cm_t_ha_dead * FC_value) %>% 
   left_join(plotinfo %>% select(plot_id, period, survey_deadw, survey_lis))
 
 t3 <- logs_per_plot1 %>% 
   filter(is.na(vol_log_m3_ha))
 t3 <- logs_per_plot1 %>% 
-  filter(is.na(vol_log_m3_ha) & is.na(vol_lis_m3_ha)) %>% 
+  filter(is.na(vol_log_m3_ha)) %>% 
   left_join(plotinfo)
 t3 %>% select(forest_reserve, period, plottype) %>% unique()
 ```
-
-
-
 
 ### Plot-species-niveau
 
@@ -1580,21 +1633,24 @@ logs_per_plot_species1 <- logs2 %>%
   dplyr::summarise(
     vol_log_m3_ha = sum(vol_log_m3_ha, na.rm = FALSE)
     , vol_log_above30cm_m3_ha = sum(vol_log_above30cm_m3_ha, na.rm = FALSE)
-    , vol_lis_m3_ha = sum(vol_lis_m3_ha, na.rm = FALSE)
-    , vol_lis_10_30cm_m3_ha = sum(vol_lis_10_30cm_m3_ha, na.rm = FALSE)
+    # OPGEPAST: niet correct om vol_lis te berekenen via summarize
+    # , vol_lis_m3_ha = sum(vol_lis_m3_ha, na.rm = FALSE)
+    # , vol_lis_10_30cm_m3_ha = sum(vol_lis_10_30cm_m3_ha, na.rm = FALSE)
     , vol_log_above40cm_m3_ha = sum(vol_log_above40cm_m3_ha, na.rm = FALSE)
     , biomass_lying_t_ha_dead = sum(biomass_lying_deadw_t_ha, na.rm = FALSE)
+    , biomass_lying_above30cm_t_ha_dead = sum(biomass_lying_deadw_above30cm_t_ha, na.rm = FALSE)
     , biomass_lying_above40cm_t_ha_dead = sum(biomass_lying_deadw_above40cm_t_ha, na.rm = FALSE)
   ) %>% 
   ungroup() %>% 
-  mutate(carbon_lying_t_ha_dead = biomass_lying_t_ha_dead * FC_value,
-         carbon_lying_above40cm_t_ha_dead = biomass_lying_above40cm_t_ha_dead * FC_value) %>% 
+  mutate(carbon_lying_t_ha_dead = biomass_lying_t_ha_dead * FC_value
+         , carbon_lying_above30cm_t_ha_dead = biomass_lying_above30cm_t_ha_dead * FC_value
+         , carbon_lying_above40cm_t_ha_dead = biomass_lying_above40cm_t_ha_dead * FC_value) %>% 
   left_join(plotinfo %>% select(plot_id, period, survey_deadw, survey_lis))
 
 t3 <- logs_per_plot_species1 %>% 
   filter(is.na(vol_log_m3_ha))
 t3 <- logs_per_plot_species1 %>% 
-  filter(is.na(vol_log_m3_ha) & is.na(vol_lis_m3_ha)) %>% 
+  filter(is.na(vol_log_m3_ha)) %>% 
   left_join(plotinfo)
 t3 %>% select(forest_reserve, period, plottype) %>% unique()
 # kersselaerspleyn
@@ -1687,6 +1743,7 @@ logs_per_plot_extra <- dendro_by_plot %>%
   # ungroup()
   anti_join(logs_per_plot1 %>% 
               filter(!is.na(biomass_lying_t_ha_dead) | 
+                       !is.na(biomass_lying_above30cm_t_ha_dead) |
                        !is.na(biomass_lying_above40cm_t_ha_dead))
             , by = c("plot_id", "period"))
 
@@ -1710,26 +1767,34 @@ logs_per_plot_extra_ <- logs_per_plot_extra %>%
          , biomass_lying_t_ha_dead = 
               ifelse(!is.na(vol_log_m3_ha)
                      , vol_log_m3_ha * WD * decomposition
-                     , ifelse(!is.na(vol_log_above30cm_m3_ha) & survey_lis
-                              , (vol_lis_10_30cm_m3_ha + vol_log_above30cm_m3_ha) * WD * decomposition
-                              , vol_lis_m3_ha * WD * decomposition)
+                     , NA
+                     # , ifelse(!is.na(vol_log_above30cm_m3_ha) & survey_lis
+                     #          , (vol_lis_10_30cm_m3_ha + vol_log_above30cm_m3_ha) * WD * decomposition
+                     #          , vol_lis_m3_ha * WD * decomposition)
                     ) 
+         , biomass_lying_above30cm_t_ha_dead = 
+              ifelse(!is.na(vol_log_above30cm_m3_ha)
+                     , vol_log_above30cm_m3_ha * WD * decomposition
+                     , NA)
          , biomass_lying_above40cm_t_ha_dead = 
               ifelse(!is.na(vol_log_above40cm_m3_ha)
                      , vol_log_above40cm_m3_ha * WD * decomposition
                      , NA)
          , carbon_lying_t_ha_dead = biomass_lying_t_ha_dead * FC_value
+         , carbon_lying_above30cm_t_ha_dead = biomass_lying_above30cm_t_ha_dead * FC_value
          , carbon_lying_above40cm_t_ha_dead = biomass_lying_above40cm_t_ha_dead * FC_value
          ) %>% 
   select(forest_reserve
          , plot_id, period
          , vol_log_m3_ha
          , vol_log_above30cm_m3_ha
-         , vol_lis_m3_ha
-         , vol_lis_10_30cm_m3_ha
+         # , vol_lis_m3_ha
+         # , vol_lis_10_30cm_m3_ha
          , vol_log_above40cm_m3_ha
-         , biomass_lying_t_ha_dead, biomass_lying_above40cm_t_ha_dead
-         , carbon_lying_t_ha_dead, carbon_lying_above40cm_t_ha_dead
+         , biomass_lying_t_ha_dead, biomass_lying_above30cm_t_ha_dead
+         , biomass_lying_above40cm_t_ha_dead
+         , carbon_lying_t_ha_dead, carbon_lying_above30cm_t_ha_dead
+         , carbon_lying_above40cm_t_ha_dead
          , survey_deadw, survey_lis
   )
         
@@ -1747,7 +1812,8 @@ logs_per_plot_extra <- logs_per_plot_extra_  %>%
 
 ```{r results='hide'}
 logs_per_plot2 <- rbind(logs_per_plot1 %>% 
-                          filter(!is.na(biomass_lying_t_ha_dead) |
+                          filter(!is.na(biomass_lying_t_ha_dead) | 
+                                   !is.na(biomass_lying_above30cm_t_ha_dead) | 
                                    !is.na(biomass_lying_above40cm_t_ha_dead))
                         , logs_per_plot_extra)
 summary(logs_per_plot2)
@@ -1790,6 +1856,7 @@ logs_per_plot_species_extra <- dendro_by_plot_species %>%
   # ungroup()
   anti_join(logs_per_plot_species1 %>% 
               filter(!is.na(biomass_lying_t_ha_dead) | 
+                       !is.na(biomass_lying_above30cm_t_ha_dead) |
                        !is.na(biomass_lying_above40cm_t_ha_dead))
             , by = c("plot_id", "period", "species"))
 
@@ -1814,26 +1881,34 @@ logs_per_plot_species_extra_ <- logs_per_plot_species_extra %>%
          , biomass_lying_t_ha_dead = 
               ifelse(!is.na(vol_log_m3_ha)
                      , vol_log_m3_ha * WD * decomposition
-                     , ifelse(!is.na(vol_log_above30cm_m3_ha) & survey_lis
-                              , (vol_lis_10_30cm_m3_ha + vol_log_above30cm_m3_ha) * WD * decomposition
-                              , vol_lis_m3_ha * WD * decomposition)
+                     , NA
+                     # , ifelse(!is.na(vol_log_above30cm_m3_ha) & survey_lis
+                     #          , (vol_lis_10_30cm_m3_ha + vol_log_above30cm_m3_ha) * WD * decomposition
+                     #          , vol_lis_m3_ha * WD * decomposition)
                     ) 
+         , biomass_lying_above30cm_t_ha_dead = 
+              ifelse(!is.na(vol_log_above30cm_m3_ha)
+                     , vol_log_above30cm_m3_ha * WD * decomposition
+                     , NA)
          , biomass_lying_above40cm_t_ha_dead = 
               ifelse(!is.na(vol_log_above40cm_m3_ha)
                      , vol_log_above40cm_m3_ha * WD * decomposition
                      , NA)
          , carbon_lying_t_ha_dead = biomass_lying_t_ha_dead * FC_value
+         , carbon_lying_above30cm_t_ha_dead = biomass_lying_above30cm_t_ha_dead * FC_value
          , carbon_lying_above40cm_t_ha_dead = biomass_lying_above40cm_t_ha_dead * FC_value
          ) %>% 
   select(forest_reserve, plot_id, period
          , species
          , vol_log_m3_ha
          , vol_log_above30cm_m3_ha
-         , vol_lis_m3_ha
-         , vol_lis_10_30cm_m3_ha
+         # , vol_lis_m3_ha
+         # , vol_lis_10_30cm_m3_ha
          , vol_log_above40cm_m3_ha
-         , biomass_lying_t_ha_dead, biomass_lying_above40cm_t_ha_dead
-         , carbon_lying_t_ha_dead, carbon_lying_above40cm_t_ha_dead
+         , biomass_lying_t_ha_dead, biomass_lying_above30cm_t_ha_dead
+         , biomass_lying_above40cm_t_ha_dead
+         , carbon_lying_t_ha_dead, carbon_lying_above30cm_t_ha_dead
+         , carbon_lying_above40cm_t_ha_dead
          , survey_deadw, survey_lis
   )
         
@@ -1854,6 +1929,7 @@ logs_per_plot_species_extra <- logs_per_plot_species_extra_  %>%
 ```{r results='hide'}
 logs_per_plot_species2 <- rbind(logs_per_plot_species1 %>% 
                           filter(!is.na(biomass_lying_t_ha_dead) |
+                                   !is.na(biomass_lying_above30cm_t_ha_dead) |
                                    !is.na(biomass_lying_above40cm_t_ha_dead))
                         , logs_per_plot_species_extra)
 summary(logs_per_plot_species2)
@@ -1872,7 +1948,7 @@ range(t$vol_log_m3_ha, na.rm = T)
 # ok, goed aangevuld
 ```
 
-# Combineren staand en liggend
+## Combineren staand en liggend
 
 ```{r biomass_all_plot, results='hide'}
 names(logs_per_plot2)
@@ -1895,26 +1971,12 @@ nrow(plot_level1) == nrow(logs_per_plot2) - 13
 # anders worden NA's toegevoegd 
 # ! checken of dat echt NA's zijn, of eerder nullen?
 
-
 plot_level2 <- plot_level1 %>% 
-  left_join(logs_per_plot2, by = c("plot_id", "period")) %>% 
-  mutate(vol_agb_m3_ha_dead = ifelse(!is.na(vol_log_m3_ha)
-                     , vol_tot_standing_agb_m3_ha_dead + vol_log_m3_ha
-                     , ifelse(!is.na(vol_log_above30cm_m3_ha) & survey_lis
-                              , vol_tot_standing_agb_m3_ha_dead + 
-                                vol_log_above30cm_m3_ha + 
-                                vol_lis_10_30cm_m3_ha
-                              , vol_tot_standing_agb_m3_ha_dead + vol_lis_m3_ha)
-                     )
-         , biomass_agb_t_ha_dead = biomass_standing_t_ha_dead + biomass_lying_t_ha_dead
-         , carbon_agb_t_ha_dead = carbon_standing_t_ha_dead + carbon_lying_t_ha_dead)
+  left_join(logs_per_plot2, by = c("plot_id", "period"))
 
 names(plot_level2)
 nrow(plot_level2) == nrow(plot_level1)
 ```
-> beter geen som maken van LIS en FAS om tot totaal volume t ekomen
-iedereen dat zelf laten doen, duidelijker
-
 
 ```{r biomass_all_plot_species, results='hide'}
 names(logs_per_plot_species2)
@@ -1943,20 +2005,10 @@ nrow(plot_species_level1) == nrow(logs_per_plot_species2) - 13
 
 
 plot_species_level2 <- plot_species_level1 %>% 
-  full_join(logs_per_plot_species2, by = c("plot_id", "period", "species")) %>% 
-  mutate(vol_agb_m3_ha_dead = ifelse(!is.na(vol_log_m3_ha)
-                     , vol_tot_standing_agb_m3_ha_dead + vol_log_m3_ha
-                     , ifelse(!is.na(vol_log_above30cm_m3_ha) & survey_lis
-                              , vol_tot_standing_agb_m3_ha_dead + 
-                                vol_log_above30cm_m3_ha + 
-                                vol_lis_10_30cm_m3_ha
-                              , vol_tot_standing_agb_m3_ha_dead + vol_lis_m3_ha)
-                     )
-         , biomass_agb_t_ha_dead = biomass_standing_t_ha_dead + biomass_lying_t_ha_dead
-         , carbon_agb_t_ha_dead = carbon_standing_t_ha_dead + carbon_lying_t_ha_dead)
+  full_join(logs_per_plot_species2, by = c("plot_id", "period", "species")) 
 
-names(plot_species_level_species2)
-nrow(plot_species_level_species2) == nrow(plot_species_level_species1)
+names(plot_species_level2)
+nrow(plot_species_level2) == nrow(plot_species_level1)
 ```
 
 
@@ -2006,37 +2058,6 @@ head(carbon_by_plot %>% arrange(plot_id, period) %>% filter(plot_id == 91000));
 head(carbon_by_plot_git %>% arrange(plot_id, period) %>% filter(plot_id == 91000))
 
 ```
-
-
-# Overview bosreservaten
-
-```{r }
-carbon_plotinfo[[1]] %>% 
-  group_by(forest_reserve, plottype, period, survey_number) %>% 
-  summarize(n = n()) %>% 
-  ungroup() %>% 
-  DT :: datatable(filter = 'top', options = list(dom = 'tip'),rownames = FALSE)
-
-```
-
-
-# Info mbt biomassa liggend dood hout
-
-**Combinatie LIS en FAS**     
-
-Indien we deadwood willen vanaf 10 cm moeten we hier werken met **data uit LIS**, 
-net zoals bij VBI.    
-
-Om biomassa van liggend dood hout te berekenen (vanaf 10 cm), hebben we de combinatie gemaakt van 
-10-30cm obv LIS en > 30 cm obv FAS.      
-Als enkel LIS uitgevoerd, dan volledig op basis van LIS.
-
-
-Voor meer info zie script `jansheideberg_dendro_2025.Rmd`.      
-Immers correctie nodig voor       
-
-- `vol_log_m3_ha`, `biomass_lying_t_ha_dead`, `carbon_lying_t_ha_dead` corrigeren: NA voor LIS-plots     
-- Extra velden toevoegen `vol_log_above_30cm_m3_ha`, `biomass_lying_above_30cm_t_ha_dead`, `carbon_lying_above_30cm_t_ha_dead`       
 
 # Export stem-level-data
 
@@ -2094,7 +2115,7 @@ save_results_csv(
 
 ```
 
-# Export plot-level-data
+# Export plot(-species)-level-data
 
 carbon_by_plot en carbon_by_plot_species
 
@@ -2165,6 +2186,18 @@ save_results_csv(
 ```
 **Na update van forresdat, project "forresdat" openen en alles naar de cloud pushen**
 **Eventueel ook access op gdrive plaatsen**
+
+
+# Overview bosreservaten
+
+```{r }
+carbon_plotinfo[[1]] %>% 
+  group_by(forest_reserve, plottype, period, survey_number) %>% 
+  summarize(n = n()) %>% 
+  ungroup() %>% 
+  DT :: datatable(filter = 'top', options = list(dom = 'tip'),rownames = FALSE)
+
+```
 
 
 # Copy html to teamdrive
