@@ -42,7 +42,7 @@ source(here::here("scripts/Setup.R"))
 
 ```{r Setup2}
 folder <- "INBO_Time4C/"
-scriptnaam <- "INBO_Time4C_boomsoortniveau"
+scriptnaam <- "INBO_Time4C_boomsoortniveau_2026"
 
 path_to_datarequest_cschijf <- paste0(path_to_datarequests, folder)
 path_to_datarequest_teamdrive <- paste0(path_to_datarequests_gdrive, folder)
@@ -110,10 +110,9 @@ names(plotinfo)
 
 ```
 
+Volopname liggend dood hout in BR?
 
-# Volopname liggend dood hout in BR?
-
-```{r}
+```{r check_LIS_FAS}
 FAS_BR <- plots_BR |> 
   left_join(plotinfo) |> 
   group_by(plot_id, code) |> 
@@ -126,7 +125,70 @@ FAS_BR <- plots_BR |>
 FAS_BR |> filter(diam_min_a4_logs == 100) |> nrow() == 2
 # maar 2 plots met een volopname 
 ```
+
 Er zijn maar 2 plots met een volopname vanaf 10 cm => liggend dood hout kunnen we niet berekenen.
+
+
+```{r load_carbon_by_species}
+# data <- read.csv2(paste0(path_to_plotlevel_csv, "carbon_by_plot_species.csv"))
+# ook op forresdat
+
+carbon_by_plot_species <- read_forresdat_table(
+  tablename = "carbon_by_plot_species"
+  , git_ref_type = "branch", git_reference = "develop"
+  , join_plotinfo = TRUE
+  , plottype = "CP")  # NIET ENKEL CP's!
+
+```
+
+
+# Data selecteren
+
+Enkel 7 BR-plots, enkel meest recente opname
+
+```{r}
+plotinfo_selectie <- plotinfo %>% 
+  filter(plot_id %in% plots_BR$plot_id) %>% 
+  group_by(plot_id) %>% 
+  summarize(max_period = max(period))
+  
+```
+
+
+```{r}
+result <- carbon_by_plot_species %>% 
+  inner_join(plotinfo_selectie, by = c("plot_id", "period" = "max_period"))
+
+range(result$year)
+# [1] 2016 2024
+
+names(result)
+
+```
+
+
+
+# Output
+
+```{r export}
+path_to_datarequest
+
+write.csv2(result, paste0(path_to_datarequest_cschijf, "result.csv")) 
+write.csv2(result, paste0(path_to_datarequest_cschijf, "result.csv")) 
+
+
+```
+
+Ook rechtstreeks naar teamdrive: `r path_to_datarequest_teamdrive`.
+
+```{r }
+path_to_datarequest_teamdrive
+
+write.csv2(result, paste0(path_to_datarequest_teamdrive, "result.csv")) 
+write.csv2(result, paste0(path_to_datarequest_teamdrive, "result.csv")) 
+
+
+```
 
 
 # Copy html to teamdrive

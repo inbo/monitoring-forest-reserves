@@ -211,6 +211,8 @@ recent_80perc_oak <- selection %>%
 nrow(recent_70perc_oak)
 nrow(recent_80perc_oak)
 ```
+
+
 # Output
 
 ```{r export}
