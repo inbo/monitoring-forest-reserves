@@ -1,0 +1,209 @@
+---
+title: "Time 4C"
+subtitle: "Volumes staand en liggend dood hout 7 BR-plots"
+author: "Anja Leyman"
+date: "12/03/2025"  
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: TRUE
+      smooth_scroll: TRUE
+---
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 7,
+  fig.height = 3,
+  fig.align = TRUE)
+
+library(here)
+library(writexl)
+library(scales)
+library(sf)
+
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+```
+
+
+```{r Setup2}
+folder <- "INBO_Time4C/"
+scriptnaam <- "INBO_Time4C_boomsoortniveau_2026"
+
+path_to_datarequest_cschijf <- paste0(path_to_datarequests, folder)
+path_to_datarequest_teamdrive <- paste0(path_to_datarequests_gdrive, folder)
+path_to_html_teamdrive <- path_to_datarequest_teamdrive
+
+path_to_html_cschijf <- here::here(paste0("Scripts/AanvraagGegevens/", folder, scriptnaam, ".html"))
+
+```
+
+```{r}
+path_to_datarequests_gdrive # algemeen
+path_to_datarequest_cschijf
+path_to_datarequest_teamdrive # specifiek deze datavraag
+
+path_to_treelevel_csv
+path_to_treelevel_gdrive
+```
+
+
+
+# Vraagstelling
+
+Mail van 27/6/2026
+
+Een hele tijd geleden (11/12/2024?) heb je volume en koolstofvoorraden aangeleverd voor 7 plots van BR en 1 plot van VBI (plots: zie bijlage). Toen lag de focus op koolstof.
+Cf. [map op teamdrive](https://drive.google.com/drive/folders/1oTRD5HyxzYgxE-O5AmVviafA9o1ZAUac).
+
+Nu ben ik bezig met een overzichtsartikel over Time4C voor Bosrevue, waarin we ook bodemverzuring en stikstof bespreken (in het kader van het PAS-project 'Bos als stikstofbuffer'). Ik was in het artikel aan het uitleggen dat we geen stikstofstocks berekend hadden voor de boom/struikbiomassa, omdat we geen betrouwbare stikstofgehaltes hebben. Toen vond ik een databank met stikstofgehalten in hout van boreale en gematigde boomsoorten van het noordelijke halfrond (samengesteld in januari 2025). Dat zijn natuurlijk nog steeds geen 'betrouwbare' (als in: relevant voor onze bomen) waarden, maar op zich niet veel slechter dan 50% koolstof en 1 densiteitwaarde per boomsoort uit de literatuur en 21% ondergrondse biomassa... dus... ik vond dat ik ook de stikstofstocks benaderend moet berekenen voor de houtbiomassa.
+Nu zijn die stikstofgehaltes opgesplitst in n_stamhout, n_takken, n_wortels. Telkens per boomsoort.
+Voor dood hout is de afbraakklasse relevant, omdat het stikstofgehalte toeneemt met de afbraak. Voor dood hout vond ik ook cijfers per boomsoort (en dus ook per afbraakklasse).
+ 
+Mijn vraag is dus: kan je me voor de 8 Time4C-plots uit BR/VBI bezorgen:
+- het stamvolume, kroonvolume, (wortelvolume) per boomsoort
+- doodhoutvolume per afbraakklasse en boomsoort
+Hm. Of in plaats van de volumes, de biomassa's?
+Als dat te veel tijd vraagt en voor BR/VBI niet berekend wordt, mag je zeker ook de plotgegevens (diameter, hoogte, boomsoort, ...) sturen en probeer ik het zelf te berekenen!
+
+
+
+# Data inladen
+
+
+```{r load_plots}
+plots <- read_excel(paste0(path_to_datarequest_cschijf, "Time4C_oudebossen.xlsx"))
+
+plots_BR <- plots |> 
+  filter(source == "BR")
+
+```
+
+
+```{r load_plotinfo_BR}
+# uit forresdat
+plotinfo <- read_forresdat_table(
+  tablename = "plotinfo"
+  , git_ref_type = "branch", git_reference = "develop"
+  , join_plotinfo = FALSE
+  , plottype = "CP")  # NIET ENKEL CP's!
+
+# ! enkel de processed data - dd 11/9/2024: nu ook Wijnendale en Everzwijnbad 3de decade erbij
+names(plotinfo)
+
+# plotinfo <- read_forresdat_table("plotinfo", plottype = "CP", join_plotinfo = FALSE)
+# qheight_class_regeneration <- read_forresdat_table("qheight_class_regeneration", join_plotinfo = FALSE)
+
+```
+
+Volopname liggend dood hout in BR?
+
+```{r check_LIS_FAS}
+FAS_BR <- plots_BR |> 
+  left_join(plotinfo) |> 
+  group_by(plot_id, code) |> 
+  summarize(max_year = max(year_dendro)) |> 
+  ungroup() |> 
+  left_join(plotinfo |> select(plot_id, year_dendro, survey_lis
+         , survey_deadw, diam_min_a4_logs)
+         , by = c("plot_id", "max_year" = "year_dendro")) 
+
+FAS_BR |> filter(diam_min_a4_logs == 100) |> nrow() == 2
+# maar 2 plots met een volopname 
+```
+
+Er zijn maar 2 plots met een volopname vanaf 10 cm => liggend dood hout kunnen we niet berekenen.
+
+
+```{r load_carbon_by_species}
+# data <- read.csv2(paste0(path_to_plotlevel_csv, "carbon_by_plot_species.csv"))
+# ook op forresdat
+
+carbon_by_plot_species <- read_forresdat_table(
+  tablename = "carbon_by_plot_species"
+  , git_ref_type = "branch", git_reference = "develop"
+  , join_plotinfo = TRUE
+  , plottype = "CP")  # NIET ENKEL CP's!
+
+```
+
+
+# Data selecteren
+
+Enkel 7 BR-plots, enkel meest recente opname
+
+```{r}
+plotinfo_selectie <- plotinfo %>% 
+  filter(plot_id %in% plots_BR$plot_id) %>% 
+  group_by(plot_id) %>% 
+  summarize(max_period = max(period))
+  
+```
+
+
+```{r}
+result <- carbon_by_plot_species %>% 
+  inner_join(plotinfo_selectie, by = c("plot_id", "period" = "max_period"))
+
+range(result$year)
+# [1] 2016 2024
+
+names(result)
+
+```
+
+
+
+# Output
+
+```{r export}
+path_to_datarequest
+
+write.csv2(result, paste0(path_to_datarequest_cschijf, "result.csv")) 
+write.csv2(result, paste0(path_to_datarequest_cschijf, "result.csv")) 
+
+
+```
+
+Ook rechtstreeks naar teamdrive: `r path_to_datarequest_teamdrive`.
+
+```{r }
+path_to_datarequest_teamdrive
+
+write.csv2(result, paste0(path_to_datarequest_teamdrive, "result.csv")) 
+write.csv2(result, paste0(path_to_datarequest_teamdrive, "result.csv")) 
+
+
+```
+
+
+# Copy html to teamdrive
+
+Na knitting - manueel
+
+```{r eval = FALSE}
+# Specify the path of the file you want to copy
+source_file <- path_to_html_cschijf
+
+# Specify the destination directory where you want to copy the file
+destination_dir <- path_to_html_teamdrive
+
+# Copy the file to the destination directory
+file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
+# ? file.copy
+```
+

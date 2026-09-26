@@ -26,7 +26,10 @@ subfolder <- "C:/3BR/2_VisualisatieDataBR/1Packages/"
 file1 <- paste(subfolder, "calc_variables_tree_level_AL.R", sep = "")
 file2 <- paste(subfolder, "forrescalc/R/calc_variables_tree_level.R", sep = "")
 
-# 
+# folder en scripts definiëren BR ----
+subfolder <- "C://03_BR/1_DataVerwerkingBR/Scripts/AanvraagGegevens/ZENODO_open_data/"
+file1 <- paste(subfolder, "zenodo_CP_plot_level_results.Rmd", sep = "")
+file2 <- paste(subfolder, "zenodo_CP_plot_level_results_vs2_2026.Rmd", sep = "")
 
 # vergelijken ----
 diffr(file1, file2, contextSize = 3, minJumpSize = 10, wordWrap = TRUE,

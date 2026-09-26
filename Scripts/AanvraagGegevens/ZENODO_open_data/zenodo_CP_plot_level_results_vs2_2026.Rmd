@@ -1,0 +1,712 @@
+---
+title: "Create plot level results (only circular plots) for publication on zenodo"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: FALSE
+      smooth_scroll: FALSE
+---
+
+# Setup
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+
+```
+
+
+```{r results='hold', eval=TRUE}
+path_to_fieldmap_db
+path_to_forresdat_data
+path_to_analysis_set_db
+path_to_plotlevel_csv
+path_to_treelevel_csv
+path_to_output_gdrive
+path_to_meetgegevens
+path_to_strata_db
+```
+
+# Vraagstelling
+
+Dit script heeft als doel een dataset te creëren voor publicatie op zenodo:   
+
+- plot level resultaten (enkel cirkelplots)   
+- plotinfo met o.a. XY-coördinaten    
+
+
+Op termijn kunnen ook tree level resultaten (doorheen de tijd) gepubliceerd worden 
+(cfr Hongary: https://zenodo.org/record/7311384#.Y9kYO3bMKUk :   
+dbh_1st en DBH_2nd, V_1st/2nd, alivedead_1st/2nd, ...)
+
+Op teamoverleg besproken:   
+
+- vegetatie en dendrometrie als aparte datasets publiceren
+- XY volgens WGS (<strata_location)    
+- geen extra strata zoals bodem, beheer, …
+- species (latijnse naam), heightclass, decaystage en browseindex mee opnemen (niet via LU-lists)
+- plotinfo in afzonderlijke file   
+- "strict forest reserves" => enkel onbeheerde reservaten, zonder De Heide, Ename en 
+deel van Kluisbos dat geen BR is
+
+Extra aandachtspunten: 
+
+- vol_log_min40cm verwijderen uit tabellen   
+- metadata-files aanpassen zdd deze enkel verwijzing naar CP's bevatten   
+
+
+```{r Path}
+# deze worden ook in "Setup.R" gedefinieerd (aanroepen van "Paths.R")
+# hier ev. extra "paths" toevoegen indien nodig 
+
+path_to_datarequest <- "C:/03_BR/1_DataVerwerkingBR/Open_data_zenodo/"
+
+path_to_datarequest_gdrive <- paste0(path_to_output_gdrive, "ZENODO_open_data/")
+
+```
+
+# Inladen data
+
+We halen eerst het volledige datapackage "forresdat" innen, waarna we de
+tabellen waar we in geïnteresseerd zijn als dataframes opslaan.
+
+
+## Overzicht data
+
+Overzicht van alle tabellen in forrresdat:
+
+```{r read_all_forresdat}
+datapackage <- read_forresdat(git_ref_type = "branch", git_reference = "develop")
+
+# overzicht van wat er in forresdat (het datapackage) zit 
+frictionless::resources(datapackage)
+
+```
+
+Volgende versie wordt gedownload:
+
+```{r }
+# versie forresdat
+attr(datapackage, "forresdat")
+```
+
+## Relevante tabellen
+
+We slaan de tabellen waar we in geïnteresseerd zijn op als dataframe.
+
+```{r overview}
+# qiufroheight <- read_resource(datapackage, "qiufroheight")
+# qalive_dead <- read_resource(datapackage, "qalive_dead")
+
+# mbv purr::map
+names_data_tables <- c("dendro_by_plot", "dendro_by_plot_species"
+                 , "dendro_by_diam_plot", "dendro_by_diam_plot_species"
+                 , "deadw_by_decay_plot", "deadw_by_decay_plot_species"
+                 , "carbon_by_plot"
+                 , "reg_by_plot", "reg_by_plot_height", "reg_by_plot_height_species"
+                 , "veg_by_plot", "herblayer_by_plot")
+
+names_info_tables  <- c("plotinfo", "strata_remaining", "strata_location"
+                  , "plots_excluded_from_network")
+
+names_lkp_tables <- c("qiufroheight", "qalive_dead", "qdecaystage"
+                , "qspecies", "qind_shoot_cop"
+                , "qheight_class_regeneration"
+                , "qbrows_index", "qherb_species240810")
+
+# all_tables <- c(data_tables, info_tables, lkp_tables)
+```
+
+```{r load_lkp_tables}
+lkp_tables <- map(names_lkp_tables, function(x) read_resource(datapackage, x))
+#The input was not named
+names(lkp_tables) <- names_lkp_tables
+
+```
+
+```{r modify_lkp_tables}
+modify_lkp_tables <- function(table){
+  colnames_table <- colnames(table)
+  
+  # enkel relevante velden behouden bij lookuplijsten
+  if ("OrderField" %in% colnames_table) {
+  table <- table %>% 
+    select(-Value3, -OrderField, -Active)
+  }
+  
+  if ("MasterID" %in% colnames_table) {
+  table <- table %>% 
+    select(-MasterID)
+  }
+  
+  table
+  # 
+  # # species: name_nl en name_sc
+  # if (str_detect(string = paste(deparse(substitute(table)), collapse="")
+  #                , pattern = "species") & "ID" %in% colnames_table) {     # naam van dataframe (< stackoverflow)
+  #   table <- table %>% select(ID, name_nl = Value1, name_sc = Value2)
+  # } 
+}
+
+###
+lkp_tables <- map(lkp_tables, function(x) modify_lkp_tables(x))
+
+# Create separate dataframes
+# strata nodig voor volgende stap
+for (tablename in names(lkp_tables)) {
+     assign(tablename, lkp_tables[[tablename]])
+} 
+
+# extra
+qspecies <- qspecies %>% select(ID, name_nl = Value1, name_sc = Value2)
+qherb_species240810 <- qherb_species240810 %>% select(ID, name_nl = Value1, name_sc = Value2)
+
+qdecaystage <- qdecaystage %>% select(ID, decaystage = Value2)
+
+```
+
+```{r load_info_tables}
+info_tables <- map(names_info_tables, function(x) read_resource(datapackage, x))
+#The input was not named
+names(info_tables) <- names_info_tables
+
+# Create separate dataframes
+# strata nodig voor volgende stap
+for (tablename in names(info_tables)) {
+     assign(tablename, info_tables[[tablename]])
+} 
+```
+
+
+```{r plotinfo_split_Kluisbos}
+plotinfo <- split_Kluisbos(plotinfo)
+```
+
+XY-coördinaten toevoegen aan `plotinfo` obv `strata_location`.
+
+```{r plotinfo_add_xy}
+plotinfo <- plotinfo %>% 
+  left_join(strata_location %>% 
+              select(plot_id
+                     # , XLambert72, YLambert72
+                     , XLon_wgs84, YLat_wgs84
+                     , Z_m_TAW)) %>% 
+  select(forest_reserve, plot_id, plottype,
+         XLon_wgs84, YLat_wgs84, Z_m_TAW,
+         period, year_dendro, survey_number,
+         contains(c("survey", "game")), data_processed,
+         contains(c("r_A", "dbh_min_a"))
+  ) %>% 
+  rename(dbh_min_a3_alive = dbh_min_a3
+         , dbh_min_a4_alive = dbh_min_a4)
+
+names(plotinfo)
+```
+
+We selecteren enkel cirkelplots en enkel strikte bosreservaten. 
+De Heide, Enamebos en het communal deel van Kluisbos zijn geen strikte bosreservaten.
+
+```{r list_strict_reserves_CP}
+not_strict_reserves <- c("De heide", "Ename", "Kluisbos_communal")
+
+plotinfo <- plotinfo %>% 
+  filter(!forest_reserve %in% not_strict_reserves & plottype == "CP")
+
+list_plots <- plotinfo %>% 
+  select(forest_reserve, plot_id) %>% 
+  unique()
+
+table(list_plots$forest_reserve)
+```
+
+
+```{r load_data_tables}
+data_tables <- map(names_data_tables, function(x) read_resource(datapackage, x))
+#The input was not named
+names(data_tables) <- names_data_tables
+
+```
+
+We selecteren enkel de cirkelplots in de strikte bosreservaten (`list_plots`).    
+
+We verwijderen de velden gebaseerd op volume van de logs > 40 cm,
+omdat deze enkel betrekking hebben op de kernvlakte "Zoniën KERN_1983": 
+
+- vol_log_above40cm_m3_ha     
+- VolumeLogs_above40cm_m3_ha    
+- BiomassLying_above40cm_t_ha_dead    
+- CarbonLying_above40cm_t_ha_dead       
+
+
+```{r modify_data_tables}
+modify_data_tables <- function(table){
+  colnames_table <- colnames(table)
+  
+  # enkel CP én strikt reserve
+  table <- table %>% 
+    filter(plot_id %in% list_plots$plot_id)
+  
+  if ("plottype" %in% colnames_table) {
+    table <- table %>% 
+      select(-plottype)
+  }
+  
+  # 
+  if ("year" %in% colnames_table) {
+  table <- table %>% 
+    select(plot_id, period, year, everything())
+  }
+
+  # vol_log_above40cm_m3_ha verwijderen (enkel CA)
+  if ("vol_log_above40cm_m3_ha" %in% colnames_table) {
+  table <- table %>% 
+    select(-vol_log_above40cm_m3_ha)
+  }
+  
+  if ("VolumeLogs_above40cm_m3_ha" %in% colnames_table) {
+  table <- table %>% 
+    select(-VolumeLogs_above40cm_m3_ha
+           , -BiomassLying_above40cm_t_ha_dead
+           , -CarbonLying_above40cm_t_ha_dead)
+  }
+  
+  # subplot_id niet relevant bij reg
+  if ("subplot_id" %in% colnames_table) {
+  table <- table %>% 
+    select(-subplot_id)
+  }
+  
+  # species
+  if ("species" %in% colnames_table & !"date_vegetation" %in% colnames_table) {
+  table <- table %>% 
+    left_join(qspecies, by = c("species" = "ID")) %>% 
+    select(plot_id, period, year
+         , species_id = species, name_nl, name_sc
+         , everything())
+  }
+  
+  # decaystage
+  if ("decaystage" %in% colnames_table) {
+  table <- table %>% 
+    rename(decaystage_id = decaystage) %>% 
+    left_join(qdecaystage, by = c("decaystage_id" = "ID")) %>% 
+    select(plot_id, period, year
+           , decaystage_id, decaystage
+           , everything())
+  }
+  
+  # heightclass reg
+  if ("height_class" %in% colnames_table) {
+  table <- table %>% 
+    left_join(qheight_class_regeneration %>% select(1:2), by = c("height_class" = "ID")) %>% 
+    select(plot_id, period, year
+         , height_class_id = height_class, height_class= Value1
+         , everything())
+  }
+
+  # herbspecies
+  if ("coverage_class_average_perc" %in% colnames_table) {
+  table <- table %>% 
+    left_join(qherb_species240810, by = c("species" = "ID")) %>% 
+    left_join(qbrows_index, by = c("browse_index_id" = "ID")) %>% 
+    select(plot_id, period, year, date_vegetation,
+         species_id = species, name_nl, name_sc, 
+         coverage_class_average_perc,
+         browse_index_id, browse_index = Value2)
+  }
+  
+
+  if ("Carbon_t_ha_alive" %in% colnames_table) {
+  table <- table %>% 
+    select(plot_id, period, year
+         , StemVolume_m3_ha_alive, VolumeStump_m3_ha_alive
+         , TotalVolumeAGB_m3_ha_alive
+         , BiomassAboveGr_t_ha_alive, BiomassBelowGr_t_ha_alive
+         , Biomass_t_ha_alive 
+         , CarbonAboveGr_t_ha_alive, CarbonBelowGr_t_ha_alive
+         , Carbon_t_ha_alive
+         , StemVolume_m3_ha_dead, VolumeStump_m3_ha_dead
+         , TotalVolumeAGB_m3_ha_dead
+         , BiomassAboveGr_t_ha_dead, BiomassBelowGr_t_ha_dead
+         , BiomassStanding_t_ha_dead
+         , CarbonAboveGr_t_ha_dead, CarbonBelowGr_t_ha_dead
+         , CarbonStanding_t_ha_dead
+         , VolumeLogs_m3_ha, VolumeLogs_above30cm_m3_ha
+         , VolumeLIS_m3_ha, VolumeLIS_10_30cm_m3_ha
+         , BiomassLying_t_ha_dead, 
+         , CarbonLying_t_ha_dead, 
+         , VolumeAGB_m3_ha_dead, BiomassAGB_t_ha_dead
+         , CarbonAGB_t_ha_dead
+  )
+  }
+
+  table
+  # 
+  # # species: name_nl en name_sc
+  # if (str_detect(string = paste(deparse(substitute(table)), collapse="")
+  #                , pattern = "species") & "ID" %in% colnames_table) {     # naam van dataframe (< stackoverflow)
+  #   table <- table %>% select(ID, name_nl = Value1, name_sc = Value2)
+  # } 
+}
+
+###
+data_tables <- map(data_tables, function(x) modify_data_tables(x))
+
+# Create separate dataframes
+# strata nodig voor volgende stap
+for (tablename in names(data_tables)) {
+     assign(tablename, data_tables[[tablename]])
+} 
+```
+
+
+# Plotdata
+
+Zonder plotinfo (afzonderlijke file)    
+Met species, heightclass, decaystage en browse index
+
+```{r dendro}
+#
+print("dendro_by_plot")
+# dendro_by_plot <- dendro_by_plot %>% 
+#   select(plot_id, period, year, everything())
+names(dendro_by_plot)
+# ev. enkel plottype verwijderen?
+# 1974
+
+#
+print("dendro_by_plot_species")
+# dendro_by_plot_species <- dendro_by_plot_species %>% 
+#   left_join(qspecies, by = c("species" = "ID"))  %>% 
+#   select(plot_id, period, year
+#          , species_id = species, name_nl, name_sc
+#          , everything())
+names(dendro_by_plot_species)
+# 
+# #
+print("dendro_by_diam_plot")
+names(dendro_by_diam_plot)
+# 
+# #
+# print("dendro_by_diam_plot_species")
+# dendro_by_diam_plot_species <- dendro_by_diam_plot_species %>% 
+#   left_join(qspecies, by = c("species" = "ID")) %>% 
+#   select(plot_id, period, year
+#          , species_id = species, name_nl, name_sc
+#          , everything())
+# names(dendro_by_diam_plot_species)
+
+```
+
+```{r deadw}
+# 
+print("deadw_by_decay_plot")
+# deadw_by_decay_plot <- deadw_by_decay_plot %>% 
+#   rename(decaystage_id = decaystage) %>% 
+#   left_join(qdecaystage, by = c("decaystage_id" = "ID")) %>% 
+#   select(plot_id, period, year
+#          , decaystage_id, decaystage
+#          , everything())
+names(deadw_by_decay_plot)
+
+#
+print("deadw_by_decay_plot_species")
+# deadw_by_decay_plot_species <- deadw_by_decay_plot_species %>% 
+#   left_join(qspecies, by = c("species" = "ID")) %>% 
+#   rename(decaystage_id = decaystage) %>% 
+#   left_join(qdecaystage, by = c("decaystage_id" = "ID")) %>% 
+#   select(plot_id, period, year
+#          , species_id = species, name_nl, name_sc
+#          , decaystage_id, decaystage
+#          , everything())
+names(deadw_by_decay_plot_species)
+
+```
+
+```{r carbon}
+print("carbon_by_plot")
+
+# carbon_by_plot <- carbon_by_plot %>% 
+#   select(plot_id, period, year
+#          , StemVolume_m3_ha_alive, VolumeStump_m3_ha_alive
+#          , TotalVolumeAGB_m3_ha_alive
+#          , BiomassAboveGr_t_ha_alive, BiomassBelowGr_t_ha_alive
+#          , Biomass_t_ha_alive 
+#          , CarbonAboveGr_t_ha_alive, CarbonBelowGr_t_ha_alive
+#          , Carbon_t_ha_alive
+#          , StemVolume_m3_ha_dead, VolumeStump_m3_ha_dead
+#          , TotalVolumeAGB_m3_ha_dead
+#          , BiomassAboveGr_t_ha_dead, BiomassBelowGr_t_ha_dead
+#          , BiomassStanding_t_ha_dead
+#          , CarbonAboveGr_t_ha_dead, CarbonBelowGr_t_ha_dead
+#          , CarbonStanding_t_ha_dead
+#          , VolumeLogs_m3_ha, VolumeLogs_above30cm_m3_ha
+#          , VolumeLIS_m3_ha, VolumeLIS_10_30cm_m3_ha
+#          , BiomassLying_t_ha_dead, 
+#          , CarbonLying_t_ha_dead, 
+#          , VolumeAGB_m3_ha_dead, BiomassAGB_t_ha_dead
+#          , CarbonAGB_t_ha_dead
+#   )
+
+names(carbon_by_plot)
+
+# bij carbon zijn de open ruimtes weggelaten
+nrow(dendro_by_plot) == nrow(carbon_by_plot) + 13
+
+```
+
+```{r reg1}
+print("reg_by_plot")
+names(reg_by_plot)
+# 1677 vs 1680 dendro - OK (zie hierna)
+
+
+```
+
+```{r check_reg, eval = FALSE}
+plotinfo %>% filter(survey_trees == TRUE & data_processed == TRUE) %>% 
+  anti_join(reg_by_plot)
+# 3 records met survey_reg == FALSE
+
+dplyr::n_distinct(reg_by_plot$plot_id) == dplyr::n_distinct(dendro_by_plot$plot_id)
+# 813
+reg_by_plot %>% group_by(period) %>% summarize(n_plots = n_distinct(plot_id))
+reg_by_plot %>% group_by() %>% summarize(n_plots = n_distinct(plot_id))
+# t <- reg_by_plot %>% group_by(period, plot_id) %>% summarize(n_subplots = n_distinct(subplot_id))
+# max(t$n_subplots) == 1
+
+```
+
+
+```{r reg2}
+# 
+print("reg_by_plot_height")
+# reg_by_plot_height <- reg_by_plot_height %>% 
+#   left_join(qheight_class_regeneration %>% select(1:2), by = c("height_class" = "ID")) %>% 
+#   select(plot_id, period, year
+#          , height_class_id = height_class, height_class= Value1
+#          , everything())
+names(reg_by_plot_height)
+
+# 
+print("reg_by_plot_height_species")
+# reg_by_plot_height_species <- reg_by_plot_height_species %>% 
+#   left_join(qspecies, by = c("species" = "ID")) %>% 
+#   left_join(qheight_class_regeneration %>% select(1:2), by = c("height_class" = "ID")) %>% 
+#   select(plot_id, period, year 
+#          , height_class_id = height_class, height_class= Value1
+#          , species_id = species, name_nl, name_sc
+#          , everything())
+names(reg_by_plot_height_species)
+
+```
+
+```{r veg}
+# 
+print("veg_by_plot")
+names(veg_by_plot)
+# 1651 vs 1680 dendro - OK (zie hierna)
+```
+
+
+```{r check_veg, eval = FALSE}
+plotinfo %>% filter(survey_trees == TRUE & data_processed == TRUE) %>% 
+  anti_join(veg_by_plot)
+# 28 records met survey_veg == FALSE
+
+dplyr::n_distinct(veg_by_plot$plot_id) == dplyr::n_distinct(dendro_by_plot$plot_id)
+# 813
+veg_by_plot %>% group_by(period) %>% summarize(n_plots = n_distinct(plot_id))
+veg_by_plot %>% group_by() %>% summarize(n_plots = n_distinct(plot_id))
+# t <- veg_by_plot %>% group_by(period, plot_id) %>% summarize(n_subplots = n_distinct(subplot_id))
+# max(t$n_subplots) == 1
+
+```
+
+
+```{r read_herbs}
+# 
+print("herblayer_by_plot")
+# herblayer_by_plot <- herblayer_by_plot %>% 
+#   left_join(qherb_species240810, by = c("species" = "ID")) %>% 
+#   left_join(qbrows_index, by = c("browse_index_id" = "ID")) %>% 
+#   select(plot_id, period, year, date_vegetation,
+#          species_id = species, name_nl, name_sc, 
+#          coverage_class_average_perc,
+#          browse_index_id, browse_index = Value2)
+names(herblayer_by_plot)
+```
+
+
+
+```{r check_herbs, eval = FALSE}
+plotinfo %>% filter(plottype == "CP" & survey_trees == TRUE & data_processed == TRUE) %>% 
+  anti_join(herblayer_by_plot)
+# 28 records met survey_veg == FALSE
+
+dplyr::n_distinct(herblayer_by_plot$plot_id) == dplyr::n_distinct(dendro_by_plot$plot_id)
+# 813
+herblayer_by_plot %>% group_by(period) %>% summarize(n_plots = n_distinct(plot_id))
+herblayer_by_plot %>% group_by() %>% summarize(n_plots = n_distinct(plot_id))
+# t <- herblayer_by_plot %>% group_by(period, plot_id) %>% summarize(n_subplots = n_distinct(subplot_id))
+# max(t$n_subplots) == 1
+
+```
+
+
+
+# Overview
+
+Hoeveel plots?
+Hoeveel bosreservaten?
+Hoeveel twee en hoeveel drie cycli?
+
+```{r}
+dendro_by_plot %>% left_join(plotinfo) %>% 
+  group_by(forest_reserve) %>% 
+  summarize(n_plots = n_distinct(plot_id), 
+            n_surveys = n_distinct(period)) %>% 
+  DT :: datatable(options = list(dom = 'tip'),rownames = FALSE) 
+#18
+
+n_plots <- dendro_by_plot %>% 
+  group_by(plot_id) %>% 
+  summarize(n_plots = n_distinct(plot_id), 
+            n_surveys = n_distinct(period))
+#999
+
+```
+
+In totaal zijn er `r n_distinct(plotinfo$plot_id)` unieke plots, verspreid over 
+`r n_distinct(plotinfo$forest_reserve)` bosreservaten.
+
+
+# Export 
+
+Dendro (dendro, deadw, reg en carbon) en vegetatie in afzonderlijke folder (ook afz. publiceren op zenodo)
+
+Als list samenvoegen en dan afronden zoals gewenst 
+(nu op 2 cijfers na de komma voor dendro en 0 voor reg)
+
+
+```{r list_round}
+list_dendro <- list(
+      dendro_by_plot = dendro_by_plot,
+      dendro_by_plot_species = dendro_by_plot_species,
+      dendro_by_diam_plot = dendro_by_diam_plot,
+      dendro_by_diam_plot_species = dendro_by_diam_plot_species,
+      deadw_by_decay_plot = deadw_by_decay_plot,
+      deadw_by_decay_plot_species = deadw_by_decay_plot_species,
+      carbon_by_plot = carbon_by_plot
+      )
+
+list_reg <- list(
+      reg_by_plot = reg_by_plot, 
+      reg_by_plot_height = reg_by_plot_height, 
+      reg_by_plot_height_species = reg_by_plot_height_species
+      )
+
+list_veg <- list(veg_by_plot = veg_by_plot,
+              herblayer_by_plot = herblayer_by_plot
+              ) # geen afronding nodig
+
+# ----
+list_dendro <- list_dendro %>% 
+  lapply(., function(x) mutate_at(x, vars(matches("_ha|_tree")), round, 2))
+
+list_reg <- list_reg %>% 
+  lapply(., function(x) mutate_at(x, vars(matches("_ha|_tree")), round, 0))
+
+#uitgebreider kan ook
+    # list_dendro_ <- list_dendro %>% 
+    #   lapply(., function(x) {
+    #     data.frame(x) %>% 
+    #       mutate_at(vars(matches("_ha|_tree")), round, 2)})
+
+```
+
+Rechtstreeks naar gdrive
+
+```{r export_gdrive, eval = FALSE}
+path_to_datarequest_gdrive
+
+# naar dendro-folder
+save_results_csv(list_dendro, paste0(path_to_datarequest_gdrive, "CP_dendro/"))
+
+# reg
+save_results_csv(list_reg, paste0(path_to_datarequest_gdrive, "CP_dendro/"))
+
+# naar veg-folder
+save_results_csv(list_veg, paste0(path_to_datarequest_gdrive, "CP_veg/"))
+
+```
+
+
+Plotinfo: bevat enkel processed data
+
+```{r export_plotinfo, results = 'hide', eval = FALSE}
+# plotinfo
+names(plotinfo)
+
+write.csv2(plotinfo, paste0(path_to_datarequest_gdrive, "CP_dendro/plotinfo.csv")) 
+
+write.csv2(plotinfo, paste0(path_to_datarequest_gdrive, "CP_veg/plotinfo.csv")) 
+```
+
+
+# Copy html to teamdrive
+
+Na knitting - manueel
+
+```{r eval = FALSE}
+# Specify the path of the file you want to copy
+source_file <- here::here(paste0("Scripts/AanvraagGegevens/ZENODO_open_data/zenodo_CP_plot_level_results_vs2_2026.html"))
+
+# Specify the destination directory where you want to copy the file
+destination_dir <- path_to_datarequest_gdrive
+
+# Copy the file to the destination directory
+file.copy(from = source_file, to = paste0(destination_dir, "CP_dendro/"), overwrite = TRUE)
+# ? file.copy
+file.copy(from = source_file, to = paste0(destination_dir, "CP_veg/"), overwrite = TRUE)
+```
+
+# Metadata  
+
+De metadata worden opgeslagen in de folder "`r path_to_datarequest_gdrive`".
+
+Ze zijn een kopie van de metadata in de folder "`r path_to_metadata`", en werden 
+manueel aangepast (o.a. de niet-relevante info mbt kernvlaktes werd verwijderd).
+
+Bij wijzigingen aan de metadata ten opzichte van de vorige update, moet dit opnieuw gebeuren.
+
+De metadata bestaat uit volgende files:   
+
+- _metadata_plotinfo.xlsx     
+<!-- volgende keer wellicht sprake van dbh_min_a3_alive ipv dbh_min_a3, 
+nog te implementeren in, forrescalc (17/2/2026)-->
+- _metadata_plotlevel_results_dendro.xlsx     
+- _metadata_plotlevel_results_veg.xlsx        
+
+<!-- update gebeurd op 17/2/2026 voor plotinfo, veg en dendro -->
