@@ -417,7 +417,56 @@ query_database <-
     return(data_dendro)
   }
 
-
+ 
+ #' @title connect to fieldmap database
+ #'
+ #' @description
+ #' This helper function returns a connection to the given database (path).
+ #' Reason for this function is to avoid repetition of this information.
+ #'
+ #' @inheritParams load_data_dendrometry
+ #'
+ #' @return DBI connection that can be used to connect to the database
+ #'
+ #' @noRd
+ #'
+ #' @importFrom DBI dbConnect
+ #' @importFrom odbc odbc
+ #' @importFrom RSQLite SQLite
+ #'
+connect_to_database <-
+   function(database) {
+     
+     if (grepl(".accdb$", database) || grepl(".mdb$", database)) {
+       con <-
+         DBI::dbConnect(
+           odbc::odbc(),
+           .connection_string =
+             paste0("Driver={Microsoft Access Driver (*.mdb, *.accdb)};DBQ=",
+                    database)
+         )
+     } else if (grepl(".sqlite$", database)) {
+       con <- DBI::dbConnect(SQLite(), database)
+     } else if (grepl(".fdb$", database) || grepl(".gdb", database)) {
+       con <-
+         DBI::dbConnect(
+           odbc::odbc(),
+           .connection_string =
+             paste0(
+               "Driver={Firebird/InterBase(r) driver};UID=SYSDBA;PWD=masterkey; DBNAME=", #nolint: line_length_linter
+               database
+             )
+         )
+     } else {
+       stop(
+         "This database type is not supported, please use .mdb, .accdb, .fdb, .gdb or .sqlite" #nolint: line_length_linter
+       )
+     }
+     
+     return(con)
+   }
+ 
+ 
 #' retrieve dendrometry data from fieldmap database - AANPASSING
 #' --> ook mogelijk zonder plotdetails (left_join ipv inner_join)
 #' --> geen berekening van lokale X, Y: X, Y zoals in layer trees genoteerd
