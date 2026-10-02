@@ -1,0 +1,146 @@
+---
+title: "Hoogtemodellen Zoniënwoud"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: yes
+      smooth_scroll: yes
+---
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,  # FALSE: dan kan ik knitten zonder dat er iets gebeurt
+  # maar dan kan ik ook niet bv. n_plots weergeven in de html mbv 'r n_plots'
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+
+# libraries & invoergegevens & functions
+source(here::here("scripts/Setup.R"))
+
+```
+
+
+```{r Setup2}
+path_to_datarequest <- paste0(path_to_datarequests_gdrive, "INBO_allerlei/")
+path_to_html <- path_to_datarequest
+
+```
+
+```{r}
+path_to_datarequests_gdrive # algemeen
+path_to_datarequest # specifiek deze datavraag
+
+```
+ 
+```{r eval = FALSE}
+height_model <- load_height_models()
+save(height_model, file = "height_model.RData")
+```
+
+```{r}
+load("height_model.RData")
+
+# bij problemen met forresheights github, eigen functie gebruiken
+# path_to_height_models <- "C:/03_BR/1_DataVerwerkingBR/Data/Hoogtemodellen/"
+# height_model <- load_height_models_local(path_to_height_models)
+```
+
+# Zoniën
+
+```{r}
+datapackage <- read_forresdat(git_ref_type = "branch"
+                              , git_reference = "develop")
+                              
+qspecies <- read_forresdat_table("qspecies", join_plotinfo = FALSE
+                                 , git_ref_type = "branch"
+                              , git_reference = "develop")                             
+```
+
+```{r results = 'hide'}
+unique(height_model$forest_reserve)
+```
+
+
+```{r}
+height_model_zonien <- height_model %>% 
+  left_join(qspecies %>% select(ID, name_nl = Value1)
+            , by = c("species" = "ID")) %>% 
+  filter(str_detect(forest_reserve, "Zoni"))
+
+unique(height_model_zonien$forest_reserve)
+```
+```{r}
+height_model_zonien %>% 
+  group_by(forest_reserve, plottype, species, name_nl, model, P1, P2) %>% 
+  summarize(n_periods = n_distinct(period)) %>% 
+  ungroup()  %>% 
+  arrange(species) %>% 
+  DT::datatable(filter = "top", selection = "none", rownames = FALSE, 
+                options = list(pageLength = 10, dom = 'tip'))
+
+  
+```
+
+```{r}
+haagbeuk <- height_model_zonien %>% 
+  group_by(forest_reserve, plottype, species, name_nl, model, P1, P2) %>% 
+  summarize(n_periods = n_distinct(period)) %>% 
+  ungroup() %>% 
+  filter(name_nl == "Haagbeuk")
+
+beuk <- height_model_zonien %>% 
+  group_by(forest_reserve, plottype, species, name_nl, P1, P2, ) %>% 
+  summarize(n_periods = n_distinct(period)) %>% 
+  ungroup() %>% 
+  filter(name_nl == "Beuk")
+```
+
+```{r}
+# zelfde curves voor alle periodes op dit moment
+dhcurves_zonien <- height_model_zonien %>% 
+  select(-period) %>% 
+  unique()
+  
+```
+
+
+# Wegschrijven output
+
+Data worden weggeschreven naar `r path_to_datarequest`.
+
+```{r export, eval = FALSE}
+write.xlsx(dhcurves_zonien, file = file.path(path_to_datarequest, "dhcurves_zonien.xlsx"))
+```
+
+
+# Copy html to teamdrive
+
+Na knitting - manueel
+
+```{r eval = FALSE}
+# Specify the path of the file you want to copy
+source_file <- here::here(paste0("Scripts/AanvraagGegevens/INBO_allerlei/dhcurves_zonien.html"))
+
+# Specify the destination directory where you want to copy the file
+destination_dir <- path_to_html
+
+# Copy the file to the destination directory
+file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
+# ? file.copy
+```
