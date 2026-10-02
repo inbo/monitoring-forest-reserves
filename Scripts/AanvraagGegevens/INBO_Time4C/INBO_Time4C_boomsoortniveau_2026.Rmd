@@ -41,14 +41,14 @@ source(here::here("scripts/Setup.R"))
 
 
 ```{r Setup2}
-folder <- "INBO_Time4C/"
+folder <- "INBO_Time4C/boomsoortniveau/"
 scriptnaam <- "INBO_Time4C_boomsoortniveau_2026"
 
 path_to_datarequest_cschijf <- paste0(path_to_datarequests, folder)
 path_to_datarequest_teamdrive <- paste0(path_to_datarequests_gdrive, folder)
 path_to_html_teamdrive <- path_to_datarequest_teamdrive
 
-path_to_html_cschijf <- here::here(paste0("Scripts/AanvraagGegevens/", folder, scriptnaam, ".html"))
+path_to_html_cschijf <- here::here(paste0("Scripts/AanvraagGegevens/INBO_Time4C/", scriptnaam, ".html"))
 
 ```
 
@@ -84,15 +84,19 @@ Als dat te veel tijd vraagt en voor BR/VBI niet berekend wordt, mag je zeker ook
 
 # Data inladen
 
-
 ```{r load_plots}
 plots <- read_excel(paste0(path_to_datarequest_cschijf, "Time4C_oudebossen.xlsx"))
 
 plots_BR <- plots |> 
   filter(source == "BR")
 
+plots_VBI<- plots |> 
+  filter(source == "VBI")
+
 ```
 
+
+## BR
 
 ```{r load_plotinfo_BR}
 # uit forresdat
@@ -110,7 +114,37 @@ names(plotinfo)
 
 ```
 
-Volopname liggend dood hout in BR?
+```{r load_carbon_by_species}
+# data <- read.csv2(paste0(path_to_plotlevel_csv, "carbon_by_plot_species.csv"))
+# ook op forresdat
+
+carbon_by_plot_species <- read_forresdat_table(
+  tablename = "carbon_by_plot_species"
+  , git_ref_type = "branch", git_reference = "develop"
+  , join_plotinfo = TRUE
+  , plottype = "CP")  # NIET ENKEL CP's!
+
+```
+
+## VBI
+
+```{r}
+dbAnalyseData_path <- "C:/01_VBI/0bosinventaris/Output/VBI_Analysedatabank_v2026-09-01.accdb"
+
+con <- odbcConnectAccess2007(dbAnalyseData_path)
+tbl0Plot_BMS <- sqlFetch(con,"tbl0Plot_BMS")
+odbcClose(con)
+
+```
+
+
+
+# Al dan niet dood hout?
+
+LIS op plotniveau heeft geen zin => enkel indien er een volopname was in de laatste 
+meeetronde heeft zin om dit aan te leveren.
+
+=> volopname liggend dood hout in BR?
 
 ```{r check_LIS_FAS}
 FAS_BR <- plots_BR |> 
@@ -126,20 +160,9 @@ FAS_BR |> filter(diam_min_a4_logs == 100) |> nrow() == 2
 # maar 2 plots met een volopname 
 ```
 
-Er zijn maar 2 plots met een volopname vanaf 10 cm => liggend dood hout kunnen we niet berekenen.
+Er zijn maar 2 plots met een volopname vanaf 10 cm => liggend dood hout kunnen we 
+niet berekenen op plotniveau.
 
-
-```{r load_carbon_by_species}
-# data <- read.csv2(paste0(path_to_plotlevel_csv, "carbon_by_plot_species.csv"))
-# ook op forresdat
-
-carbon_by_plot_species <- read_forresdat_table(
-  tablename = "carbon_by_plot_species"
-  , git_ref_type = "branch", git_reference = "develop"
-  , join_plotinfo = TRUE
-  , plottype = "CP")  # NIET ENKEL CP's!
-
-```
 
 
 # Data selecteren
@@ -155,26 +178,52 @@ plotinfo_selectie <- plotinfo %>%
 ```
 
 
-```{r}
-result <- carbon_by_plot_species %>% 
+```{r results='hide'}
+result_BR <- carbon_by_plot_species %>% 
   inner_join(plotinfo_selectie, by = c("plot_id", "period" = "max_period"))
 
-range(result$year)
+range(result_BR$year)
 # [1] 2016 2024
-
-names(result)
-
 ```
 
+```{r results='hide'}
+result_VBI <- tbl0Plot_BMS %>% 
+  filter(IDPlots %in% plots_VBI$plot_id)
+
+max_period = max(result_VBI$Periode)
+
+result_VBI <- result_VBI %>% 
+  filter(Periode == max_period)
+
+range(result_VBI$Year)
+# [1] 2020  2020
+```
 
 
 # Output
 
-```{r export}
-path_to_datarequest
+```{r variables}
+# BR
+result_BR_ <- result_BR %>% 
+  select(1:38, -contains("40cm"))
 
-write.csv2(result, paste0(path_to_datarequest_cschijf, "result.csv")) 
-write.csv2(result, paste0(path_to_datarequest_cschijf, "result.csv")) 
+names(result_BR_)
+unique(result_BR_$plot_id)
+
+# VBI
+result_VBI_ <- result_VBI %>% 
+  select(1:32)
+
+names(result_VBI_)
+unique(result_VBI_$IDPlots)
+```
+
+
+```{r export}
+path_to_datarequest_cschijf
+
+write.csv2(result_BR_, paste0(path_to_datarequest_cschijf, "carbon_by_plot_species_BR.csv")) 
+write.csv2(result_VBI_, paste0(path_to_datarequest_cschijf, "carbon_by_plot_species_VBI.csv")) 
 
 
 ```
@@ -184,9 +233,8 @@ Ook rechtstreeks naar teamdrive: `r path_to_datarequest_teamdrive`.
 ```{r }
 path_to_datarequest_teamdrive
 
-write.csv2(result, paste0(path_to_datarequest_teamdrive, "result.csv")) 
-write.csv2(result, paste0(path_to_datarequest_teamdrive, "result.csv")) 
-
+write.csv2(result_BR_, paste0(path_to_datarequest_teamdrive, "carbon_by_plot_species_BR.csv")) 
+write.csv2(result_VBI_, paste0(path_to_datarequest_teamdrive, "carbon_by_plot_species_VBI.csv")) 
 
 ```
 
