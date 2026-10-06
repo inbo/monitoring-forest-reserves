@@ -828,6 +828,7 @@ unique(data_LIS$AliveDead) == 12  # enkel dood
 unique(data_LIS$survey_lis) == TRUE
 
 ```
+
 ```{r}
 # aantal hits per soort
 
@@ -838,7 +839,6 @@ hits_per_soort <- data_LIS %>%
   ungroup()
 
 ```
-
 
 ```{r results='hide'}
 data_LIS %>% filter(is.na(diam_mm)) %>% nrow()
@@ -1034,13 +1034,6 @@ sum(check2$mean_lis) # 46.95212
 mean(LIS_by_plot$vol_lis_m3_ha)  #  46.95212 - JA
 # 
 ```
-
-
-
-
-
-
-
 
 Twee opties: 
 
