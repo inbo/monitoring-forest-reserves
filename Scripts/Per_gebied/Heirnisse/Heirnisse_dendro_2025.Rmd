@@ -862,20 +862,24 @@ data_LIS <- data_LIS %>%
 
 ```{r TOTALEN_ALLE_PLOTS}
 # zonder KV
-li_totaal <- 68*45
+n_plots <- plotinfo %>% filter(forest_reserve == "Heirnisse" & plottype == "CP") %>% select(plot_id) %>% 
+  n_distinct()
+# 68
+
+li_totaal <- n_plots*45
 # niet groeperen per plot, maar per periode, en dan geen mean_LI per plot, maar som
 LIS_totaal <- data_LIS %>%
   filter(plot_id != "91000") %>% 
   mutate(diam_m = diam_mm/1000
          # , Diameter_cm = diam_mm/10     # cfrVBI
          ) %>% 
-  dplyr::group_by(period) %>%
-  dplyr::summarise(
+  dplyr::group_by(forest_reserve, period) %>%
+  dplyr::summarize(
     n_plots = n_distinct(plot_id), 
     volume_m3_m2=pi^2/8/li_totaal*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
     # , v3_VolumeLogs_ha=pi^2/8/mean(Li)*sum((Diameter_cm^2)/cos(angle*pi/180),na.rm=T)   # cfrVBI, zelfde resultaat
     ) %>% 
-  ungroup() %>% 
+  dplyr::ungroup() %>% 
   mutate(vol_lis_m3_ha = volume_m3_m2 * 10000) %>% 
   select(-volume_m3_m2)
 
@@ -895,8 +899,7 @@ LIS_species_totaal <- data_LIS %>%
 # bij mogelijkse verwarring tss VBI en BR: VBI rekent obv diam_cm en komt m3/ha uit, 
 # BR gebruikt diam_m en komt m3/m2 uit
 
-sum(LIS_species_totaal$vol_lis_m3_ha) 
-
+sum(LIS_totaal$vol_lis_m3_ha) ; sum(LIS_species_totaal$vol_lis_m3_ha) 
 ```
 
 ```{r}
@@ -918,65 +921,13 @@ n_distinct(plotinfo$plot_id) # 69 of 68 CP's
 range(plotinfo$plot_id)
 
 
-range()t <- data_LIS_ %>% filter(between(plot_id, 700, 800))
+t <- data_LIS_ %>% filter(between(plot_id, 700, 800))
 n_distinct(t$plot_id) # 57: 11 plots hebben geen data
 n_distinct(data_LIS_$plot_id)
 t <- t %>% 
   left_join(plotinfo %>% select(plot_id, forest_reserve, period, survey_lis))
 
-
-
-
-
-
 ```
-
-
-
-
-```{r}
-# berekening en op plotniveau zijn OK, ook per species
-LIS_by_plot %>% filter(plot_id == 702)  # 29.11
-
-LIS_by_species %>% filter(plot_id == 702) 
-sum(LIS_by_species[LIS_by_species$plot_id == 702, "vol_lis_m3_ha"])   # 29.11
-
-sum(LIS_by_species$vol_lis_m3_ha) # 2723.223
-sum(LIS_by_plot$vol_lis_m3_ha) # 2723.223
-round(sum(LIS_by_species$vol_lis_m3_ha), 4) == round(sum(LIS_by_plot$vol_lis_m3_ha), 4) # +/- zelfde
-
-# wat als we alle plots samentellen en gemiddelde berekenen - 58 plots
-sum(LIS_by_species$vol_lis_m3_ha)/58 
-sum(LIS_by_plot$vol_lis_m3_ha)/58
-
-# wat als we per soort gemiddelde berekenen en dan optellen
-unique(LIS_by_species$species)
-# voor alle soorten een '0' toevoegen, waar soort niet voorkomt
-LIS_by_species_0 <- add_zeros(dataset = LIS_by_species %>% mutate(forest_reserve = "Heirnisse"),
-                             comb_vars = c("plot_id", "period", "species"),
-                             grouping_vars = c("forest_reserve")
-                             )
-check <- LIS_by_species_0 %>% 
-  dplyr::group_by(species) %>% 
-  dplyr::summarize(n = n()) %>% 
-  dplyr::ungroup()
-range(check$n)
-
-check2 <- LIS_by_species_0 %>% 
-  dplyr::group_by(species) %>% 
-  dplyr::summarize(n = n(),
-                   mean_lis = mean(vol_lis_m3_ha)) %>% 
-  dplyr::ungroup()
-sum(check2$mean_lis) # 46.95212
-
-# is dat hetzelfde als het gemiddelde over alle plots?
-mean(LIS_by_plot$vol_lis_m3_ha)  #  46.95212 - JA
-
-
-# 
-```
-
-
 
 
 ```{r calc_LIS, results='hide'}
@@ -1043,11 +994,52 @@ LIS_by_plot <- data_LIS %>%
 
 ```
 
+
 ```{r}
-LIS_by_plot %>% filter(plot_id == 702)
+# berekeningen op plotniveau zijn OK, ook per species
+LIS_by_plot %>% filter(plot_id == 702)  # 29.11
 
+LIS_by_species %>% filter(plot_id == 702) 
+sum(LIS_by_species[LIS_by_species$plot_id == 702, "vol_lis_m3_ha"])   # 29.11
 
+sum(LIS_by_species$vol_lis_m3_ha) # 2723.223
+sum(LIS_by_plot$vol_lis_m3_ha) # 2723.223
+round(sum(LIS_by_species$vol_lis_m3_ha), 4) == round(sum(LIS_by_plot$vol_lis_m3_ha), 4) # +/- zelfde
+
+# wat als we alle plots samentellen en gemiddelde berekenen - 58 plots
+sum(LIS_by_species$vol_lis_m3_ha)/58 
+sum(LIS_by_plot$vol_lis_m3_ha)/58
+
+# wat als we per soort gemiddelde berekenen en dan optellen
+unique(LIS_by_species$species)
+# voor alle soorten een '0' toevoegen, waar soort niet voorkomt
+LIS_by_species_0 <- add_zeros(dataset = LIS_by_species %>% mutate(forest_reserve = "Heirnisse"),
+                             comb_vars = c("plot_id", "period", "species"),
+                             grouping_vars = c("forest_reserve")
+                             )
+check <- LIS_by_species_0 %>% 
+  dplyr::group_by(species) %>% 
+  dplyr::summarize(n = n()) %>% 
+  dplyr::ungroup()
+range(check$n)
+
+check2 <- LIS_by_species_0 %>% 
+  dplyr::group_by(species) %>% 
+  dplyr::summarize(n = n(),
+                   mean_lis = mean(vol_lis_m3_ha)) %>% 
+  dplyr::ungroup()
+sum(check2$mean_lis) # 46.95212
+
+# is dat hetzelfde als het gemiddelde over alle plots?
+mean(LIS_by_plot$vol_lis_m3_ha)  #  46.95212 - JA
+# 
 ```
+
+
+
+
+
+
 
 
 Twee opties: 
