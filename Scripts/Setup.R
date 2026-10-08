@@ -62,7 +62,7 @@ library(readr)
 library(tidyverse)
 # library(inbodb)
 library(glue)
-# library(forestmangr)
+library(forestmangr)
 library(gridExtra)
 # library(sf)
 library(xlsx)
@@ -81,12 +81,13 @@ library(usethis)
 # !! toch best inladen, want soms nodig voor eigen code (buiten de functies van forrescalc)
 library(forrescalc)
 library(frictionless)
-
-
+library(writexl)
+library(scales)
 
 ### Extra functies tov package forrescalc ----
 source(here::here("Scripts/functions.r"))
 source(here::here("Scripts/functions_volume.r"))
+source(here::here("Scripts/functions_dhcurves.r"))
 source(here::here("Scripts/functions_overall_statistics.r"))
 
 ### Load packages (na herinstallatie pc) -----
