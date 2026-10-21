@@ -108,10 +108,16 @@ print(paste0("path_to_shp is ", path_to_shp))
 
 # SVZ
 
-- 25/9/2024: eerste keer op basis van een kopie van de volledige moederdatabank
-(te vinden als zip-file op citrix onder "...\Projects\PRJ_BosEco\PRJ_ALG_FIELDMAP\FM_MDB BOSRESERVATEN")
+- okt 2026: nieuwe projectstructuur hakhout + correctie LIS
+- mrt 2026: idem, met toevoeging van Terrijst en Coolhem
+- jan 2026: volledige databank verwerkt mét implementatie LIS
 
-- 7/10/2024: qTotalCover toegevoegd aan forresdat
+- 15/12/2025: meest recente bosreservaten apart verwerkt mét implementatie LIS
+- 17/11/2025: foutje in forrescalc => werken met branch "bugfix_AL2025" (nog niet door 
+Els gemerged in haar branch "bugfix")
+- 4/6/2025: foutje plot 414 tresholds
+- 10/3/2025: update van de reeds verwerkte data, vooral vanuit vraag naar trees wide beuk
+(trees_wide_beuk: tabel met ook Wijnendale, Everzwijnbad en Jansheideberg)
 
 - 18/12/2024: er werd beslist (nalv Euforia) om **Zoniën** op te splitsen in **4 sites**
 (directere link met wanneer ingesteld als bosreservaat).
@@ -123,26 +129,19 @@ en Zwaenepoel werden vervangen door
     liggen (voorheen "Kersselaerspleyn")     
     - Zoniën HARRAS_1995: bevat KV en CP (voorheen "Harras" voor KV en "Zwaenepoel" voor CP's)    
     - Zoniën UITBR_2010: bevat enkel CP's (voorheen "Zwaenepoel", maar zonder deze die nu in "HARRAS_1995" liggen)
+    
+- 7/10/2024: qTotalCover toegevoegd aan forresdat
+- 25/9/2024: eerste keer op basis van een kopie van de volledige moederdatabank
+(te vinden als zip-file op citrix onder "...\Projects\PRJ_BosEco\PRJ_ALG_FIELDMAP\FM_MDB BOSRESERVATEN")
 
-- 10/3/2025: update van de reeds verwerkte data, vooral vanuit vraag naar trees wide beuk
-(trees_wide_beuk: tabel met ook Wijnendale, Everzwijnbad en Jansheideberg)
-
-- 4/6/2025: foutje plot 414 tresholds
-
-- 17/11/2025: foutje in forrescalc => werken met branch "bugfix_AL2025" (nog niet door 
-Els gemerged in haar branch "bugfix")
-
-- 15/12/2025: meest recente bosreservaten apart verwerkt mét implementatie LIS
-
-- jan 2026: volledige databank verwerkt mét implementatie LIS
-- mrt 2026: idem, met toevoeging van Terrijst en Coolhem
 
 # Update lookuplijsten - INDIEN GEWIJZIGD
 
 Enkel indien de q-tabellen gewijzigd zijn.
 Enkel de gewijzigde tabellen vermelden.
 
-Forresdat opnieuw opgevuld op 15/12/2024
+21/10/2026: extra: `alive_dead_shoots` 
+15/12/2024: Forresdat opnieuw opgevuld
 
 ## Rechtstreeks van fieldmap-db naar forresdat - ok
 
@@ -158,7 +157,7 @@ Sinds 2024 als csv en metadata in één grote json-file:
 
 from_access_to_forresdat(
   database = path_to_fieldmap_db,
-  tables = c("qAliveDead", "qSpecies", "qHerbSpecies240810", 
+  tables = c("qAliveDead", "qAliveDeadShoots", "qSpecies", "qHerbSpecies240810", 
              "qHeightClass_regeneration", "qnumber_regeneration_classes", 
              "qdecaystage",
              "qcommonremark", 
@@ -209,7 +208,8 @@ Deze kunnen ook data binnenhalen van de develop branch.
 #                          , pattern = "\\.csv$") %>% 
 #   gsub("\\.csv$", "", .)
 # file_names
-from_forresdat_to_access(tables = c("qalive_dead", "qbranch_lenght_reduction",  
+from_forresdat_to_access(tables = c("qalive_dead", "qalive_dead_shoots"
+                                    ,"qbranch_lenght_reduction",  
                                     "qbrows_index", "qcommonremark", "qcover_herbs" , 
                                     "qcrown_vol_redu", "qdecaystage", 
                                     "qheight_class_regeneration", "qherb_species240810", 
@@ -245,9 +245,11 @@ Daarvoor is een list nodig van de weg te schrijven tabellen.
 # inladen
 con <- odbcConnectAccess2007(path_to_fieldmap_db)
 
+  qPlotType <- sqlFetch(con, "qPlotType", stringsAsFactors = FALSE)
   qIndShootCop <- sqlFetch(con, "qIndShootCop", stringsAsFactors = FALSE)
   # deadw_test <- sqlFetch(con, "Deadwood_3eSET", stringsAsFactors = FALSE)
   qAliveDead <- sqlFetch(con, "qAliveDead", stringsAsFactors = FALSE)
+  qAliveDeadShoots <- sqlFetch(con, "qAliveDeadShoots", stringsAsFactors = FALSE)
   qSpecies <- sqlFetch(con, "qSpecies", stringsAsFactors = FALSE)
   qDecaystage <- sqlFetch(con, "qdecaystage", stringsAsFactors = FALSE)
   qIntactSnag <- sqlFetch(con, "qIntactSnag", stringsAsFactors = FALSE)
@@ -277,22 +279,30 @@ con <- odbcConnectAccess2007(path_to_fieldmap_db)
 odbcClose(con)
 
 # in lijst stoppen
-list_lkp <- list(qIndShootCop = qIndShootCop, qAliveDead = qAliveDead, qSpecies = qSpecies, 
-                 qDecaystage = qDecaystage, qIntactSnag = qIntactSnag, 
-                 qVdagnVfm = qVdagnVfm,
-                 qCrownVolRedu = qCrownVolRedu, qBranchLenghtReduction = qBranchLenghtReduction,
-                 qiufroheight = qiufroheight, qiufroheight_shoots = qiufroheight_shoots,
+list_lkp <- list(qplot_type = qPlotType,
+                 qind_shoot_cop = qIndShootCop, 
+                 qalive_dead = qAliveDead, 
+                 qalive_dead_shoots = qAliveDeadShoots,
+                 qspecies = qSpecies, 
+                 qdecaystage = qDecaystage, 
+                 qintact_snag = qIntactSnag, 
+                 qvdagn_vfm = qVdagnVfm,
+                 qcrown_vol_redu = qCrownVolRedu, 
+                 qbranch_lenght_reduction = qBranchLenghtReduction,
+                 qiufroheight = qiufroheight, 
+                 qiufroheight_shoots = qiufroheight_shoots,
                  qiufrosocialstatus = qiufrosocialstatus, 
                  qiufrosocialstatus_shoots = qiufrosocialstatus_shoots,
                  qiufrovitality = qiufrovitality, 
                  qiufrovitality_shoots = qiufrovitality_shoots,
                  qtotalCover = qtotalCover,
-                 qHerbSpecies240810 = qHerbSpecies240810, 
-                 qCoverHerbs = qCoverHerbs, qBrowsIndex = qBrowsIndex, 
-                 qHeightClass_regeneration = qHeightClass_regeneration, 
+                 qherb_species240810 = qHerbSpecies240810, 
+                 qcover_herbs = qCoverHerbs, 
+                 qbrows_index = qBrowsIndex, 
+                 qheight_class_regeneration = qHeightClass_regeneration, 
                  qnumber_regeneration_classes = qnumber_regeneration_classes,
                  qcommonremark = qcommonremark,
-                 qLIangle = qLIangle
+                 ql_iangle = qLIangle
                  )
 
 # Blijkbaar Value3 als logical geëxporteerd verderop
@@ -362,7 +372,7 @@ names(plotinfo_0)
 ```{r}
 plotinfo <- plotinfo_0
 
-nrow(plotinfo) # 2629 / 2628 / 2721
+nrow(plotinfo) # 2629 / 2628 / 2721 / 2728
 
 plotinfo %>% 
   filter(survey_trees == FALSE & data_processed == TRUE) %>% nrow() == 0
@@ -373,7 +383,7 @@ nrow(t)  # 0
 
 plotinfo_ <- plotinfo %>% 
   filter(survey_trees == TRUE & !is.na(survey_trees))
-nrow(plotinfo_) # 2081
+nrow(plotinfo_) # 2081 / 2177
 
 plotinfo <- plotinfo_
 ```
@@ -384,7 +394,7 @@ table(plotinfo$forest_reserve, plotinfo$data_processed)
 # table(plotinfo$forest_reserve, plotinfo$data_processed)
 # Zoniën UITBR_1995: altijd één plot niet-processed = 1999 CA (Rogister+)
 # wijnendale: 4 plots
-# 10/3/2025: Coolhem en Bos Terrijst: periode 3 zit er al in, maar nog niet verwerkt, klopt
+# 21/10/2026: Pruikemakers en liedekerke: periode 3 zit er al in, maar nog niet verwerkt, klopt
 
 plotinfo %>% filter(data_processed==FALSE)
 ```
@@ -403,7 +413,8 @@ check_survey_trees_summ %>%
 
 Wijnendalebos: 4 plots uit periode 1 die niet verder meegenomen werden in de verwerking - ok
 Kersselaerspleyn: plot 1999: Rgister+: OK, niet mee te nemen
-TR Liedekerke 3de decade (plot 131000: nog geen forest_reesrve ingevuld)
+TR Liedekerke 3de decade (plot 131000: nog geen forest_reserve ingevuld)
+Pruikemakres en Liedekerke 3de decade moet nog verwerkt worden
 
 ```{r}
 plotinfo %>% filter(is.na(forest_reserve)) %>% nrow() == 0
@@ -445,7 +456,7 @@ plotinfo %>% filter(is.na(survey_lis)) %>%
   summarise(n = n()) %>% 
   ungroup()
 
-# gevraagd aan Peter (mail 16/12/2025):
+# gevraagd aan Peter (mail 16/12/2025): OK
 # plotdetails_2eSET: Lineintersect staat op "ja" bij volgende plots:
 #     Kluisbos, CPs
 #     Zoniën KERN_1983
@@ -513,6 +524,7 @@ plotinfo <- plotinfo_
 
 # Vergelijking met oude data
 
+21/10/2026 vergeleken met data op git (25/3/2026)
 25/3/2026 vergeleken met data op git (17/12/2025)
 
 ```{r eval = FALSE, results='hide'}
@@ -566,8 +578,8 @@ save_results_forresdat(
   results = list(plotinfo = plotinfo)
   , repo_path = path_to_git_forresdat
   , metadata_path = paste0(path_to_metadata, "_metadata_plotinfo.xlsx")
-  # , strict = TRUE
   , strict = TRUE
+  # , strict = FALSE
   , push = FALSE
   , branch = "develop"
   )
