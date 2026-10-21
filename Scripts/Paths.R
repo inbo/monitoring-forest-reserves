@@ -29,7 +29,8 @@ path_to_reserves <- Sys.getenv("path_to_reserves") #"C:/03_BR_gebieden/"
 
 path_to_databases <- Sys.getenv("path_to_databases") #"C:/03_BR_db_monitoring/"
 
-path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_23_INBO2026_20260619/")
+path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_23_INBO2026_20261015/")
+# path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_23_INBO2026_20260619/")
 # path_to_fieldmap <- paste0(path_to_databases, "MDB_BR_23_INBO2026_20260505/")
           # mail Peter: aanpassingen:
           #   LET OP, de nieuwe versie bevat 23 in de naam, staat voor FMversie, werken momenteel nog in 22 maar 23 staat klaar voor installatie binnenkort.
@@ -110,7 +111,8 @@ path_to_plotlevel_csv <- paste0(path_to_dataverwerking, "Output/_plot-level-data
 path_to_lulists_csv <- paste0(path_to_dataverwerking, "Output/_qXX_lookuplijsten/") 
 path_to_treelevel_csv <- paste0(path_to_dataverwerking, "Output/_tree-level-data/")
 
-path_to_analysis_set_db <- paste0(path_to_dataverwerking, "Output/BR_analysedb_20260326.accdb") # accessdb
+path_to_analysis_set_db <- paste0(path_to_dataverwerking, "Output/BR_analysedb_20261021.accdb") 
+# path_to_analysis_set_db <- paste0(path_to_dataverwerking, "Output/BR_analysedb_20260326.accdb") # accessdb
 # path_to_analysis_set_db <- paste0(path_to_dataverwerking, "Output/BR_analysedb_20251215.accdb") # accessdb
 # path_to_analysis_set_db <- paste0(path_to_dataverwerking, "Output/BR_analysedb_20250310.accdb") # accessdb
 # path_to_analysis_set_db <- paste0(path_to_dataverwerking, "Output/BR_analysedb_20240924.accdb") # accessdb
