@@ -86,7 +86,6 @@ path_to_meetgegevens
 
 # Load plotinfo
 
-
 Plotinfo inladen: `plottype`, naam `forest_reserve` en info over survey's.
 (plotinfo op gdrive en forresdat: enkel processed plots!)
 
@@ -140,13 +139,96 @@ data_dendro %>% filter(plot_id == 11000 & period == 1 & tree_measure_id == 10)
 
 ```{r load_dendro2, results="hide"}
 data_shoots <- load_data_shoots(database = path_to_fieldmap_db, extra_variables = TRUE)
+```
 
+
+> Tijdelijk in R corrigeren voor foute levende shoots in 3eSET
+shoot_measure_id > 5000 moet altijd alive_dead 12 zijn
+Eerst hier corrigeren, als dan OK resultaat, in moederdb aanpassen mbv bijwerkquery
+
+```{r TMP_ERROR_OMVORMING_dode_shoots}
+t <- data_shoots %>% 
+  filter(shoot_measure_id > 5000)
+table(t$alive_dead_shoot, t$period)
+  #       1    2    3
+  # 11    0    0  771
+  # 12 1619 2767  956
+# enkel periode 3
+
+t <- data_shoots %>% 
+  filter(shoot_measure_id > 5000 & alive_dead_shoots == 11)
+nrow(t)
+
+# CORRECTIE
+data_shoots_ <- data_shoots %>% 
+  mutate(
+    alive_dead_shoots = ifelse(
+      shoot_measure_id > 5000 & alive_dead_shoots == 11
+      , 12, alive_dead_shoots))
+
+t <- data_shoots_ %>% 
+  filter(shoot_measure_id > 5000)
+table(t$alive_dead_shoot, t$period)
+# ok
+
+data_shoots <- data_shoots_
+```
+
+
+```{r}
 data_stems  <- compose_stem_data(data_dendro, data_shoots, extra_variables = TRUE)
-# data_stems %>% filter(plot_id == 11000 & period == 1 & tree_measure_id == 10)
+```
 
+> 21/10/2026: tijdelijk corrigeren voor fout in package
+A3 en A4 op niveau stems toekennen
+Bij omvorming van project nog grotere fout ontstaan omdat subcircle voor hakhout ALTIJD op 
+A3 gezet wordt (alive_dead = 15)
+Zie [issue 184](https://github.com/inbo/forrescalc/issues/184) 
+subcircle, subcirclearea_ha en plotarea_ha aanpassen
+
+```{r TMP_CORR_subcircle}
+names(data_stems)
+table(data_stems$alive_dead) # ok, enkel leven/dood
+
+# _ha wordt berekend obv plotarea_ha
+data_stems_ <- data_stems %>% 
+  mutate(subcircle = 
+           ifelse(
+             .data$alive_dead == 11 & .data$dbh_mm >= .data$dbh_min_a4_alive,
+             "A4",
+             ifelse(
+               .data$alive_dead == 12 & .data$dbh_mm >= .data$dbh_min_a4_dead,
+               "A4",
+               "A3" 
+               )
+             ),
+         subcirclearea_ha =
+            ifelse(
+              .data$subcircle == "A4",
+              (pi * .data$r_A4 ^ 2) / 10000,
+              (pi * .data$r_A3 ^ 2) / 10000
+            ),
+          plotarea_ha =
+            ifelse(
+              .data$plottype == "CP",
+              .data$subcirclearea_ha,
+              plotarea_ha
+            )
+         )
+
+t <- data_stems_ %>% filter(period == 3 & species == 16 & plot_id ==102) %>% 
+  select(plot_id, tree_measure_id, period, species
+         , dbh_mm, subcircle, plotarea_ha, subcirclearea_ha)
+# OK
+
+data_stems <- data_stems_
+```
+
+```{r}
 data_deadwood <- load_data_deadwood(database = path_to_fieldmap_db, processed = TRUE)
 # unique(data_deadwood$plottype) # CP CA
 ```
+
 
 ```{r eval = FALSE}
 height_model <- load_height_models()
@@ -333,6 +415,13 @@ save(data_dendro_calc, data_stems_calc, file = here::here("RData/main03_data_den
 > doel is om in 2026 coppice om te vormen zdd levend en dood deel aan één boom toegekend wordt,
 daarom hier geen strenge datacontrole wat betreft hakhout. 
 > nieuwe opnamemethode vanaf Liedekerke, Pruikemakers in voege.
+
+
+> 22/10/2026: coppice omgevormd ondertussen. Tot hier code aangepast naar aanleiding 
+van nieuwe projectstructuur:
+toevoeging van twee correcties (zie lijn 149:chuncks TMP_ERROR en TMP_CORR)
+mogelijks zijn deze opgelost wanneer u dit leest
+
 
 **! nog niet in detail gecheckt voor KV's**  
 

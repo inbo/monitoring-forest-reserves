@@ -219,22 +219,62 @@ unique(result_VBI_$IDPlots)
 ```
 
 
-```{r export}
+```{r export, eval = FALSE}
 path_to_datarequest_cschijf
 
-write.csv2(result_BR_, paste0(path_to_datarequest_cschijf, "carbon_by_plot_species_BR.csv")) 
-write.csv2(result_VBI_, paste0(path_to_datarequest_cschijf, "carbon_by_plot_species_VBI.csv")) 
+write.csv2(result_BR_, paste0(path_to_datarequest_cschijf, "BR_carbon_by_plot_species.csv")) 
+write.csv2(result_VBI_, paste0(path_to_datarequest_cschijf, "VBI_carbon_by_plot_species.csv")) 
 
 
 ```
 
 Ook rechtstreeks naar teamdrive: `r path_to_datarequest_teamdrive`.
 
-```{r }
+```{r eval = FALSE}
 path_to_datarequest_teamdrive
 
-write.csv2(result_BR_, paste0(path_to_datarequest_teamdrive, "carbon_by_plot_species_BR.csv")) 
-write.csv2(result_VBI_, paste0(path_to_datarequest_teamdrive, "carbon_by_plot_species_VBI.csv")) 
+write.csv2(result_BR_, paste0(path_to_datarequest_teamdrive, "BR_carbon_by_plot_species.csv")) 
+write.csv2(result_VBI_, paste0(path_to_datarequest_teamdrive, "VBI_carbon_by_plot_species.csv")) 
+
+```
+
+# Controle totalen
+
+```{r vgl_plotniveau}
+old <- read_excel(paste0(path_to_datarequests_gdrive, "INBO_Time4C/20241216_BR_carbon_alle_plots.xlsx"))
+new <- result_BR_
+# new <- read.csv2(paste0(path_to_datarequest_teamdrive, "carbon_by_plot_species_BR.csv")) 
+
+old <- old %>% 
+  filter(plot_id %in% new$plot_id)
+
+vgl <- new %>% 
+  # select(plot_id, period, species, vol_bole_m3_ha_alive) %>% 
+  group_by(plot_id, period) %>% 
+  summarize(vol_bole_m3_ha_alive = sum(vol_bole_m3_ha_alive)) %>% 
+  ungroup() %>% 
+  left_join(old %>% 
+              select(plot_id, period, vol_bole_m3_ha_alive = StemVolume_m3_ha_alive)
+            , by = c("plot_id", "period")) %>% 
+  mutate(diff = vol_bole_m3_ha_alive.x - vol_bole_m3_ha_alive.y)
+
+names(old)
+# ok, nieuwe dataset heeft voor 3 van de 7 plots een meer recente periode
+
+```
+```{r vgl_corr}
+old <- read.csv2(paste0(path_to_datarequest_teamdrive, "carbon_by_plot_species_BR.csv"))
+new <- result_BR_
+# new <- read.csv2(paste0(path_to_datarequest_teamdrive, "carbon_by_plot_species_BR.csv")) 
+
+old <- old %>% 
+  filter(plot_id %in% new$plot_id) %>% 
+  select(-X)
+
+vgl <- new %>% 
+  left_join(old, by = c("plot_id", "period", "species")) %>% 
+  select(plot_id, period, species, contains(c("vol_bole_m3_ha_alive", "vol_bole_m3_ha_dead")))
+# ok, 2 kleine correcties
 
 ```
 
