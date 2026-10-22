@@ -26,7 +26,8 @@
 
 save_results_csv <- function(results, output_dir){
   for (tablename in names(results)) {
-    write.csv2(results[[tablename]], file = paste0(output_dir, tablename, ".csv"))
+    write.csv2(results[[tablename]], file = paste0(output_dir, tablename, ".csv")
+               , row.names = FALSE)
   }
 }
 
@@ -94,18 +95,18 @@ load_height_models_local <- function(path_to_height_models) {
       filename = list.files(path = path_to_height_models, pattern = "xlsx")
     ) %>%
     mutate(
-      no_extension = str_extract(.data$filename, "^(.+)(?=\\.)"),
-      x = str_split(.data$no_extension, "_"),
-      plottype = sapply(.data$x, `[`, 3),
-      period = as.numeric(sapply(.data$x, `[`, 4)),
-      path_file = paste0(path_to_height_models, .data$filename)
+      no_extension = str_extract(filename, "^(.+)(?=\\.)"),
+      x = str_split(no_extension, "_"),
+      plottype = sapply(x, `[`, 3),
+      period = as.numeric(sapply(x, `[`, 4)),
+      path_file = paste0(path_to_height_models, filename)
     ) %>%
-    select(-.data$no_extension, -.data$x) %>%
+    select(-no_extension, -x) %>%
     mutate(
-      data = map(.data$path_file, add_models)
+      data = map(path_file, add_models)
     ) %>%
-    unnest(cols = c(.data$data)) %>%
-    select(-.data$filename, -.data$path_file) %>%
+    unnest(cols = c(data)) %>%
+    select(-filename, -path_file) %>%
     distinct()
   if (nrow(heightmodels) == 0) {
     warning("No height models (.xlsx files) found on the given path.")
@@ -317,7 +318,7 @@ query_database <-
 #' @importFrom lubridate round_date year
 #'
 
-load_data_dendrometry_all <-
+ load_data_dendrometry_all <-
   function(database, plottype = NA, forest_reserve = NA, extra_variables = TRUE) {
     selection <-
       translate_input_to_selectionquery(database, plottype, forest_reserve)
@@ -416,7 +417,56 @@ load_data_dendrometry_all <-
     return(data_dendro)
   }
 
-
+ 
+ #' @title connect to fieldmap database
+ #'
+ #' @description
+ #' This helper function returns a connection to the given database (path).
+ #' Reason for this function is to avoid repetition of this information.
+ #'
+ #' @inheritParams load_data_dendrometry
+ #'
+ #' @return DBI connection that can be used to connect to the database
+ #'
+ #' @noRd
+ #'
+ #' @importFrom DBI dbConnect
+ #' @importFrom odbc odbc
+ #' @importFrom RSQLite SQLite
+ #'
+connect_to_database <-
+   function(database) {
+     
+     if (grepl(".accdb$", database) || grepl(".mdb$", database)) {
+       con <-
+         DBI::dbConnect(
+           odbc::odbc(),
+           .connection_string =
+             paste0("Driver={Microsoft Access Driver (*.mdb, *.accdb)};DBQ=",
+                    database)
+         )
+     } else if (grepl(".sqlite$", database)) {
+       con <- DBI::dbConnect(SQLite(), database)
+     } else if (grepl(".fdb$", database) || grepl(".gdb", database)) {
+       con <-
+         DBI::dbConnect(
+           odbc::odbc(),
+           .connection_string =
+             paste0(
+               "Driver={Firebird/InterBase(r) driver};UID=SYSDBA;PWD=masterkey; DBNAME=", #nolint: line_length_linter
+               database
+             )
+         )
+     } else {
+       stop(
+         "This database type is not supported, please use .mdb, .accdb, .fdb, .gdb or .sqlite" #nolint: line_length_linter
+       )
+     }
+     
+     return(con)
+   }
+ 
+ 
 #' retrieve dendrometry data from fieldmap database - AANPASSING
 #' --> ook mogelijk zonder plotdetails (left_join ipv inner_join)
 #' --> geen berekening van lokale X, Y: X, Y zoals in layer trees genoteerd

@@ -1,0 +1,635 @@
+---
+title: "LIS per soort en decay"
+subtitle: "Correctie"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: TRUE
+      smooth_scroll: TRUE
+---
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 7,
+  fig.height = 3,
+  fig.align = TRUE)
+
+library(here)
+library(writexl)
+library(scales)
+
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+
+```
+
+```{r Setup2, include = FALSE}
+forest_reserve <- "Heirnisse"
+source(here::here("scripts/Per_gebied/", forest_reserve, "/setup_paths_gebied.R"))
+path_to_datarequest_teamdrive <- paste0(path_to_teamdrive_gebied, "03_output_R_plotlevel/")
+```
+
+
+# Vraagstelling
+
+LIS per soort en/of afbraak niet correct berekend.
+Ontdekt bij dataverwerking Heirnisse.
+
+Mail Arno:
+
+De LIS waarden in deze 2 files verschillen bij elk reservaat (op een na). Is hier een logische verklaring?  
+
+```{r arno, eval = FALSE}
+deadw_by_decay_plot_species <- read_forresdat_table("deadw_by_decay_plot_species")
+deadw_by_decay_plot <- read_forresdat_table("deadw_by_decay_plot")
+
+deadw_by_decay_plot_species_test <- deadw_by_decay_plot_species %>%
+  group_by(forest_reserve) %>%
+  summarise(vol_lis_10_30cm_m3_ha= sum(vol_lis_10_30cm_m3_ha, na.rm = TRUE))
+
+deadw_by_decay_plot_test <- deadw_by_decay_plot %>%
+  group_by(forest_reserve) %>%
+  summarise(vol_lis_10_30cm_m3_ha= sum(vol_lis_10_30cm_m3_ha, na.rm = TRUE))
+
+cbind(deadw_by_decay_plot_species_test, deadw_by_decay_plot_test)
+
+
+# deadw_by_decay_plot_species <- read_forresdat_table("deadw_by_decay_plot_species")
+deadw_by_decay_plot <- read_forresdat_table("deadw_by_decay_plot")
+
+deadw_by_decay_plot_species_test <- deadw_by_decay_plot_species %>%
+  group_by(forest_reserve) %>%
+  summarise(vol_lis_m3_ha= sum(vol_lis_m3_ha, na.rm = TRUE))
+
+deadw_by_decay_plot_test <- deadw_by_decay_plot %>%
+  group_by(forest_reserve) %>%
+  summarise(vol_lis_m3_ha= sum(vol_lis_m3_ha, na.rm = TRUE))
+
+cbind(deadw_by_decay_plot_species_test, deadw_by_decay_plot_test)
+
+```
+
+
+# Heirnisse
+
+Ik weet niet meer of ik dat gecorrigeerd heb => vgln data Heirnisse met forresdat
+
+## Plotniveau forresdat
+
+```{r}
+deadw_by_decay_plot_Heirnisse <- read_excel(paste0(path_to_datarequest, "deadw_by_decay_plot.xlsx")) 
+
+deadw_by_decay_plot_Heirnisse <- deadw_by_decay_plot_Heirnisse %>% 
+  dplyr::select(-vol_LIS_above30cm_m3_ha, -1)
+
+colnames(deadw_by_decay_plot_Heirnisse) <- tolower(colnames(deadw_by_decay_plot_Heirnisse))
+
+deadw_by_decay_plot_H_forresdat <- deadw_by_decay_plot %>% 
+  filter(forest_reserve == "Heirnisse") %>% 
+  select(all_of(colnames(deadw_by_decay_plot_Heirnisse)))
+
+deadw_by_decay_plot_Heirnisse <- deadw_by_decay_plot_Heirnisse %>% 
+  filter(plot_id %in% deadw_by_decay_plot_H_forresdat$plot_id)
+
+# waldo::compare(deadw_by_decay_plot_Heirnisse %>% arrange(plot_id, period, decaystage)
+#                , deadw_by_decay_plot_H_forresdat %>% arrange(plot_id, period, decaystage))
+
+```
+
+```{r}
+vgl_LIS <- deadw_by_decay_plot_Heirnisse %>% 
+  select(plot_id, period, decaystage, vol_lis_m3_ha) %>% 
+  left_join(deadw_by_decay_plot_H_forresdat %>% 
+              select(plot_id, period, decaystage, vol_lis_m3_ha)
+            , by = c("plot_id", "period", "decaystage")) %>% 
+  mutate(diff_lis = vol_lis_m3_ha.x - vol_lis_m3_ha.y) %>% 
+  filter(diff_lis > 0)
+
+mean(vgl_LIS$diff_lis)
+# miniem verschil
+```
+
+Nee, nog geen correctie gebeurd op plotniveau.
+
+Anderzijds, kan niet gecorrigeerd worden op plotniveau.
+Correctie is dat het op reservaatsniveau moet berekend worden.
+
+
+## Reservaatsniveau dataverwerking statistics
+
+```{r}
+path_to_datarequest_teamdrive <- paste0(path_to_teamdrive_gebied, "04_statistieken_BR/")
+
+stat_dendro_Heirnisse <- read_excel(paste0(path_to_datarequest_teamdrive, "stat_dendro_Heirnisse.xlsx")) 
+
+stat_dendro_Heirnisse <- stat_dendro_Heirnisse %>% 
+  filter(variable == "vol_LIS_m3_ha" & !is.na(mean))
+
+#
+stat_deadw_by_decay_Heirnisse <- read_excel(paste0(path_to_datarequest_teamdrive, "stat_dendro_Heirnisse.xlsx"), 
+                                            sheet = "deadw_by_decay_plot") 
+
+stat_deadw_by_decay_Heirnisse <- stat_deadw_by_decay_Heirnisse %>% 
+  filter(variable == "vol_LIS_m3_ha" & !is.na(mean))
+
+#
+stat_dendro_by_species_Heirnisse <- read_excel(paste0(path_to_datarequest_teamdrive, "stat_dendro_Heirnisse.xlsx"), 
+                                            sheet = "dendro_by_plot_species") 
+
+stat_dendro_by_species_Heirnisse <- stat_dendro_by_species_Heirnisse %>% 
+  filter(variable == "vol_LIS_m3_ha" & !is.na(mean))
+```
+
+```{r}
+sum(stat_deadw_by_decay_Heirnisse$mean) ; stat_dendro_Heirnisse$mean
+```
+Op reservaatsniveau ook nog niet aangepast.
+
+Berekening zou moeten gebeuren over alle plots heen.
+Maar klopt het dan wel??
+
+
+## Herberekening totalen op reservaatsniveau
+
+Code overgenomen uit Heirnisse_dendro_2025.Rmd
+
+```{r}
+# forestreserve <- "Heirnisse"
+plotinfo_orig <- read_forresdat_table("plotinfo", git_ref_type = "branch"
+                                 , git_reference = "develop"
+                                 , join_plotinfo = FALSE)
+names(plotinfo_orig)
+
+plotinfo <- plotinfo_orig %>% 
+  select(forest_reserve, plot_id, period
+         , plottype
+         , survey_lis, survey_trees
+         , year_dendro)
+```
+
+
+
+```{r load_data_LIS, results='hide'}
+# enkel 3eSET 
+query_LIS <- 
+    "SELECT lis.IDPlots AS plot_id, 
+    lis.IDLineIntersect_3eSet, 
+    lis.ID, 
+    lis.TreeSpecies AS species,
+    lis.AliveDead,
+    lis.DecayStage AS decaystage,
+    lis.Diameter_mm AS diam_mm, 
+    lis.Angle as angle_cde
+    FROM LI_data_3eSet lis;"
+
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+  data_LIS_ <- sqlQuery(con, query_LIS, stringsAsFactors = TRUE) 
+  qLIangle <- sqlFetch(con, "qLIangle", stringsAsFactors = TRUE) %>% 
+    select(ID, Value1, angle = Value2)
+odbcClose(con)
+
+data_LIS <- data_LIS_ %>% 
+  mutate(period = 3) %>% 
+  left_join(plotinfo %>% select(plot_id, forest_reserve, period, survey_lis)) %>% 
+  filter(forest_reserve == forestreserve) %>% 
+  mutate(angle_cde = ifelse(is.na(angle_cde), 10, angle_cde)) %>% 
+  left_join(qLIangle, by = c("angle_cde" = "ID"))
+```
+
+```{r}
+names(data_LIS)
+nrow(data_LIS)  # 354
+range(data_LIS$plot_id)
+unique(data_LIS$AliveDead) == 12  # enkel dood
+unique(data_LIS$survey_lis) == TRUE
+
+```
+
+
+```{r}
+# aantal hits per soort
+hits_per_soort <- data_LIS %>% 
+  group_by(species) %>% 
+  summarize(n_hits = n()
+            , n_plots = n_distinct(plot_id)) %>% 
+  ungroup()
+
+```
+
+```{r}
+data_LIS <- data_LIS %>% 
+  # Li<-45  # lengte van de drie transecten   ! anders bij zonien
+  mutate(Li = ifelse(str_detect(forest_reserve, "Zon")
+                     , 120, 45)) %>% 
+  # ook anders bij KV Heirnisse
+  mutate(Li = ifelse(plot_id == "91000", 560, Li))
+
+```
+
+```{r berekening_TOTALEN_ALLE_PLOTS}
+# zonder KV
+n_plots <- plotinfo %>% filter(forest_reserve == "Heirnisse" & plottype == "CP") %>% select(plot_id) %>% 
+  n_distinct()
+# 68
+
+li_totaal <- n_plots*45
+# niet groeperen per plot, maar per periode, en dan geen mean_LI per plot, maar som
+LIS_totaal <- data_LIS %>%
+  filter(plot_id != "91000") %>% 
+  mutate(diam_m = diam_mm/1000
+         # , Diameter_cm = diam_mm/10     # cfrVBI
+         ) %>% 
+  dplyr::group_by(forest_reserve, period) %>%
+  dplyr::summarize(
+    n_plots = n_distinct(plot_id), 
+    volume_m3_m2=pi^2/8/li_totaal*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
+    # , v3_VolumeLogs_ha=pi^2/8/mean(Li)*sum((Diameter_cm^2)/cos(angle*pi/180),na.rm=T)   # cfrVBI, zelfde resultaat
+    ) %>% 
+  dplyr::ungroup() %>% 
+  mutate(vol_lis_m3_ha = volume_m3_m2 * 10000) %>% 
+  select(-volume_m3_m2)
+
+LIS_species_totaal <- data_LIS %>%
+  filter(plot_id != "91000") %>% 
+  mutate(diam_m = diam_mm/1000
+         # , Diameter_cm = diam_mm/10     # cfrVBI
+         ) %>% 
+  dplyr::group_by(period, species) %>%
+  dplyr::summarise(
+    volume_m3_m2=pi^2/8/li_totaal*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
+    # , v3_VolumeLogs_ha=pi^2/8/mean(Li)*sum((Diameter_cm^2)/cos(angle*pi/180),na.rm=T)   # cfrVBI, zelfde resultaat
+    ) %>% 
+  ungroup() %>% 
+  mutate(vol_lis_m3_ha = volume_m3_m2 * 10000) %>% 
+  select(-volume_m3_m2)
+# bij mogelijkse verwarring tss VBI en BR: VBI rekent obv diam_cm en komt m3/ha uit, 
+# BR gebruikt diam_m en komt m3/m2 uit
+
+sum(LIS_totaal$vol_lis_m3_ha) ; sum(LIS_species_totaal$vol_lis_m3_ha) 
+```
+## Vergelijking totalen (oude statitics en herberekend)
+
+Vergelijking met bewaarde statistieken in excel en de herberekening
+
+```{r LIS_totaal}
+LIS_totaal$vol_lis_m3_ha # herberekening
+stat_dendro_Heirnisse$mean
+
+# [1] 39.07754
+# [1] 44.09
+```
+
+
+```{r LIS_species_totaal}
+sum(LIS_species_totaal$vol_lis_m3_ha)
+sum(stat_dendro_by_species_Heirnisse$mean)
+
+# [1] 39.07754
+# [1] 40.91
+```
+
+Wat nu in excel staat is niet correct, want som van soorten is niet zelfde als totaal.
+
+```{r cfr_arno, eval = FALSE}
+dendro_by_plot <- read_forresdat_table("dendro_by_plot")
+dendro_by_plot_species <- read_forresdat_table("dendro_by_plot_species")
+
+dendro_by_plot_species_test <- dendro_by_plot_species %>%
+  group_by(forest_reserve) %>%
+  summarise(vol_lis_m3_ha= sum(vol_lis_m3_ha, na.rm = TRUE)) %>% 
+  filter(forest_reserve == forestreserve)
+
+dendro_by_plot_test <- dendro_by_plot %>%
+  group_by(forest_reserve) %>%
+  summarise(vol_lis_m3_ha= sum(vol_lis_m3_ha, na.rm = TRUE)) %>% 
+  filter(forest_reserve == forestreserve)
+
+cbind(dendro_by_plot_species_test, dendro_by_plot_test)
+
+# LIS_totaal
+LIS_totaal$vol_lis_m3_ha*n_plots
+dendro_by_plot_species_test$vol_lis_m3_ha
+dendro_by_plot_test$vol_lis_m3_ha
+
+# LIS_species_totaal
+sum(LIS_species_totaal$vol_lis_m3_ha)*n_plots
+dendro_by_plot_species_test$vol_lis_m3_ha
+dendro_by_plot_test$vol_lis_m3_ha
+```
+
+
+## Herberekening forresdat
+
+Zou het kunnen dat er een fout zit in mijn forresdat berekeningen?
+Want als ik in `problem_LIS_beknopt.Rmd` probeer het probleem duidelijk te schetsen voor
+BMK, heb ik indruk dat probleem zich niet meer stelt.
+
+Daarom script `Main_UpdateForresdat_02_dendro.Rmd` opnieuw laten lopen en output hier bewaren.
+
+```{r}
+dendro_by_plot_herrekend <- dendro_by_plot %>% 
+  left_join(plotinfo)
+dendro_by_plot_species_herrekend <- dendro_by_plot_species %>% 
+  left_join(plotinfo)
+```
+
+Is dat hetzelfde als wat in forresdat zit? 
+
+```{r}
+dendro_by_plot_forresdat <- read_forresdat_table("dendro_by_plot"
+                                                 , join_plotinfo = FALSE) %>% 
+  left_join(plotinfo)
+dendro_by_plot_species_forresdat <- read_forresdat_table("dendro_by_plot_species"
+                                                         , join_plotinfo = FALSE) %>% 
+  left_join(plotinfo)
+
+
+dendro_by_plot_forresdat_dev <- read_forresdat_table(tablename = "dendro_by_plot"
+                                                     , git_ref_type = "branch"
+                                                     , git_reference = "develop"
+                                                     , join_plotinfo = FALSE) %>% 
+  left_join(plotinfo)
+dendro_by_plot_species_forresdat_dev <- read_forresdat_table("dendro_by_plot_species"
+                                                      , git_ref_type = "branch"
+                                                     , git_reference = "develop"
+                                                     , join_plotinfo = FALSE) %>% 
+  left_join(plotinfo)
+
+waldo::compare(dendro_by_plot_forresdat, dendro_by_plot_forresdat_dev)
+# OK, zelfde
+```
+
+
+```{r}
+nrow(dendro_by_plot_herrekend); nrow(dendro_by_plot_forresdat)
+dendro_by_plot_herrekend <- dendro_by_plot_herrekend %>% 
+  select(colnames(dendro_by_plot_forresdat))
+
+waldo::compare(
+  dendro_by_plot_herrekend %>% 
+    filter(forest_reserve == "Heirnisse" & plottype == "CP" & period == 3) %>% 
+    arrange(period, plot_id) %>% 
+    select(plot_id, period, vol_lis_m3_ha) # vol_alive_m3_ha, 
+  , dendro_by_plot_forresdat %>% 
+    filter(forest_reserve == "Heirnisse" & plottype == "CP" & period == 3) %>% 
+    arrange(period, plot_id) %>% 
+    select(plot_id, period, vol_lis_m3_ha) # vol_alive_m3_ha, 
+)
+
+# wat vol_lis betreft is dat hetzelfde
+
+
+# idem voor SPECIES
+waldo::compare(
+  dendro_by_plot_species_herrekend %>% 
+    filter(forest_reserve == "Heirnisse" & plottype == "CP" & period == 3) %>% 
+    arrange(period, plot_id, species) %>% 
+    select(plot_id, period, species, vol_lis_m3_ha) # vol_alive_m3_ha, 
+  , dendro_by_plot_species_forresdat %>% 
+    filter(forest_reserve == "Heirnisse" & plottype == "CP" & period == 3) %>% 
+    arrange(period, plot_id, species) %>% 
+    select(plot_id, period, species, vol_lis_m3_ha) # vol_alive_m3_ha, 
+)
+
+```
+## Enkel stuk code mbt LIS herrekenen
+
+Maar wat als ik stuk code kopieer uit dat script mbt lis?
+
+Code overgenomen uit Heirnisse_dendro_2025.Rmd
+
+Opgepast: Heirnisse: `plots_excluded_from_network` uit strata_db!
+
+```{r }
+con <- odbcConnectAccess2007(path_to_strata_db)
+# strata_remaining <- sqlFetch(con, "strata_remaining", stringsAsFactors = FALSE)
+plots_excluded_from_network <- sqlFetch(con, "plots_excluded_from_network", stringsAsFactors = FALSE)
+# = plots waar beheer gebeurd is ergens na start van monitoringnetwerk
+odbcClose(con)
+```
+
+
+```{r load_ruwe_data_LIS, results='hide'}
+# path_to_fieldmap_db <- "C:/03_BR_db_monitoring/MDB_BR_23_INBO2026_20260619/FieldMapData_MDB_BR_23_INBO2026.accdb"
+
+# enkel 3eSET 
+query_LIS <- 
+    "SELECT lis.IDPlots AS plot_id, 
+    lis.IDLineIntersect_3eSet, 
+    lis.ID, 
+    lis.TreeSpecies AS species,
+    lis.AliveDead,
+    lis.DecayStage AS decaystage,
+    lis.Diameter_mm AS diam_mm, 
+    lis.Angle as angle_cde
+    FROM LI_data_3eSet lis;"
+
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+  data_LIS_ <- sqlQuery(con, query_LIS, stringsAsFactors = TRUE) 
+  qLIangle <- sqlFetch(con, "qLIangle", stringsAsFactors = TRUE) %>% 
+    select(ID, Value1, angle = Value2)
+odbcClose(con)
+
+data_LIS <- data_LIS_ %>% 
+  mutate(period = 3) %>% 
+  left_join(plotinfo %>% select(plot_id, forest_reserve, period, survey_lis)) %>% 
+  filter(survey_lis == TRUE) %>% 
+  # filter(forest_reserve == forestreserve) %>% 
+  mutate(angle_cde = ifelse(is.na(angle_cde), 10, angle_cde)) %>% 
+  left_join(qLIangle, by = c("angle_cde" = "ID")) %>% 
+  filter(!plot_id %in% plots_excluded_from_network$plot_id)
+```
+
+```{r}
+names(data_LIS)
+nrow(data_LIS)  # 354
+range(data_LIS$plot_id)
+unique(data_LIS$AliveDead) == 12  # enkel dood
+unique(data_LIS$survey_lis) == TRUE
+
+data_LIS %>% filter(is.na(forest_reserve)) %>% nrow() == 0
+```
+```{r}
+# aantal hits per soort
+hits_per_soort <- data_LIS %>% 
+  group_by(forest_reserve, species) %>% 
+  summarize(n_hits = n()
+            , n_plots = n_distinct(plot_id)) %>% 
+  ungroup()
+
+```
+
+```{r}
+data_LIS <- data_LIS %>% 
+  # Li<-45  # lengte van de drie transecten   ! anders bij zonien
+  mutate(Li = ifelse(str_detect(forest_reserve, "Zon")
+                     , 120, 45)) %>% 
+  # ook anders bij KV Heirnisse
+  mutate(Li = ifelse(plot_id == "91000", 560, Li))
+
+range(data_LIS$Li)
+range(data_LIS$plot_id)
+# enkel CP's
+
+```
+Code waarmee `vol_lis_m3_ha` in `dendro_by_plot` en `dendro_by_plot_species` berekend zijn.
+
+```{r code_calc_dendro_forresdat, results='hide'}
+colnames(data_LIS)
+
+# dendro_by_plot_species
+LIS_by_species <- data_LIS %>%
+  mutate(diam_m = diam_mm/1000
+         # , Diameter_cm = diam_mm/10     # cfrVBI
+         ) %>% 
+  dplyr::group_by(forest_reserve, plot_id, period, species) %>%
+  dplyr::reframe(
+    volume_m3_m2=pi^2/8/mean(Li)*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
+    # , v3_VolumeLogs_ha=pi^2/8/Li*sum((Diameter_cm^2)/cos(angle*pi/180),na.rm=T)   # cfrVBI, zelfde resultaat
+    ) %>% 
+  mutate(vol_lis_m3_ha = volume_m3_m2 * 10000) %>% 
+  select(-volume_m3_m2)
+# bij mogelijkse verwarring tss VBI en BR: VBI rekent obv diam_cm en komt m3/ha uit, 
+# BR gebruikt diam_m en komt m3/m2 uit
+
+# dendro_by_plot
+LIS_by_plot <- data_LIS %>%
+  mutate(diam_m = diam_mm/1000
+         # , Diameter_cm = diam_mm/10     # cfrVBI
+         ) %>% 
+  dplyr::group_by(forest_reserve, plot_id, period) %>%
+  dplyr::reframe(
+    volume_m3_m2=pi^2/8/mean(Li)*sum((diam_m^2)/cos(angle*pi/180),na.rm=TRUE)
+    # , v3_VolumeLogs_ha=pi^2/8/Li*sum((Diameter_cm^2)/cos(angle*pi/180),na.rm=T)   # cfrVBI, zelfde resultaat
+    ) %>% 
+  mutate(vol_lis_m3_ha = volume_m3_m2 * 10000) %>% 
+  select(-volume_m3_m2)
+# waldo::compare(LIS_by_plot, LIS_by_plot_)
+```
+
+```{r}
+lis_ruwe_code <- LIS_by_plot %>% 
+  filter(forest_reserve == "Heirnisse" & plot_id < 5000)
+
+lis_species_ruwe_code <- LIS_by_species %>% 
+  filter(forest_reserve == "Heirnisse" & plot_id < 5000)
+
+```
+
+Vergelijking tss forresdat (ook opnieuw runnen van script komt op zelfde neer)
+en het kleine stukje code om lis te berekenen (voor er samenvoegingen met vol_alive 
+of andere aanpassingen gebeuren)
+
+```{r vgl_lis_forresdat_herrekend_vs_beperkte_code}
+waldo::compare(
+  dendro_by_plot_forresdat %>% 
+    filter(forest_reserve == "Heirnisse" & plottype == "CP" & period == 3) %>% 
+    filter(vol_lis_m3_ha > 0) %>% 
+    arrange(plot_id) %>% 
+    select(plot_id, vol_lis_m3_ha) # vol_alive_m3_ha, 
+  , lis_ruwe_code %>% 
+    arrange(plot_id) %>% 
+    select(plot_id, vol_lis_m3_ha) 
+)
+# gelijk
+
+
+# Idem per SPECIES
+waldo::compare(
+  dendro_by_plot_species_forresdat %>% 
+    filter(forest_reserve == "Heirnisse" & plottype == "CP" & period == 3) %>% 
+    filter(vol_lis_m3_ha > 0) %>% 
+    arrange(plot_id, species) %>% 
+    select(plot_id, species, vol_lis_m3_ha) # vol_alive_m3_ha, 
+  , lis_species_ruwe_code %>% 
+    arrange(plot_id, species) %>% 
+    select(plot_id, species, vol_lis_m3_ha) 
+)
+
+
+dendro_by_plot_species_forresdat %>% 
+    filter(forest_reserve == "Heirnisse" & plottype == "CP" & period == 3) %>% 
+    filter(vol_lis_m3_ha > 0) %>% 
+    arrange(plot_id, species) %>% 
+    select(plot_id, species, vol_lis_m3_ha) %>% nrow()
+# 114
+
+lis_species_ruwe_code %>% 
+    # filter(vol_lis_m3_ha > 0) %>% 
+    arrange(plot_id, species) %>% 
+    select(plot_id, species, vol_lis_m3_ha) %>% nrow()
+# 132
+
+
+vgl <- lis_species_ruwe_code %>% 
+    arrange(plot_id, species) %>% 
+    select(plot_id, species, vol_lis_m3_ha) %>% 
+  left_join(dendro_by_plot_species_forresdat %>% 
+    filter(forest_reserve == "Heirnisse" & plottype == "CP" & period == 3) %>% 
+    # filter(vol_lis_m3_ha > 0) %>% 
+    select(plot_id, species, vgl %>% filter(is.na(diff)))
+    , by = c("plot_id", "species")) %>% 
+  mutate(diff = vol_lis_m3_ha.x - vol_lis_m3_ha.y)
+
+vgl %>% filter(is.na(diff)) %>% nrow()
+vgl %>% filter(is.na(diff)) %>% summarize(sum = sum(vol_lis_m3_ha.x))
+
+vgl %>%  filter(is.na(diff)) %>% select(plot_id, species)
+```
+
+```{r}
+dendro_by_plot_species_herrekend %>% filter(plot_id == 703 & species == 6 & period == 3) %>% 
+  select(plot_id, species, vol_lis_m3_ha)
+
+dendro_by_plot_species_forresdat %>% filter(plot_id == 703 & species == 6 & period == 3) %>% 
+  select(plot_id, species, vol_lis_m3_ha)
+
+lis_species_ruwe_code %>% filter(plot_id == 703 & species == 6) %>% 
+  select(plot_id, species, vol_lis_m3_ha)
+
+
+# 
+t1 <- dendro_by_plot_species_herrekend %>% filter(plot_id == 703 & period == 3) %>% 
+  select(plot_id, species, vol_lis_m3_ha, vol_alive_m3_ha)
+
+t2 <- dendro_by_plot_species_forresdat %>% filter(plot_id == 703 & period == 3) %>% 
+  select(plot_id, species, vol_lis_m3_ha, vol_alive_m3_ha)
+
+t3 <- lis_species_ruwe_code %>% filter(plot_id == 703) %>% 
+  select(plot_id, species, vol_lis_m3_ha)
+```
+
+
+
+
+
+# Besluit
+
+Om correct te zijn moeten de **gemiddelde waardes per soort en/of afbraak en per reservaat** 
+telkens **afgeleid** worden **van de ruwe LIS-data** gebruik maken van de originele formule 
+en rekening houdend met de totale lengte van de transecten (n_plot * 3 * 15 voor CP's) 
+
+Dit is nog niet gebeurd!
+
+Moet aangepoast worden op zenodo, forresdat en specifiek ook voor alle resultaten
+op teamdrive "G:\Gedeelde drives\Team_Boseco_BR\PRJ_BR_Gegevensverwerking\20_Per_gebied"
+
+
+
+

@@ -43,6 +43,10 @@ gitrepo te kopiëren.
 Bij de dataverwerking kunnen ze van daaruit ingeladen en gebruikt worden.
 Dit in kader van versiebeheer. 
 
+**BELANGRIJK**: naam van files moeten strikt bestaan uit HeightParams, naam reservaat 
+(zonder inderscores!!), plottype (!! CA of CP), periode.      
+Anders werk functie `load_heightmodels()` niet
+
 ```{r results='hold', eval=TRUE}
 # van xlsx
 path_to_height_models
@@ -78,7 +82,7 @@ csv_files <- list.files(destination_dir, pattern = "\\.csv$", full.names = TRUE)
 
 head(csv_files)
 length(csv_files)
-# 67  / 72
+# 67  / 72 / 78 / 81
 
 ```
 

@@ -1,0 +1,620 @@
+---
+title: "Verkenning DHcurves aangemaakt in FM-IA"
+subtitle: "2026 - decade 3 - kernvlakte"
+author: "Anja Leyman"
+date: "20 maart 2026"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: FALSE
+      smooth_scroll: FALSE
+---
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 7,
+  fig.height = 3,
+  fig.align = TRUE)
+
+library(here)
+library(writexl)
+library(scales)
+
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+
+```
+
+
+```{r Setup2, results = 'hide'}
+forestreserve_short <- "Terrijst"
+source(here::here(paste0("Scripts/Per_gebied/", forestreserve_short, "/setup_paths_gebied.R")))
+
+plot_type <- "CA"
+# plot_type <- "CP"
+
+virt_plot <- 111001
+```
+
+
+```{r extra_paths}
+# specifiek voor Wijnendale werden hoogtes toegevoegd aan "Wijnendale_DHcurves_CP_X8_inbo2020.accdb"
+# => dit project gebruiken om dhcurves te verkennen
+path_to_fieldmap_dhcurves <- paste0(forestreserve_folder_pc,"/FMprojecten_2025/", forestreserve_short, "_DHcurves_", plot_type, "_22_inbo2026/FieldMapData_", forestreserve_short, "_DHcurves_", plot_type, "_22_inbo2026.accdb")
+
+
+# resultatenzijn hier de virtuele bomen
+path_to_datarequest <- paste0(forestreserve_folder_pc, "/verwerking_2026_1e2e3eSET/2AanmaakDHcurves_1e2e3eSET/")
+# VirtualTreesHeightCurves
+
+path_to_html <-  path_to_heightcurves
+```
+
+```{r overview_paths}
+forestreserve_folder_pc
+
+forestreserve_folder_teamdrive
+path_to_datacontrol
+path_to_heightcurves
+path_to_plotdata_teamdrive
+
+path_to_fieldmap_dhcurves
+
+# EVENTUEEL NIET MEER GEBRUIKEN??
+path_to_plotdata_pc
+
+# TIJDELIJK `path_to_fieldmap_db` naar nieuwe situatie mrt 2026 (met aanpassing nalv andere benadering hakhout)
+path_to_fieldmap_db <- paste0(path_to_fieldmap, dbFieldmap)
+
+# specifiek dit script
+path_to_datarequest
+path_to_html
+
+```
+
+
+# Vraagstelling
+
+Momenteel gebeurt de meeste dataverwerking in R, maar de aanmaak van DH-curves gebeurt nog steeds in FM-IA.
+
+Onderstaand R-script helpt en geeft info bij  
+
+1. het checken van de erraneous records door in de excel-file erraneous_records.xlsx 
+een extra tabblad ("detail") aan te maken met daarin de outliers met vermelding 
+van soort, dbh, hoogte en ev. opmertrkingen
+
+2. het checken van de curves: de globale curves (0_xx.emf) en de curves op plotniveau (`r virt_plot`_xxxx.emf) worden in in FM-IA overlopen en de probleemgevallen worden in onderstaand R-script beschreven
+
+3. het controleren of er wel voor elke soort een curve opgesteld is
+
+4. het beslissen of er geen soorten geclusterd dienen te worden
+
+<br>
+
+
+# Data inladen
+
+**Bosreservaat `r forestreserve`** - **plottype `r plot_type`**.
+
+<!-- In het geval van `r forestreserve` dient ook rekening gehouden te worden met een aantal **verstoorde plots**. -->
+<!-- Deze worden niet meegenomen in de verdere dataverwerking.   -->
+
+
+```{r overview_tables}
+con <- odbcConnectAccess2007(path_to_fieldmap_dhcurves)
+      dbtablesRaw_1eSET <- sqlTables(con) %>% 
+                filter(str_detect(TABLE_NAME, "MSys", negate = TRUE ))
+                # wegfilteren van records waar TABLE_NAME "MSys" bevat
+odbcClose(con)
+```
+
+```{r load_lookuplists}
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+
+qspecies <- sqlFetch(con, "qSpecies")
+qalivedead <- sqlFetch(con, "qAliveDead")
+qindshootcop <- sqlFetch(con, "qIndShootCop")
+qintactsnag <- sqlFetch(con, "qIntactSnag")
+
+odbcClose(con)
+
+```
+
+Om functie `load_data_dendrometry()`van forrescalc te kunnen gebruiken, moeten de
+plotdetails ingevuld zijn (o.a. `forest_reserve` en `survey_trees` en `data_processed`)! 
+
+```{r load_data, results='hide'}
+# zorgen dat plotdetails ingevuld is
+stems <- load_data_dendrometry(path_to_fieldmap_dhcurves, extra_variables = TRUE)
+
+names(stems)
+
+stems_ <- stems %>% 
+  select(plot_id, tree_measure_id, species, alive_dead
+         , intact_snag, ind_sht_cop, dbh_mm, height_m
+         , remark, common_remark)
+
+summary(stems_)
+```
+
+```{r select_height_data}
+# names(stems)
+stems_height <- stems_ %>% 
+  filter(alive_dead == 11 & intact_snag == 11
+         & ind_sht_cop != 11
+         & !is.na(height_m)  # levend en intact, geen opgr spil
+  ) %>% 
+  left_join(qspecies %>% select(ID, name_nl = Value1), by = c("species"= "ID")) %>% 
+  left_join(qindshootcop %>% select(ID, ind_sht_cop_txt = Value1), by = c("ind_sht_cop"= "ID"))
+
+```
+
+
+# Erraneous records
+
+## Inladen en omvormen
+
+Eerst kolomnamen "plot", "diff", "vorm" toevoegen in `erraneous_records.xlsx`
+
+Vervolgens worden de erraneous records ingeladen en omgevormd naar IDPlots, ID, diff
+en gekoppeld met soort, dbh, hoogte en ev. remark. 
+
+**OPGEPAST**: de erraneous records worden bepaald obv afwijking tov algemene curve, 
+niet tov de soort-specifieke curve
+
+
+```{r}
+erraneous <- read_xlsx(paste0(path_to_datarequest, "erraneous_records_", plot_type, ".xlsx"),
+                       sheet = "Blad1")
+# erraneous <- read_xlsx(paste0(path_to_VBI2_dhcurves, "erraneous_records_dhcurves.xlsx")
+                       # , sheet = "2eRun")
+
+erraneous_ <- erraneous %>% 
+  mutate(plot_id = str_match(plot, "Plot\\s*(.*?)\\s*/")[,2]
+         # na plot_ en voor /
+         # ,ID = str_match(Plot, "Tree\\s*(.*?)")
+         , tree_measure_id = sub(".*Tree ", "", plot)  # alles na "Tree" 
+               # (want alles tem tree vervangen door "" (niks))
+         , diff_m = ifelse(str_detect(diff, "-"),
+                         str_sub(diff, 6, 11),
+                         str_sub(diff, 6, 10)
+                         )
+         , diff_m = str_replace(diff_m, ",", ".")
+         , diff_m = as.numeric(diff_m)
+         # volgende code werkt ook voor IDPlots - eenvoudiger te snappen
+         # , test_plotid = sub("/.*", "", Plot)   # alles voor "/"
+         # , test_plotid = sub(".*Plot ", "", test_plotid) # alles na "Plot "
+         , plot_id = as.integer(plot_id)
+         , tree_measure_id = as.integer(tree_measure_id)
+  )
+
+# x <- "hello xxx other stuff"         # Example character string
+# x                                    # Print example string
+# # "hello xxx other stuff"
+# sub(" xxx.*", "", x)
+# sub(" *.xxx", "", x)
+# sub(".*xxx ", "", x)
+
+erraneous_ <- erraneous_ %>% 
+  select(plot_id, tree_measure_id, diff_m, vorm)
+```
+
+```{r}
+# names(stems_height)
+
+erraneous_ <- erraneous_ %>% 
+  left_join(stems_height) %>% 
+  arrange(species, tree_measure_id, vorm) %>% 
+  select(species, name_nl, everything(), -plot_id)
+
+range(abs(erraneous_$diff_m))
+table(erraneous_$species)
+table(erraneous_$name_nl)
+```
+
+Erraneous records worden bepaald op basis van de afwijkingen tov de algemene curve.
+Dat wil echter niet zeggen dat dat echt afwijkende metingen zijn!
+(zie 0_0_residuals.emf)
+Daarvoor moeten we kijken naar de emf-files per soort.
+
+Hiervoor voegen we (eenmalig) de soort, dbh en hoogte toe aan de erraneous_records 
+in een nieuw tabblad "detail".
+
+```{r eval=FALSE}
+write.xlsx(x = erraneous_, file = paste0(path_to_datarequest, "erraneous_records_"
+                                         , plot_type, ".xlsx")
+           , sheetName = "detail"
+           , append = TRUE)
+```
+
+
+## Besluit 
+
+Esdoorn, tKa, Vlier en Zomereik
+16, 64, 69, 87 
+
+Vlier (69): 3 m hoog => verwijderen
+Zomereik (97): 20m hoog en 60 cm dbh: kan, geen grote invloed op curve
+Esdoorn (16): twee smalle met hoogte > 25m, kan zijn, geen grote invloed op curve
+tKa (64): vooral outliers tov andere soorten, niet voor tKa zelf
+
+Zowel bij log als bij exponentiële functie (enkel vlier enkel bij log een outlier):  
+ 
+ <!-- => hoogte verwijderen     -->
+ <!-- **Hierna dh-curves opnieuw laten berekenen in FM-IA.** -->
+
+
+# Hoogtemodellen checken
+
+De globale curves (0_xx.emf) en de curves op plotniveau (`r virt_plot`_xxx.emf) worden in 
+FM-IA overlopen.
+
+
+## Globale modellen per soort - outliers
+
+Over alle plots heen: 0_xx.emf
+
+Om snel te zien of globale curve ok is en er geen rare outliers zijn
+
+
+## Plotmodellen per soort - extrapolaties
+
+bv. `r virt_plot`_xxx.emf: specifiek voor die ene plot, met ook aanduiding van de bomen 
+zonder hoogtes (in dit project enkel de levende bomen ingeladen)
+
+Dit laat toe om te zien of er een (onverantwoorde) extrapolatie gebeurd is 
+(blauwe bolletjes geven de hoogtemetingen weer; gele vierkantjes de gemodelleerde 
+hoogtes)
+
+<br> 
+
+**Terrijst CA: geen extrapolaties.**
+
+<!-- Ev. aftoetsen aan alle bomen van een bepaalde soort om te kijken of de extrapolatie  -->
+<!-- geen te grote over- of onderschatting geeft?  -->
+
+```{r}
+all_trees_ever <- load_data_dendrometry(database = path_to_fieldmap_db) %>% 
+  filter(alive_dead == 11 & intact_snag == 11 & !is.na(height_m)) %>% 
+  mutate(dbh_cm = dbh_mm/10)
+
+```
+
+
+## Parameters exp vs log    
+
+### Check in FM-IA
+
+show existing charts - tabblad "Model Parameters" - Copy to clipboard
+
+Plakken in excel-file "HeightParams_Terrijst_CA.xlsx" in folder ".../06_Terrijst/verwerking_2026_1e2e3eSET/2AanmaakDHcurves_1e2e3eSET"
+
+- tabblad log    
+- tabblad exp
+
+ 
+### Check in verkenner
+
+de emf-files uit ".../06_Terrijst/FMprojecten_2025/Terrijst_DHcurves_CA_22_inbo2026/InventoryAnalyst/Charts_Height_m" kopiëren naar
+
+- ".../06_Terrijst/verwerking_2026_1e2e3eSET/2AanmaakDHcurves_1e2e3eSET/DH_curves_CA_exp"    
+- ".../06_Terrijst/verwerking_2026_1e2e3eSET/2AanmaakDHcurves_1e2e3eSET/DH_curves_CA_log"     
+
+
+
+## Besluit
+
+### Outliers
+
+Geen outliers
+<!-- - één vrij hoge wilg (sp 78) bij dbh 140, maar niet onrealistisch => behouden -->
+
+
+### Extrapolaties
+
+Geen extrapolaties
+
+<!-- - Logaritmische functie zeker gebruiken bij Hazelaar (sp 28), Hulst (sp 31) -->
+<!-- en aEik (sp 3) -->
+
+
+### Exp vs log
+
+In 2021 obv 1e en 2e SET geopteerd voor log, was toen beter dan de exp.
+Nu lijkt het net andersom, toch als we naar de gesommeerde (gewogen) R-waardes kijken.
+
+Exp scoort vooral beter omdat de curve voor Zomereik heel duidelijk beter is dan de log-curve.     
+Als we die buiten beschouwing laten, is log globaal beter.
+
+Op dit moment is het in R mogelijk om andere vorm voor de curves te gebruiken, 
+afh van de soort.
+
+DAAROM R-waarde volgen:     
+  
+- voor meeste soorten LOG gebruiken - cfr vorige dataverwerking én lagere R voor 
+alle bomen samen      
+- met uitz voor Es (14), Grauwe abeel(24) en Zomereik (87) - lagere R        
+
+We maken tabblad "def" aan waarin we de juiste curves combineren.
+We schuiven dit naar voor in de excel-file.
+We voegen volgende velden toe:    
+
+- BR	  
+- info	  
+- Brondata	  
+- Verklaring   
+
+
+<br>
+
+
+# Aantal gemeten hoogtes per soort
+
+<!-- TIJDELIJK `path_to_fieldmap_db` aanpassen naar export van wijnendale en everzwijnbad uit moederdb (4/3/2024) -->
+
+<!-- ```{r Path_tmp} -->
+<!-- path_to_fieldmap_db <- "C:/03_BR/3_db_Els_deel2_Wijn_Ever/FieldMapData_3_db_Els_deel2_Wijn_Ever.accdb" -->
+<!-- ``` -->
+
+```{r}
+all_trees_reserve <- load_data_dendrometry(database = path_to_fieldmap_db
+                                   , plottype = plot_type
+                                   , extra_variables = TRUE
+                                   , processed = FALSE) %>% 
+  # filter(forest_reserve == forestreserve & !plot_id %in% plots_to_exclude) %>% 
+  filter(forest_reserve == forestreserve) %>% 
+  mutate(fperiod = as.factor(period))
+
+all_shoots_reserve <- load_data_shoots(database = path_to_fieldmap_db, extra_variables = TRUE)
+all_stems_reserve <- compose_stem_data(all_trees_reserve, all_shoots_reserve, extra_variables = TRUE)
+
+# names(all_stems_reserve)
+
+all_stems_reserve <- all_stems_reserve %>% 
+  select(plot_id, tree_measure_id, species, alive_dead
+         , intact_snag, ind_sht_cop, dbh_mm, height_m
+         , remark, common_remark
+         , period)
+```
+
+## Overzichtstabel
+
+```{r}
+nr_measured <- all_stems_reserve %>% 
+  # filter(alive_dead == 11 & intact_snag == 11) %>% 
+  group_by(species) %>% 
+  summarize(n = n(),
+            n_alive = sum(alive_dead == 11),
+            n_dead = sum(alive_dead == 12),
+            n_height_all = sum(height_m > 0, na.rm = TRUE), 
+            n_height_alive = sum(height_m > 0 & alive_dead == 11 & intact_snag == 11
+                                 , na.rm = TRUE)) %>%
+  ungroup() %>% 
+  left_join(qspecies %>% select(ID, name_nl = Value1), by = c("species" = "ID")) %>% 
+  arrange(n_height_alive, n_alive)
+
+nr_measured %>% arrange(desc(n_height_alive)) %>% 
+  DT :: datatable(filter = 'top', options = list(dom = 'tip'),rownames = FALSE) 
+
+```
+
+
+## Enkel dode bomen
+
+<!-- Er zijn drie soorten die enkel als dode boom voorkomen. -->
+
+```{r}
+nr_measured %>% filter(n_alive == 0) %>% 
+  DT :: datatable(options = list(dom = 'tip'),rownames = FALSE) 
+```
+
+
+Deze manueel toevoegen aan de excel-file "HeightParams_Terrijst_CP.xlsx", 
+met de algemene curve als curve, en n = 0.
+
+
+
+## Geen hoogtes
+
+```{r}
+nr_measured %>% filter(between(n_height_alive, 0, 0)) %>% 
+  DT :: datatable(options = list(dom = 'tip'),rownames = FALSE) 
+```
+
+
+Daar wordt automatisch de algemene curve gebruikt = OK    
+
+
+## Adjusted curve 
+
+Welke soorten hebben enkel een “adjusted” curve wegens onvoldoende (< 5) metingen? 
+
+Dit wil zeggen dat er te weinig metingen zijn voor een curve met eigen vorm, en  
+dat de algemene curve (alle soorten samen) verschoven wordt obv die enkele metingen 
+(intercept wordt aangepast). 
+
+Daarom is het van belang om te checken of één rare meting toch geen foute curve creëert.
+
+Zo ja, dan kiezen we beter voor de algemene curve.
+
+```{r}
+nr_measured %>% filter(between(n_height_alive, 1, 4)) %>% 
+  DT :: datatable(options = list(dom = 'tip'),rownames = FALSE) 
+```
+
+Bovenstaande soorten worden in detail bekeken in FM-IA.
+
+Alles OK. 
+
+
+## Soorten clusteren 
+
+We voegen soorten samen wanneer er van een bepaalde soort te weinig metingen zijn.
+Dit zien we soms al duidelijk bij het overlopen van de curves in FM-IA, maar
+bovenstaande tabel geeft soms nog wat meer duidelijkheid.
+
+Bij de `r plot_type` van Terrijst is dit niet nodig. 
+
+
+# Aanpassen parameterfile
+
+De excel-file "HeightParams_Terrijst_CA.xlsx" aanpassen
+
+
+## Verklaring toevoegen
+
+Volgende opties zijn mogelijk:
+
+```{r}
+# Maak een dataframe met de gegeven gegevens
+verklaring <- data.frame(
+  Source = c("global", "adjusted_all_species", "all_species"),
+  Brondata = c("1eSET+3eSET", "1eSET+3eSET", "1eSET+3eSET"),
+  Verklaring = c("eigen curve: voldoende bomen voor de soort beschikbaar", 
+                 "globale hoogtecurve van geclusterde soorten, intercept aangepast aan soort", 
+                 "globale hoogtecurve van geclusterde soorten")
+)
+
+# Toon de dataframe
+verklaring %>% DT :: datatable(options = list(dom = 'tip'),rownames = FALSE)
+```
+
+- bij de globale soortmodellen als verklaring "eigen curve: 
+voldoende bomen voor de soort beschikbaar" toevoegen     
+ 
+- bij de plotmodellen van soorten met 0 metingen, als verklaring "globale hoogtecurve 
+van geclusterde soorten" toevoegen     
+
+- bij de plotmodellen van soorten met < 5 metingen, als verklaring "globale hoogtecurve
+van geclusterde soorten, intercept aangepast aan soort" toevoegen   
+
+- idem dito voor de soorten met meer dan 4 metingen, waar toch geen eigen curve voor 
+opgesteld kon worden (hier zijn dat soorten 69 en 17)
+
+
+
+## Verwijderen plotmodellen
+
+De plotmodellen (plotID = `r virt_plot`) van soorten waar ook een globaal model 
+(plotID = <ALL>) van is, verwijderen, zodat soorten niet dubbel voorkomen in de lijst.
+
+
+## Toevoegen plotmodellen van geclusterde soorten   
+
+Dit is ahw het ontkoppelen van de geclusterde soorten.
+Hier niet nodig.
+
+
+## Kopieren naar folder dataverwerking 
+
+De parameterfile kopiëren naar folder "C:/03_BR/1_DataVerwerkingBR/Data/Hoogtemodellen" 
+voor gebruik in R, package forrescalc.
+
+
+- Eerst de oude parameterfiles die daar staan, hernoemen naar "xxxxx_vs2022.xlsx" en 
+verplaatsen naar folder "archief",met behulp van onderstaande code (! versienr aanpassen).    
+
+```{r eval = FALSE}
+versienr <- "vs2022"
+
+for (decade in c(1, 2)){
+  
+  # bestaat de file al?
+  archive_filename <- paste0(path_to_height_models, "archief/HeightParams_", forestreserve_short, "_", plot_type, "_", decade, "_", versienr, ".xlsx")
+  
+  if (file.exists(archive_filename)) {
+  print(paste0(archive_filename, " already exists!"))
+} else {
+  print("The file does not exist.")
+  parameters_old <- read_excel(paste0(path_to_height_models, "HeightParams_", forestreserve_short, "_", plot_type, "_1.xlsx"))
+  write.xlsx(parameters_old, file = archive_filename, showNA = FALSE) 
+}
+  
+}
+
+# idem voor teamdrive
+for (decade in c(1, 2)){
+  
+  # bestaat de file al?
+  archive_filename <- paste0(path_to_heightmodels_teamdrive, "archief/HeightParams_", forestreserve_short, "_", plot_type, "_", decade, "_", versienr, ".xlsx")
+  
+  if (file.exists(archive_filename)) {
+  print(paste0(archive_filename, " already exists!"))
+} else {
+  print("The file does not exist.")
+  parameters_old <- read_excel(paste0(path_to_heightmodels_teamdrive, "HeightParams_", forestreserve_short, "_", plot_type, "_1.xlsx"))
+  write.xlsx(parameters_old, file = archive_filename, showNA = FALSE) 
+}
+  
+}
+
+
+```
+
+- De parameterfile inlezen.    
+
+```{r eval = FALSE}
+parameters <- read_excel(path = paste0(path_to_datarequest, "HeightParams_", forestreserve_short, "_", plot_type, ".xlsx"))
+
+# eerste sheet inlezen
+```
+
+- De parameterfile opslaan onder `r path_to_height_models`, met een afzonderlijke file per decade.
+
+```{r eval = FALSE}
+write.xlsx(parameters, file = paste0(path_to_height_models, "HeightParams_", forestreserve_short, "_", plot_type, "_1.xlsx"), showNA = FALSE)  # row.names = TRUE geeft foutmelding
+
+write.xlsx(parameters, file = paste0(path_to_height_models, "HeightParams_", forestreserve_short, "_", plot_type, "_2.xlsx"), showNA = FALSE)
+
+write.xlsx(parameters, file = paste0(path_to_height_models, "HeightParams_", forestreserve_short, "_", plot_type, "_3.xlsx"), showNA = FALSE)
+```
+
+
+- De parameterfile ook direct opslaan in onze teamdrive `r path_to_heightmodels_teamdrive`
+
+```{r eval = FALSE}
+write.xlsx(parameters, file = paste0(path_to_heightmodels_teamdrive, "HeightParams_", forestreserve_short, "_", plot_type, "_1.xlsx"), showNA = FALSE)  # row.names = TRUE geeft foutmelding
+
+write.xlsx(parameters, file = paste0(path_to_heightmodels_teamdrive, "HeightParams_", forestreserve_short, "_", plot_type, "_2.xlsx"), showNA = FALSE)
+
+write.xlsx(parameters, file = paste0(path_to_heightmodels_teamdrive, "HeightParams_", forestreserve_short, "_", plot_type, "_3.xlsx"), showNA = FALSE)
+```
+
+# Html kopieren naar teamdrive
+
+Html manueel kopieren naar c-schijf en naar de teamdrive (`r forestreserve_folder_teamdrive`)  
+
+Na knitting - manueel
+
+```{r eval = FALSE}
+# Specify the path of the file you want to copy
+source_file <- here::here(paste0("Scripts/AanmaakHoogteCurves/verkenning_DHcurves_", forestreserve_short, "_", plot_type, "_2026.html"))
+
+# Specify the destination directory where you want to copy the file
+destination_dir1 <- path_to_datarequest  #c-schijf
+destination_dir2 <- path_to_heightcurves    # teamdrive
+
+# Copy the file to the destination directory
+file.copy(from = source_file, to = destination_dir1, overwrite = TRUE)
+file.copy(from = source_file, to = destination_dir2, overwrite = TRUE)
+# ? file.copy
+```
+
+
+
+
+

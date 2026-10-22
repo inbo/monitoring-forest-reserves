@@ -1,0 +1,602 @@
+---
+title: "Trends in background mortality in unmanaged forests across Europe over the last century"
+author: "Jokin Idoate Lacasia"
+date: "08-07-2025"
+output:
+  html_document:
+    toc: no
+    number_sections: no
+    theme: sandstone
+  pdf_document:
+    toc: no
+---
+
+Corresponding author: Jokin Idoate-Lacasia,1,2\*
+
+^1^ Forest Resources and Management, Swiss Federal Research Institute for Forest, Snow and Landscape Research WSL, Birmensdorf, Switzerland\
+^2^ Forest Ecology, Institute of Terrestrial Ecosystems, Department of Environmental Systems Science, ETH Zurich, Zurich, Switzerland\
+^\*^ jokin.lacasia\@wsl.ch
+
+This script documents the analyses and the plot generation for the article *"Trends in background mortality in unmanaged forests across Europe over the last century"*. We used a comprehensive network of permanent plots with repeated censuses spanning from 1936 to 2020 in 299 unmanaged forest reserves across Europe. The database includes 1.5 million tree records over successive censuses covering a total sampled area of 853.7 ha. We (1) calculated background mortality rates (Figure 1), (2) analysed trends in mortality rates (Figure 2), and (3) investigated how these trends relate to the location of each tree within its ecological niche (Figure 3). First, we developed a series of generalized linear mixed models (GLMMs) at the plot level to analyse the mortality rates over time. Then, we developed another series of models at the tree level, to analyse the mortality probability of the individual trees based on their probability of occurrence, used as a proxy for their position within their ecological niche.
+
+\
+Please place the provided `.RDS` files in a subfolder called `data`, housed in the same directory as the `.RMD` to compile the markdown.
+
+This is the R code used to analyse the data and create the figures presented in the article.
+
+## Set up R
+
+```{r error=FALSE, message=FALSE, warning=FALSE}
+
+# Load the packages that are going to be used in the script
+
+# Data wrangling
+library(dplyr)
+# Weighted mean and quantiles for Figure 1
+library(TAM)
+
+# Modelling
+# glmm
+library(glmmTMB)
+library(stats)
+
+# Plotting
+library(ggplot2)
+library(patchwork)
+
+```
+
+## Load the data
+
+Here we load the following datasets:
+
+#### `plot_level.RDS`:
+
+This dataset contains annual mortality rate values for each permanent plot at each census, of plots with at least three censuses. This dataset is going to be used to calculate the weighted mean annual background mortality rates by forest types, and the series of models to study the trends of annual mortality rates, and then to create Figure 1 and Figure 2. The dataset contains the following columns:
+
+-   **site_id:** Unique identifier for each site
+
+-   **unique_plot_id2:** Unique identifier for each permanent plot
+
+-   **mort_proportion**: Annual mortality rate (% year^-1^)
+
+-   **species_en**: Name in English of the dominant tree species in the plot (used as a proxy for forest type)
+
+-   **year**: Year of the census
+
+-   **invPrev**: Year of the previous census
+
+-   **period_length**: Time between inventories (years)
+
+-   **mid_inv**: Middle calendar year between inventories (year)
+
+-   **plot_area**: Area of the individual permanent plots (ha)
+
+-   **final_count_prev**: Total number of trees in the plot (stems)
+
+-   **BA_prev_ha**: Stand basal area in previous census (m^2^ ha^-1^)
+
+-   **tree_dens_prev_ha**: Tree density in previous census (stems ha^-1^)
+
+-   **dds_y**: Annual degree day sum (°C days)
+
+-   **cwb_y**: Climatic water balance (mm year^-1^)
+
+#### `tree_level.RDS`:
+
+This dataset contains tree census data for each permanent plot at each census, of plots with at least two censuses. This dataset is going to be used to model species-specific size dependent mortality probabilities of the studied tree species, and then to create Figure 3. The dataset contains the following columns:
+
+-   **site_id:** Unique identifier for each site
+
+-   **unique_plot_id2:** Unique identifier for each permanent plot
+
+-   **unique_tree_id2:** Unique identifier for each tree
+
+-   **year**: Year of the census
+
+-   **period_length**: Time between censuses (years)
+
+-   **status:** Whether the tree is alive or dead
+
+-   **species_en**: Name in English of the tree species
+
+-   **dbh_before**: Dbh of the tree in the previous census
+
+-   **prob_occ**: Probability of occurrence of the individual trees based on the outcome of their respective Species Distribution Models (SDMs)
+
+-   **BA_prev_ha**: Stand basal area in previous census (m^2^ ha^-1^)
+
+-   **tree_dens_prev_ha**: Stand tree density in previous census (stems ha^-1^)
+
+-   **cwb_y**: Climatic water balance (mm year^-1^)
+
+```{r warning=FALSE, error=FALSE, message=FALSE}
+
+# Annual mortality rates at the plot level
+dat_plot <- readRDS("./data/plot_level.RDS")
+
+# Annual mortality rates at the plot level
+dat_tree <- readRDS("./data/tree_level.RDS")
+
+```
+
+### 1. Long-term background mortality rates in European forest reserves
+
+Explore the data.
+
+```{r message=FALSE, warning=FALSE}
+str(dat_plot)
+```
+
+Define the desired order for plotting the forest types. It will be used to create Figure 1 and Figure 2.
+
+```{r message=FALSE, warning=FALSE}
+desired_order <- c("Beech-dominated", "Oak-dominated", "Hornbeam-dominated", "Ash-dominated", "Fir-dominated", "Spruce-dominated", "Scots pine-dominated", "Mountain pine-dominated")
+
+```
+
+First, create a function to expand the dataframe so each year of the census interval has its corresponding annual mortality value, and apply it.
+
+```{r message=FALSE, warning=FALSE}
+
+expand_df <- function(dat) {
+  expanded_df <- do.call(rbind, lapply(1:nrow(dat), function(i) {
+    years <- seq(dat$invPrev[i], dat$year[i])
+    data.frame(unique_plot_id2 = dat$unique_plot_id2[i],
+               Year = years,
+               mort = dat$mort[i],
+               mid_inv = dat$mid_inv[i],
+               final_count_prev = dat$final_count_prev[i],
+               plot_area = dat$plot_area[i],
+               species_en = dat$species_en[i])
+  }))
+  return(expanded_df)
+}
+
+# Use the expand_df function to create the longer dataframe
+expanded_df <- expand_df(dat_plot)
+
+```
+
+Second, calculate the weighted mean by forest type and year.
+
+```{r message=FALSE, warning=FALSE}
+
+dat_p <- expanded_df %>% group_by(species_en, Year) %>%
+  mutate(n = n()) %>%
+  filter(n >= 2) %>% # We need at least 2 obs (plots) to calculate a mean
+  summarise(mort_w = weighted.mean(x=mort,
+                                   w=final_count_prev, na.rm=TRUE),
+            mort_m = mean(mort),
+            quantile_low = weighted_quantile(x=mort, w=final_count_prev,
+                                             probs=0.025,
+                                             type=NULL, select=NULL),
+            quantile_high = weighted_quantile(x=mort, w=final_count_prev,
+                                              probs=0.975,
+                                              type=NULL, select=NULL),
+            final_count_prev_tot = sum(final_count_prev),
+            n = n())
+```
+
+Third, create the individual plots and store them in a list.
+
+```{r warning=FALSE, error=FALSE, message=FALSE}
+
+# Initialize a list to hold individual plots
+plot_list <- list()
+
+# Loop over each species in the desired order
+for (species_name in desired_order) {
+  
+  # Filter data for the current species
+  dat_species <- dat_p %>% filter(species_en == species_name)
+  
+  # Create the plot for the current species
+  pl <- ggplot(dat_species, aes(x = Year, y = mort_w, col = final_count_prev_tot)) +
+    geom_ribbon(aes(ymin = quantile_low, ymax = quantile_high),
+                col = "grey", alpha = 0.15, linetype = 0, show.legend = FALSE) +
+    geom_line(linewidth = 1.5) +
+    scale_color_gradient2(
+      low = "#D53E4F",  
+      mid = "#E6F598", 
+      high = "#3288BD",
+      midpoint = 15000,
+      limits = c(380, 46300),
+      name = "Total number of stems") +
+    labs(title = species_name,
+         x = "Year",
+         y = expression("Observed annual mortality (% yr"^-1*")")) +
+    theme_bw() +
+    theme(
+      plot.title = element_text(hjust = 0.5),
+      axis.title.x = element_text(size = 18, vjust = -0.75),  
+      axis.title.y = element_text(size = 18, vjust = +3), 
+      axis.text = element_text(size = 12),
+      legend.text = element_text(size = 12, hjust = 1, angle = 45),
+      legend.title = element_text(size = 15)) +
+     coord_cartesian(ylim = c(0,5),
+                    xlim = c(1935, 2020))
+  
+  # Add the plot to the list
+  plot_list[[species_name]] <- pl
+}
+
+```
+
+#### Figure 1 - *Weighted mean of observed annual mortality rates by forest type*
+
+Create the combined plot with a single shared legend and axis labels and the desired dimensions.
+
+```{r warning=FALSE, error=FALSE, message=FALSE, fig.width=8.27, fig.height=11.69}
+
+combined_plot <- wrap_plots(plot_list[desired_order], ncol = 2) +
+  plot_layout(guides = "collect",
+              axes = "collect",
+              axis_titles = "collect") &
+  theme(legend.position='bottom',
+        legend.margin=margin(10, 0, 0, 0))
+
+combined_plot
+```
+
+### 2. Predicted trends in mortality rates
+
+Explore the data.
+
+```{r warning=FALSE, error=FALSE}
+
+str(dat_plot)
+
+```
+
+Load the confidence intervals function that will also be used in part 3.
+
+```{r warning=FALSE, error=FALSE}
+# Using Ben Bolker's function for calculating fixed effect CIs for mixed models
+# https://bbolker.github.io/mixedmodels-misc/glmmFAQ.html#glmmtmb
+# https://ms.mcmaster.ca/~bolker/R/misc/foxchapter/14-Fox-Chap13.pdf
+
+easyPredCI <- function(model,newdata=NULL,alpha=0.05) {
+  ## baseline prediction, on the linear predictor (logit) scale:
+  pred0 <- predict(model,re.form=NA,newdata=newdata)
+  ## fixed-effects model matrix for new data
+  X <- model.matrix(formula(model,fixed.only=TRUE)[-2],newdata)
+  beta <- fixef(model) ## fixed-effects coefficients
+  V <- vcov(model)$c     ## variance-covariance matrix of beta 
+  pred.se <- sqrt(diag(X %*% V %*% t(X))) ## std errors of predictions
+  ## inverse-link function
+  linkinv <- family(model)$linkinv
+  ## construct 95% Normal CIs on the link scale and
+  ##  transform back to the response (probability) scale:
+  crit <- -qnorm(alpha/2)
+  linkinv(cbind(conf.low=pred0-crit*pred.se,
+                conf.high=pred0+crit*pred.se))
+}
+
+```
+
+Build the mixed effects model to analyse mortality rates over time while controlling for other important parameters that potentially affect mortality rates, i.e. the average CWB and DDS between the inventories, and BA at the beginning of the inventory. The random effect is defined for the intercept using plots as a grouping variable to account for the repeated measurements.
+
+Create individual models for each forest type, and scale the variables. Then, create the plots based on the predictions of the individual models and store them in a list.
+
+Finally, combine the plots to visualize the effect of the variable time (Figure 2) and the other covariates BA, CWB and DDS (Figures A7, A8 and A9 in the Appendix of the article).
+
+```{r warning=FALSE, error=FALSE}
+
+# Initialize plot lists
+plot_list_mid_inv <- list()
+plot_list_BA <- list()
+plot_list_CWB <- list()
+plot_list_DDS <- list()
+
+species_en <- unique(dat_plot$species_en)
+
+# Global min/max for point size scaling
+global_min <- min(dat_plot$final_count_prev, na.rm = TRUE)
+global_max <- max(dat_plot$final_count_prev, na.rm = TRUE)
+
+for (i in species_en) {
+  
+  dat_plot2 <- dat_plot %>% filter(species_en == i)
+  
+  # Scale predictors
+  dat_plot2 <- dat_plot2 %>% 
+    mutate(BA_prev_ha_scaled = scale(BA_prev_ha),
+           cwb_y_scaled = scale(cwb_y),
+           dds_y_scaled = scale(dds_y),
+           mid_inv_scaled = scale(mid_inv)) %>%
+    as.data.frame()
+  
+  dat_plot2$unique_plot_id2_f <- as.factor(dat_plot2$unique_plot_id2)
+
+  # Fit GLMM
+  glmm_model <- glmmTMB(
+    mort_proportion ~ mid_inv_scaled +
+      BA_prev_ha_scaled + 
+      cwb_y_scaled * dds_y_scaled +
+      (1 | unique_plot_id2_f),
+    weights = final_count_prev,
+    family = binomial(link = "logit"),
+    data = dat_plot2
+  )
+
+  # Create a function to make the plots
+  make_plot <- function(var_name, var_seq, x_label, x_var_original) {
+    newdata <- expand.grid(
+      dummy_var = var_seq,
+      mid_inv_scaled = mean(dat_plot2$mid_inv_scaled),
+      cwb_y_scaled = mean(dat_plot2$cwb_y_scaled),
+      BA_prev_ha_scaled = mean(dat_plot2$BA_prev_ha_scaled),
+      dds_y_scaled = mean(dat_plot2$dds_y_scaled),
+      final_count_prev = mean(dat_plot2$final_count_prev)
+    )
+    
+    # Rename the first column to the variable we are interested in
+    names(newdata)[1] <- var_name
+
+    # Predict
+    newdata$mort_proportion <- predict(glmm_model, newdata, type = "response", re.form = NA)
+    cpred1.CI <- easyPredCI(model = glmm_model, newdata = newdata)
+    data_p2 <- data.frame(newdata, cpred1.CI)
+    
+    # Detransform for original axis label
+    data_p2[[x_var_original]] <- data_p2[[var_name]] * attr(dat_plot2[[var_name]], "scaled:scale") +
+                                                   attr(dat_plot2[[var_name]], "scaled:center")
+    
+    ggplot(data_p2, aes_string(x = x_var_original, y = "mort_proportion * 100")) +
+      geom_line() +
+      geom_ribbon(aes(ymin = conf.low * 100, ymax = conf.high * 100), alpha = 0.15) +
+      geom_point(data = dat_plot2, aes_string(x = x_var_original, y = "mort_proportion * 100",
+                                              size = "final_count_prev"), alpha = 0.1) +
+      scale_size_continuous(range = c(1, 8),
+                            limits = c(global_min, global_max), name = "Total number of stems") +
+      labs(title = i, x = x_label, y = expression("Predicted annual mortality (% yr"^-1*")")) +
+      theme_bw() +
+      theme(
+        plot.title = element_text(hjust = 0.5),
+        axis.title.x = element_text(size = 18, vjust = -0.75),
+        axis.title.y = element_text(size = 18, vjust = +3),
+        axis.text = element_text(size = 12),
+        legend.text = element_text(size = 12),
+        legend.title = element_text(size = 15)
+      ) +
+      coord_cartesian(ylim = c(0, 5))
+  }
+
+  # Store plots
+  plot_list_mid_inv[[i]] <- make_plot(
+    var_name = "mid_inv_scaled",
+    var_seq = seq(min(dat_plot2$mid_inv_scaled), max(dat_plot2$mid_inv_scaled), length.out = 100),
+    x_label = "Year",
+    x_var_original = "mid_inv"
+  )
+
+  plot_list_BA[[i]] <- make_plot(
+    var_name = "BA_prev_ha_scaled",
+    var_seq = seq(min(dat_plot2$BA_prev_ha_scaled), max(dat_plot2$BA_prev_ha_scaled), length.out = 100),
+    x_label = "Basal Area (ha)",
+    x_var_original = "BA_prev_ha"
+  )
+
+  plot_list_CWB[[i]] <- make_plot(
+    var_name = "cwb_y_scaled",
+    var_seq = seq(min(dat_plot2$cwb_y_scaled), max(dat_plot2$cwb_y_scaled), length.out = 100),
+    x_label = "Climatic Water Balance (CWB)",
+    x_var_original = "cwb_y"
+  )
+
+  plot_list_DDS[[i]] <- make_plot(
+    var_name = "dds_y_scaled",
+    var_seq = seq(min(dat_plot2$dds_y_scaled), max(dat_plot2$dds_y_scaled), length.out = 100),
+    x_label = "Drought Severity (DDS)",
+    x_var_original = "dds_y"
+  )
+
+  print(paste(i, "successfully done"))
+}
+
+```
+
+#### Figure 2.1 - *Predicted annual mortality rates as a function of time*
+
+Create the combined plot with a single shared legend and axis labels and the desired dimensions.
+
+```{r warning=FALSE, error=FALSE, fig.width=8.27, fig.height=11.69}
+
+combined_plot <- wrap_plots(plot_list_mid_inv[desired_order], ncol = 2) +
+  plot_layout(guides = "collect",
+              axes = "collect",
+              axis_titles = "collect") &
+  theme(legend.position='bottom',
+        legend.margin=margin(10, 0, 0, 0))
+
+combined_plot
+
+```
+
+#### Figure 2.2 - *Predicted annual mortality rates as a function of BA*
+
+Create the combined plot with a single shared legend and axis labels and the desired dimensions.
+
+```{r warning=FALSE, error=FALSE, fig.width=8.27, fig.height=11.69}
+
+combined_plot <- wrap_plots(plot_list_BA[desired_order], ncol = 2) +
+  plot_layout(guides = "collect",
+              axes = "collect",
+              axis_titles = "collect") &
+  theme(legend.position='bottom',
+        legend.margin=margin(10, 0, 0, 0))
+
+combined_plot
+
+```
+
+#### Figure 2.3 - *Predicted annual mortality rates as a function of CWB*
+
+Create the combined plot with a single shared legend and axis labels and the desired dimensions.
+
+```{r warning=FALSE, error=FALSE, fig.width=8.27, fig.height=11.69}
+
+combined_plot <- wrap_plots(plot_list_CWB[desired_order], ncol = 2) +
+  plot_layout(guides = "collect",
+              axes = "collect",
+              axis_titles = "collect") &
+  theme(legend.position='bottom',
+        legend.margin=margin(10, 0, 0, 0))
+
+combined_plot
+
+```
+
+#### Figure 2.4 - *Predicted annual mortality rates as a function of DDS*
+
+Create the combined plot with a single shared legend and axis labels and the desired dimensions.
+
+```{r warning=FALSE, error=FALSE, fig.width=8.27, fig.height=11.69}
+
+combined_plot <- wrap_plots(plot_list_DDS[desired_order], ncol = 2) +
+  plot_layout(guides = "collect",
+              axes = "collect",
+              axis_titles = "collect") &
+  theme(legend.position='bottom',
+        legend.margin=margin(10, 0, 0, 0))
+
+combined_plot
+
+```
+
+### 3. Niche edge effect on tree mortality
+
+Explore the data.
+
+```{r warning=FALSE, error=FALSE}
+
+str(dat_tree)
+
+# Check the 99th percentile of DBH for each species
+percentile_99 <- dat_tree %>%
+  group_by(species_en) %>%
+  summarize(dbh_99th = quantile(dbh_before, 0.99))
+
+percentile_99
+
+```
+
+Build the mixed effects model to evaluate the species-specific size-dependent probability of mortality and the tree location within their ecological niche. Include BA in the census before the event and CWB within the census interval as covariates since they may play a pivotal role in tree mortality. The random effects for the intercept included trees nested within plot and nested within forest reserve as grouping variables to account for the hierarchical structure of the dataset and the repeated measurements. Include the log-transformed length of the census interval of each plot as an offset term to account for different interval lengths.
+
+Create individual models for each forest type, and scale the variables. Then, create the plots based on the predictions of the individual models and store them in a list.
+
+```{r warning=FALSE, error=FALSE}
+
+# List to store plots
+plots <- list()
+
+species_en <- unique(dat_tree$species_en)
+
+for (i in species_en) {
+  
+  dat_tree_ind <- dat_tree %>% filter(species_en == i)
+  
+  # Remove data with dbh_before outside of the 99th quantile 
+    dbh_99th <- quantile(dat_tree_ind$dbh_before, 0.99)
+    dat_tree_ind <- dat_tree_ind %>% filter(dbh_before <= dbh_99th)
+ 
+  # Scale variables
+  dat_tree_ind$prob_occ_scaled <- scale(dat_tree_ind$prob_occ)
+  dat_tree_ind$dbh_before_scaled <- scale(dat_tree_ind$dbh_before)
+  dat_tree_ind$BA_prev_ha_scaled <- scale(dat_tree_ind$BA_prev_ha)
+  dat_tree_ind$cwb_y_scaled <- scale(dat_tree_ind$cwb_y)
+ 
+  glmm_model <- glmmTMB::glmmTMB(status_model ~ prob_occ_scaled * 
+                                   poly(dbh_before_scaled, 2) +
+                                    BA_prev_ha_scaled +
+                                    cwb_y_scaled +
+                                    offset(log(period_length)) + 
+                                    (1|site_id/unique_plot_id2/unique_tree_id2),
+                                  binomial(link = "cloglog"),
+                                  data = dat_tree_ind)
+  
+  # Calculate prob_occ 0.9, 0.5 and 0.2 in its log and scaled version
+  
+  prob_occ_scaled_1 = (0.9 - attr(dat_tree_ind$prob_occ_scaled, "scaled:center")) / attr(dat_tree_ind$prob_occ_scaled, "scaled:scale") 
+  prob_occ_scaled_0.5 = (0.5 - attr(dat_tree_ind$prob_occ_scaled, "scaled:center")) / attr(dat_tree_ind$prob_occ_scaled, "scaled:scale") 
+  prob_occ_scaled_0.2 = (0.2 - attr(dat_tree_ind$prob_occ_scaled, "scaled:center")) / attr(dat_tree_ind$prob_occ_scaled, "scaled:scale") 
+  
+  pred_grid <- expand.grid(
+    dbh_before_scaled = seq(min(dat_tree_ind$dbh_before_scaled), max(dat_tree_ind$dbh_before_scaled), length.out = 100),
+    prob_occ_scaled = c(prob_occ_scaled_0.2, prob_occ_scaled_0.5, prob_occ_scaled_1),
+    cwb_y_scaled = mean(dat_tree_ind$cwb_y_scaled),
+    BA_prev_ha_scaled = mean(dat_tree_ind$BA_prev_ha_scaled),
+    period_length = 1)
+  
+  # Predict probabilities using the model
+  pred_grid$preds <- stats::predict(glmm_model, newdata = pred_grid, type = "response", re.form = NA)
+  
+  # Detransform scaled variables
+  pred_grid$prob_occ <- pred_grid$prob_occ_scaled * attr(dat_tree_ind$prob_occ_scaled, "scaled:scale") + attr(dat_tree_ind$prob_occ_scaled, "scaled:center") 
+  pred_grid$dbh_before <- pred_grid$dbh_before_scaled * attr(dat_tree_ind$dbh_before_scaled, "scaled:scale") + attr(dat_tree_ind$dbh_before_scaled, "scaled:center") 
+
+  
+  # 95% confidence intervals for the fixed effects 
+  cpred1.CI <- easyPredCI(model = glmm_model, newdata = pred_grid)
+  
+  data_pl3 <- data.frame(pred_grid, cpred1.CI)
+  
+  # Plot results
+  
+  col_names <- c("Low", "Medium", "High")
+  colors <- c("burlywood4", "sandybrown", "springgreen4")
+  
+  pl <- ggplot(data_pl3, aes(x = dbh_before, y = preds*100, col = as.character(prob_occ))) +
+    geom_line(linewidth = 2) + 
+    geom_ribbon(data = data_pl3,
+                aes(ymin = conf.low*100, ymax = conf.high*100, fill = as.character(prob_occ)),
+                size = 2, alpha = 0.15, linetype = 0, show.legend = FALSE) +
+    labs(title = i,
+         x = "dbh (cm)",
+         y = expression("Predicted probability of mortality (% yr"^-1*")")) +
+    scale_color_manual(values = colors,
+                       labels = col_names,
+                       name = "Probability of occurrence") + 
+    scale_fill_manual(values = colors) +
+    theme_bw() +
+    theme(
+      plot.title = element_text(hjust = 0.5),
+      axis.title.x = element_text(size = 18, vjust = -0.75),  
+      axis.title.y = element_text(size = 18, vjust = +3), 
+      axis.text = element_text(size = 12),
+      legend.text = element_text(size = 12, hjust = 1),
+      legend.title = element_text(size = 15))  +
+    coord_cartesian(ylim = c(0,16),
+                    xlim = c(8, 105))
+   
+  # Save individual plots to list
+  plots[[i]] <- pl
+  
+  print(paste(i, "succesfully done"))
+  
+}
+
+```
+
+#### Figure 3 - *Predicted annual mortality probability as a function of dbh and three different levels of probability of occurence*
+
+Create the combined plot with a single shared legend and axis labels and the desired dimensions.
+
+```{r warning=FALSE, error=FALSE, fig.width=8.27, fig.height=11.69}
+
+# First create an order for the tree species as done for forest types
+desired_order <- c("Beech", "Oak", "Hornbeam", "Ash",
+                   "Fir", "Spruce", "Scots pine", "Mountain pine")
+
+# Combine plots with a single shared legend and axis labels
+combined_plot <- wrap_plots(plots[desired_order], ncol = 2) +
+  plot_layout(guides = "collect",
+              axes = "collect",
+              axis_titles = "collect") &
+  theme(legend.position='bottom',
+        legend.margin=margin(10, 0, 0, 0))
+
+combined_plot
+
+```
