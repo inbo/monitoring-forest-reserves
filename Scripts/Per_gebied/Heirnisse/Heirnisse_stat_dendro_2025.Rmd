@@ -21,7 +21,6 @@ output:
 **NOG OPNIEUW TE RUNNEN INDIEN DATA NODIG**
 
 
-
 ```{r Rm, eval = FALSE}
 rm(list=ls())
 ```
