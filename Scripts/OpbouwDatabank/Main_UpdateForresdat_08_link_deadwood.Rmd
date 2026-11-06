@@ -1,0 +1,236 @@
+---
+title: "Update forresdat - deadwood op plotniveau obv LIS"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: yes
+      smooth_scroll: yes
+---
+
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = FALSE,  # FALSE: dan kan ik knitten zonder dat er iets gebeurt
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+
+# libraries & invoergegevens & functions
+source(here::here("scripts/Setup.R"))
+
+```
+
+
+> juiste forrescalc kiezen:   
+- om weg te schrijven naar forresdat => met juiste release: dan `install.packages("forrescalc")`  
+- laatste correcties van forrescalc => juiste branch selecteren in forrescalc en opnieuw builden
+(bv. branch 'bugfix' met corr van read_forresdat waarbij we de develop branch kunnen selecteren ipv main)
+
+```{r juiste_forrescalc, eval = FALSE}
+# !!! eerst zeker 'install.packages("forrescalc")
+# zodat data goede release krijgt!
+# zie mail 7/10/24 van Els L.
+# soms een andere branch nodig als Els nog iets moet fixen, maar als ik naar forresdat 
+# wil wegschrijven, moet ik officiële versie van forrescalc gebruiken
+
+install.packages("forrescalc")
+
+```
+
+
+# Vraagstelling
+
+Linken van deadwood fragmenten doorheen de tijd
+Kan dat??
+
+Antwoord Peter (mail van 24/3/2025):
+
+Er zijn koppelingen naar zowel trees (staand) als deadwood (liggend),
+
+MAAR
+
+VANAF 3e decade
+dit kon pas worden ingevoerd nadat we bij de opstart van de 3e decade in Zonien
+de StatusRemeasurement hebben ingevoerd; 
+bij status staand (2eset) => liggend (3eset) verwijst de IDlink naar ID trees_2eSet  
+bij status liggend (2eset) => liggend (3eset) verwijst de IDlink naar ID Deadwood_2eSet
+
+VOOR 3e decade
+werden enkel de liggende gekoppeld aan de reeds liggende uit de voorgaande set,
+om dit te kunnen realiseren wordt  de lijnlaag deadwood_1eSet in de layer
+RefOldDeadwood geimporteerd, wanneer dan een lijn in Deadwood_2eSet werd ingemeten en die overlapt
+de streeplijn in de referentielaag wordt de ID overgenomen in het veld IDlink
+(deze procedure wordt nog steeds gehanteerd, lijnlaag voorgaande set wordt enkel ingeladen wanneer er kandidaten zijn om te koppelen)
+
+LIS-FAS
+sinds het gebruik van de nieuwe DW methode (combi LIS-FAS) is het aantal te koppelen objecten natuurlijk ook sterk gedaald,
+wat dan wel weer overeenstemt met het beoogde doel om enkel de inspanning te doen om te koppelen bij de zwaardere volumes 
+
+Is dus een complex verhaal met veranderingen doorheen de tijd,
+wat kunnen we hiermee :
+als we dus specifiek zoeken naar objecten met koppeling om daar iets mee te gaan doen naar biodiversiteitsonderzoek bijvoorbeeld,
+dan kunnen we hiermee aan de slag. 
+Een consequente éénduidige koppeling over de verschillende decades is dit dus niet, wel bruikbaar voor 
+bepaalde periodes voor bepaalde reservaten, rekening houdend met bovenstaande...
+
+
+----
+
+Sinds 2022 is LIS in gebruik om dood hout opnames te vereenvoudigen.
+Arno T. schreef er een artikel over ()
+
+LIS wordt gebruikt bij diameters < 30 cm
+Volopname blijft in gebruik bij diameters >= 30 cm.
+
+Everzwijnbad en Wijnendale zijn de eerste reservaten waar LIS gebruikt werd in de cirkelplots 
+(3 x 15 m lijn). Intussen ook gebruikt bij Jansheideberg en Heirnisse.
+Heirnisse het eerste reservaat waar LIS in de kernvlakte gebruikt werd (560 m: 2 lijnen van 140m 
+en 4 van 70m, zie figuur mail 7/12/2023).
+
+<!-- Insteek Arno: Het lijkt me logisch om ongeveer eenzelfde aandeel aan te houden als in de cirkelplots (45m/1000m²), dus ongeveer 440m. Idd beter beide richtingen en randen.  -->
+
+
+Veld `LineIntersect` in layer `PlotDetails_3eSet` geeft aan of er LIS gebruikt werd of niet (TRUE/10 or FALSE/20)
+
+
+```{r results='hold', eval=TRUE}
+path_to_forresdat_data
+path_to_analysis_set_db
+path_to_plotlevel_csv
+path_to_treelevel_csv
+path_to_output_gdrive
+path_to_meetgegevens
+
+```
+
+# Load plotinfo
+
+Plotinfo inladen: plottype, naam forest_reserve en info over survey en data al dan niet processed.
+
+(in forrescalc - branch "bugfix_AL": survey_lis toegevoegd 15/10/2024)
+
+```{r }
+plotinfo <- load_plotinfo(database = path_to_fieldmap_db, processed = FALSE)
+```
+
+
+# Aanmaak list
+
+```{r new_list_dendro}
+# dendro_by_plot_species <- dendro_by_plot_species %>% 
+#   mutate(plot_id = as.integer(plot_id),
+#          species = as.integer(species))
+# 
+# dendro_by_diam_plot_species <- dendro_by_plot_species %>% 
+#   mutate(plot_id = as.integer(plot_id),
+#          species = as.integer(species))
+
+# opnieuw list van maken om te exporteren en plotinfo aan te koppelen
+dendro <- list(
+      dendro_by_plot = dendro_by_plot,
+      dendro_by_plot_species = dendro_by_plot_species,
+      dendro_by_diam_plot = dendro_by_diam_plot,
+      dendro_by_diam_plot_species = dendro_by_diam_plot_species,
+      logs_by_decay_plot = logs_by_decay_plot,
+      logs_by_decay_plot_species = logs_by_decay_plot_species
+    )
+```
+
+
+# Plotinfo toevoegen (aan csv-files)
+
+```{r join_plottype_surveynr_BR}
+dendro_plotinfo <- lapply(dendro, function(x) left_join(x, plotinfo %>% select(plot_id, forest_reserve, plottype, period, survey_number), by = c("plot_id", "period")))
+# lapply: same function over all elements of the list
+```
+
+
+# Export plot-level-data
+
+**!!!! ENKEL PLOTS EXPORTEREN WAARVAN DATA PROCESSED ZIJN!!**
+Is standaard parameter bij inladen dendro-data 
+
+**DUS: zorgen dat dit veld in Fieldmap up-to-date is, zie chunck "plotinfo_processed"**
+
+
+Enkele verduidelijkingen:
+
+* "number_of_tree_species" = aantal soorten obv de levende bomen
+
+* "stems_per_tree" = meerstammigheid (stem_number_ha / number_of_trees_ha): heeft hier geen zin, maar dient als insteek voor berekeningen per soort
+
+* "vol_bole_alive_m3_ha" en "vol_bole_dead_m3_ha": volume zonder crown, 
+versus "vol_alive_m3_ha" en "vol_dead_standing_m3_ha"
+
+* "vol_log_m3_ha": liggend dood hout (NA als er geen deadwood survey gebeurd is)
+
+* "vol_deadw_m3_ha": staand en liggend dood hout (NA als er geen deadwood survey gebeurd is)
+
+
+```{r save_dendro_git, eval = FALSE}
+# geen plotinfo naar git
+save_results_git(
+  results = dendro,
+  repo_path = path_to_git_forresdat,
+  strict = TRUE
+)
+```
+
+```{r save_dendro_git_manueel, eval = FALSE}
+# manueel - eigen simpele functie - als save_results_git niet werkt
+save_results_tsv(dendro, 
+                 root = path_to_forresdat_data, 
+                 strict = FALSE)
+```
+
+
+```{r save_dendro_access_csv, eval = FALSE}
+# hier wel plotinfo (plottype, BR, surveynr mee wegschrijven)
+
+# volgende functie heb ik zelf geschreven, zit niet in het package!
+save_results_csv (
+    results = dendro_plotinfo,
+    output_dir = path_to_plotlevel_csv
+    )
+
+# afgerond voor export naar access
+dendro_round <- dendro_plotinfo %>% 
+  lapply(., function(x) round_df(x, 2))
+
+save_results_access (
+  results = dendro_round,
+  database = path_to_analysis_set_db,
+  remove_tables = TRUE
+  )
+
+```
+
+Direct naar gdrive exporteren (csv): 
+naar **/PRJ_BOSECO_ALGEMEEN/PRJ_BR_AanvraagGegevens/00_METADATA-ALL_PLOTS/_plot-level-data/**
+
+```{r save_dendro_gdrive, eval = FALSE}
+save_results_csv(
+    results = dendro_plotinfo,
+    output_dir = path_to_plotlevel_gdrive
+    )
+
+```
+
+
+**Na update van forresdat, project "forresdat" openen en alles naar de cloud pushen**
+**Eventueel ook access op gdrive plaatsen**

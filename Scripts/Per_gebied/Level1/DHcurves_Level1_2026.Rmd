@@ -1,0 +1,332 @@
+---
+title: "Aanmaak DH-curves mbv FM-IA"
+author: "Anja Leyman"
+date: "7/9/2026"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: FALSE
+      smooth_scroll: FALSE
+---
+
+```{r Rm, eval = FALSE}
+rm(list=ls())
+```
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 9,
+  fig.align = TRUE)
+
+library(here)
+library(writexl)
+library(DBI)
+library(odbc)
+library(RSQLite)
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+
+```
+
+
+```{r Setup2, results = 'hide'}
+forestreserve_short <- "Level1"
+source(here::here(paste0("Scripts/Per_gebied/", forestreserve_short, "/setup_paths_gebied.R")))
+source(here::here(paste0("Scripts/Per_gebied/", forestreserve_short, "/functies.R")))
+
+
+# plot_type <- "CA"
+plot_type <- "CP"
+plot_type <- "Circular plot"
+
+# virt_plot <- 899
+```
+
+
+# Vraagstelling
+
+Momenteel gebeurt de meeste dataverwerking in R, maar de aanmaak van DH-curves gebeurt nog steeds in FM-IA.
+We maken voor Level 1 géén virtuele plot aan, er worden curves per plot en jaar aangemaakt.
+
+
+# Data inladen
+
+In dit script wordt data van het **bosreservaat `r forestreserve`** ingeladen, met als **plottype `r plot_type`**.
+
+<!-- In het geval van `r forestreserve` dient ook rekening gehouden te worden met een aantal **verstoorde plots**. -->
+<!-- Deze worden niet meegenomen in de verdere dataverwerking.   -->
+
+
+```{r overview_data}
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+      dbtablesRaw_1eSET <- sqlTables(con) %>% 
+                filter(str_detect(TABLE_NAME, "MSys", negate = TRUE ))
+                # wegfilteren van records waar TABLE_NAME "MSys" bevat
+odbcClose(con)
+```
+
+```{r load_lookuplists}
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+
+qspecies <- sqlFetch(con, "qTreeSpecies")
+# qalivedead <- sqlFetch(con, "qAliveDead")
+qalivedead <- sqlFetch(con, "qStatusTree")
+qindshootcop <- sqlFetch(con, "qCoppice_Individual")
+qintactsnag <- sqlFetch(con, "qIntactTree")
+
+odbcClose(con)
+
+```
+
+```{r load_data}
+conn <- odbcConnectAccess2007(path_to_fieldmap_db)
+
+trees2025 <- load_data_dendrometry_L1(con = conn, jaar = 2025)
+trees2009 <- load_data_dendrometry_L1(con = conn, jaar = 2009) |> 
+  mutate(decaystage = NA)
+trees <- rbind(trees2025, trees2009)
+
+shoots2025 <- load_data_shoots_L1(con = conn, jaar = 2025)
+shoots2009 <- load_data_shoots_L1(con = conn, jaar = 2009)
+shoots <- rbind(shoots2025, shoots2009) 
+
+odbcClose(conn)
+
+stems <- compose_stem_data(trees, shoots) |> 
+  mutate(fperiod = as.factor(period))
+```
+
+```{r select_height_data}
+# names(stems)
+table(stems$alive_dead)
+stems_height <- stems %>% 
+  filter(alive_dead == 1 & (intact_snag == 10 | is.na(intact_snag))
+         # & ind_sht_cop != 11
+         & !is.na(height_m)  # levend en intact, geen opgr spil
+  ) %>% 
+  left_join(qspecies, by = c("species"= "ID")) %>% 
+  rename(name_nl = Value1) %>% 
+  left_join(qindshootcop, by = c("ind_sht_cop"= "ID")) %>% 
+  rename(ind_sht_cop_txt = Value1)
+
+table(stems_height$ind_sht_cop_txt)
+
+# geen haklhout met hoogte
+```
+
+# Hakhout meenemen?
+
+```{r tables, include=FALSE}
+table(stems_height$period)
+table(stems_height$ind_sht_cop)
+table(stems_height$name_nl)
+
+table(stems_height$ind_sht_cop, stems_height$name_nl)
+
+```
+
+```{r HH_overzicht}
+overview_HH_height <- stems_height %>% 
+  group_by(ind_sht_cop, species, name_nl) %>% 
+  summarize(aantal = n()) %>% 
+  ungroup %>% 
+  pivot_wider(names_from = ind_sht_cop, values_from = aantal) %>% 
+  rename(individual = "10", coppice = "20") %>% 
+  mutate(perc_hakhout = round(100*coppice/(individual + coppice), ))
+
+overview_HH_height %>% arrange(desc(perc_hakhout)) %>% DT :: datatable(options = list(dom = 'rt'), rownames = FALSE, filter = "top") 
+
+write.csv2(overview_HH_height, paste0(path_to_datarequest, "/overview_HH_height.csv"))
+```
+
+**Besluit**: voor de meeste soorten meerwaarde om hoogtes van hakhout te betrekken bij opmaak curves!
+(voor gemak dan direct voor alle soorten)
+
+
+# Periode 1 en periode 2 afzonderlijke curves
+
+Immers niet zoals bij de bosreservaten ongelijkjarige bestanden, heeft geen zin vna samen te gooien.
+Wel cfr VBI: curves van periode 2 laten afhangen van periode 1, zodat er geen dalende curve is.
+
+## Tabel
+
+```{r }
+n1_h <- stems %>% filter(period == 1 & alive_dead == 1 & !is.na(height_m)) %>% nrow()
+n2_h <- stems %>% filter(period == 2 & alive_dead == 1 & !is.na(height_m)) %>% nrow()
+
+n1 <- stems %>% filter(period == 1) %>% nrow()
+n2 <- stems %>% filter(period == 2) %>% nrow()
+
+periode <- c("periode 1", "periode 2")
+n_bomen <- c(n1, n2)
+n_hoogtes <- c(n1_h, n2_h)
+dt <- data.frame(periode, n_bomen, n_hoogtes)
+dt %>% DT :: datatable(options = list(dom = 'rt'), rownames = FALSE) 
+  
+```
+
+
+## Grafiek
+
+```{r vgl_all_1_vs_2_curve}
+ggplot(stems_height, aes(dbh_mm, height_m)) + geom_point(aes(color = fperiod)) + geom_smooth(aes(color = fperiod)) 
+
+ggplot(stems_height, aes(dbh_mm, height_m)) + geom_point() + geom_smooth() + facet_wrap(~fperiod)
+
+ggplot(stems_height, aes(dbh_mm, height_m)) + geom_point(aes(color = fperiod)) + geom_smooth()
+                                                  
+```
+
+# Zie InvAnalist
+
+In een en hetzelfde project twee keer hoogtecurves maken en wegschrijven naar CalcHeight_m.
+Dan zit alles mooi in één databank.
+
+De curves zelf wel wegschrijven naar twee aparte excel-files.
+
+## Erraneous records
+
+### Inladen en omvormen
+
+Eerst kolomnamen "plot" en "diff" toevoegen in `erraneous_records_2025.xlsx`
+
+Vervolgens worden de erraneous records ingeladen en omgevormd naar IDPlots, ID, diff
+en gekoppeld met soort, dbh, hoogte en ev. remark. 
+
+**OPGEPAST**: de erraneous records worden bepaald obv afwijking tov algemene curve, 
+niet tov de soort-specifieke curve
+
+```{r kies_2025_2009}
+jaar <- 2025
+jaar <- 2009
+```
+
+```{r }
+erraneous <- read_xlsx(paste0(path_to_datarequest, "erraneous_records_", jaar, ".xlsx"),
+                       sheet = "Blad1")
+
+erraneous_ <- erraneous %>% 
+  mutate(plot_id = str_match(plot, "Plot\\s*(.*?)\\s*/")[,2]
+         # na plot_ en voor /
+         # ,ID = str_match(Plot, "Tree\\s*(.*?)")
+         , tree_measure_id = sub(".*Tree ", "", plot)  # alles na "Tree" 
+               # (want alles tem tree vervangen door "" (niks))
+         , diff_m = ifelse(str_detect(diff, "-"),
+                         str_sub(diff, 6, 11),
+                         str_sub(diff, 6, 10)
+                         )
+         , diff_m = str_replace(diff_m, ",", ".")
+         , diff_m = as.numeric(diff_m)
+         # volgende code werkt ook voor IDPlots - eenvoudiger te snappen
+         # , test_plotid = sub("/.*", "", Plot)   # alles voor "/"
+         # , test_plotid = sub(".*Plot ", "", test_plotid) # alles na "Plot "
+         , plot_id = as.integer(plot_id)
+         , tree_measure_id = as.integer(tree_measure_id)
+  )
+
+# x <- "hello xxx other stuff"         # Example character string
+# x                                    # Print example string
+# # "hello xxx other stuff"
+# sub(" xxx.*", "", x)
+# sub(" *.xxx", "", x)
+# sub(".*xxx ", "", x)
+
+erraneous_ <- erraneous_ %>% 
+  select(plot_id, tree_measure_id, diff_m)
+```
+
+```{r}
+# names(stems_height)
+erraneous_ <- erraneous_ %>% 
+  left_join(stems_height |> filter(year == jaar))
+
+range(abs(erraneous_$diff_m))
+table(erraneous_$species)
+table(erraneous_$name_nl)
+```
+
+Erraneous records worden bepaald op basis van de afwijkingen tov de algemene curve.
+Dat wil echter niet zeggen dat dat echt afwijkende metingen zijn!
+(zie 0_0_residuals.emf)
+Daarvoor moeten we kijken naar de emf-files per soort.
+
+Hiervoor voegen we (eenmalig) de soort, dbh en hoogte toe aan de erraneous_records 
+in een nieuw tabblad "detail".
+
+```{r eval=FALSE}
+# write.xlsx(x = erraneous_, file = paste0(path_to_datarequest, "erraneous_records_2025.xlsx")
+#            , sheetName = "detail"
+#            , append = TRUE)
+
+write.xlsx(x = erraneous_, file = paste0(path_to_datarequest, "erraneous_records_", jaar, ".xlsx")
+           , sheetName = "detail"
+           , append = TRUE)
+```
+
+2009: curves en uitschieters bekeken, allemaal OK => opgelsagen als HeightParams_2009.xml
+
+Dit als input-file voor aanmaak curves 2025
+
+2025: hoogte van één berk in plot 147067 (treeID 17) verwijderd wegens te grote invloed op de curve 
+
+In de twee trees layers (tres2009 en trees2025) is CalcHeight_m nu correct berekend
+en kan gebruikt worden voor verdere berekeningen.
+
+
+# Aanpassen parameterfile
+
+De excel-file "HeightParams_Terrijst_CP.xlsx" aanpassen
+
+
+## Verklaring toevoegen
+
+Volgende opties zijn mogelijk:
+
+```{r}
+# Maak een dataframe met de gegeven gegevens
+verklaring <- data.frame(
+  Source = c("global", "adjusted_all_species", "all_species"),
+  Brondata = c("1eSET+3eSET", "1eSET+3eSET", "1eSET+3eSET"),
+  Verklaring = c("eigen curve: voldoende bomen voor de soort beschikbaar", 
+                 "globale hoogtecurve van geclusterde soorten, intercept aangepast aan soort", 
+                 "globale hoogtecurve van geclusterde soorten")
+)
+
+# Toon de dataframe
+verklaring %>% DT :: datatable(options = list(dom = 'tip'),rownames = FALSE)
+```
+
+- bij de globale soortmodellen als verklaring "eigen curve: 
+voldoende bomen voor de soort beschikbaar" toevoegen     
+ 
+- bij de plotmodellen van soorten met 0 metingen, als verklaring "globale hoogtecurve 
+van geclusterde soorten" toevoegen     
+
+- bij de plotmodellen van soorten met < 5 metingen, als verklaring "globale hoogtecurve
+van geclusterde soorten, intercept aangepast aan soort" toevoegen   
+
+- idem dito voor de soorten met meer dan 4 metingen, waar toch geen eigen curve voor 
+opgesteld kon worden (hier zijn dat soorten 69 en 17)
+
+
+
+## Verwijderen plotmodellen
+
+De plotmodellen (plotID = `r virt_plot`) van soorten waar ook een globaal model (plotID = <ALL>) 
+van is, verwijderen, zodat soorten niet dubbel voorkomen in de lijst.
+
+
+## Toevoegen plotmodellen van geclusterde soorten   
+
+Dit is ahw het ontkoppelen van de geclusterde soorten.
+Hier niet nodig.
