@@ -671,7 +671,7 @@ min(check_Kerss$dbh_mm) == 300 # 300
 save(data_stems, data_dendro, data_shoots, height_model, data_deadwood,
      file=here::here(paste0("RData/main02_dendro_basics_", Sys.Date(), ".RData")))
 
-# load(here::here("RData/main02_dendro_basics.RData"))
+# load(here::here("RData/main02_dendro_basics_2026-10-22.RData"))
 ```
 
 > tijdelijk calculate_dendrometry() vervangen door deelfuncties, en baseren op 
@@ -696,6 +696,52 @@ dendro_by_diam_plot_species <-
     calc_diam_plot_species(data_stems_calc, data_deadwood, plotinfo)
 
 ```
+
+
+```{r}
+# plot met hakhout deel leven en deel dood
+data_stems_calc %>% filter(plot_id == 103 & period == 2 & ind_sht_cop == 12
+                           & species == 28) %>% 
+  select(plot_id, period, tree_measure_id
+         , old_id, shoot_measure_id, species, alive_dead)
+
+data_dendro_calc %>% filter(plot_id == 103 & period == 2 & ind_sht_cop == 12
+                            & species == 28) %>% 
+  select(plot_id, period, tree_measure_id
+         , old_id, species, alive_dead
+         , nr_of_stems, number_of_trees_alive_ha, number_of_trees_dead_ha)
+
+dendro_by_plot %>% filter(plot_id == 103 & period == 2)
+
+dendro_by_plot_species %>% filter(plot_id == 103 & period == 2 & species == 28)
+
+dendro_by_diam_plot_species %>% filter(plot_id == 103 & period == 2 & species == 28)
+```
+
+
+```{r}
+by_plot <- data_dendro_calc %>%
+    mutate(
+      species_alive = ifelse(.data$alive_dead == 11, .data$species, NA)
+    ) %>%
+    group_by(
+      .data$plottype, .data$plot_id, .data$year, .data$period
+    ) %>%
+    summarise(
+      number_of_tree_species = n_distinct(.data$species_alive, na.rm = TRUE),
+      number_of_trees_ha = sum(.data$number_of_trees_alive_ha),
+      stem_number_ha =
+          sum((.data$alive_dead == 11) * .data$nr_of_stems / .data$plotarea_ha),
+      basal_area_alive_m2_ha = sum(.data$basal_area_alive_m2_ha),
+      basal_area_dead_m2_ha = sum(.data$basal_area_dead_m2_ha),
+      vol_alive_m3_ha = sum(.data$vol_alive_m3_ha),
+      vol_dead_standing_m3_ha = sum(.data$vol_dead_standing_m3_ha),
+      vol_bole_alive_m3_ha = sum(.data$vol_bole_alive_m3_ha),
+      vol_bole_dead_m3_ha = sum(.data$vol_bole_dead_m3_ha)
+    ) 
+```
+
+
 
 
 ```{r CreateSeparateDataframesDendro, eval = FALSE}

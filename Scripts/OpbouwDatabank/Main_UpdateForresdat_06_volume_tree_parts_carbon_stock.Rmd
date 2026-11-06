@@ -340,109 +340,19 @@ unique(plotinfo$plottype)
 Standaard wordt enkel processed data ingeladen mbv de load-functies.
 We willen voor onze output ook enkel deze processed data mee.
 
-```{r load_dendro}
-data_dendro <- load_data_dendrometry(database = path_to_fieldmap_db, 
-                                     extra_variables = TRUE, 
-                                     processed = TRUE) %>% 
-  filter(plottype != "OTHER")  # enkel CP of CA
+We gaan verder met `stems_calc` zoals aangemaakt in script "MainUpdateForresdat_03_treeniveau.Rmd"
 
-data_shoots <- load_data_shoots(database = path_to_fieldmap_db, extra_variables = TRUE)
+<!-- Enkel levende en staande, dode bomen -->
 
+```{r calc_stems}
+stems_calc <- read_csv2(paste0(path_to_treelevel_csv, "stems_calc.csv"))
 ```
 
-> Tijdelijk in R corrigeren voor foute levende shoots in 3eSET
-shoot_measure_id > 5000 moet altijd alive_dead 12 zijn
-Eerst hier corrigeren, als dan OK resultaat, in moederdb aanpassen mbv bijwerkquery
-
-```{r TMP_ERROR_OMVORMING_dode_shoots}
-t <- data_shoots %>% 
-  filter(shoot_measure_id > 5000)
-table(t$alive_dead_shoot, t$period)
-  #       1    2    3
-  # 11    0    0  771
-  # 12 1619 2767  956
-# enkel periode 3
-
-t <- data_shoots %>% 
-  filter(shoot_measure_id > 5000 & alive_dead_shoots == 11)
-nrow(t)
-
-# CORRECTIE
-data_shoots_ <- data_shoots %>% 
-  mutate(
-    alive_dead_shoots = ifelse(
-      shoot_measure_id > 5000 & alive_dead_shoots == 11
-      , 12, alive_dead_shoots))
-
-t <- data_shoots_ %>% 
-  filter(shoot_measure_id > 5000)
-table(t$alive_dead_shoot, t$period)
-# ok
-
-data_shoots <- data_shoots_
-```
 
 ```{r}
-data_stems  <- compose_stem_data(data_dendro, data_shoots, extra_variables = TRUE)
-```
-
-> 21/10/2026: tijdelijk corrigeren voor fout in package
-A3 en A4 op niveau stems toekennen
-Bij omvorming van project nog grotere fout ontstaan omdat subcircle voor hakhout ALTIJD op 
-A3 gezet wordt (alive_dead = 15)
-Zie [issue 184](https://github.com/inbo/forrescalc/issues/184) 
-subcircle, subcirclearea_ha en plotarea_ha aanpassen
-
-```{r TMP_CORR_subcircle}
-names(data_stems)
-table(data_stems$alive_dead) # ok, enkel leven/dood
-
-# _ha wordt berekend obv plotarea_ha
-data_stems_ <- data_stems %>% 
-  mutate(subcircle = 
-           ifelse(
-             .data$alive_dead == 11 & .data$dbh_mm >= .data$dbh_min_a4_alive,
-             "A4",
-             ifelse(
-               .data$alive_dead == 12 & .data$dbh_mm >= .data$dbh_min_a4_dead,
-               "A4",
-               "A3" 
-               )
-             ),
-         subcirclearea_ha =
-            ifelse(
-              .data$subcircle == "A4",
-              (pi * .data$r_A4 ^ 2) / 10000,
-              (pi * .data$r_A3 ^ 2) / 10000
-            ),
-          plotarea_ha =
-            ifelse(
-              .data$plottype == "CP",
-              .data$subcirclearea_ha,
-              plotarea_ha
-            )
-         )
-
-t <- data_stems_ %>% filter(period == 3 & species == 16 & plot_id ==102) %>% 
-  select(plot_id, tree_measure_id, period, species
-         , dbh_mm, subcircle, plotarea_ha, subcirclearea_ha)
-# OK
-
-data_stems <- data_stems_
-```
-
-```{r eval = FALSE}
-height_model <- load_height_models()
-
-save(height_model, file = "height_model.RData")
-```
-
-```{r}
-load("height_model.RData")
-
-# bij problemen met forresheights github, eigen functie gebruiken
-# path_to_height_models <- "C:/03_BR/1_DataVerwerkingBR/Data/Hoogtemodellen/"
-# height_model <- load_height_models_local(path_to_height_models)
+# kleine check
+stems_calc %>% filter(is.na(calc_height_m)) %>% nrow() == 0
+# t <- stems_calc %>% filter(is.na(calc_height_m))
 ```
 
 ```{r load_deadw, results='hide'}
@@ -465,29 +375,6 @@ data_deadwood <- data_deadwood %>%
 data_deadwood <- calc_intact_deadwood(data_deadwood)
 ```
 
-
-```{r calc_stems}
-stems_calc <- calc_variables_stem_level(data_stems, height_model)
-
-colnames(stems_calc)
-unique(stems_calc$forest_reserve)
-
-# OF
-
-stems_db_old <- read_csv2(paste0(path_to_treelevel_csv, "stems_calc.csv"))
-
-```
-
-
-```{r}
-# kleine check
-stems_calc %>% filter(is.na(calc_height_m)) %>% nrow() == 0
-# t <- stems_calc %>% filter(is.na(calc_height_m))
-
-```
-
-<!-- Enkel levende en staande, dode bomen -->
-
 <!-- Ontbrekende waarden controleren -->
 
 ```{r CheckMissingValues}
@@ -502,7 +389,6 @@ Er zijn geen ontbrekende waarden.
 
 
 # Overzicht gebruikte factoren
-
 
 ```{r FC}
 # hoger enkel vermeld: FC = 0.5
@@ -1229,11 +1115,12 @@ trees_standing7 <- trees_standing7 %>%
 
 ```{r stems_all_parts, results = 'hide'}
 names(trees_standing7)
+names(stems_calc)
 
 trees_standing8 <- trees_standing7 %>% 
   select(plot_id, plottype, period, year, date_dendro
          , totalplotarea_ha, plotarea_ha
-         , tree_measure_id, old_id, shoot_measure_id
+         , tree_measure_id, shoot_measure_id
          , x_local, y_local
          , species
          , dbh_mm, height_m, calc_height_m
@@ -1422,6 +1309,7 @@ names(zero_volume_bosplots); names(plot_level0)
 plot_level1 <- rbind(plot_level0, zero_volume_bosplots %>% 
                             select(-survey_trees, -year_dendro, -data_processed))
 # 2009
+# 2062 (1 meer dan 2061 - OK)
 
 ```
 
@@ -1519,7 +1407,7 @@ zero_volume_bosplots$species <- NA
 plot_specieslevel_1 <- rbind(plot_specieslevel_0
                           , zero_volume_bosplots %>% 
                             select(-survey_trees, -year_dendro, -data_processed))
-# 2009
+# 9710 (1 meer dan 9709 - OK)
 
 ```
 
@@ -2233,13 +2121,6 @@ waldo::compare(carbon_by_plot_check %>% filter(plot_id == 410), dendro_by_plot_g
 
 t <- carbon_by_plot_check %>% filter(plot_id == 757)
 
-# dode spillen die levend waren: zou opgelost moeten zijn
-waldo::compare(carbon_by_plot %>% filter(plot_id == 757), carbon_by_plot_git %>% filter(plot_id == 757))
-t <- carbon_by_plot %>% filter(plot_id == 757) %>% 
-  select(plot_id, period, contains(c("vol_bole")))
-tgit <- carbon_by_plot_git %>% filter(plot_id == 757) %>% 
-  select(plot_id, period, contains(c("vol_bole")))
-# tree_measure_id 6
 ```
 
 ```{r eval = FALSE}
@@ -2250,6 +2131,16 @@ carbon_by_plot_git <- read_forresdat_table(tablename = "carbon_by_plot"
                                            , plottype = "all"
                                            , git_ref_type = "branch"
                                            , git_reference = "develop")
+
+
+# dode spillen die levend waren: zou opgelost moeten zijn
+waldo::compare(carbon_by_plot %>% filter(plot_id == 757), carbon_by_plot_git %>% filter(plot_id == 757))
+t <- carbon_by_plot %>% filter(plot_id == 757) %>% 
+  select(plot_id, period, contains(c("vol_bole")))
+tgit <- carbon_by_plot_git %>% filter(plot_id == 757) %>% 
+  select(plot_id, period, contains(c("vol_bole")))
+# tree_measure_id 6
+
 
 # carbon_by_plot_git <- read.csv2(file = "C:/03_BR/1_DataVerwerkingBR/Output/_plot-level-data/carbon_by_plot.csv")
 names(carbon_by_plot_git)
@@ -2375,7 +2266,7 @@ save_results_forresdat(
   repo_path = path_to_git_forresdat,
   metadata_path = paste0(path_to_metadata, "_metadata_plotlevel_results_dendro.xlsx"),
   push = FALSE,
-  strict = FALSE,
+  strict = TRUE,
   branch = "develop"
 )
 

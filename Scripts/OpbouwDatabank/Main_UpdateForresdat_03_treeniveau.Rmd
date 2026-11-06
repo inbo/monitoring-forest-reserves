@@ -141,40 +141,6 @@ data_dendro %>% filter(plot_id == 11000 & period == 1 & tree_measure_id == 10)
 data_shoots <- load_data_shoots(database = path_to_fieldmap_db, extra_variables = TRUE)
 ```
 
-
-> Tijdelijk in R corrigeren voor foute levende shoots in 3eSET
-shoot_measure_id > 5000 moet altijd alive_dead 12 zijn
-Eerst hier corrigeren, als dan OK resultaat, in moederdb aanpassen mbv bijwerkquery
-
-```{r TMP_ERROR_OMVORMING_dode_shoots}
-t <- data_shoots %>% 
-  filter(shoot_measure_id > 5000)
-table(t$alive_dead_shoot, t$period)
-  #       1    2    3
-  # 11    0    0  771
-  # 12 1619 2767  956
-# enkel periode 3
-
-t <- data_shoots %>% 
-  filter(shoot_measure_id > 5000 & alive_dead_shoots == 11)
-nrow(t)
-
-# CORRECTIE
-data_shoots_ <- data_shoots %>% 
-  mutate(
-    alive_dead_shoots = ifelse(
-      shoot_measure_id > 5000 & alive_dead_shoots == 11
-      , 12, alive_dead_shoots))
-
-t <- data_shoots_ %>% 
-  filter(shoot_measure_id > 5000)
-table(t$alive_dead_shoot, t$period)
-# ok
-
-data_shoots <- data_shoots_
-```
-
-
 ```{r}
 data_stems  <- compose_stem_data(data_dendro, data_shoots, extra_variables = TRUE)
 ```
@@ -256,43 +222,6 @@ height_model %>% group_by(forest_reserve) %>% summarise(n = n()) %>% ungroup() %
 # => trees werden niet ingeladen 
 ```
 
-
-## Correctie year van dendrometrie
-
-Year = jaar van groeiseizoen
-Grens was gelegd op 1/7, nu naar 1/5.
-Aangevraagd in issue # 114, OK (27/3/2024)
-<!-- Berekening van year en year_dendro aangepast voor load_data_dendrometry() en load_plotinfo():  -->
-
-**T.e.m. 30 april wordt nog bij het vorige jaar geteld, vanaf 1 mei wordt bij het **
-**nieuwe jaar geteld (1 mei bij huidig jaar).**
-
-Volgende reservaten daadwerkelijk over twee jaartallen heen opgemeten:
-
-- Bos Terrijst CA - 1eSET: OK
-- Heirnisse - 2eSET: 5 plots 9/2014: OK
-- Everzwijnbad - 3eSET: 1 plot (118) pas op 5/5/2023 opgemeten
-- Zoniën HARRAS_1995 - 3eSET: 3 plots nog opgemeten 14/5/2020, rest in 2019 opgemeten
-- Zoniën UITBR_2010 - 3eSET: 52 plots jan 2020 tot april 2020 en 12 plots in mei 2020
-
-
-```{r check, results = 'hide'}
-names(data_dendro)
-# data_dendro %>% filter(plot_id == 11000 & period == 1 & tree_measure_id == 10)
-
-year_range <- data_dendro %>% 
-  group_by(forest_reserve, period) %>% 
-  summarize(min_year = min(year), 
-            max_year = max(year),
-            year_range = paste0(min_year, " - ", max_year)) %>% 
-  ungroup()
-
-t <- year_range %>% 
-  filter(min_year != max_year)
-
-```
-
-
 # Correctie Kersselaerspleyn staande bomen
 
 ## Afwijkingen 
@@ -357,7 +286,7 @@ col <- c("dbh_mm", "species", "dbh_class_5cm", "calc_height_m", "vol_crown_m3",
 nrow(data_stems_calc  %>%
        filter_at(col, any_vars(is.na(.)))) == 0
 
-col <- c("dbh_mm", "species", "dbh_class_5cm", "calc_height_m",
+col <- c("dbh_mm", "species", "calc_height_m",
          "basal_area_m2", "vol_bole_m3", "vol_crown_m3", "vol_tot_m3",
          "basal_area_alive_m2_ha", "basal_area_dead_m2_ha", "vol_alive_m3_ha",
          "vol_dead_standing_m3_ha", "vol_bole_alive_m3_ha", "vol_bole_dead_m3_ha",
@@ -365,7 +294,6 @@ col <- c("dbh_mm", "species", "dbh_class_5cm", "calc_height_m",
 
 nrow(data_dendro_calc  %>%
        filter_at(col, any_vars(is.na(.)))) == 0
-
 ```
 
 
@@ -373,30 +301,34 @@ nrow(data_dendro_calc  %>%
 
 ```{r eval = FALSE}
 trees_old <- read.csv2(file = paste0(path_to_treelevel_csv, "trees_calc.csv"))
-nrow(trees_old) - nrow(data_dendro_calc) == -2514  # 36
+nrow(trees_old) - nrow(data_dendro_calc) == 0  # 36
 summary(data_dendro_calc)
 summary(trees_old)
 check <- trees_old %>% 
+  select(-dbh_class_5cm) %>% 
   anti_join(data_dendro_calc, by = c("period", "plot_id", "tree_measure_id"))
-#0
+# 2379: dat zijn de dode delen van levende stoven die aan andere tree_id gekoppeld zijn
+check %>% filter(!str_detect(tree_id, "b")) %>% nrow() 
+# nog 2, niet verder op ingaan, dood hakhout, OK
+
+
 check <- data_dendro_calc %>% 
   anti_join(trees_old, by = c("period", "plot_id", "tree_measure_id"))
 table(check$period, check$forest_reserve)
-  #   Bos Terrijst Coolhem A Coolhem Q
-  # 3         1607       440       467
-# ok, nieuwe reservaten
+# 0
 
 #--------
 stems_old <- read.csv2(file = paste0(path_to_treelevel_csv, "stems_calc.csv"))          
-nrow(stems_old) - nrow(data_stems_calc) == -3086
+nrow(stems_old) - nrow(data_stems_calc) == 5
 summary(data_stems_calc)
 summary(stems_old)
 check2 <- stems_old  %>% 
-  anti_join(data_stems_calc, by = c("period", "plot_id", "tree_measure_id"))
-# 0  
+  anti_join(data_stems_calc, by = c("period", "plot_id", "tree_measure_id")) %>% 
+  filter(!str_detect(tree_id, "b"))
+# 2  
 check2 <- data_stems_calc  %>% 
   anti_join(stems_old, by = c("period", "plot_id", "tree_measure_id"))
-#3086
+# 0
 ```
 
 
@@ -410,66 +342,50 @@ save(data_dendro_calc, data_stems_calc, file = here::here("RData/main03_data_den
 ```
 
 
-# Create unique tree-id - 26/3/2026 laatste keer gerund (11/3/2025 voorlaatste keer)
+# Create unique tree-id - 4/11/2026 laatste keer gerund
 
-> doel is om in 2026 coppice om te vormen zdd levend en dood deel aan één boom toegekend wordt,
-daarom hier geen strenge datacontrole wat betreft hakhout. 
-> nieuwe opnamemethode vanaf Liedekerke, Pruikemakers in voege.
+We hebben unieke `tree_id` per boom nodig, die constant blijft doorheen de tijd,
+dus verschillend van de `tree_measure_id` uit fieldmap, die wel varieert doorheen de tijd.
 
+Deze `tree_id` wordt in het package aangemaakt obv old_id mbv de functie `create_unique_tree_id()`.
 
-> 22/10/2026: coppice omgevormd ondertussen. Tot hier code aangepast naar aanleiding 
-van nieuwe projectstructuur:
-toevoeging van twee correcties (zie lijn 149:chuncks TMP_ERROR en TMP_CORR)
-mogelijks zijn deze opgelost wanneer u dit leest
+<!-- **OPGEPAST** -->
+<!-- Vooraleer coppice omgevormd werd tot één stoof met levende en/of dode spillen,  -->
+<!-- kon `create_unique_tree_id()` soms tot gemiste linken leiden.  -->
+<!-- (zie ook "TreeMortalityData_DetailHakhout.Rmd") -->
 
+<!-- OldID werd toen standaard toegekend aan het levende deel van de hakhoutstoof. -->
+<!-- Het dode deel werd dan gelinkt via CoppiceID. -->
+<!-- Indien er enkel een dood deel is (en geen levend deel), dan werd daar OldID aan toegekend. -->
 
-**! nog niet in detail gecheckt voor KV's**  
+<!-- Dat wil zeggen dat er zich enkel een probleem stelde wanneer er in één van de  -->
+<!-- twee periodes zowel een levend als een dood deel voorkomt. -->
+<!-- In de andere gevallen was de koppeling die gebeurde via OldID correct. -->
 
-**! nog datacontrole te doen, ook voor bepaalde CP's **
-(al zeker: 717,763,940,1155,1310,1502,1609: hebben dubbele coppice-id)
+<!-- **OPLOSSING** -->
+<!-- Daarom werd in oude code (vóór 4/11/2026) hakhout dat in één van de  -->
+<!-- twee periodes uit zowel een levend als een dood deel bestond, de tree_id bepaald  -->
+<!-- obv coppice_id. -->
 
-`Data_dendro_calc` bevat een unieke `tree_id` per boom (die constant blijft doorheen de tijd),
-verschillend van de `tree_measure_id` uit fieldmap, die wel varieert doorheen de tijd.
+<!-- Dit hield in dat tree_id niet uniek was per periode, wat voor problemen zorgde -->
+<!-- wanneer we er een "wijde" tabel van wilden maken. -->
 
-Deze `tree_id` wordt in het package aangemaakt obv old_id.
+<!-- Daarom werd er een _a of _b toegevoegd, afh. of het om levend of dood deel van een  -->
+<!-- hakhoutstoof ging.  -->
+<!-- Indien we toch één ID per hakhout wilden, ongeacht levend/dood, dan konden we  -->
+<!-- makkelijk de _a en _b verwijderen (= `tree_id_non_unique`). -->
 
-**OPGEPAST**
-Bij hakhout kan/kon dit soms tot gemiste linken leiden. 
-(zie ook "TreeMortalityData_DetailHakhout.Rmd")
-
-Hakhoutstoven worden opgesplitst in een levend en dood deel, 
-en elk deel wordt dan als een afzonderlijke boom beschouwd 
-(een boom kan immers niet én levend én dood tegelijk zijn)
-
-OldID wordt standaard toegekend aan het levende deel van de hakhoutstoof.
-Het dode deel wordt gelinkt via CoppiceID.
-Indien er enkel een dood deel is (en geen levend deel), dan wordt daar OldID aan toegekend.
-
-Dat wil zeggen dat er zich enkel een probleem stelt wanneer er in één van de 
-twee periodes zowel een levend als een dood deel voorkomt.
-In de andere gevallen is de koppeling die gebeurt via OldID correct.
-
-**OPLOSSING**
-Daarom wordt in code hierna voor hakhout dat in één van de 
-twee periodes uit zowel een levend als een dood deel bestaat, de tree_id bepaald obv coppice_id.
-
-Voor de 11 verwerkte CP's + KV Muizenbos is die koppeling gecheckt en OK bevonden.
-
-Dit houdt in dat tree_id niet meer uniek is per periode.
-Dat geeft dan weer problemen wanneer we er een "wijde" tabel van willen maken.
-
-Daarom wordt er een _a of _b toegevoegd, afh. of het om levend of dood deel van een hakhoutstoof gaat.
-Indien we toch één ID per hakhout willen, ongeacht levend/dood, dan kunnen we makkelijk de _a en _b verwijderen (= `tree_id_non_unique`).
+<!-- **Nu is `tree_id_non_unique` echter niet meer nodig** -->
 
 
-## Op boomniveau - obv old-id
+## Op boomniveau
 
-Met behulp van `create_unique_tree_id()` voor 4 decades. 
+Met behulp van `create_unique_tree_id()` voor 4 decades, obv old_id. 
 
 <!-- `create_unique_tree_id()` oneindige loop wanner old_id niet in vorige periode gevonden wordt: issue # 119: opgelost -->
 
-
-```{r mbv_oldid_obv_package, results = 'hide'}
+```{r results = 'hide'}
+names(data_dendro_calc)
 tree_id <- create_unique_tree_id(data_dendro = data_dendro_calc)
 # Deze tabel wordt NIET bewaard in forresdat (daar enkel geaggregeerde resultaten op plotniveau)
 
@@ -484,231 +400,9 @@ tree_id_long <- tree_id %>%
 
 ```
 
-
-## Op boomniveau - obv coppice-id
-
-**EVENTUEEL EXTRA TOEVOEGEN**  
-> 21/2/2022: link obv coppice-id, want dat wordt veel gevraagd.
-> Zie ook `Euforia_TreePlotData_Flanders_Olalla_2022-01-13.Rmd`.
-
-Uitsplitsen van hakhoutstoven in dood en levend deel is nodig, want een "tree" kan niet zowel levend als dood zijn.
-Bovendien kan een `oldID` niet aan twee "trees" toegekend worden, omdat er anders problemen ontstaan met de koppeling die gebaseerd is op OldID (moet een één-op-één relatie zijn tussen de 2 periodes).
-
-In de databank wordt OldID standaard toegekend aan het levende deel van de hakhoutstoof.   
-Het dode deel wordt gelinkt via CoppiceID.   
-Indien er enkel een dood deel is (en geen levend deel), dan wordt daar OldID aan toegekend.   
-
-Dus bij de hakhoutstoven die (in eenzelfde periode) uit een levend en dood deel bestaan, hebben de twee delen niet dezelfde oldID, maar wel dezelfde coppice_id.    
-
-Dat wil zeggen dat er zich enkel een probleem stelt wanneer er in één van de twee periodes zowel een levend als een dood deel voorkomt.   
-In de andere gevallen kan de koppeling gebeuren via OldID.   
-
-Zo werken we dan ook:  
-
-- 2 delen: koppeling via OldID
-- 3 of 4 delen: koppeling via CoppiceID  
-
-In kader van het TreeMortality project hebben we nog een extra onderscheid gemaakt tss levend en dood deel van een hakhoutstoof, door _a en _b toe te voegen voor resp. levend of dood deel van een stoof.
-Dat was toen nodig omdat we extra records "fallen" toe moesten voegen voor het dood hout dat er niet meer was.
-
-Dat is ook nodig wanneer we er ooit een "wijde" tabel van willen maken.
-
-Het is echter niet zeker dat dat een correcte link is, want beide delen lopen als het ware in elkaar over. 
-Bv. - periode 1 levend gekoppeld aan periode 2 levend
-    - periode 1 dood gekoppeld aan periode 2 dood
---> mogelijks zijn er van de levende wat extra dood gegaan, en van de dode wat omgevallen (fallen)
-maar dat is niet te bepalen (kan vergeleken worden met dode takken in een boom)
-(zie ook `TreeMortalityData_DetailHakhout.Rmd`)
-
-Indien we een correcte link willen, moeten we _a en _b terug verwijderen, met als gevolg dat tree-id géén uniek veld meer is.
-
-> !! controle van die coppice_id nodig obv aantal soorten en afwijking van XY
-> reeds gedaan voor de 11 bosreservaten (CP's) in forresdat op 30/5/2023)
-Nu zijn daar 3de decade wijnendale, everzwijnbad, with heide, heirnisse, jansheide,
-terrijst, coolhem bijgekomen
-? welke 2 nog extra? 
-Zoniën KERN_1983 afgesplitst van Zonien UITBR_1995
-Kluisbos?
-
-```{r results='hide'}
-plotinfo %>% filter(plottype == "CP") %>% select(forest_reserve) %>% unique()
-```
-
-
-__Werkwijze:__
-
-* bepalen hoeveel delen er per hakhoutstoof aanwezig zijn
-
-* data opsplitsen:
-    (1) een deel waarbij link via OldID behouden blijft (= treeid): **_data_OldID_**
-    (individuele bomen en coppice dat uit max. één deel bestaat per periode)
-    (2) een deel waarbij link via CoppiceID gecreëerd wordt (= nieuwe tree_id): **_data_CoppID_**
-    (coppice met ergens een periode met 2 delen)
- 
-* in data_CoppID de treeid vervangen door period_plotid_coppiceID_a indien levend 
-en period_plotid_coppiceID_b indien dood
-
-* samenvoegen van data_OldID, data_CoppID
-
---
-Vanaf 3 decades wordt het moeilijker.
-Dan zouden we moeten kijken of er max. één per decade is, dan obv old_id
-Zodra er meer dan één per decade is, dan moeten we werken met coppice_id voor allemaal en dan onderscheid tss levend en dood mbv suffix "a" en "b". 
-
-
-```{r NumberOfPartsPerCoppicePerDecade, results = 'hide'}
-tree_id %>% filter(coppice_id > 0) %>% nrow()
-# [1] 17224 - 18015 - 18481 - 21583 - 22361
-
-# coppice_id en plot_id samen uniek => hoeveel metingen zijn er per stoof en per decade 
-# (max.2, 1 levend en 1 dood deel- klopt)
-summ_coppice_id <- tree_id %>% 
-  filter(coppice_id > 0) %>%
-  group_by(coppice_id, plot_id, period) %>% 
-  summarise(aantal = n()) %>% 
-  ungroup()
-# 16138 - 16536 - 19253  - 19265 - 19962
-
-table(summ_coppice_id$aantal)  
-# per periode max 2 (voor levend en dood deel zelfde coppice-ide)=> OK
-#     1     2 
-# 14645  1918
-#     1     2 
-# 16922  2331 
-#     1     2 
-# 16947  2318
-#     1     2 
-# 17563  2399 
-
-summ_coppice_id %>% filter(aantal > 2) %>% distinct(plot_id)
-summ_coppice_id %>% filter(aantal > 2) %>% nrow() == 0
-
-# vb van 3 decades
-tree_id %>%  filter(coppice_id == 32 & plot_id == 31000) %>% 
-  select(period, tree_measure_id, species, alive_dead, nr_of_stems, x_local, y_local, tree_id, coppice_id)
-
-
-# summ_coppice_id
-summ_coppice_id_def <- summ_coppice_id %>% 
-  group_by(coppice_id, plot_id) %>% 
-  summarise(max_aantal = max(aantal)) %>% 
-  ungroup()
-# 9690 - 9774 - 10125 - 10136 - 10209
-```
-
-```{r SplitDataTrees_OldID_CoppID, results = 'hide'}
-tree_id_  <- tree_id %>% 
-  left_join(summ_coppice_id_def, by = c("plot_id","coppice_id")) %>% 
-  rename (max_nr_parts_coppice = max_aantal) 
-
-str(tree_id_)
-str(summ_coppice_id_def)
-
-# tree_data via OldID
-tree_data_OldID <- tree_id_ %>% 
-  filter (ind_sht_cop != 12 | max_nr_parts_coppice < 2 | is.na(coppice_id))
-
-# tree_data via coppice ID
-tree_data_CoppID <- tree_id_ %>% 
-  filter (max_nr_parts_coppice > 1)
-
-nrow(tree_data_OldID) + nrow(tree_data_CoppID) - nrow(tree_id) == 0
-# [1] 0
-
-```
-
-Daar waar coppice in één van de (twee of drie) decades uit meer dan één deel bestaat, `tree_id` vervangen door een id obv `coppice_id`.
-(één deel lukt nog via old_id, zelfs al is het een dood dat verwijst naar voorheen een levend)
-
-```{r CreateNewTreeID_TreeData_CoppID, results = 'hide'}
-tree_data_CoppID_ <- tree_data_CoppID %>% 
-  rename (treeid_old = tree_id) %>%    # tree-id obv old_id
-  mutate (tree_id = paste(1, plot_id, coppice_id, sep = "_")) %>%
-  mutate (tree_id = ifelse(alive_dead == 11, paste(tree_id, "a", sep = "_"),
-                          ifelse(alive_dead == 12, paste(tree_id, "b", sep = "_"),
-                                 NA)))
-
-names(tree_data_CoppID_)
-
-check_coppID <- tree_data_CoppID_ %>% 
-  select(plot_id, 
-         tree_id, tree_measure_id, coppice_id,
-         max_nr_parts_coppice,
-         x_local, y_local, 
-         period, 
-         species, 
-         alive_dead, intact_snag, ind_sht_cop, decaystage,
-         dbh_mm, height_m, calc_height_m, vol_tot_m3
-         ) 
-
-tree_data_CoppID <- tree_data_CoppID_
-```
-
-## Samenvoegen op boomniveau
-
-```{r rbind_tree_data_OldID_CoppID, results = 'hide'}
-tree_data_CoppID <- tree_data_CoppID %>% 
-  select(-treeid_old)
-
-tree_data_all <- rbind(tree_data_OldID, tree_data_CoppID)
-
-nrow(tree_data_all) == nrow(tree_id)
-names(tree_data_all)
-names(tree_id)
-
-# check_a_b <- tree_data_all %>% 
-#   select(plot_id, 
-#          tree_id, tree_measure_id, coppice_id,
-#          nr_parts_coppice,
-#          x_local, y_local, 
-#          period, 
-#          species, 
-#          alive_dead, intact_snag, ind_sht_cop, decaystage,
-#          dbh_mm, height_m, calc_height_m, vol_tot_m3
-#          ) %>% 
-#   filter(nr_parts_coppice > 2)
-
-tree_id_ <- tree_data_all %>% 
-  mutate(tree_id_non_unique = ifelse(max_nr_parts_coppice < 2 | is.na(max_nr_parts_coppice), tree_id,
-                                 str_sub(tree_id, 1, -3)),
-         test = (tree_id_non_unique == tree_id))
-# %>%
-#   select(plot_id,
-#          tree_id, tree_measure_id,
-#          coppice_id, old_id,
-#          tree_id_non_unique, test,
-#          max_nr_parts_coppice,
-#          x_local, y_local,
-#          period,
-#          species,
-#          alive_dead, intact_snag, ind_sht_cop, decaystage,
-#          dbh_mm, height_m, calc_height_m, vol_tot_m3
-#          )
-
-tree_id <- tree_id_ %>% 
-  select(-test, -max_nr_parts_coppice)
-
-names(tree_id)
-```
-
-
-Controle: zie `Datacontrole7_coppice_id.Rmd`
-(dataframe ter controle opslaan in C:\03_BR\1_DataVerwerkingBR\RData)
-
-Hier verder gaan met wat is ....
-
-```{r save_RData_ter_controle}
-save(tree_data_OldID, tree_data_CoppID, tree_id, file = here::here("RData/controle_CoppID.Rdata"))
-# load(here::here("RData/controle_CoppID.Rdata"))
-```
-
-
-
 ## Op spilniveau
 
-**!! OPGEPAST !! **
-
-Tree-id wordt overgenomen van boomniveau, aangemaakt via `old_id` of `coppice_id` afhankelijk van "delen" hakhout (zie hoger).
+Tree-id wordt overgenomen van boomniveau (zie hoger).
 
 ```{r copy_tree_id, results = 'hide'}
 names(data_stems_calc)
@@ -717,14 +411,15 @@ tree_id %>%  filter(is.na(tree_id)) %>% nrow() == 0
 data_stems_calc %>% filter(tree_measure_id == 0) %>% nrow() == 0
 
 tree_id_ <- tree_id %>% 
-   select(plot_id, tree_measure_id, tree_id, tree_id_non_unique, period)
+  select(plot_id, tree_measure_id, tree_id, period) %>% 
+  unique()  # want soms levend en dood deel van hakhout
 
 stem_id <- data_stems_calc %>% 
   filter(tree_measure_id != 0) %>% 
   left_join(tree_id_, by = c("plot_id", "tree_measure_id", "period"))
 
 names(stem_id)
-nrow(stem_id) == nrow(data_stems_calc)
+nrow(stem_id) - nrow(data_stems_calc) == 0
 
 ```
 
@@ -733,9 +428,8 @@ stem_id %>% filter(is.na(tree_id)) %>% nrow() == 0
 # 0
 stem_id %>% filter(is.na(tree_id)) %>% select(plot_id, period)
 
-
 tree_id_hakhout <- stem_id %>% 
-  group_by(plot_id, tree_measure_id, period) %>% 
+  group_by(plot_id, tree_measure_id, tree_id, period) %>% 
   summarize(aantal = n()) %>% 
   ungroup()
 
@@ -745,95 +439,76 @@ table(tree_id_hakhout$aantal)
 
 # Op boomniveau: wijde tabel met één record per boom doorheen de tijd
 
-Om één record per boom te verkrijgen met info uit beide periodes, dient functie "make_table_wide" gebruikt te worden.
+Om één record per boom te verkrijgen met info uit beide periodes, kan de functie 
+`make_table_wide()` gebruikt worden.
 Dit werkt enkel bij een unieke tree_id.
-**DAAROM: tijdelijk verwijderen van deze met een dubbele tree-id**
 
-> mail op 12/3/25 naar Peter om dubbele coppice_id's te checken
-(zie G:\Gedeelde drives\Team_Boseco_BR\PRJ_BR_Gegevensverwerking\30_Datacontrole)
+Door recente omvorming komt een "tree" 2x voor bij hakhout met levend en dood deel: 
+een keer levend en een keer dood
+Gevolg: tree_wide bevat "lists" voor bv alive_dead_2 (zowel 11 als 12)
+=> oplossing: **bij hakhout dat uit twee delen bestaat het dode deel verwijderen,** 
+want is niet echt relevant.
+Dan wél het aantal spillen én al dan niet coppice vermelden doorheen de tijd!
 
-> 22/12/2025: geen dubbele tree-id's
+```{r dead_parts_living_coppice}
+# detecteren van hakhout bestaande uit twee delen 
+# daarvan het dode deel verwijderen uit tree_id_long
 
-Zie hierna:
-
-```{r tree_id_wide_check}
-check_dubbele_tree_id <- tree_id %>% 
+coppice_levend_dood <- tree_id %>% 
   group_by(plot_id, tree_id, period, species) %>% 
-  summarize(aantal_per_periode = n()) %>% 
-  ungroup() %>% 
+  reframe(aantal_per_periode = n()) %>% 
   filter(aantal_per_periode > 1) 
-# %>% inner_join(tree_data_CoppID_check)
+# 2380 stoven
 
-nrow(check_dubbele_tree_id) == 0
-# A tibble: 3 x 4
-#   plot_id tree_id       period aantal_per_periode
-#     <int> <chr>          <dbl>              <int>
-# 1   41000 1_41000_164_a      2                  2
-# 2   51000 1_51000_4_a        1                  2
-# 3   53000 1_53000_258_b      1                  2
+tree_id_levend_dood <- tree_id %>% 
+  inner_join(coppice_levend_dood)
+# 4760 (2x coppice_levend_dood)
 
-tree_id %>% filter(tree_id %in% check_dubbele_tree_id$tree_id)
-# hhstoofid 290
-```
-```{r results='hide', eval = FALSE}
-check_dubbele_tree_id %>% distinct(plot_id)
-# 0 rows
-
-check_dubbele_tree_id2 <- tree_id %>% 
-  inner_join(check_dubbele_tree_id) %>% 
-  select(plot_id, period, tree_measure_id, old_id, coppice_id,
-         tree_id, 
-         species, ind_sht_cop,
-         dbh_mm, vol_tot_m3, alive_dead)
-
-# exporteren en laten nakijken door Peter
-write.xlsx(check_dubbele_tree_id2, 
-           file = paste0(path_to_dataverwerking_teamdrive, 
-                         "30_Datacontrole/dubbele_coppice_20250311.xlsx"))
-
-write.xlsx(check_dubbele_tree_id2, 
-           file = paste0(path_to_dataverwerking,
-                         "Data_controle/coppice_id/coppice_id_te_checken_20250311.xlsx"))
+tree_id_dead_part <- tree_id_levend_dood %>% 
+  filter(alive_dead == 12)
 ```
 
 
-
-```{r dubbele_ids_verwijderen, eval = FALSE}
-# TIJDELIJK
-tree_id_ <- tree_id %>% 
-  anti_join(check_dubbele_tree_id %>%  select(plot_id, tree_id, period))  # tijdelijk de dubbele tree_id's verwijderen
-# bevat geen beuk ...
-
-nrow(tree_id_) == nrow(tree_id) - 2*nrow(check_dubbele_tree_id)
-
-tree_id <- tree_id_
-```
-
-
-```{r tree_id_long}
+```{r tree_id_long, results='hide'}
+names(tree_id)
 # selectie om wijde tabel aan te maken
 tree_id_long <- tree_id %>%
   select(plot_id, period, tree_id, 
          species, ind_sht_cop,
-         dbh_mm, vol_tot_m3, alive_dead) %>% 
+         dbh_mm, vol_tot_m3, alive_dead,
+         nr_of_stems) %>% 
   arrange(period) %>% 
-  left_join(plotinfo %>% select(plot_id, period, survey_number)) %>% 
-  select(-period)
+  left_join(plotinfo %>% select(plot_id, period, survey_number))
+# table wide obv survey_number => joinen met plotinfo
+```
+```{r delete_dead_parts_living_coppice}
+# detecteren van hakhout bestaande uit twee delen 
+# daarvan het dode deel verwijderen uit tree_id_long
+tree_id_long_ <- tree_id_long %>% 
+  anti_join(tree_id_dead_part)
 
-# ? survey_number => joinen met plotinfo
+nrow(tree_id_long_) + nrow(coppice_levend_dood) == nrow(tree_id_long) 
+
+tree_id_long <- tree_id_long_
+
+names(tree_id_long)
 ```
 
 !!Opgepast: soms daalt dbh doorheen de tijd: dat is het geval bij dode bomen.
 
-
 ```{r tree_id_wide_zonder_dubbele_ids, results='hide'}
+tree_id_long <- tree_id_long %>% 
+  select(-period)  # table wide obv survey_number
+
 tree_id_wide <- make_table_wide(table_long = tree_id_long
                                 , column_to_repeat = "survey_number"
                                 , columns_for_comparison = 
-                                  c("alive_dead", "dbh_mm", "vol_tot_m3"))
+                                  c("alive_dead", "ind_sht_cop", "nr_of_stems",
+                                    "dbh_mm", "vol_tot_m3"))
 
 names(tree_id_wide)
 ```
+
 **Jaartal survey's toevoegen**    
 Dit jaartal moet uit `plotinfo` gehaald worden, want als boom er niet meer staat (omgevallen), 
 is er in de tabel met bomen ook geen `year_dendro` meer voor die boom en dat jaartal, 
@@ -874,27 +549,31 @@ names(plotinfo_wide)
 # survey_Y1 = jaar van eerste survey voor dat gebied, is meest logische (idem als shapefile Marc, zie strata_location)
 ```
 
-```{r combine}
+```{r combine, results='hide'}
 tree_survey_wide <- tree_id_wide %>% 
   left_join(plotinfo_wide) %>% 
   left_join(n_surveys)
 head(tree_survey_wide)
 
+```
+```{r}
 names(tree_survey_wide)
 ```
+
 
 ```{r}
 tree_survey_wide_ <- tree_survey_wide %>% 
   select(forest_reserve, plot_id, plottype
-         , tree_id, species, ind_sht_cop
+         , tree_id, species, 
          , n_surveys
-         , contains(c("survey_Y", "alive_dead", "dbh", "vol")))
+         , contains(c("survey_Y", "alive_dead", "ind_sht_cop", "nr_of_stems",
+                      "dbh", "vol")))
 
 tree_id_wide <- tree_survey_wide_
 
 ```
 
-# Op boomniveau: lange tabel met unieke record per boom doorheen de tijd
+ # Op boomniveau: lange tabel met unieke record per boom doorheen de tijd
 
 Op vraag van Arno ook de "lange" tabel waar `tree_survey_wide` op gebaseerd is, 
 exporteren als `trees_unique_id_long`.
@@ -906,7 +585,7 @@ Volgende velden worden opgenomen:
 
 - forest_reserve, plot_id, plottype
 - tree_id
-- species, ind_sht_cop
+- species, ind_sht_cop, nr_of_stems
 - survey_nr
 - decade
 - year_dendro
@@ -923,19 +602,19 @@ tree_id_long <- tree_id %>%
   select(forest_reserve, plot_id, plottype
          , tree_id
          , decade = period, survey_number, year_dendro
-         , species, ind_sht_cop, alive_dead
+         , species, ind_sht_cop, nr_of_stems, alive_dead
          , dbh_mm, vol_tot_m3) %>% 
   arrange(decade)
 
 # check: max. 4 surveys?
 tree_id_long %>% 
-  group_by(tree_id) %>% 
+  group_by(tree_id, alive_dead) %>% 
   summarize(n = n()) %>% 
   ungroup() %>% 
   filter(n > 4) %>% nrow() == 0
 
 summary(tree_id_long)
-  
+
 ```
 
 # Vergelijking met oude data
@@ -943,53 +622,45 @@ summary(tree_id_long)
 ```{r eval = FALSE}
 trees_long_old <- read.csv2(file = paste0(path_to_treelevel_csv, "trees_unique_id_long.csv"))
 
-nrow(trees_long_old); nrow(tree_id_less_var)
+nrow(trees_long_old) == nrow(tree_id_long)
 summary(trees_long_old)
 summary(tree_id_long)
 
 
 check <- trees_long_old %>% 
   anti_join(tree_id_long, by = c("decade", "plot_id", "tree_id"))
-# Coolhem en terrijst extra verwerkt - ok
+# 7021: allemaal met tree_id _a of _b, op 2 na: nu geen tree_id meer met _a/b => OK
 
 check2 <- tree_id_long %>% 
   anti_join(trees_long_old, by = c("decade", "plot_id", "tree_id"))
-# Coolhem en terrijst extra verwerkt - ok
+# 7018
 table(check$decade, check$forest_reserve)
 
 
 #--------
 trees_wide_old <- read.csv2(file = paste0(path_to_treelevel_csv, "trees_wide.csv"))
 
-nrow(trees_wide_old); nrow(tree_survey_wide)
+nrow(trees_wide_old); nrow(tree_id_wide)
+# [1] 53099
+# [1] 51025
+# klopt dat oude "wide" meer records hefet want nog opsplitsing levend en dood deel hh
 
 summary(trees_wide_old)
-summary(tree_survey_wide)
+summary(tree_id_wide)
 check <- trees_wide_old  %>% 
-  anti_join(tree_survey_wide, by = c("plot_id", "tree_id"))
-# Coolhem en terrijst extra verwerkt - ok
-check2 <- tree_survey_wide  %>% 
+  anti_join(tree_id_wide, by = c("plot_id", "tree_id"))
+# 4008: allemaal met tree_id _a of _b, op 2 na
+check2 <- tree_id_wide  %>% 
   anti_join(trees_wide_old, by = c("plot_id", "tree_id"))
-# Coolhem en terrijst extra verwerkt - ok
+# 2032
 ```
 
 
 # Export tree level data
 
-- Met unieke en non-unieke (voor hakhout) tree-id én berekende variabelen    
+- Met unieke tree-id én berekende variabelen    
 - Enkel processed data   
 - Niet alle variabelen geëxporteerd, enkel deze relevant voor de meeste gebruikers    
-- Zonder de bomen met dubbele tree-id's (TIJDELIJK) => belangrijk om dit voor gebruik goed te checken 
-
-**Volgende plots zijn niet helemaal correct (wegens één of meerdere dubbele tree-id's): **    
-
-- niet correcte unieke tree-id in `trees_calc`     
-- ontbrekende bomen in wijde tabel in `trees_wide` en `trees_unique_id_long`
-
-
-```{r}
-check_dubbele_tree_id %>% distinct(plot_id) %>% as_tibble
-```
 
 
 **Enkele verduidelijkingen:**
@@ -1007,7 +678,7 @@ tree_id_less_var <- tree_id %>%
 tree_id_less_var <- tree_id_less_var %>% 
   select(forest_reserve, plot_id, plottype, 
          period, 
-         tree_measure_id, tree_id, tree_id_non_unique, coppice_id, 
+         tree_measure_id, tree_id, 
          x_local, y_local, 
          species, 
          dbh_mm, height_m, calc_height_m, 
@@ -1017,7 +688,8 @@ tree_id_less_var <- tree_id_less_var %>%
          remark, common_remark, 
          year, date_dendro, 
          subcircle, plotarea_ha, totalplotarea_ha, 
-         dbh_class_5cm, 
+         # dbh_class_5cm, # niet meer behouden wegens irrelevant: was obv mean dbh van spillen bij hh (uit FM-DC)
+         # zie issue #187 forrescalc
          nr_of_stems, 
          basal_area_m2, 
          vol_bole_m3, vol_crown_m3, vol_tot_m3, 
@@ -1128,24 +800,14 @@ save_results_csv(
 
 # Export stem level data
 
-Met unieke en non-unieke (voor hakhout) tree-id (uniek op boomniveau, niet op spilniveau) én berekende variabelen.
+Met unieke tree-id (uniek op boomniveau, niet op spilniveau) én berekende variabelen.
 
 **!! OPGEPAST !!**
-Unieke en non-unieke (voor hakhout) tree-id overgenomen van trees berekend op boomniveau.
+Unieke tree-id overgenomen van trees berekend op boomniveau.
 
 <!--  na 16/2/2022: voor hakhout met meer dan twee delen: tree-id obv coppice-id (zie hoger) -->
 
 Niet alle variabelen mee exporteren, enkel deze relevant voor de meeste gebruikers
-
-
-Volgende plots zijn (NOG) niet helemaal correct (wegens één of meerdere dubbele tree-id's):   
-
-- niet correcte unieke tree-id in `stems_calc`     
-- ontbrekende bomen in wijde tabel in `stems_wide`
-
-```{r}
-check_dubbele_tree_id %>% distinct(plot_id) %>% as.tibble
-```
 
 ```{r stems_less_variables}
 stem_id_less_var <- stem_id %>% 
@@ -1156,7 +818,7 @@ stem_id_less_var <- stem_id_less_var %>%
   select(forest_reserve, plot_id, plottype, 
          period, 
          tree_measure_id, shoot_measure_id, 
-         tree_id, tree_id_non_unique, coppice_id, 
+         tree_id, 
          x_local, y_local, 
          species, 
          dbh_mm, height_m, calc_height_m, 
