@@ -644,6 +644,8 @@ save_results_csv(
     output_dir = path_to_treelevel_gdrive
     )
 
+```{r results='hide'}
+check_dubbele_tree_id %>% distinct(tree_id) %>% as.tibble
 ```
 
 
@@ -654,8 +656,7 @@ Na knitting - manueel
 
 ```{r eval = FALSE}
 # Specify the path of the file you want to copy
-source_file <- here::here(paste0("Scripts/OpbouwDatabank/Main_UpdateForresdat_03_treeniveau.html"))
-
+source_file <- here::here(paste0("Scripts/Per_gebied/", forestreserve_short, "/", forestreserve_short, "_treeniveau.html"))
 # Specify the destination directory where you want to copy the file
 destination_dir <- path_to_html_teamdrive
 
