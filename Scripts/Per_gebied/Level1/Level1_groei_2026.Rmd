@@ -55,17 +55,11 @@ source(here::here(paste0("Scripts/Per_gebied/", forestreserve_short, "/functies.
 
 ```{r results='hold', eval=TRUE}
 path_to_fieldmap_db
-path_to_forresdat_data
-path_to_analysis_set_db
-path_to_plotlevel_csv
-path_to_treelevel_csv
-path_to_output_gdrive
-path_to_meetgegevens
-
+path_to_output_pc
+path_to_output_teamdrive
 ```
 
-
-Naast dednro ook info over groei tss 2009 en 2025.
+Naast dendro ook info over groei tss 2009 en 2025.
 
 Dat houdt in een "wijde" tabel met een unieke tree-id over de verschillende surveys heen met: 
 
@@ -79,13 +73,13 @@ Om zo duidelijk onderscheid te hebben tussen omgevallen bomen of geen opname mee
 
 # Import data
 
-Trees_wide aangemaakt met behulp van forrescalc (zie "Main_UpdateForresdat_03_treeniveau.html" in teamdrive "Team_Boseco_BR\PRJ_BR_Gegevensverwerking\25_Overkoepelend")
+Trees_wide aangemaakt in script "Level1_treeniveau.Rmd".
 
 ```{r}
-plotinfo <- read.csv2(paste0(path_to_plotlevel_csv, "plotinfo.csv")) %>% 
+plotinfo <- read_xlsx(paste0(path_to_output_pc, "plotinfo.xlsx")) |> 
   select(-1)
 
-trees_wide <- read.csv2(paste0(path_to_treelevel_csv, "trees_wide.csv")) %>% 
+trees_wide <- read.csv2(paste0(path_to_output_pc, "trees_wide.csv")) %>% 
   select(-1)
 
 names(trees_wide)
@@ -93,17 +87,10 @@ names(trees_wide)
 ```
 
 
-```{r results='hide'}
-beuk_wide <- trees_wide %>% 
-  filter(species == 7)
-
-unique(beuk_wide$forest_reserve)
-```
-
 ```{r overview}
 # aantal surveys, aantal bomen
 
-summ_beuk <- beuk_wide %>% group_by(forest_reserve, plottype, n_surveys) %>% 
+summ <- trees_wide %>% group_by(forest_reserve, plottype, n_surveys) %>% 
   summarise(n_beuk = n()) %>% ungroup %>% 
   arrange(desc(n_surveys), desc(n_beuk)) 
 

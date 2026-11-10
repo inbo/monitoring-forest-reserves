@@ -1,5 +1,5 @@
 ---
-title: "Dataverwerking - dendro op stam- en boomniveau"
+title: "Dataverwerking - dendro op boomniveau"
 subtitle: "Level 1 - cirkelplots"
 author: "Anja Leyman"
 date: "`r Sys.Date()`"
@@ -51,17 +51,9 @@ source(here::here(paste0("Scripts/Per_gebied/", forestreserve_short, "/functies.
 
 ```{r results='hold', eval=TRUE}
 path_to_fieldmap_db
-path_to_forresdat_data
-path_to_analysis_set_db
-path_to_plotlevel_csv
-path_to_treelevel_csv
-path_to_output_gdrive
-path_to_meetgegevens
-
+path_to_output_pc
+path_to_output_teamdrive
 ```
-
-
-# Vraagstelling
 
 Een "wijde" tabel aanmaken met een unieke tree-id over de verschillende surveys heen met:
 
@@ -73,7 +65,7 @@ Een "wijde" tabel aanmaken met een unieke tree-id over de verschillende surveys 
 # Load plotinfo
 
 ```{r}
-plotinfo <- read_xlsx(paste0(path_to_plotdata_pc, "plotinfo.xlsx")) |> 
+plotinfo <- read_xlsx(paste0(path_to_output_pc, "plotinfo.xlsx")) |> 
   select(-1)
 ```
 
@@ -82,7 +74,7 @@ plotinfo <- read_xlsx(paste0(path_to_plotdata_pc, "plotinfo.xlsx")) |>
 Aangemaakt in script "Level1_dendro.Rmd"
 
 ```{r}
-data_dendro_calc <- read.csv2(paste0(path_to_plotdata_pc, "data_dendro_calc.csv")) |> 
+data_dendro_calc <- read.csv2(paste0(path_to_output_pc, "data_dendro_calc.csv")) |> 
   select(-X)
 ```
 
@@ -97,17 +89,15 @@ Deze `tree_id` wordt in het package aangemaakt obv old_id.
 Rol `label_level1`? 
 Verschil met `old_id`?
 
-Old_id enkel in periode 2 uiteraard.
-Maar toch sommige bomen mét old_id en géén label.
-Omgekeerd ook soms met een label en geen old_id, dat zijn normaal gezien de nieuwe bomen in nieuwe plots.
-Of nieuw aangeduide bomen.
-
-Antwoord Peter: niet elke boom in een plot krijgt een label!
-Daarom soms old_id, terwijl er geen label is.
-Maar als er een label is, zou dat hetzelfde moeten zijn doorheen de tijd.
+Old_id enkel in periode 2 uiteraard, bij elke gekoppelde boom.
+Een label wordt echter niet aan elke boom toegekend, daarom sommige bomen mét old_id 
+en géén label. 
+Omgekeerd ook soms met een label en geen old_id, dat zijn de nieuw aangeduide bomen,
+aangezien er ook regelmatig bomen uit het Level 1 netwerk verdwijnen.
+Als er een label is, zou dat hetzelfde moeten zijn doorheen de tijd (OK, wordt verderop gecheckt)
 
 Functie `create_unique_tree_id()` aangepast nalv nieuwe projectstructuur hakhout.
-Hier echter nog op oude manier opgemeten
+Hier echter nog op oude manier opgemeten.
 Daarom eerst kijken of we met `label_level_1` ook genoeg bomen kunnen koppelen doorheen de tijd.
 
 ```{r}
@@ -141,8 +131,8 @@ Sowieso is diameteraangroei enkel relevant bij individuele bomen, want hakhout n
 op spilniveau gekoppeld.
 
 ?? zijn er bomen die in p1 geen hakhout zijn en in p2 wel, of omgekeerd?
-Moeilijk te checken en eigenlijk ook irrelevant, we gaan enkel verder met individuals 
-in beide periodes
+Moeilijk te checken en eigenlijk ook irrelevant, we gaan enkel verder met individuele 
+bomen, individueel in beide periodes.
 
 ```{r}
 data_dendro_indiv <- data_dendro_calc %>% 
@@ -187,10 +177,9 @@ Om één record per boom te verkrijgen met info uit beide periodes, gebruiken we
 Dit werkt enkel bij een unieke tree_id.
 
 Indien nodig: tijdelijk verwijderen van deze met een dubbele tree-id.
+Hier OK aangezien we hakhout verwijderd hebben.
 
-Hier OK.
-
-```{r tree_id_wide_check}
+```{r tree_id_wide_check, results='hide'}
 check_dubbele_tree_id <- tree_id %>% 
   group_by(tree_id, period) %>% 
   summarize(aantal_per_periode = n()) %>% 
@@ -200,8 +189,8 @@ check_dubbele_tree_id <- tree_id %>%
 nrow(check_dubbele_tree_id) == 0
 
 tree_id %>% filter(tree_id %in% check_dubbele_tree_id$tree_id)
-
 ```
+
 ```{r dubbele_ids_verwijderen, eval = FALSE}
 # # TIJDELIJK
 # tree_id_ <- tree_id %>% 
@@ -228,7 +217,6 @@ tree_id_long <- tree_id %>%
 ```
 
 !!Opgepast: soms daalt dbh doorheen de tijd: dat is het geval bij dode bomen.
-
 
 ```{r tree_id_wide_zonder_dubbele_ids, results='hide'}
 tree_id_wide <- make_table_wide(table_long = tree_id_long
@@ -304,7 +292,7 @@ plotinfo_wide %>% filter(is.na(survey_Y1) | is.na(survey_Y2)) %>% nrow() ==
   n_surveys %>% filter(min_yr == max_yr) %>% nrow()
 ```
 
-```{r combine}
+```{r combine, results='hide'}
 tree_survey_wide <- tree_id_wide %>% 
   left_join(plotinfo_wide) %>% 
   left_join(n_surveys) %>% 
@@ -325,248 +313,67 @@ tree_id_wide <- tree_survey_wide_
 names(tree_id_wide)
 ```
 
+
 # Export tree level data
 
-- Met unieke tree-id én berekende variabelen    
-- Niet alle variabelen geëxporteerd, enkel deze relevant voor de meeste gebruikers    
+Volgende tabellen:
 
+- trees_calc: alle trees met info over _ha (< data_dendro_calc)
+- tree_id_long_extra_vars: tabel waar trees_wide op gemaakt is, dus zonder coppice
+- trees_wide: tabel met per boom evolutie doorheen de tijd 
 
-```{r}
-check_dubbele_tree_id %>% distinct(plot_id) %>% as_tibble
+```{r trees_calc, results='hide'}
+names(data_dendro_calc)
+
+trees_calc <- data_dendro_calc %>% 
+  select(-plotarea_ha, -contains(c("dbh_class_5cm", "r_A4", "plottype"))) %>% 
+  select(forest_reserve, plot_id, period, year
+         , tree_measure_id, old_id, label_level1
+         , species, alive_dead, dbh_mm, height_m, calc_height_m
+         , ind_sht_cop, intact_snag, decaystage, everything())
+# plotarea_ha = opp A4 => geen meerwaarde bij berekenen van _ha
+
+names(trees_calc)
 ```
 
-
-**Enkele verduidelijkingen:**
-
-- plotarea_ha = de oppervlakte van resp. A3 of A4, afh. van status en diameter van de boom
-(of LxB voor kernvlaktes of volledig BR voor andere plottypes) dus NIET de volledige cirkel
-
-
-```{r trees_less_variables, results='hide'}
+```{r tree_id_long_extra_vars, results='hide'}
+names(tree_id_long)
 names(tree_id)
 
-tree_id_less_var <- tree_id %>% 
-  select(-old_id, -r_A1, -r_A2, -r_A3, -r_A4, -contains(c("dbh_min", "core_area_")), -subcirclearea_ha)
-
-tree_id_less_var <- tree_id_less_var %>% 
-  select(forest_reserve, plot_id, plottype, 
-         period, 
-         tree_measure_id, tree_id, tree_id_non_unique, coppice_id, 
-         x_local, y_local, 
-         species, 
-         dbh_mm, height_m, calc_height_m, 
-         alive_dead, ind_sht_cop, intact_snag, 
-         iufro_hght, iufro_vital, iufro_socia, 
-         decaystage, crown_volume_reduction, branch_length_reduction, 
-         remark, common_remark, 
-         year, date_dendro, 
-         subcircle, plotarea_ha, totalplotarea_ha, 
-         dbh_class_5cm, 
-         nr_of_stems, 
-         basal_area_m2, 
-         vol_bole_m3, vol_crown_m3, vol_tot_m3, 
-         basal_area_alive_m2_ha, basal_area_dead_m2_ha, 
-         vol_alive_m3_ha, vol_dead_standing_m3_ha, 
-         vol_bole_alive_m3_ha, vol_bole_dead_m3_ha, 
-         number_of_trees_alive_ha, number_of_trees_dead_ha
+tree_id_long_extra_vars <- tree_id %>% 
+  select(forest_reserve, plot_id, 
+         period, year,
+         tree_measure_id, tree_id, 
+         # x_local, y_local, 
+         species, dbh_mm, height_m, calc_height_m, 
+         alive_dead, ind_sht_cop, intact_snag, decaystage, 
+         nr_of_stems, basal_area_m2, 
+         vol_bole_m3, vol_crown_m3, vol_tot_m3
          )
-
+names(tree_id_long_extra_vars)
+# hier geen zin om per hectare te behouden, want bevat niet alle bomen in een plot 
+# (hakhout weggefilterd)
 ```
 
+Direct naar gdrive exporteren (csv), naar **`r path_to_output_teamdrive`**.
 
-```{r save_trees_access_csv, eval = FALSE}
+```{r save_trees_csv, eval = FALSE}
+trees <- list(trees_calc = trees_calc
+              , tree_id_long_extra_vars = tree_id_long_extra_vars
+              , trees_wide = tree_id_wide)
+
 # volgende functies heb ik zelf geschreven, zitten niet in het package!!!
 save_results_csv (
-    results = list(trees_calc = tree_id_less_var),
-    output_dir = path_to_treelevel_csv
+    results = trees,
+    output_dir = path_to_output_pc
     )
 
-# afgerond voor export naar access
-tree_id_round <- tree_id_less_var %>% 
-  mutate_at(c("calc_height_m"), round, 2) %>% 
-  mutate_at(vars(matches("_ha|_m3|_m2")), round, 4)
-
-# save_results_access (
-#   results = list(trees_calc = data_dendro_calc_round),
-#   database = path_to_analysis_set_db,
-#   remove_tables = TRUE
-#   )
-
-# Functie "save_results_access" (< package) geeft problemen met dates => hierna manueel
-
-con <- odbcConnectAccess2007(path_to_analysis_set_db)
-
-dbtables <- sqlTables(con)
-if ("trees_calc" %in% dbtables$TABLE_NAME) {
-        sqlDrop(con, "trees_calc")
-      }
-sqlSave(con, dat = tree_id_round, tablename = "trees_calc", varTypes = c(date_dendro="datetime"), fast = FALSE)
-
-odbcClose(con)
-```
-
-
-```{r save_trees_wide_access_csv, eval = FALSE}
-# volgende functies heb ik zelf geschreven, zitten niet in het package!!!
+# temmdrive
 save_results_csv (
-    results = list(trees_wide = tree_id_wide),
-    output_dir = path_to_treelevel_csv
+    results = trees,
+    output_dir = path_to_output_teamdrive
     )
-
-# afgerond voor export naar access
-tree_id_wide_round <- tree_id_wide %>% 
-  # mutate_at(c("calc_height_m"), round, 2) %>% 
-  mutate_at(vars(matches("_ha|_m3|_m2")), round, 4)
-
-save_results_access (
-  results = list(trees_wide = tree_id_wide_round),
-  database = path_to_analysis_set_db,
-  remove_tables = TRUE
-  )
-
 ```
-
-
-```{r save_trees_unique_id_long_access_csv, eval = FALSE}
-# volgende functies heb ik zelf geschreven, zitten niet in het package!!!
-save_results_csv (
-    results = list(trees_unique_id_long = tree_id_long),
-    output_dir = path_to_treelevel_csv
-    )
-
-# afgerond voor export naar access
-tree_id_long_round <- tree_id_long %>% 
-  # mutate_at(c("calc_height_m"), round, 2) %>% 
-  mutate_at(vars(matches("_ha|_m3|_m2")), round, 4)
-
-save_results_access (
-  results = list(trees_unique_id_long = tree_id_long_round),
-  database = path_to_analysis_set_db,
-  remove_tables = TRUE
-  )
-
-```
-
-
-Direct naar gdrive exporteren (csv): 
-naar **/PRJ_BOSECO_ALGEMEEN/PRJ_BR_AanvraagGegevens/!METADATA-ALL_PLOTS/_tree-level-data/**
-
-```{r save_trees_gdrive, eval = FALSE}
-save_results_csv(
-    results = list(trees_calc = tree_id_less_var),
-    output_dir = path_to_treelevel_gdrive
-    )
-
-save_results_csv(
-    results = list(trees_wide = tree_id_wide),
-    output_dir = path_to_treelevel_gdrive
-    )
-
-save_results_csv(
-    results = list(trees_unique_id_long = tree_id_long),
-    output_dir = path_to_treelevel_gdrive
-    )
-
-```
-
-
-# Export stem level data
-
-Met unieke en non-unieke (voor hakhout) tree-id (uniek op boomniveau, niet op spilniveau) én berekende variabelen.
-
-**!! OPGEPAST !!**
-Unieke en non-unieke (voor hakhout) tree-id overgenomen van trees berekend op boomniveau.
-
-<!--  na 16/2/2022: voor hakhout met meer dan twee delen: tree-id obv coppice-id (zie hoger) -->
-
-Niet alle variabelen mee exporteren, enkel deze relevant voor de meeste gebruikers
-
-
-Volgende plots zijn (NOG) niet helemaal correct (wegens één of meerdere dubbele tree-id's):   
-
-- niet correcte unieke tree-id in `stems_calc`     
-- ontbrekende bomen in wijde tabel in `stems_wide`
-
-```{r}
-check_dubbele_tree_id %>% distinct(plot_id) %>% as.tibble
-```
-
-```{r stems_less_variables}
-stem_id_less_var <- stem_id %>% 
-  select(-old_id, -r_A1, -r_A2, -r_A3, -r_A4, -contains(c("dbh_min", "core_area_")), -subcirclearea_ha)
-## stemnumber_alive werd weggefilterd
-
-stem_id_less_var <- stem_id_less_var %>% 
-  select(forest_reserve, plot_id, plottype, 
-         period, 
-         tree_measure_id, shoot_measure_id, 
-         tree_id, tree_id_non_unique, coppice_id, 
-         x_local, y_local, 
-         species, 
-         dbh_mm, height_m, calc_height_m, 
-         alive_dead, ind_sht_cop, intact_snag, 
-         iufro_hght, iufro_vital, iufro_socia, 
-         decaystage, crown_volume_reduction, branch_length_reduction, 
-         remark, common_remark, 
-         year, date_dendro, 
-         subcircle, plotarea_ha, totalplotarea_ha, 
-         dbh_class_5cm, 
-         basal_area_m2, 
-         vol_bole_m3, vol_crown_m3, vol_tot_m3, 
-         basal_area_alive_m2_ha, basal_area_dead_m2_ha, 
-         vol_alive_m3_ha, vol_dead_standing_m3_ha, 
-         vol_bole_alive_m3_ha, vol_bole_dead_m3_ha, 
-         stem_number_dead_ha, stem_number_alive_ha
-         )
-
-```
-
-
-```{r save_stems_access_csv, eval = FALSE}
-# volgende functies heb ik zelf geschreven, zitten niet in het package!!!
-save_results_csv (
-    results = list(stems_calc = stem_id_less_var),
-    output_dir = path_to_treelevel_csv
-    )
-
-# afgerond voor export naar access
-stem_id_round <- stem_id_less_var %>% 
-  # mutate_at(c("calc_height_m"), round, 2) %>% 
-  mutate_at(vars(matches("_ha|_m3|_m2")), round, 4)
-
-# save_results_access (
-#   results = list(trees_calc = data_dendro_calc_round),
-#   database = path_to_analysis_set_db,
-#   remove_tables = TRUE
-#   )
-
-# Functie "save_results_access" (< package) geeft problemen met dates => hierna manueel
-
-con <- odbcConnectAccess2007(path_to_analysis_set_db)
-
-dbtables <- sqlTables(con)
-if ("stems_calc" %in% dbtables$TABLE_NAME) {
-        sqlDrop(con, "stems_calc")
-      }
-# sqlSave(con, dat = stem_id_round, tablename = "stems_calc", varTypes = c(date_dendro="datetime"))
-sqlSave(con, dat = stem_id_round, tablename = "stems_calc", varTypes = c(date_dendro="datetime"), fast = FALSE)
-
-odbcClose(con)
-```
-
-Direct naar gdrive exporteren (csv): 
-naar **/PRJ_BOSECO_ALGEMEEN/PRJ_BR_AanvraagGegevens/!METADATA-ALL_PLOTS/_tree-level-data/**
-
-```{r save_stems_gdrive, eval = FALSE}
-save_results_csv(
-    results = list(stems_calc = stem_id_less_var),
-    output_dir = path_to_treelevel_gdrive
-    )
-
-```{r results='hide'}
-check_dubbele_tree_id %>% distinct(tree_id) %>% as.tibble
-```
-
 
 
 # Copy html to teamdrive
@@ -575,9 +382,9 @@ Na knitting - manueel
 
 ```{r eval = FALSE}
 # Specify the path of the file you want to copy
-source_file <- here::here(paste0("Scripts/Per_gebied/", forestreserve_short, "/", forestreserve_short, "_treeniveau.html"))
+source_file <- here::here(paste0("Scripts/Per_gebied/", forestreserve_short, "/", forestreserve_short, "_treeniveau_2026.html"))
 # Specify the destination directory where you want to copy the file
-destination_dir <- path_to_html_teamdrive
+destination_dir <- path_to_output_teamdrive
 
 # Copy the file to the destination directory
 file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
