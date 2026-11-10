@@ -61,21 +61,35 @@ Een "wijde" tabel aanmaken met een unieke tree-id over de verschillende surveys 
 - dbh_mm
 - volume 
 
+# Import data
 
-# Load plotinfo
-
-```{r}
+```{r plotinfo}
 plotinfo <- read_xlsx(paste0(path_to_output_pc, "plotinfo.xlsx")) |> 
   select(-1)
 ```
 
-# Load dendro data
+```{r lkp}
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+
+qSpecies <- sqlFetch(con, "qTreeSpecies")
+qIndShootCop <- sqlFetch(con, "qCoppice_Individual")
+qIntactSnag <- sqlFetch(con, "qIntactTree")
+qDecaystage <- sqlFetch(con, "qDecayStage")
+
+odbcClose(con)
+
+qSpecies <- qSpecies %>% 
+  select(ID, name_nl = Value1, name_sc = Value2)
+qDecaystage <- qDecaystage %>% 
+  select(ID, decaystage_txt = Value1)
+```
 
 Aangemaakt in script "Level1_dendro.Rmd"
 
-```{r}
+```{r dendro}
 data_dendro_calc <- read.csv2(paste0(path_to_output_pc, "data_dendro_calc.csv")) |> 
-  select(-X)
+  select(-X) %>% 
+  left_join(qSpecies %>% select(ID, name_nl), by = c("species" = "ID"))
 ```
 
 
@@ -203,12 +217,14 @@ tree_id %>% filter(tree_id %in% check_dubbele_tree_id$tree_id)
 ```
 
 
-```{r tree_id_long}
+```{r tree_id_long, results='hide'}
+names(tree_id)
 # selectie om wijde tabel aan te maken
 tree_id_long <- tree_id %>%
   select(plot_id, period, tree_id, label_level1,
-         species, ind_sht_cop,
-         dbh_mm, vol_tot_m3, alive_dead) %>% 
+         species, name_nl, ind_sht_cop, alive_dead,
+         dbh_mm, height_m, calc_height_m,  
+         basal_area_m2, vol_bole_m3, vol_tot_m3) %>% 
   arrange(period) %>% 
   left_join(plotinfo %>% select(plot_id, period, survey_number)) %>% 
   select(-period)
@@ -219,10 +235,13 @@ tree_id_long <- tree_id %>%
 !!Opgepast: soms daalt dbh doorheen de tijd: dat is het geval bij dode bomen.
 
 ```{r tree_id_wide_zonder_dubbele_ids, results='hide'}
+names(tree_id_long)
 tree_id_wide <- make_table_wide(table_long = tree_id_long
                                 , column_to_repeat = "survey_number"
                                 , columns_for_comparison = 
-                                  c("alive_dead", "dbh_mm", "vol_tot_m3", "label_level1"))
+                                  c("alive_dead", "dbh_mm", "height_m", "calc_height_m"
+                                    , "basal_area_m2", "vol_bole_m3", "vol_tot_m3"
+                                    , "label_level1"))
 
 names(tree_id_wide)
 
@@ -232,7 +251,7 @@ nrow(tree_id_wide); n_distinct(tree_id_long$tree_id)
 tree_id_wide |> filter(label_level1_1 != label_level1_2) |> nrow() == 0
 # OK, alle gelabelde hebben zelfde label in beide periodes
 tree_id_wide |> filter(is.na(label_level1_1) & !is.na(label_level1_2)) |> nrow() == 221
-# OK, niet alle gekoppelde hebben een labek
+# OK, niet alle gekoppelde hebben een label
 
 t1 <- tree_id_wide |> filter(is.na(label_level1_1) & !is.na(label_level1_2)) %>% 
   filter(!is.na(alive_dead_1))
@@ -304,11 +323,12 @@ names(tree_survey_wide)
 
 ```{r}
 tree_survey_wide_ <- tree_survey_wide %>% 
-  select(forest_reserve, plot_id, plottype
-         , tree_id, species, ind_sht_cop
+  select(forest_reserve, plot_id, 
+         , tree_id, species, name_nl, ind_sht_cop
          , n_surveys
-         , contains(c("survey_Y", "alive_dead", "dbh", "vol")))
+         , contains(c("survey_Y", "alive_dead", "dbh", "height", "basal", "vol")))
 
+# names(tree_survey_wide_)
 tree_id_wide <- tree_survey_wide_
 names(tree_id_wide)
 ```
@@ -319,17 +339,24 @@ names(tree_id_wide)
 Volgende tabellen:
 
 - trees_calc: alle trees met info over _ha (< data_dendro_calc)
-- tree_id_long_extra_vars: tabel waar trees_wide op gemaakt is, dus zonder coppice
+- tree_id_long_extra_vars: tabel waar trees_wide op gebaseerd is, dus zonder coppice
 - trees_wide: tabel met per boom evolutie doorheen de tijd 
+
+
+```{r path_output, eval = FALSE}
+path_to_output_pc <- paste0(path_to_output_pc, "boomniveau/")
+path_to_output_teamdrive <- paste0(path_to_output_teamdrive, "boomniveau/")
+
+```
 
 ```{r trees_calc, results='hide'}
 names(data_dendro_calc)
 
 trees_calc <- data_dendro_calc %>% 
-  select(-plotarea_ha, -contains(c("dbh_class_5cm", "r_A4", "plottype"))) %>% 
+  select(-contains(c("dbh_class_5cm", "r_A4", "plottype"))) %>% 
   select(forest_reserve, plot_id, period, year
          , tree_measure_id, old_id, label_level1
-         , species, alive_dead, dbh_mm, height_m, calc_height_m
+         , species, name_nl, alive_dead, dbh_mm, height_m, calc_height_m
          , ind_sht_cop, intact_snag, decaystage, everything())
 # plotarea_ha = opp A4 => geen meerwaarde bij berekenen van _ha
 
@@ -342,12 +369,13 @@ names(tree_id)
 
 tree_id_long_extra_vars <- tree_id %>% 
   select(forest_reserve, plot_id, 
-         period, year,
-         tree_measure_id, tree_id, 
+         period, year, 
+         tree_id, label_level1,
          # x_local, y_local, 
-         species, dbh_mm, height_m, calc_height_m, 
-         alive_dead, ind_sht_cop, intact_snag, decaystage, 
-         nr_of_stems, basal_area_m2, 
+         species, name_nl, 
+         alive_dead, ind_sht_cop, intact_snag, 
+         dbh_mm, height_m, calc_height_m, 
+         basal_area_m2, 
          vol_bole_m3, vol_crown_m3, vol_tot_m3
          )
 names(tree_id_long_extra_vars)
@@ -368,7 +396,7 @@ save_results_csv (
     output_dir = path_to_output_pc
     )
 
-# temmdrive
+# teamdrive
 save_results_csv (
     results = trees,
     output_dir = path_to_output_teamdrive

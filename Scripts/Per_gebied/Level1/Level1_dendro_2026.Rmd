@@ -54,13 +54,8 @@ source(here::here(paste0("Scripts/Per_gebied/", forestreserve_short, "/functies.
 
 ```{r results='hold', eval=TRUE}
 path_to_fieldmap_db
-path_to_forresdat_data
-path_to_analysis_set_db
-path_to_plotlevel_csv
-path_to_treelevel_csv
-path_to_output_gdrive
-path_to_meetgegevens
-
+path_to_output_pc
+path_to_output_teamdrive
 ```
 
 
@@ -89,7 +84,7 @@ qDecaystage <- qDecaystage %>%
 Plotinfo samenstellen, zijnde plottype, naam forest_reserve en info over survey en 
 data al dan niet processed.
 
-Level1: geen plotdetails ingevuld =>  op andere manier saenstellen
+Level1: geen plotdetails ingevuld =>  op andere manier samenstellen
 
 ```{r plotinfo_vb}
 path_to_fieldmap_db_ALL <- "C:/03_BR_db_monitoring/MDB_BR_22_inbo2026_20260313/FieldMapData_MDB_BR_22_inbo2026.accdb"
@@ -133,7 +128,7 @@ odbcClose(conn)
 ? verderop data_dendro_calc ontbrekende dbh terwijl er wel een dbh in FM staat
 Wegens missing ind_sht_cop
 
-```{r}
+```{r results='hide'}
 data_dendro |> filter(plot_id == 713 & tree_measure_id == 27 & period == 2)
 data_dendro |> filter(plot_id == 311 & tree_measure_id == 32 & period == 2)
 
@@ -144,7 +139,7 @@ data_dendro <- data_dendro |>
 
 
 
-```{r}
+```{r results='hide'}
 data_shoots |> filter(is.na(dbh_mm)) |> nrow() 
 t <- data_shoots |> filter(is.na(dbh_mm)) 
 # volgens mij wegens slechte link of per ongeluk aangemaakt => verwijderen
@@ -166,10 +161,7 @@ data_dendro <- data_dendro |>
 data_stems <- compose_stem_data_L1(data_dendro, data_shoots) |> 
   mutate(fperiod = as.factor(period))
 
-data_stems |> filter(is.na(calc_height_fm)) |> nrow()  # 1 , wegens missing dbh
-data_stems |> filter(is.na(calc_height_fm)) |> select(plot_id, period, tree_measure_id, dbh_mm, height_m, calc_height_fm)
-
-data_stems |> filter(is.na(dbh_mm)) |> nrow() 
+data_stems |> filter(is.na(dbh_mm)) |> nrow() == 0
 
 ```
 
@@ -248,32 +240,44 @@ height_model <- rbind(height_model2009, height_model2025) |>
 
 ## Extra variabelen
 
-Alive_dead code aanpassen
+Codes `alive_dead`  en `ind_sht_cop` aanpassen zdd functies forrescalc kunne gebruikt worden
 
 crown_volume_reduction en branch_length_reduction
 
-```{r extra_vars}
+```{r codes_status_indshtcop, results='hide'}
 # alive dead nieuwe code
 data_dendro_ <- data_dendro |> 
-  rename(alive_dead_old = alive_dead) |> 
+  rename(alive_dead_old = alive_dead,
+         ind_sht_cop_old = ind_sht_cop) |> 
   mutate(alive_dead = ifelse(alive_dead_old == 1, 11
-                             , ifelse(alive_dead_old == 2, 12, 9999))) |> 
-  select(-alive_dead_old)
+                             , ifelse(alive_dead_old == 2, 12, 9999)),
+         ind_sht_cop = ifelse(ind_sht_cop_old == 10, 10
+                             , ifelse(ind_sht_cop_old == 20, 12, 9999))
+         ) |> 
+  select(-alive_dead_old, -ind_sht_cop_old)
   
-table(data_dendro_$alive_dead)
-table(data_dendro$alive_dead)
+# table(data_dendro_$alive_dead)
+# table(data_dendro_$ind_sht_cop_old)
+# table(data_dendro$alive_dead)
+# check <- data_dendro_ %>% 
+#   filter(ind_sht_cop == 9999)
 
 data_dendro <- data_dendro_
 
 # 
 data_stems_ <- data_stems |> 
-  rename(alive_dead_old = alive_dead) |> 
+  rename(alive_dead_old = alive_dead,
+         ind_sht_cop_old = ind_sht_cop) |> 
   mutate(alive_dead = ifelse(alive_dead_old == 1, 11
-                             , ifelse(alive_dead_old == 2, 12, 9999))) |> 
-  select(-alive_dead_old) |> 
+                             , ifelse(alive_dead_old == 2, 12, 9999)),
+         ind_sht_cop = ifelse(ind_sht_cop_old == 10, 10
+                             , ifelse(ind_sht_cop_old == 20, 12, 9999))
+         ) |> 
+  select(-alive_dead_old, -ind_sht_cop_old) |> 
   mutate(crown_volume_reduction = NA, branch_length_reduction = NA)
   
 table(data_stems_$alive_dead)
+table(data_stems_$ind_sht_cop)
 table(data_stems$alive_dead)
 
 data_stems <- data_stems_
@@ -284,7 +288,7 @@ data_stems <- data_stems_
 Level1 gebruikt soortenlijst van VBI
 
 
-```{r load_tarieven}
+```{r load_tarieven, results='hide'}
 # cfr forrescalc
 tariffs1 <- read_csv2(
           system.file("extdata/tariffs1entry.csv", package = "forrescalc")
@@ -351,33 +355,49 @@ data_stems <- data_stems |>
   mutate(intact_snag = ifelse(is.na(height_m), 10, intact_snag))
 ```
 
-```{r eval = FALSE}
-# functie calc_stem_volume uitproberen
-data_stems_test <- calc_stem_volume(data_stems |> rename(calc_height_m = calc_height_fm))
-data_stems_test |> filter(is.na(vol_bole_m3)) |> nrow() == 0
-
-```
 ## Berekeningen tree niveau
 
-```{r calc_stems_tree}
+```{r calc_stems_tree, results='hide'}
 data_stems_calc <- calc_variables_stem_level_L1(data_stems, height_model)
 data_stems_calc |> filter(is.na(vol_bole_m3)) |> nrow() == 0
 
 data_dendro_calc <- calc_variables_tree_level_L1(data_dendro, data_stems_calc)
 summary(data_dendro_calc)
 
-data_dendro_calc |> filter(is.na(vol_bole_alive_m3_ha)) |> nrow()
+data_dendro_calc |> filter(is.na(vol_bole_alive_m3_ha)) |> nrow() == 0
 
 ```
-```{r save_treeniveau, eval = FALSE}
-write.csv2(data_dendro_calc, paste0(path_to_output_pc, "data_dendro_calc.csv"))
-```
 
+
+```{r vgl_old_data, eval = FALSE}
+data_dendro_calc_old <- read.csv2(paste0(path_to_output_pc, "archief/data_dendro_calc.csv")) %>% 
+  select(-1)
+
+waldo::compare(data_dendro_calc, data_dendro_calc_old)
+
+summary(data_dendro_calc_old)
+summary(data_dendro_calc)
+
+t_old <- data_dendro_calc_old %>% 
+  select(plot_id, tree_measure_id, period, alive_dead, ind_sht_cop, contains("number_of"))
+t_new <- data_dendro_calc %>% 
+  select(plot_id, tree_measure_id, period, alive_dead, ind_sht_cop, contains("number_of"))
+
+t_vgl <- t_old %>% 
+  left_join(t_new, by = c("plot_id", "period", "tree_measure_id")) %>% 
+  filter(round(number_of_trees_alive_ha.x,5) != round(number_of_trees_alive_ha.y, 5))
+# alle coppice 20 => klopt, new is beter, nu aangepast
+t_vgl <- t_old %>% 
+  left_join(t_new, by = c("plot_id", "period", "tree_measure_id")) %>% 
+  filter(round(number_of_trees_dead_ha.x,5) != round(number_of_trees_dead_ha.y, 5))
+```
 
 ## Berekeningen plot niveau
 
-```{r plotinfo}
+```{r plotinfo, results = 'hide'}
 names(plotinfo_vb)
+
+# diam_min_a4_logs = 10 cm in 2009 en 30 cm in 2025
 
 plotinfo <- data_dendro |> 
   group_by(forest_reserve, plot_id, period
@@ -391,13 +411,19 @@ plotinfo <- data_dendro |>
          , dbh_min_a3_dead = 70
          , dbh_min_a4_alive = 70
          , dbh_min_a4_dead = 70
+         , diam_min_a4_logs = ifelse(period == 1, 100, 300)
          , length_transect_lis = 45
          , survey_trees = TRUE
          , data_processed = TRUE
          , survey_deadw = TRUE
          , survey_lis = ifelse(period == 2, TRUE, FALSE)
          , survey_number = period
-         )
+         ) %>% 
+  select(-n) %>% 
+  relocate(r_A4, .after = r_A3) %>% 
+  relocate(data_processed, .after = survey_number)
+
+names(plotinfo)
 ```
 
 
@@ -413,16 +439,15 @@ plotinfo <- data_dendro |>
 # OPGEPAST: er bij statistische verwerking wél voor zorgen dat deze plots niet meegenomen worden
 # ev. mbv lijstje "plots_to_exclude" obv processed = TRUE
 
-
-by_plot <- calc_dendro_plot(data_dendro_calc, data_deadwood, plotinfo)
-by_plot_species <-
+dendro_by_plot <- calc_dendro_plot(data_dendro_calc, data_deadwood, plotinfo)
+dendro_by_plot_species <-
   calc_dendro_plot_species(data_dendro_calc, data_deadwood, plotinfo)
-by_decay_plot <-
+deadw_by_decay_plot <-
   calc_deadw_decay_plot(plotinfo, data_deadwood, data_dendro_calc)
-by_decay_plot_species <-
+deadw_by_decay_plot_species <-
   calc_deadw_decay_plot_species(plotinfo, data_deadwood, data_dendro_calc)
-by_diam_plot <- calc_diam_plot(data_stems_calc, data_deadwood, plotinfo)
-by_diam_plot_species <-
+dendro_by_diam_plot <- calc_diam_plot(data_stems_calc, data_deadwood, plotinfo)
+dendro_by_diam_plot_species <-
   calc_diam_plot_species(data_stems_calc, data_deadwood, plotinfo)
 
 ```
@@ -451,13 +476,15 @@ test_DW1 <- data_deadwood %>%
   ungroup()
 
 test_DW1
-# OK: CP's & CA periode 3 pas vanaf 30 cm opgemeten
+# OK: CP's periode 3 pas vanaf 30 cm opgemeten
+# (c)A: 1 record met max_diam = 70, mogelijks typfout 70 max en 10 min ipv 100 max en 70 min
+# => gewoon behouden
 ```
 
 We zien dat er in periode 2 effectief pas opgemeten wordt vanaf 30 cm.
 
 ```{r eval = FALSE}
-test_DW2 <- by_diam_plot %>% 
+test_DW2 <- dendro_by_diam_plot %>% 
   group_by(period, plottype, dbh_class_5cm) %>% 
   summarize(n = n()
             , logs = sum(vol_log_m3_ha, na.rm = TRUE)) %>% 
@@ -488,7 +515,7 @@ Onderstaande tabellen bevatten enkel `vol_log_m3_ha`
 - deadw_by_decay_plot     
 - deadw_by_decay_plot_species     
 
-Er moeten dus 8 dataframes aangepast worden voor CP's periode 3.      
+Er moeten dus 8 dataframes aangepast worden voor CP's periode 2.      
 
 Daarbij gaan we       
 
@@ -516,17 +543,17 @@ Zie [issue 168](https://github.com/inbo/forrescalc/issues/168)
 staan (zou afbraak = 16 - NVT moeten zijn) 
 => zowel decay = NA (periode 3) als decay = 16 (periode 1 en 2) wegfilteren.      
 
-Nu (2/12/22025) opgenomen in onderstaande functie `correctie_1`
+Nu (2/12/2025) opgenomen in onderstaande functie `correctie_1`
 
 ```{r corr1}
 # Correctie 1: 
 # 1) dataframes zonder info over diameterklasse: een extra veld aanmaken `vol_log_above30cm_m3_ha` 
 # en `vol_log_m3_ha` op NA zetten
 
-corr_1 <- list(dendro_by_plot = by_plot
-               , dendro_by_plot_species = by_plot_species
-               , deadw_by_decay_plot = by_decay_plot
-               , deadw_by_decay_plot_species = by_decay_plot_species)
+corr_1 <- list(dendro_by_plot = dendro_by_plot
+               , dendro_by_plot_species = dendro_by_plot_species
+               , deadw_by_decay_plot = deadw_by_decay_plot
+               , deadw_by_decay_plot_species = deadw_by_decay_plot_species)
 
 # info <- plotinfo
 # tab <- deadw_by_decay_plot_species
@@ -535,6 +562,7 @@ correctie_1 <- function(tab, info = plotinfo) {
   
   tabel <- tab
   
+  # enkel voor deadw_by_decay_xxx
   if ("decaystage" %in% colnames(tabel)) {
     tabel <- tabel %>% 
       filter(!((is.na(decaystage) | decaystage == 16) & vol_dead_standing_m3_ha == 0 &
@@ -580,10 +608,10 @@ for (tablename in names(tbls)) {
 # 2) dataframes mét info over diameterklasse: `vol_log_m3_ha` op NA zetten in de
 # diameterklasses < 30 cm vindien LIS_survet én overal voor diameterklasse < 10 cm
 
-corr_2 <- list(dendro_by_diam_plot = by_diam_plot
-            , dendro_by_diam_plot_species = by_diam_plot_species)
+corr_2 <- list(dendro_by_diam_plot = dendro_by_diam_plot
+            , dendro_by_diam_plot_species = dendro_by_diam_plot_species)
 
-unique(by_diam_plot$dbh_class_5cm)
+unique(dendro_by_diam_plot$dbh_class_5cm)
 diam_klasses_under_30cm <- c("5 - 10 cm", "10 - 15 cm", "15 - 20 cm", "20 - 25 cm", "25 - 30 cm")
 diam_klasses_under_10cm <- c("5 - 10 cm")
 
@@ -679,13 +707,12 @@ Lijst `dendro` opnieuw aanmaken
 ```{r}
 dendro <- list(
   # gecorrigeerde standaard forrescalc files nalv vol_logs_above30cm & LIS
-  dendro_by_plot = by_plot
- , dendro_by_plot_species = by_plot_species
- , deadw_by_decay_plot = by_decay_plot
- , deadw_by_decay_plot_species = by_decay_plot_species
- , dendro_by_diam_plot = by_diam_plot
- , dendro_by_diam_plot_species = by_diam_plot_species)
-
+  dendro_by_plot = dendro_by_plot
+ , dendro_by_plot_species = dendro_by_plot_species
+ , deadw_by_decay_plot = deadw_by_decay_plot
+ , deadw_by_decay_plot_species = deadw_by_decay_plot_species
+ , dendro_by_diam_plot = dendro_by_diam_plot
+ , dendro_by_diam_plot_species = dendro_by_diam_plot_species)
 
 ```
 
@@ -715,15 +742,74 @@ for (tablename in names(dendro_plotinfo)) {
 
 ```
 
+# Vgl met oude data
+
+```{r dendro_by_plot, results='hide'}
+dendro_by_plot_old <- read_excel(paste0(path_to_output_teamdrive, "plotniveau/archief/dendro_by_plot.xlsx")) %>% 
+  select(-1)
+
+waldo::compare(dendro_by_plot, dendro_by_plot_old)
+
+summary(dendro_by_plot_old)
+summary(dendro_by_plot)
+
+t_old <- dendro_by_plot_old %>% 
+  select(plot_id, period, stems_per_tree, contains("number_of_trees")
+         , vol_alive_m3_ha, vol_dead_standing_m3_ha)
+t_new <- dendro_by_plot %>% 
+  select(plot_id, period, stems_per_tree, contains("number_of_trees")
+         , vol_alive_m3_ha, vol_dead_standing_m3_ha)
+
+t_vgl <- t_old %>% 
+  left_join(t_new, by = c("plot_id", "period")) %>% 
+  filter(round(stems_per_tree.x,5) != round(stems_per_tree.y, 5))
+summary(t_vgl)
+# volumes gelijk, enkel number_of_trees en daarom ook stems_per_tree (new is beter)
+```
+```{r dendro_by_plot_species, results='hide'}
+dendro_by_plot_species_old <- read_excel(paste0(path_to_output_teamdrive, "plotniveau/archief/dendro_by_plot_species.xlsx")) %>% 
+  select(-1)
+
+waldo::compare(dendro_by_plot_species, dendro_by_plot_species_old)
+
+summary(dendro_by_plot_species_old)
+summary(dendro_by_plot_species)
+
+t_old <- dendro_by_plot_species_old %>% 
+  select(plot_id, period, species, stems_per_tree, contains("number_of_trees")
+         , vol_alive_m3_ha, vol_dead_standing_m3_ha)
+t_new <- dendro_by_plot_species %>% 
+  select(plot_id, period, species, stems_per_tree, contains("number_of_trees")
+         , vol_alive_m3_ha, vol_dead_standing_m3_ha)
+
+t_vgl <- t_old %>% 
+  left_join(t_new, by = c("plot_id", "period", "species")) %>% 
+  filter(round(stems_per_tree.x,5) != round(stems_per_tree.y, 5))
+summary(t_vgl)
+
+# OK, zie hoger
+```
 
 # Export
 
 Resultaten worden opgeslagen op c-schijf en in teamdrive:
 
-```{r}
-path_to_output_pc
-path_to_output_teamdrive 
+```{r path_output, eval = FALSE}
+path_to_output_pc <- paste0(path_to_output_pc, "plotniveau/")
+path_to_output_teamdrive <- paste0(path_to_output_teamdrive, "plotniveau/")
 
+```
+
+
+```{r save_treeniveau, eval = FALSE}
+names(data_dendro_calc)
+data_dendro_calc_export <- data_dendro_calc %>% 
+  select(-plottype, -r_A4) %>% 
+  relocate(forest_reserve, .before = plot_id) %>% 
+  relocate(height_m, .before = calc_height_m)
+names(data_dendro_calc_export)
+  
+write.csv2(data_dendro_calc_export, paste0(path_to_output_pc, "data_dendro_calc.csv"))
 ```
 
 Enkele verduidelijkingen:
@@ -741,7 +827,7 @@ versus "vol_alive_m3_ha" en "vol_dead_standing_m3_ha"
 want onduidelijk welke fracties geteld worden (LIS of FAS of beide)
 
 
-```{r save, eval=FALSE}
+```{r save_plotniveau, eval=FALSE}
 save_results_xlsx(
     results = list(plotinfo = plotinfo),
     output_dir = path_to_output_pc
@@ -755,7 +841,7 @@ save_results_xlsx(
 ```
 
 
-```{r save_teamdrive, eval=FALSE}
+```{r save_plotniveau_teamdrive, eval=FALSE}
 save_results_xlsx(
     results = list(plotinfo = plotinfo),
     output_dir = path_to_output_teamdrive 

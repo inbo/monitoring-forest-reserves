@@ -82,7 +82,6 @@ load_data_dendrometry_L1 <-
       mutate(year = jaar
              , r_A4 = 18
              , period = ifelse(year == 2009, 1, 2)
-             , dbh_class_5cm = give_diamclass_5cm(.data$dbh_mm)
       )
     
     return(data_dendro)

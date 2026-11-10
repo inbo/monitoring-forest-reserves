@@ -86,43 +86,195 @@ names(trees_wide)
 
 ```
 
+# Overzicht
 
-```{r overview}
+```{r overview_2surveys}
 # aantal surveys, aantal bomen
 
-summ <- trees_wide %>% group_by(forest_reserve, plottype, n_surveys) %>% 
-  summarise(n_beuk = n()) %>% ungroup %>% 
-  arrange(desc(n_surveys), desc(n_beuk)) 
+summ <- trees_wide %>% 
+  filter(n_surveys == 2) %>% 
+  group_by(species, name_nl, n_surveys) %>% 
+  reframe(n_trees = n()) %>% 
+  arrange(desc(n_trees)) %>% 
+  relocate(n_trees, .before = n_surveys) 
 
-summ_beuk %>% 
-  DT::datatable()
+summ %>% 
+  DT::datatable(rownames = FALSE)
+```
 
-write.csv2(summ_beuk, paste0(path_to_datarequest_cschijf, "n_surveys_n_beuk_per_BR.csv"))
-write.csv2(summ_beuk, paste0(path_to_datarequest_teamdrive, "n_surveys_n_beuk_per_BR.csv"))
-
+```{r eval = FALSE}
+write.csv2(summ, paste0(path_to_output_pc, "aantal_bomen_2x_gemeten_per_soort.csv"))
+write.csv2(summ, paste0(path_to_output_teamdrive, "aantal_bomen_2x_gemeten_per_soort.csv"))
 ```
 
 
+# Aangroei
+
+Aangroei berekenen cfr VBI
 
 ```{r}
-names(beuk_wide)
-nrow(beuk_wide) # 11277
-
-beuk_wide <- beuk_wide %>% 
-  select(-contains("vol"))
+names(trees_wide)
+nrow(trees_wide) # 4143
 ```
 
+```{r growth_paired_alive}
+trees_growth <- trees_wide %>% 
+  filter(n_surveys == 2 & alive_dead_1 == 11 & alive_dead_2 == 11) %>% 
+  mutate(dbh_growth_mm_jr = (dbh_mm_2 - dbh_mm_1)/(survey_Y2 - survey_Y1)
+         , basal_area_growth_m2_jr = (basal_area_m2_2 - basal_area_m2_1)/(survey_Y2 - survey_Y1)
+         , vol_bole_growth_m3_jr = (vol_bole_m3_2 - vol_bole_m3_1)/(survey_Y2 - survey_Y1)
+         , vol_tot_growth_m3_jr = (vol_tot_m3_2 - vol_tot_m3_1)/(survey_Y2 - survey_Y1)
+         , height_diff = height_m_2 - height_m_1)
+
+trees_growth %>% filter(is.na(dbh_growth_mm_jr)) %>% nrow() == 0
+# summary(trees_growth)
+```
+```{r}
+check <- trees_growth %>% 
+  filter(dbh_growth_mm_jr < 0) %>% 
+  mutate(perc = 0.1*dbh_mm_1/(survey_Y2 - survey_Y1))  # 10 procent van dbh_mm_1
+
+# vooral relevant als > 10%
+check2 <- check %>% 
+  filter(dbh_growth_mm_jr < 0 & abs(dbh_growth_mm_jr) > perc)
+
+```
+
+
+
+#  Dataverkenning
+
+## Dotplot --> zijn er outliers?
+
+```{r outliers}
+ggplot(trees_growth, aes(x=dbh_growth_mm_jr,y=1:length(trees_growth$plot_id))) +
+  geom_point()+
+  labs(x="diameteraangroei", y="trees_growthvolgorde",title="diameteraangroei")
+
+# focus op grote aangroei
+ggplot(trees_growth %>% filter(dbh_growth_mm_jr > 8)
+       , aes(x=dbh_growth_mm_jr, y=1:nrow(trees_growth %>% filter(dbh_growth_mm_jr > 8)))) +
+  geom_point(aes(colour=name_nl))+
+  labs(x="diameteraangroei",title="Positieve diameteraangroei")
+trees_growthOutliers<-trees_growth[trees_growth$dbh_growth_mm_jr>8,]
+#lijken realistische waarden
+# lijkt OK
+
+# focus op grote krimp
+g <- ggplot(trees_growth %>% filter(dbh_growth_mm_jr < (-3))
+       , aes(x=dbh_growth_mm_jr, y=1:nrow(trees_growth %>% filter(dbh_growth_mm_jr < (-3))))) +
+  geom_point(aes(colour=name_nl))+
+  labs(x="diameteraangroei",title="Negatieve diameteraangroei")
+# g
+
+ggplot(trees_growth %>% filter(dbh_growth_mm_jr < (-0))
+       , aes(x=dbh_growth_mm_jr, y=1:nrow(trees_growth %>% filter(dbh_growth_mm_jr < (-0))))) +
+  geom_point(aes(colour=name_nl))+
+  labs(x="diameteraangroei",title="Negatieve diameteraangroei")
+
+trees_growthOutliersNeg<-trees_growth[trees_growth$dbh_growth_mm_jr < (-3),]
+# per jaar 1 cm gekrommpen, kan niet => outlier verwijderen
+
+
+# c(A): te negatieve waardes verwijderen, foute koppeling of ergens een meetfout.
+# Tot -4 kan kleine meetfout zijn (en komt voor in twee richtingen) => deze nog behouden
+# omgekeerd: te hoge aangroei is moeilijk, vooral populier, maar kan uitz misschien ook wel bij andere boomsoorten
+
+trees_growth <- trees_growth %>% 
+  filter(dbh_growth_mm_jr > (-3)) 
+```
+Uit VBI: 5cm afwijking (op 10 jaar) kan een meetfout zijn.
+Hier 16 jaar tussen, ook 5 cm meetfout = 0.3 cm of 3 mm per jaar.
+
+DUS: afwijking tot dbh_growth_mm_jr = -3 wordt nog als kleine meetfout aanzien, en komt 
+volgens mij in beide richtingen voor.
+Te extreem negatieve waardes (dbh_growth_mm_jr < -3) worden verwijderd, wellicht foute koppeling of meetfout.
+
+Omgekeerd: vanaf wanneer is aangroei te hoog? Dat is moeilijk in te schatten, de 
+waardes hier lijken realistisch.
+
+
+## Histogrammen
+
+```{r}
+ggplot(trees_growth,aes(x=dbh_growth_mm_jr))+
+    geom_histogram(alpha=.5, position="identity")+
+    labs(y="Aantal gekoppelde bomen",x="Diameteraangroei per jaar (cm)",title= "Diameteraangroei")
+
+```
+
+
+## Relaties met covariaten
+
+```{r}
+# ggplot(trees_growth,aes(x=OwnerType,y=dbh_growth_mm_jr,weight=SegmentWeight*PlotWeight)) + geom_boxplot() + labs(y="Diameteraangroei per jaar (cm)",x="Eigenaarscategorie",title= "Diameteraangroei")
+# hier zonder weights: elke boom telt evenveel mee
+g <- ggplot(trees_growth,aes(x=name_nl,y=dbh_growth_mm_jr)) + 
+    geom_boxplot() + 
+    labs(y="Diameteraangroei (mm/jr)",x="Soort",title= "Diameteraangroei") +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+g
+ggsave(plot = g, filename = "boxplot_dbh_growth_per_species.jpeg", 
+       path = path_to_output_teamdrive, height = 8, width = 8)
+
+```
+
+# Analyse
+
+```{r mean_growth_quick}
+mean_growth <- trees_growth %>% 
+  group_by(species, name_nl) %>% 
+  reframe(n_obs = n()
+          , dbh_growth_mm_jr = round(mean(dbh_growth_mm_jr), 2)
+          # , basal_area_growth_m2_jr = mean(basal_area_growth)
+          # zegt weinig want op boomniveau, basal area eerder een variabele voor plotniveau
+          , vol_bole_growth_m3_jr = round(mean(vol_bole_growth_m3_jr), 4)
+          , vol_tot_growth_m3_jr = round(mean(vol_tot_growth_m3_jr), 4)
+  )
+
+mean_growth  %>%
+  DT::datatable(rownames = F)
+```
+
+```{r mean_growth_CI, results='hide'}
+# met BI
+names(trees_growth)
+variables_for_statistics <- c("dbh_growth_mm_jr", 
+                              # "basal_area_growth", 
+                              "vol_bole_growth_m3_jr", "vol_tot_growth_m3_jr")
+# mbv forrescalc, ook BI
+mean_growth_CI <- create_statistics(
+  dataset = trees_growth,
+  level = c("species", "name_nl"),
+  variables = variables_for_statistics,
+  include_year_range = FALSE
+  ) %>% 
+  forestmangr::round_df(., 4)
+```
 
 
 # Wegschrijven output
 
-Data worden weggeschreven naar `r path_to_datarequest_teamdrive`.
+```{r path_output, eval = FALSE}
+path_to_output_pc <- paste0(path_to_output_pc, "groei/")
+path_to_output_teamdrive <- paste0(path_to_output_teamdrive, "groei/")
+
+```
+
+Data worden weggeschreven naar `r path_to_output_teamdrive`.
 
 ```{r WegschrijvenOutput_csv, eval = FALSE}
-write_csv2(beuk_wide, paste0(path_to_datarequest_cschijf, "beuk_wide.csv"))
+# trees_growth
+write_csv2(trees_growth, paste0(path_to_output_pc, "trees_growth.csv"))
+write_csv2(trees_growth, paste0(path_to_output_teamdrive, "trees_growth.csv"))
 
-write_csv2(beuk_wide, paste0(path_to_datarequest_teamdrive, "beuk_wide.csv"))
+# mean_growth per soor
+write_csv2(mean_growth, paste0(path_to_output_pc, "mean_growth_per_species.csv"))
+write_csv2(mean_growth, paste0(path_to_output_teamdrive, "mean_growth_per_species.csv"))
 
+# idem, met BI
+write_csv2(mean_growth_CI, paste0(path_to_output_pc, "mean_growth_per_species_met_BI.csv"))
+write_csv2(mean_growth_CI, paste0(path_to_output_teamdrive, "mean_growth_per_species_met_BI.csv"))
 ```
 
 
@@ -132,10 +284,9 @@ Na knitting - manueel
 
 ```{r eval = FALSE}
 # Specify the path of the file you want to copy
-source_file <- here::here(paste0("Scripts/AanvraagGegevens/INBO_allerlei/INBO_beuk_mortaliteit.html"))
-
+source_file <- here::here(paste0("Scripts/Per_gebied/", forestreserve_short, "/", forestreserve_short, "_groei_2026.html"))
 # Specify the destination directory where you want to copy the file
-destination_dir <- path_to_html_teamdrive
+destination_dir <- path_to_output_teamdrive
 
 # Copy the file to the destination directory
 file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
