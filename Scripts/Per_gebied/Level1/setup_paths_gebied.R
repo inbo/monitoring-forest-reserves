@@ -18,12 +18,12 @@ forestreserve_folder_teamdrive <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverw
 path_to_datacontrol <- paste0(forestreserve_folder_teamdrive, "/01_datacontrole/")
 path_to_heightcurves <- paste0(forestreserve_folder_teamdrive, "/02_dh_curves/")
 
-path_to_plotdata_teamdrive <- paste0(forestreserve_folder_teamdrive, "/03_output_R_plotlevel/")
+path_to_output_teamdrive <- paste0(forestreserve_folder_teamdrive, "/03_output_R/")
 path_to_stats_teamdrive <- paste0(forestreserve_folder_teamdrive, "/04_statistieken_BR/")
 
 
 # EVENTUEEL NIET MEER GEBRUIKEN??
-path_to_plotdata_pc <- paste0(forestreserve_folder_pc, "/verwerking_2025/output_forrescalc/") # c-schijf
+path_to_output_pc <- paste0(forestreserve_folder_pc, "/verwerking_2025/output_forrescalc/") # c-schijf
 
 
 # TIJDELIJK `path_to_fieldmap_db` naar nieuwe situatie mrt 2026 (met aanpassing nalv andere benadering hakhout)
