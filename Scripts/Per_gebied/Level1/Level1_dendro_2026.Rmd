@@ -370,7 +370,7 @@ data_dendro_calc |> filter(is.na(vol_bole_alive_m3_ha)) |> nrow()
 
 ```
 ```{r save_treeniveau, eval = FALSE}
-write.csv2(data_dendro_calc, paste0(path_to_plotdata_pc, "data_dendro_calc.csv"))
+write.csv2(data_dendro_calc, paste0(path_to_output_pc, "data_dendro_calc.csv"))
 ```
 
 
@@ -721,8 +721,8 @@ for (tablename in names(dendro_plotinfo)) {
 Resultaten worden opgeslagen op c-schijf en in teamdrive:
 
 ```{r}
-path_to_plotdata_pc
-path_to_plotdata_teamdrive 
+path_to_output_pc
+path_to_output_teamdrive 
 
 ```
 
@@ -744,12 +744,12 @@ want onduidelijk welke fracties geteld worden (LIS of FAS of beide)
 ```{r save, eval=FALSE}
 save_results_xlsx(
     results = list(plotinfo = plotinfo),
-    output_dir = path_to_plotdata_pc
+    output_dir = path_to_output_pc
   )
 
 save_results_xlsx(
     results = dendro_plotinfo,
-    output_dir = path_to_plotdata_pc
+    output_dir = path_to_output_pc
   )
 
 ```
@@ -758,12 +758,12 @@ save_results_xlsx(
 ```{r save_teamdrive, eval=FALSE}
 save_results_xlsx(
     results = list(plotinfo = plotinfo),
-    output_dir = path_to_plotdata_teamdrive 
+    output_dir = path_to_output_teamdrive 
   )
 
 save_results_xlsx(
     results = dendro_plotinfo,
-    output_dir = path_to_plotdata_teamdrive 
+    output_dir = path_to_output_teamdrive 
   )
 
 ```
@@ -780,7 +780,7 @@ source_file <- here::here(paste0("Scripts/Per_gebied/", forestreserve_short, "/"
 
 
 # Specify the destination directory where you want to copy the file
-destination_dir <- path_to_plotdata_teamdrive
+destination_dir <- path_to_output_teamdrive
 
 # Copy the file to the destination directory
 file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
