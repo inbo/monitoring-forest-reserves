@@ -1,0 +1,421 @@
+---
+title: "Dataverwerking - dendro op boomniveau"
+subtitle: "Level 1 - cirkelplots"
+author: "Anja Leyman"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: FALSE
+    number_sections: yes
+    fig_caption: yes
+    code_folding: hide
+    toc: TRUE
+    toc_float:
+      collapsed: yes
+      smooth_scroll: yes
+---
+
+
+```{r Setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE,
+  message = FALSE,
+  warning = FALSE, 
+  fig.width = 7,
+  fig.height = 3,
+  fig.align = TRUE)
+
+library(here)
+library(writexl)
+library(scales)
+
+
+# libraries & invoergegevens
+source(here::here("scripts/Setup.R"))
+
+```
+
+```{r Setup2, include = FALSE}
+forest_reserve_short <- "Level1"
+source(here::here("scripts/Per_gebied/", forest_reserve_short, "/setup_paths_gebied.R"))
+source(here::here(paste0("Scripts/Per_gebied/", forestreserve_short, "/functies.R")))
+```
+
+
+# Vraagstelling
+
+**Bosreservaat `r forestreserve`**
+
+<br>
+
+```{r results='hold', eval=TRUE}
+path_to_fieldmap_db
+path_to_output_pc
+path_to_output_teamdrive
+```
+
+Een "wijde" tabel aanmaken met een unieke tree-id over de verschillende surveys heen met:
+
+- jaartal van elke survey
+- dbh_mm
+- volume 
+
+# Import data
+
+```{r plotinfo}
+plotinfo <- read_xlsx(paste0(path_to_output_pc, "plotinfo.xlsx")) |> 
+  select(-1)
+```
+
+```{r lkp}
+con <- odbcConnectAccess2007(path_to_fieldmap_db)
+
+qSpecies <- sqlFetch(con, "qTreeSpecies")
+qIndShootCop <- sqlFetch(con, "qCoppice_Individual")
+qIntactSnag <- sqlFetch(con, "qIntactTree")
+qDecaystage <- sqlFetch(con, "qDecayStage")
+
+odbcClose(con)
+
+qSpecies <- qSpecies %>% 
+  select(ID, name_nl = Value1, name_sc = Value2)
+qDecaystage <- qDecaystage %>% 
+  select(ID, decaystage_txt = Value1)
+```
+
+Aangemaakt in script "Level1_dendro.Rmd"
+
+```{r dendro}
+data_dendro_calc <- read.csv2(paste0(path_to_output_pc, "plotniveau/data_dendro_calc.csv")) |> 
+  select(-X) %>% 
+  left_join(qSpecies %>% select(ID, name_nl), by = c("species" = "ID"))
+```
+
+
+# Create unique tree-id
+
+`Data_dendro_calc` bevat een unieke `tree_id` per boom (die constant blijft doorheen de tijd),
+verschillend van de `tree_measure_id` uit fieldmap, die wel varieert doorheen de tijd.
+
+Deze `tree_id` wordt in het package aangemaakt obv old_id.
+
+Rol `label_level1`? 
+Verschil met `old_id`?
+
+Old_id enkel in periode 2 uiteraard, bij elke gekoppelde boom.
+Een label wordt echter niet aan elke boom toegekend, daarom sommige bomen mét old_id 
+en géén label. 
+Omgekeerd ook soms met een label en geen old_id, dat zijn de nieuw aangeduide bomen,
+aangezien er ook regelmatig bomen uit het Level 1 netwerk verdwijnen.
+Als er een label is, zou dat hetzelfde moeten zijn doorheen de tijd (OK, wordt verderop gecheckt)
+
+Functie `create_unique_tree_id()` aangepast nalv nieuwe projectstructuur hakhout.
+Hier echter nog op oude manier opgemeten.
+Daarom eerst kijken of we met `label_level_1` ook genoeg bomen kunnen koppelen doorheen de tijd.
+
+```{r}
+label <- data_dendro_calc %>% 
+  group_by(plot_id, label_level1) %>% 
+  reframe(n = n()) %>% 
+  filter(!is.na(label_level1) & n > 1)
+# 1401
+
+# 7 records war label 3x toegekend wordt => opkuis nodig, wellicht HH
+
+oldid <- data_dendro_calc %>% 
+  group_by(plot_id, old_id, label_level1, ind_sht_cop) %>% 
+  reframe(n = n()) %>% 
+  filter(!is.na(old_id))
+# 2209
+oldid %>% filter(is.na(label_level1)) %>% nrow()
+# 2209-762
+table(oldid$ind_sht_cop)
+# 10   20 
+# 2020  189
+
+```
+
+Toch duidelijk minder bomen gekoppeld obv label dan obv old_id.
+Bovendien slechts 189 hakhoutstoven, versus 2020 individuele bomen met een old_id
+=> eenvoudigste is om coppice te verwijderen en dan functie `create_unique_tree_id()` 
+te gebruiken.
+
+Sowieso is diameteraangroei enkel relevant bij individuele bomen, want hakhout niet 
+op spilniveau gekoppeld.
+
+?? zijn er bomen die in p1 geen hakhout zijn en in p2 wel, of omgekeerd?
+Moeilijk te checken en eigenlijk ook irrelevant, we gaan enkel verder met individuele 
+bomen, individueel in beide periodes.
+
+```{r}
+data_dendro_indiv <- data_dendro_calc %>% 
+  filter(ind_sht_cop == 10)
+```
+
+
+```{r mbv_oldid_obv_package, results = 'hide'}
+tree_id <- create_unique_tree_id(data_dendro = data_dendro_indiv)
+# Deze tabel wordt NIET bewaard in forresdat (daar enkel geaggregeerde resultaten op plotniveau)
+
+# check
+tree_id %>% filter(is.na(tree_id)) %>% nrow() == 0
+tree_id_missing <- tree_id %>% filter(is.na(tree_id))
+table(tree_id_missing$forest_reserve, tree_id_missing$period)
+```
+
+```{r}
+# t <- data_dendro_calc |> 
+#   filter((!is.na(old_id) | !is.na(label_level1)) & period == 2)  # 2392
+# 
+# t |> filter(is.na(old_id) & period == 2) |> nrow()  # 183
+# t |> filter(is.na(label_level1) & period == 2) |> nrow() # 762
+# t |> filter(!is.na(old_id) & !is.na(label_level1)) |> nrow()  # 1447
+# 
+# t2 <- data_dendro_calc |> 
+#   filter(!is.na(old_id) & !is.na(label_level1))
+# # 1447
+# 
+# t3 <- data_dendro_calc |> 
+#   filter(!is.na(old_id) & is.na(label_level1))
+# 
+# t4 <- data_dendro_calc |> 
+#   filter(is.na(old_id) & !is.na(label_level1))
+```
+
+
+# Wijde tabel met één record per boom doorheen de tijd
+
+Om één record per boom te verkrijgen met info uit beide periodes, gebruiken we de functie
+`make_table_wide()`.
+Dit werkt enkel bij een unieke tree_id.
+
+Indien nodig: tijdelijk verwijderen van deze met een dubbele tree-id.
+Hier OK aangezien we hakhout verwijderd hebben.
+
+```{r tree_id_wide_check, results='hide'}
+check_dubbele_tree_id <- tree_id %>% 
+  group_by(tree_id, period) %>% 
+  summarize(aantal_per_periode = n()) %>% 
+  ungroup() %>% 
+  filter(aantal_per_periode > 1) 
+
+nrow(check_dubbele_tree_id) == 0
+
+tree_id %>% filter(tree_id %in% check_dubbele_tree_id$tree_id)
+```
+
+```{r dubbele_ids_verwijderen, eval = FALSE}
+# # TIJDELIJK
+# tree_id_ <- tree_id %>% 
+#   anti_join(check_dubbele_tree_id %>%  select(plot_id, tree_id, period))  # tijdelijk de dubbele tree_id's verwijderen
+# # bevat geen beuk ...
+# 
+# nrow(tree_id_) == nrow(tree_id) - 2*nrow(check_dubbele_tree_id)
+# 
+# tree_id <- tree_id_
+```
+
+
+```{r tree_id_long, results='hide'}
+names(tree_id)
+# selectie om wijde tabel aan te maken
+tree_id_long <- tree_id %>%
+  select(plot_id, period, tree_id, label_level1,
+         species, name_nl, ind_sht_cop, alive_dead,
+         dbh_mm, height_m, calc_height_m,  
+         basal_area_m2, vol_bole_m3, vol_tot_m3) %>% 
+  arrange(period) %>% 
+  left_join(plotinfo %>% select(plot_id, period, survey_number)) %>% 
+  select(-period)
+
+# ? survey_number => joinen met plotinfo
+```
+
+!!Opgepast: soms daalt dbh doorheen de tijd: dat is het geval bij dode bomen.
+
+```{r tree_id_wide_zonder_dubbele_ids, results='hide'}
+names(tree_id_long)
+tree_id_wide <- make_table_wide(table_long = tree_id_long
+                                , column_to_repeat = "survey_number"
+                                , columns_for_comparison = 
+                                  c("alive_dead", "dbh_mm", "height_m", "calc_height_m"
+                                    , "basal_area_m2", "vol_bole_m3", "vol_tot_m3"
+                                    , "label_level1"))
+
+names(tree_id_wide)
+
+nrow(tree_id_wide) == n_distinct(tree_id_long$tree_id)
+nrow(tree_id_wide); n_distinct(tree_id_long$tree_id)
+
+tree_id_wide |> filter(label_level1_1 != label_level1_2) |> nrow() == 0
+# OK, alle gelabelde hebben zelfde label in beide periodes
+tree_id_wide |> filter(is.na(label_level1_1) & !is.na(label_level1_2)) |> nrow() == 221
+# OK, niet alle gekoppelde hebben een label
+
+t1 <- tree_id_wide |> filter(is.na(label_level1_1) & !is.na(label_level1_2)) %>% 
+  filter(!is.na(alive_dead_1))
+# 45, soms extra trees nodig als er teveel mét label verdwenen zijn, deel ervan kan 
+# er in 1ste periode ook al gestaan hebben
+t2 <- tree_id_wide |> filter(!is.na(label_level1_1) & is.na(label_level1_2)) %>% 
+  filter(!is.na(alive_dead_2)) # 0 => allemaal verdwenen
+
+```
+
+**Jaartal survey's toevoegen**    
+Dit jaartal moet uit `plotinfo` gehaald worden, want als boom er niet meer staat (omgevallen), 
+is er in de tabel met bomen ook geen `year_dendro` meer voor die boom en dat jaartal, 
+terwijl er wél een opname was.
+We nemen voor `survey_Y1` het jaar van de eerste survey voor dat gebied, dus NIET het jaartal van 
+de eerste decade/periode van monitoringnetwerk.
+Dat is het meest logische (idem als shapefile Marc, zie `strata_location`), maar houdt wel in dat
+`survey_Y1` kan varieren van 1986 (old core zoniën) tot 2020 (Kluisbos).
+
+<!-- ! ev. NA bij jaartallen '0' van maken? cfr shapefile Marc? NEE -->
+<!-- ? wat met NA's van bomen die er niet meer zijn => moet een getal zijn, anders een probleem -->
+<!-- beste om dat toch NA te laten!!! -->
+<!-- En andere jaartallen ook NA, anders wordt er mogelijks mee gerekend ... -->
+
+```{r year_survey, results='hide'}
+names(plotinfo)
+
+# aantal surveys
+n_surveys <- plotinfo %>% 
+  group_by(forest_reserve, plot_id, plottype) %>% 
+  summarize(n_surveys = n()
+            , min_yr = min(year_dendro)
+            , max_yr = max(year_dendro)) %>% 
+  ungroup()
+
+n_surveys %>% filter(min_yr == max_yr) %>% nrow()
+# 14 plots die maar op één moment opgemeten werden
+
+
+# jaartallen surveys
+plotinfo_long <- plotinfo %>% 
+  select(forest_reserve, plot_id, plottype
+         , survey_number, year_dendro, survey_trees
+         , data_processed)
+
+plotinfo_wide <- make_table_wide(table_long = plotinfo_long
+                                , column_to_repeat = "survey_number"
+                                , columns_for_comparison = 
+                                   c("year_dendro")) %>% 
+  rename(survey_Y1 = "1", survey_Y2 = "2") %>% 
+  relocate(survey_Y1, .before = survey_Y2)
+names(plotinfo_wide)
+# survey_Y1 = jaar van eerste survey voor dat gebied, is meest logische (idem als shapefile Marc, zie strata_location)
+
+# niet elke plot 2x opgemeten
+plotinfo_wide %>% filter(is.na(survey_Y1) | is.na(survey_Y2)) %>% nrow() ==
+  n_surveys %>% filter(min_yr == max_yr) %>% nrow()
+```
+
+```{r combine, results='hide'}
+tree_survey_wide <- tree_id_wide %>% 
+  left_join(plotinfo_wide) %>% 
+  left_join(n_surveys) %>% 
+  relocate(survey_Y1, .before = survey_Y2)
+head(tree_survey_wide)
+
+names(tree_survey_wide)
+```
+
+```{r}
+tree_survey_wide_ <- tree_survey_wide %>% 
+  select(forest_reserve, plot_id, 
+         , tree_id, species, name_nl, ind_sht_cop
+         , n_surveys
+         , contains(c("survey_Y", "alive_dead", "dbh", "height", "basal", "vol")))
+
+# names(tree_survey_wide_)
+tree_id_wide <- tree_survey_wide_
+names(tree_id_wide)
+```
+
+
+# Export tree level data
+
+Volgende tabellen:
+
+- trees_calc: alle trees met info over _ha (< data_dendro_calc)
+- tree_id_long_extra_vars: tabel waar trees_wide op gebaseerd is, dus zonder coppice
+- trees_wide: tabel met per boom evolutie doorheen de tijd 
+
+
+```{r path_output, eval = FALSE}
+path_to_output_pc <- paste0(path_to_output_pc, "boomniveau/")
+path_to_output_teamdrive <- paste0(path_to_output_teamdrive, "boomniveau/")
+
+```
+
+```{r trees_calc, results='hide'}
+names(data_dendro_calc)
+
+trees_calc <- data_dendro_calc %>% 
+  select(-contains(c("dbh_class_5cm", "r_A4", "plottype"))) %>% 
+  select(forest_reserve, plot_id, period, year
+         , tree_measure_id, x_local, y_local, old_id, label_level1
+         , species, name_nl, alive_dead, dbh_mm, height_m, calc_height_m
+         , ind_sht_cop, intact_snag, decaystage, everything())
+# plotarea_ha = opp A4 => geen meerwaarde bij berekenen van _ha
+
+names(trees_calc)
+```
+
+```{r tree_id_long_extra_vars, results='hide'}
+names(tree_id_long)
+names(tree_id)
+
+tree_id_long_extra_vars <- tree_id %>% 
+  select(forest_reserve, plot_id, 
+         period, year, 
+         tree_id, label_level1,
+         x_local, y_local, 
+         species, name_nl, 
+         alive_dead, ind_sht_cop, intact_snag, 
+         dbh_mm, height_m, calc_height_m, 
+         basal_area_m2, 
+         vol_bole_m3, vol_crown_m3, vol_tot_m3
+         )
+names(tree_id_long_extra_vars)
+# hier geen zin om per hectare te behouden, want bevat niet alle bomen in een plot 
+# (hakhout weggefilterd)
+```
+
+Direct naar gdrive exporteren (csv), naar **`r path_to_output_teamdrive`**.
+
+```{r save_trees_csv, eval = FALSE}
+trees <- list(trees_calc = trees_calc
+              , tree_id_long_extra_vars = tree_id_long_extra_vars
+              , trees_wide = tree_id_wide)
+
+# volgende functies heb ik zelf geschreven, zitten niet in het package!!!
+save_results_csv (
+    results = trees,
+    output_dir = path_to_output_pc
+    )
+
+# teamdrive
+save_results_csv (
+    results = trees,
+    output_dir = path_to_output_teamdrive
+    )
+```
+
+
+# Copy html to teamdrive
+
+Na knitting - manueel
+
+```{r eval = FALSE}
+# Specify the path of the file you want to copy
+source_file <- here::here(paste0("Scripts/Per_gebied/", forestreserve_short, "/", forestreserve_short, "_treeniveau_2026.html"))
+# Specify the destination directory where you want to copy the file
+destination_dir <- path_to_output_teamdrive
+
+# Copy the file to the destination directory
+file.copy(from = source_file, to = destination_dir, overwrite = TRUE)
+# ? file.copy
+```
+

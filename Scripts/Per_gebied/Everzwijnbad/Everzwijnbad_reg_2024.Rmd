@@ -15,6 +15,9 @@ output:
       smooth_scroll: TRUE
 ---
 
+> OPGEPAST: er zat een bug in forrescalc => branch bugfix_Al_2025 op dit moment (19/11/2025),
+tot gemerged met bugfix ...
+
 ```{r Rm, eval = FALSE}
 rm(list=ls())
 ```
@@ -50,12 +53,12 @@ forestreserve_short <- forestreserve
 forestreserve_folder <- paste0(path_to_reserves, "4b_Everzw_DEELS")
 
 path_to_datarequest <- paste0(forestreserve_folder, "/verwerking_2024_1e2e3eSET/output_forrescalc/")
-path_to_datarequest_teamdrive <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverwerking/per_gebied/2024_", forestreserve_short, "/03_output_R_plotlevel/")
+path_to_datarequest_teamdrive <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverwerking/20_Per_gebied/2024_", forestreserve_short, "/03_output_R_plotlevel/")
 path_to_html_teamdrive <- path_to_datarequest_teamdrive
 
 # plots_to_exclude <- c(701, 707, 709, 727, 728, 738, 739, 740, 759, 760)
 
-path_to_datacontrol <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverwerking/per_gebied/2024_", forestreserve_short, "/datacontrole/")
+path_to_datacontrol <- paste0(path_to_teamdrive, "PRJ_BR_Gegevensverwerking/20_Per_gebied/2024_", forestreserve_short, "/datacontrole/")
 
 ```
 
@@ -360,9 +363,9 @@ for (tablename in names(regeneration)) {
 # hier eens testen of dit klopt
 
 # welke hoogteklasses komen voor?
-names(regeneration_by_plot_height)
-table(regeneration_by_plot_height$period, regeneration_by_plot_height$height_class)
-table(regeneration_by_plot_height$period, regeneration_by_plot_height$height_class, regeneration_by_plot_height$plottype)
+names(reg_by_plot_height)
+table(reg_by_plot_height$period, reg_by_plot_height$height_class)
+table(reg_by_plot_height$period, reg_by_plot_height$height_class, reg_by_plot_height$plottype)
 
 # qHeightClass_regeneration
 # 
@@ -370,8 +373,8 @@ table(regeneration_by_plot_height$period, regeneration_by_plot_height$height_cla
 
 
 ```{r}
-regeneration_by_plot_height %>% filter(is.na(lci_number_of_regeneration_ha)) %>% nrow() == 0
-regeneration_by_plot_height %>% filter(is.na(approx_nr_regeneration_ha)) %>% nrow() == 0
+reg_by_plot_height %>% filter(is.na(lci_number_of_regeneration_ha)) %>% nrow() == 0
+reg_by_plot_height %>% filter(is.na(approx_nr_regeneration_ha)) %>% nrow() == 0
 ```
 
 # Check perc_rubbing op plot-niveau
@@ -391,7 +394,7 @@ Hierna nog enkele testen.
 
 ```{r}
 # CP
-check_rubbing_perc_NA <- regeneration_by_plot_height %>% 
+check_rubbing_perc_NA <- reg_by_plot_height %>% 
   left_join(plotinfo %>% select(plot_id, period, game_impact_reg)) %>%
   filter(is.na(approx_rubbing_damage_perc) & number_of_tree_species > 0) %>% 
   filter(game_impact_reg == TRUE) 
@@ -399,7 +402,7 @@ check_rubbing_perc_NA <- regeneration_by_plot_height %>%
 check_rubbing_perc_NA %>% nrow() == 0
 
 # CA
-check_rubbing_perc_NA <- regeneration_by_core_area_height_species %>% 
+check_rubbing_perc_NA <- reg_by_core_area_height_species %>% 
   left_join(plotinfo %>% select(plot_id, period, game_impact_reg)) %>%
   filter(is.na(approx_rubbing_damage_perc) & nr_of_subplots_with_regeneration > 0) %>% 
   filter(game_impact_reg == TRUE) 
@@ -409,14 +412,14 @@ check_rubbing_perc_NA %>% nrow() == 0
 
 ```{r}
 # plot-niveau: mag enkel NA zijn ,wanneer er géén van die soort gezien is en damaged ook 0 (dus 0/0)
-check_rubbing_perc_NA <- regeneration_by_plot %>% 
+check_rubbing_perc_NA <- reg_by_plot %>% 
   left_join(plotinfo %>% select(plot_id, period, game_impact_reg)) %>%
   filter(is.na(approx_rubbing_damage_perc_established) & mean_number_established_ha > 0) %>% 
   filter(game_impact_reg == TRUE) 
 
 check_rubbing_perc_NA %>% nrow() == 0
 
-check_rubbing_perc_NA <- regeneration_by_plot %>% 
+check_rubbing_perc_NA <- reg_by_plot %>% 
   left_join(plotinfo %>% select(plot_id, period, game_impact_reg)) %>%
   filter(is.na(approx_rubbing_damage_perc_seedlings) & mean_number_seedlings_ha > 0) %>% 
   filter(game_impact_reg == TRUE) 
@@ -429,7 +432,7 @@ check_rubbing_perc_NA %>% nrow() == 0
 # Check NA's plot-level-resultaten
 
 ```{r results = 'hide'}
-names(regeneration_by_plot)
+names(reg_by_plot)
 ```
 <!-- Onderstaand probleem werd opgelost in branch testdb_AL op 28/5/2024:  -->
 
@@ -454,11 +457,11 @@ col <- c("number_of_tree_species", "approx_nr_established_ha", "approx_nr_seedli
          "mean_number_established_ha", "lci_number_established_ha", "uci_number_established_ha",
          "mean_number_seedlings_ha" , "lci_number_seedlings_ha", "uci_number_seedlings_ha")
 
-regeneration_by_plot %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+reg_by_plot %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
 
 ```
 ```{r check, results='hide'}
-regeneration_by_plot %>% filter(plot_id %in% species_NA$plot_id & period %in% c(1,2))
+reg_by_plot %>% filter(plot_id %in% species_NA$plot_id & period %in% c(1,2))
 # één missing hoogteklasses, naar boven gekomen bij datacontrole
 # zelf aangepast in db op c-schijf: missing heightclass > 200 cm gezet (plot 127 - decade 3)
 
@@ -473,7 +476,7 @@ col <- c("number_of_tree_species", "approx_nr_regeneration_ha",
          "mean_number_of_regeneration_ha", 
          "lci_number_of_regeneration_ha", "uci_number_of_regeneration_ha")
 
-regeneration_by_plot_height %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+reg_by_plot_height %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
 
 ```
 
@@ -483,7 +486,7 @@ col <- c("approx_nr_established_ha", "approx_nr_seedlings_ha",
          "mean_number_established_ha", "lci_number_established_ha", "uci_number_established_ha",
          "mean_number_seedlings_ha" , "lci_number_seedlings_ha", "uci_number_seedlings_ha")
 
-regeneration_by_plot_species %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+reg_by_plot_species %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
 
 ```
 
@@ -493,7 +496,7 @@ col <- c("approx_nr_regeneration_ha",
          "mean_number_of_regeneration_ha", 
          "lci_number_of_regeneration_ha", "uci_number_of_regeneration_ha")
 
-regeneration_by_plot_height_species %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+reg_by_plot_height_species %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
 
 ```
 
@@ -503,7 +506,7 @@ col <- c("nr_of_subplots_with_regeneration", "perc_subplots_with_regeneration",
          "mean_number_established_ha", "lci_number_established_ha", "uci_number_established_ha",
          "mean_number_seedlings_ha" , "lci_number_seedlings_ha", "uci_number_seedlings_ha")
 
-regeneration_by_core_area_species %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+reg_by_core_area_species %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
 
 ```
 
@@ -514,7 +517,7 @@ col <- c("nr_of_subplots_with_regeneration", "perc_subplots_with_regeneration",
          "mean_number_of_regeneration_ha", 
          "lci_number_of_regeneration_ha", "uci_number_of_regeneration_ha")
 
-regeneration_by_core_area_height_species %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
+reg_by_core_area_height_species %>% filter_at(col, any_vars(is.na(.))) %>% nrow() == 0
 
 ```
 
@@ -566,60 +569,60 @@ for (tablename in names(reg_plotinfo2)) {
 # Vergelijking met oude data
 
 ```{r eval = FALSE}
-regeneration_by_plot_git <- read_forresdat(tablename = "regeneration_by_plot"
+reg_by_plot_git <- read_forresdat(tablename = "reg_by_plot"
                                      , join_plotinfo = TRUE) %>% 
   filter(forest_reserve == forestreserve)
 
-regeneration_by_plot_new <- regeneration_by_plot %>% filter(period != 3)
+reg_by_plot_new <- reg_by_plot %>% filter(period != 3)
 
-regeneration_by_plot_git <- regeneration_by_plot_git %>% 
+reg_by_plot_git <- reg_by_plot_git %>% 
   select(plot_id, year, everything()) 
 
-nrow(regeneration_by_plot_new) == nrow(regeneration_by_plot_git)
-summary(regeneration_by_plot_new)
+nrow(reg_by_plot_new) == nrow(reg_by_plot_git)
+summary(reg_by_plot_new)
 
-names(regeneration_by_plot_new) == names(regeneration_by_plot_git)
-summary(regeneration_by_plot_git)
+names(reg_by_plot_new) == names(reg_by_plot_git)
+summary(reg_by_plot_git)
 
-diff <- regeneration_by_plot_new %>% anti_join(regeneration_by_plot_git, by = c("plot_id", "period"))
+diff <- reg_by_plot_new %>% anti_join(reg_by_plot_git, by = c("plot_id", "period"))
 diff
 
 
-regeneration_by_plot_new %>% select(-year) %>% arrange(plot_id, period) == regeneration_by_plot_git %>% select(-year) %>% arrange(plot_id, period)
+reg_by_plot_new %>% select(-year) %>% arrange(plot_id, period) == reg_by_plot_git %>% select(-year) %>% arrange(plot_id, period)
 # OK denk ik andere ordening van variabelen
-regeneration_by_plot_new == regeneration_by_plot_git
+reg_by_plot_new == reg_by_plot_git
 
-head(regeneration_by_plot_new %>% arrange(plot_id, period)); head(regeneration_by_plot_git %>% arrange(plot_id, period))
-head(regeneration_by_plot_new %>% arrange(desc(plot_id), period)); head(regeneration_by_plot_git %>% arrange(desc(plot_id), period))
+head(reg_by_plot_new %>% arrange(plot_id, period)); head(reg_by_plot_git %>% arrange(plot_id, period))
+head(reg_by_plot_new %>% arrange(desc(plot_id), period)); head(reg_by_plot_git %>% arrange(desc(plot_id), period))
 
 ```
 
 ```{r eval = FALSE}
-regeneration_by_core_area_species_git <- read_forresdat(tablename = "regeneration_by_core_area_species"
+reg_by_core_area_species_git <- read_forresdat(tablename = "reg_by_core_area_species"
                                      , join_plotinfo = TRUE) %>% 
   filter(forest_reserve == forestreserve)
 
-regeneration_by_core_area_species_new <- regeneration_by_core_area_species %>% filter(period != 3)
+reg_by_core_area_species_new <- reg_by_core_area_species %>% filter(period != 3)
 
-regeneration_by_core_area_species_git <- regeneration_by_core_area_species_git %>% 
+reg_by_core_area_species_git <- reg_by_core_area_species_git %>% 
   select(plot_id, year, everything()) 
 
-nrow(regeneration_by_core_area_species_new) == nrow(regeneration_by_core_area_species_git)
-summary(regeneration_by_core_area_species_new)
+nrow(reg_by_core_area_species_new) == nrow(reg_by_core_area_species_git)
+summary(reg_by_core_area_species_new)
 
-names(regeneration_by_core_area_species_new) == names(regeneration_by_core_area_species_git)
-summary(regeneration_by_core_area_species_git)
+names(reg_by_core_area_species_new) == names(reg_by_core_area_species_git)
+summary(reg_by_core_area_species_git)
 
-diff <- regeneration_by_core_area_species_new %>% anti_join(regeneration_by_core_area_species_git, by = c("plot_id", "period"))
+diff <- reg_by_core_area_species_new %>% anti_join(reg_by_core_area_species_git, by = c("plot_id", "period"))
 diff
 
-names(regeneration_by_core_area_species_new); names(regeneration_by_core_area_species_git)
-regeneration_by_core_area_species_new %>% select(-year) %>% arrange(plot_id, period) == regeneration_by_core_area_species_git %>% select(-year, -year_dendro) %>% arrange(plot_id, period)
+names(reg_by_core_area_species_new); names(reg_by_core_area_species_git)
+reg_by_core_area_species_new %>% select(-year) %>% arrange(plot_id, period) == reg_by_core_area_species_git %>% select(-year, -year_dendro) %>% arrange(plot_id, period)
 # OK denk ik andere ordening van variabelen
-regeneration_by_core_area_species_new == regeneration_by_core_area_species_git %>% select(-year_dendro)
+reg_by_core_area_species_new == reg_by_core_area_species_git %>% select(-year_dendro)
 
-head(regeneration_by_core_area_species_new %>% arrange(plot_id, period)); head(regeneration_by_core_area_species_git %>% arrange(plot_id, period))
-head(regeneration_by_core_area_species_new %>% arrange(desc(plot_id), period)); head(regeneration_by_core_area_species_git %>% arrange(desc(plot_id), period))
+head(reg_by_core_area_species_new %>% arrange(plot_id, period)); head(reg_by_core_area_species_git %>% arrange(plot_id, period))
+head(reg_by_core_area_species_new %>% arrange(desc(plot_id), period)); head(reg_by_core_area_species_git %>% arrange(desc(plot_id), period))
 
 ```
 
@@ -634,7 +637,7 @@ Plot 112: dendro 3x opgemeten, MAAR reg en veg enkel decade 2 en 3, niet opgemet
 in de 1ste decade
 
 
-<!-- table(regeneration_by_plot_height$period, regeneration_by_plot_height$height_class, regeneration_by_plot_height$plottype) -->
+<!-- table(reg_by_plot_height$period, reg_by_plot_height$height_class, reg_by_plot_height$plottype) -->
 <!-- , ,  = CA -->
 
 <!--     1000 2000 3000 4000 5000 -->
@@ -658,8 +661,8 @@ Resultaten worden opgeslagen als csv op c-schijf en in teamdrive:
 path_to_datarequest
 path_to_datarequest_teamdrive
 
-# names(regeneration_by_core_area_height_species)
-# names(regeneration_by_plot_height_species)
+# names(reg_by_core_area_height_species)
+# names(reg_by_plot_height_species)
 ```
 
 Enkele verduidelijkingen:
