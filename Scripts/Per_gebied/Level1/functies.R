@@ -35,6 +35,8 @@ load_data_dendrometry_L1 <-
         IIf(Plots.Area_ha IS NULL, Plots.Area_m2 / 10000, Plots.Area_ha)
           AS plotarea_ha,
         Trees.ID AS tree_measure_id,
+        Trees.X_m AS x_local,
+        Trees.Y_m AS y_local,
         Trees.OldID AS old_id,
         Trees.TreeLabel AS label_level1,
         Trees.Species AS species,
@@ -58,6 +60,8 @@ load_data_dendrometry_L1 <-
         IIf(Plots.Area_ha IS NULL, Plots.Area_m2 / 10000, Plots.Area_ha)
           AS plotarea_ha,
         Trees.ID AS tree_measure_id,
+        Trees.X_m AS x_local,
+        Trees.Y_m AS y_local,
         Trees.OldID AS old_id,
         Trees.TreeLabel AS label_level1,
         Trees.Species AS species,

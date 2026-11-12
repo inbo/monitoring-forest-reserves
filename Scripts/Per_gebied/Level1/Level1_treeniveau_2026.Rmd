@@ -87,7 +87,7 @@ qDecaystage <- qDecaystage %>%
 Aangemaakt in script "Level1_dendro.Rmd"
 
 ```{r dendro}
-data_dendro_calc <- read.csv2(paste0(path_to_output_pc, "data_dendro_calc.csv")) |> 
+data_dendro_calc <- read.csv2(paste0(path_to_output_pc, "plotniveau/data_dendro_calc.csv")) |> 
   select(-X) %>% 
   left_join(qSpecies %>% select(ID, name_nl), by = c("species" = "ID"))
 ```
@@ -355,7 +355,7 @@ names(data_dendro_calc)
 trees_calc <- data_dendro_calc %>% 
   select(-contains(c("dbh_class_5cm", "r_A4", "plottype"))) %>% 
   select(forest_reserve, plot_id, period, year
-         , tree_measure_id, old_id, label_level1
+         , tree_measure_id, x_local, y_local, old_id, label_level1
          , species, name_nl, alive_dead, dbh_mm, height_m, calc_height_m
          , ind_sht_cop, intact_snag, decaystage, everything())
 # plotarea_ha = opp A4 => geen meerwaarde bij berekenen van _ha
@@ -371,7 +371,7 @@ tree_id_long_extra_vars <- tree_id %>%
   select(forest_reserve, plot_id, 
          period, year, 
          tree_id, label_level1,
-         # x_local, y_local, 
+         x_local, y_local, 
          species, name_nl, 
          alive_dead, ind_sht_cop, intact_snag, 
          dbh_mm, height_m, calc_height_m, 
